@@ -136,7 +136,12 @@ STATICFILES_DIRS = [
 
 # Production settings for Vercel
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles_build', 'static')
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+# Use whitenoise without compression for deployment to avoid CSS map issues
+if config('DEBUG', default=True, cast=bool):
+    STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
+else:
+    STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 
 # CORS settings
 CORS_ALLOWED_ORIGINS = [
