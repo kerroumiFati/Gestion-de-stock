@@ -1,13 +1,11 @@
 from django.shortcuts import render, redirect
-from frontoffice import  *
-from django.shortcuts import render
 from django.contrib.auth import authenticate, login, logout
-from django.http import *
+from django.http import HttpResponse, HttpResponseRedirect
 from django.views.generic import TemplateView
 from django.conf import settings
 from django.contrib import messages
 from .forms import *
-from API.models import  *
+from API.models import Produit
 
 def login(requset):
     return render(requset, "login.html",)
@@ -21,7 +19,7 @@ class LoginView(TemplateView):
     password = request.POST.get('password', False)
     user = authenticate(username=username, password=password)
     if user is not None and user.is_active:
-        login(request)
+        login(request, user)
         return HttpResponseRedirect(settings.LOGIN_REDIRECT_URL )
     messages.success(request, 'mot de passe ou nom d''utilisateur incorrect')
     return render(request, self.template_name)
