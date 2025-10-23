@@ -12,9 +12,8 @@ python manage.py migrate --noinput
 echo "Collecting static files..."
 python manage.py collectstatic --noinput --clear
 
-# Create the static directory in the output for Vercel
+# Ensure static files are properly organized for Vercel
 echo "Organizing static files for Vercel..."
-mkdir -p staticfiles_build/static
-cp -r staticfiles_build/static/* staticfiles_build/static/ 2>/dev/null || true
+ls -la staticfiles_build/
 
 echo "Build completed successfully!"

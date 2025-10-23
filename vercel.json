@@ -23,6 +23,5 @@
       "src": "/(.*)",
       "dest": "Gestion_stock/wsgi.py"
     }
-  ],
-  "outputDirectory": "staticfiles_build"
+  ]
 }
