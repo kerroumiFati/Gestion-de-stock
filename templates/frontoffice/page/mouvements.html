@@ -1,0 +1,43 @@
+{% load static %}
+<script src="{% static 'script/mouvements.js' %}" type="text/javascript"></script>
+<div class="container-fluid">
+  <div class="card bg-white">
+    <div class="card-header card-color">
+      <p class="h2 text-center text-uppercase font-weight-bold pt-2">Journal des mouvements</p>
+    </div>
+    <div class="card-body container-fluid">
+      <div class="row mb-2">
+        <div class="col-sm-3">
+          <label>Produit</label>
+          <select id="mv_prod" class="form-control"><option value="">Tous</option></select>
+        </div>
+        <div class="col-sm-2">
+          <label>Source</label>
+          <select id="mv_src" class="form-control">
+            <option value="">Toutes</option>
+            <option>BL</option><option>BC</option><option>ACHAT</option><option>INV</option><option>CORR</option><option>AUTRE</option>
+          </select>
+        </div>
+        <div class="col-sm-3">
+          <label>Après</label>
+          <input id="mv_after" type="datetime-local" class="form-control">
+        </div>
+        <div class="col-sm-3">
+          <label>Avant</label>
+          <input id="mv_before" type="datetime-local" class="form-control">
+        </div>
+        <div class="col-sm-1 d-flex align-items-end">
+          <button id="mv_filter" class="btn btn-outline-secondary">Filtrer</button>
+        </div>
+      </div>
+      <div class="row table-responsive m-auto rounded">
+        <table id="tmouv" class="table table-hover w-100">
+          <thead><tr class="text-uppercase bg-light w-100">
+            <th>Date</th><th>Produit</th><th>Delta</th><th>Source</th><th>Ref</th><th>Note</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>

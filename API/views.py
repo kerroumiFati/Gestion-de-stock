@@ -1,0 +1,615 @@
+from django.contrib.auth import authenticate
+from django.shortcuts import render
+from django.db.models import Sum, Q, F
+from rest_framework import viewsets, generics, status
+from rest_framework import permissions
+from rest_framework.decorators import api_view, action
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from .serializers import *  # noqa: F401
+from .serializers import StockMoveSerializer, InventorySessionSerializer
+from .models import *
+
+# API pour les Catégories
+class CategorieViewSet(viewsets.ModelViewSet):
+    queryset = Categorie.objects.filter(is_active=True).order_by('nom')
+    serializer_class = CategorieSerializer
+    
+    def get_serializer_class(self):
+        if self.action == 'tree':
+            return CategorieTreeSerializer
+        return CategorieSerializer
+    
+    @action(detail=False)
+    def tree(self, request):
+        """Retourne la hiérarchie complète des catégories sous forme d'arbre"""
+        # Récupérer seulement les catégories racines (sans parent)
+        root_categories = Categorie.objects.filter(parent=None, is_active=True).order_by('nom')
+        serializer = CategorieTreeSerializer(root_categories, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False)
+    def roots(self, request):
+        """Retourne uniquement les catégories racines (sans parent)"""
+        root_categories = Categorie.objects.filter(parent=None, is_active=True).order_by('nom')
+        serializer = self.get_serializer(root_categories, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=True)
+    def children(self, request, pk=None):
+        """Retourne les sous-catégories directes d'une catégorie"""
+        categorie = self.get_object()
+        children = categorie.sous_categories.filter(is_active=True).order_by('nom')
+        serializer = self.get_serializer(children, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=True)
+    def products(self, request, pk=None):
+        """Retourne les produits d'une catégorie (sans les sous-catégories)"""
+        categorie = self.get_object()
+        products = categorie.produits.filter(is_active=True).order_by('reference')
+        serializer = ProduitSerializer(products, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=True)
+    def all_products(self, request, pk=None):
+        """Retourne tous les produits d'une catégorie et de ses sous-catégories"""
+        categorie = self.get_object()
+        # Récupérer tous les IDs des catégories et sous-catégories
+        category_ids = [categorie.id]
+        for child in categorie.get_all_children():
+            category_ids.append(child.id)
+        
+        products = Produit.objects.filter(
+            categorie_id__in=category_ids, 
+            is_active=True
+        ).order_by('reference')
+        serializer = ProduitSerializer(products, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False)
+    def stats(self, request):
+        """Statistiques des catégories"""
+        stats = {
+            'total_categories': Categorie.objects.filter(is_active=True).count(),
+            'categories_racines': Categorie.objects.filter(parent=None, is_active=True).count(),
+            'categories_avec_produits': Categorie.objects.filter(
+                produits__is_active=True, is_active=True
+            ).distinct().count(),
+        }
+        return Response(stats)
+
+class ClientViewSet(viewsets.ModelViewSet):
+    queryset = Client.objects.all().order_by('nom')
+    serializer_class = ClientSerializer
+
+class FournisseurViewSet(viewsets.ModelViewSet):
+    queryset = Fournisseur.objects.all().order_by('libelle')
+    serializer_class = FournisseurSerializer
+
+class ProduitViewSet(viewsets.ModelViewSet):
+    queryset = Produit.objects.filter(is_active=True).order_by('reference')
+    serializer_class = ProduitSerializer
+    filterset_fields = {
+        'quantite': ['gte', 'lte'],
+        'code_barre': ['exact', 'icontains'],
+        'reference': ['exact', 'icontains'],
+        'categorie': ['exact'],
+        'fournisseur': ['exact'],
+        'prixU': ['gte', 'lte']
+    }
+    @action(detail=True, methods=['get'])
+    def stock(self, request, pk=None):
+        p = self.get_object()
+        moves_sum = p.mouvements.aggregate(total=Sum('delta')).get('total') or 0
+        data = {
+            'book_quantity': p.quantite,
+            'moves_sum': moves_sum,
+            'delta': moves_sum - p.quantite
+        }
+        return Response(data)
+    
+    @action(detail=False)
+    def by_category(self, request):
+        """Retourne les produits groupés par catégorie"""
+        category_id = request.GET.get('category_id')
+        if category_id:
+            try:
+                categorie = Categorie.objects.get(id=category_id, is_active=True)
+                products = self.queryset.filter(categorie=categorie)
+                serializer = self.get_serializer(products, many=True)
+                return Response({
+                    'categorie': CategorieSerializer(categorie).data,
+                    'produits': serializer.data
+                })
+            except Categorie.DoesNotExist:
+                return Response({'error': 'Catégorie non trouvée'}, status=404)
+        
+        # Si pas de category_id, retourner tous les produits groupés
+        categories = Categorie.objects.filter(is_active=True, produits__is_active=True).distinct()
+        result = []
+        for cat in categories:
+            products = self.queryset.filter(categorie=cat)
+            result.append({
+                'categorie': CategorieSerializer(cat).data,
+                'produits': self.get_serializer(products, many=True).data
+            })
+        return Response(result)
+    
+    @action(detail=False)
+    def low_stock(self, request):
+        """Retourne les produits avec un stock faible"""
+        products = self.queryset.filter(quantite__lte=F('seuil_alerte'))
+        serializer = self.get_serializer(products, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False)
+    def critical_stock(self, request):
+        """Retourne les produits avec un stock critique"""
+        products = self.queryset.filter(quantite__lte=F('seuil_critique'))
+        serializer = self.get_serializer(products, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False)
+    def out_of_stock(self, request):
+        """Retourne les produits en rupture de stock"""
+        products = self.queryset.filter(quantite__lte=0)
+        serializer = self.get_serializer(products, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False)
+    def search(self, request):
+        """Recherche de produits par nom, référence ou code-barres"""
+        query = request.GET.get('q', '').strip()
+        if not query:
+            return Response([])
+        
+        products = self.queryset.filter(
+            Q(designation__icontains=query) |
+            Q(reference__icontains=query) |
+            Q(code_barre__icontains=query)
+        )[:20]  # Limiter à 20 résultats
+        
+        serializer = self.get_serializer(products, many=True)
+        return Response(serializer.data)
+    # def destroy(self, request, *args, **kwargs):
+    #     instance = self.get_object()
+    #     self.perform_destroy(instance)
+    #     return Response(status=status.HTTP_204_NO_CONTENT)
+    #
+    # def perform_destroy(self, instance):
+    #     instance.delete()
+
+class AchatViewSet(viewsets.ModelViewSet):
+    queryset = Achat.objects.all().order_by('date_Achat')
+    serializer_class = AchatSerializer
+
+class BonLivraisonViewSet(viewsets.ModelViewSet):
+    queryset = BonLivraison.objects.all().order_by('-date_creation')
+    serializer_class = BonLivraisonSerializer
+
+    @action(detail=True, methods=['post'])
+    def valider(self, request, pk=None):
+        bon = self.get_object()
+        if bon.statut != 'draft':
+            return Response({'detail': 'Seuls les bons en brouillon peuvent être validés.'}, status=400)
+        # Vérifier les stocks
+        insuffisants = []
+        for l in bon.lignes.select_related('produit'):
+            if l.produit.quantite < l.quantite:
+                insuffisants.append({'produit': l.produit.id, 'stock': l.produit.quantite, 'demande': l.quantite})
+        if insuffisants:
+            return Response({'detail': 'Stock insuffisant', 'lignes': insuffisants}, status=400)
+        # Décrémenter
+        for l in bon.lignes.select_related('produit'):
+            p = l.produit
+            p.quantite = p.quantite - l.quantite
+            p.save(update_fields=['quantite'])
+            StockMove.objects.create(produit=p, delta=-(l.quantite), source='BL', ref_id=str(bon.id), note=f'BL {bon.numero}')
+        bon.statut = 'validated'
+        bon.save(update_fields=['statut'])
+        return Response({'detail': 'Bon validé'}, status=200)
+
+class FactureViewSet(viewsets.ModelViewSet):
+    queryset = Facture.objects.all().order_by('-date_emission')
+    serializer_class = FactureSerializer
+
+    def perform_update(self, serializer):
+        instance = self.get_object()
+        if instance.statut != 'draft':
+            raise serializers.ValidationError('Modification interdite: la facture n\'est plus en brouillon.')
+        return super().perform_update(serializer)
+
+    def perform_destroy(self, instance):
+        if instance.statut in ('issued', 'paid'):
+            raise serializers.ValidationError('Suppression interdite: la facture est émise ou payée.')
+        return super().perform_destroy(instance)
+
+    @action(detail=False, methods=['post'])
+    def from_bl(self, request):
+        bl_id = request.data.get('bon_livraison')
+        tva_rate = request.data.get('tva_rate', 20)
+        numero = request.data.get('numero')
+        if not bl_id:
+            return Response({'detail': 'bon_livraison requis'}, status=400)
+        try:
+            bl = BonLivraison.objects.select_related('client').prefetch_related('lignes__produit').get(pk=bl_id)
+        except BonLivraison.DoesNotExist:
+            return Response({'detail': 'Bon de livraison introuvable'}, status=404)
+        if bl.statut != 'validated':
+            return Response({'detail': 'Le bon de livraison doit être validé'}, status=400)
+        # Numéro automatique si absent
+        if not numero:
+            numero = f"FA-{Facture.objects.count()+1:05d}"
+        facture = Facture.objects.create(
+            numero=numero,
+            client=bl.client,
+            bon_livraison=bl,
+            tva_rate=tva_rate,
+            statut='draft'
+        )
+        for l in bl.lignes.all():
+            LigneFacture.objects.create(
+                facture=facture,
+                produit=l.produit,
+                designation=l.produit.designation,
+                quantite=l.quantite,
+                prixU_snapshot=l.produit.prixU,
+            )
+        facture.recompute_totals()
+        facture.save(update_fields=['total_ht', 'total_tva', 'total_ttc'])
+        return Response(FactureSerializer(facture).data, status=201)
+
+    @action(detail=True, methods=['get'])
+    def printable(self, request, pk=None):
+        f = self.get_object()
+        # Simple HTML imprimable (export via impression PDF navigateur)
+        rows = ''.join([
+            f"<tr><td>{i+1}</td><td>{l.designation}</td><td>{l.quantite}</td><td>{l.prixU_snapshot}</td><td>{l.quantite * l.prixU_snapshot}</td></tr>"
+            for i, l in enumerate(f.lignes.all())
+        ])
+        html = f"""
+        <html><head><meta charset='utf-8'><title>Facture {f.numero}</title>
+        <style>table{{width:100%;border-collapse:collapse}}td,th{{border:1px solid #ddd;padding:8px;text-align:left}}</style>
+        </head><body onload='window.print()'>
+        <h2>Facture {f.numero}</h2>
+        <p>Date: {f.date_emission} - Client: {f.client.nom} {f.client.prenom} - Statut: {f.statut}</p>
+        <table><thead><tr><th>#</th><th>Désignation</th><th>Qté</th><th>PU</th><th>Total</th></tr></thead>
+        <tbody>{rows}</tbody></table>
+        <h3>Total HT: {f.total_ht} | TVA({f.tva_rate}%): {f.total_tva} | TTC: {f.total_ttc}</h3>
+        </body></html>
+        """
+        return Response(html, content_type='text/html')
+
+    @action(detail=True, methods=['post'])
+    def issue(self, request, pk=None):
+        facture = self.get_object()
+        if facture.statut != 'draft':
+            return Response({'detail': 'Seules les factures en brouillon peuvent être émises.'}, status=400)
+        facture.statut = 'issued'
+        facture.save(update_fields=['statut'])
+        return Response({'detail': 'Facture émise'}, status=200)
+
+    @action(detail=True, methods=['post'])
+    def pay(self, request, pk=None):
+        facture = self.get_object()
+        if facture.statut not in ('issued', 'paid'):
+            return Response({'detail': 'La facture doit être émise pour être payée.'}, status=400)
+        facture.statut = 'paid'
+        facture.save(update_fields=['statut'])
+        return Response({'detail': 'Facture payée'}, status=200)
+
+from django_filters.rest_framework import DjangoFilterBackend, FilterSet, filters
+
+class StockMoveFilter(FilterSet):
+    date_after = filters.DateTimeFilter(field_name='date', lookup_expr='gte')
+    date_before = filters.DateTimeFilter(field_name='date', lookup_expr='lte')
+    class Meta:
+        model = StockMove
+        fields = ['produit', 'source']
+
+class StockMoveViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = StockMove.objects.all().select_related('produit')
+    serializer_class = StockMoveSerializer
+    filter_backends = [DjangoFilterBackend]
+    filterset_class = StockMoveFilter
+
+class InventorySessionViewSet(viewsets.ModelViewSet):
+    queryset = InventorySession.objects.all().order_by('-date')
+    serializer_class = InventorySessionSerializer
+
+    @action(detail=True, methods=['post'])
+    def validate(self, request, pk=None):
+        session = self.get_object()
+        if session.statut != 'draft':
+            return Response({'detail': 'Seules les sessions en brouillon peuvent être validées.'}, status=400)
+        # pour chaque ligne, créer un mouvement d'écart et mettre à jour le stock produit
+        for l in session.lignes.select_related('produit'):
+            # book stock: utiliser le champ produit.quantite (source actuelle de vérité), sinon somme des mouvements
+            book = l.snapshot_qty if l.snapshot_qty is not None else l.produit.quantite
+            delta = l.counted_qty - book
+            if delta != 0:
+                StockMove.objects.create(produit=l.produit, delta=delta, source='INV', ref_id=str(session.id), note=f'Inventaire {session.numero}')
+                # maintenir la cohérence avec le champ quantite
+                l.produit.quantite = l.produit.quantite + delta
+                l.produit.save(update_fields=['quantite'])
+        session.statut = 'validated'
+        session.save(update_fields=['statut'])
+        return Response({'detail': 'Inventaire validé'}, status=200)
+
+class UserViewSet(viewsets.ModelViewSet):
+    queryset = User.objects.all().order_by('username')
+    serializer_class = UserSerializer
+
+class CountViewSet(APIView):
+    def get(self, request, format=None):
+        Produit_count = Produit.objects.all().count()
+        Client_count =  Client.objects.all().count()
+        Fournisseur_count = Fournisseur.objects.all().count()
+        Achat_count = Achat.objects.all().count()
+
+        content = {
+            'produits_count': Produit_count,
+            'Client_count':Client_count,
+            'Fournisseur_count':Fournisseur_count,
+            'Achat_count':Achat_count
+        }
+        return Response(content)
+
+
+class RiskViewSet(APIView):
+    def get(self, request, format=None):
+        # Optional: filter by product id if provided
+        prodid = request.GET.get('prodid')
+        qs = Produit.objects.filter(quantite__gt=0)
+        if prodid:
+            qs = qs.filter(id=prodid)
+        data = ProduitSerializer(qs, many=True).data
+        return Response(data)
+
+class LoginnViewSet(APIView):
+    def get(self, request, format=None):
+            username = request.GET.get('username', False)
+            password = request.GET.get('password', False)
+            user = authenticate(username=username, password=password)
+            if user is not None and user.is_active:
+                return Response(user)
+            return Response(user)
+
+# API pour les Ventes
+class VenteViewSet(viewsets.ModelViewSet):
+    queryset = Vente.objects.all().order_by('-date_vente')
+    
+    def get_serializer_class(self):
+        if self.action in ['create', 'update', 'partial_update']:
+            return VenteCreateSerializer
+        return VenteSerializer
+    
+    @action(detail=True, methods=['post'])
+    def complete(self, request, pk=None):
+        """Marquer une vente comme terminée"""
+        vente = self.get_object()
+        if vente.statut == 'draft':
+            # Vérifier les stocks
+            insuffisants = []
+            for ligne in vente.lignes.select_related('produit'):
+                if ligne.produit.quantite < ligne.quantite:
+                    insuffisants.append({
+                        'produit': ligne.produit.id, 
+                        'reference': ligne.produit.reference,
+                        'stock': ligne.produit.quantite, 
+                        'demande': ligne.quantite
+                    })
+            
+            if insuffisants:
+                return Response({'detail': 'Stock insuffisant', 'lignes': insuffisants}, status=400)
+            
+            vente.statut = 'completed'
+            vente.save()
+            
+            # Créer les mouvements de stock pour diminuer les quantités
+            for ligne in vente.lignes.select_related('produit'):
+                ligne.produit.quantite = ligne.produit.quantite - ligne.quantite
+                ligne.produit.save(update_fields=['quantite'])
+                
+                StockMove.objects.create(
+                    produit=ligne.produit,
+                    delta=-ligne.quantite,
+                    source='vente',
+                    ref_id=vente.id,
+                    note=f"Vente {vente.numero}"
+                )
+            
+            return Response({'status': 'Vente terminée'})
+        return Response({'error': 'Vente déjà terminée ou annulée'}, status=400)
+    
+    @action(detail=True, methods=['post'])
+    def cancel(self, request, pk=None):
+        """Annuler une vente"""
+        vente = self.get_object()
+        if vente.statut in ['draft', 'completed']:
+            old_statut = vente.statut
+            vente.statut = 'canceled'
+            vente.save()
+            
+            # Si la vente était terminée, restaurer le stock
+            if old_statut == 'completed':
+                for ligne in vente.lignes.select_related('produit'):
+                    ligne.produit.quantite = ligne.produit.quantite + ligne.quantite
+                    ligne.produit.save(update_fields=['quantite'])
+                    
+                    StockMove.objects.create(
+                        produit=ligne.produit,
+                        delta=ligne.quantite,
+                        source='vente_cancel',
+                        ref_id=vente.id,
+                        note=f"Annulation vente {vente.numero}"
+                    )
+            
+            return Response({'status': 'Vente annulée'})
+        return Response({'error': 'Vente déjà annulée'}, status=400)
+    
+    @action(detail=False)
+    def stats(self, request):
+        """Statistiques des ventes"""
+        from django.db.models import Sum, Count
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        now = timezone.now()
+        today = now.date()
+        week_ago = today - timedelta(days=7)
+        month_ago = today - timedelta(days=30)
+        
+        stats = {
+            'total_ventes': Vente.objects.filter(statut='completed').count(),
+            'ventes_aujourd_hui': Vente.objects.filter(statut='completed', date_vente__date=today).count(),
+            'ventes_semaine': Vente.objects.filter(statut='completed', date_vente__date__gte=week_ago).count(),
+            'ventes_mois': Vente.objects.filter(statut='completed', date_vente__date__gte=month_ago).count(),
+            'ca_total': Vente.objects.filter(statut='completed').aggregate(total=Sum('total_ttc'))['total'] or 0,
+            'ca_aujourd_hui': Vente.objects.filter(statut='completed', date_vente__date=today).aggregate(total=Sum('total_ttc'))['total'] or 0,
+            'ca_semaine': Vente.objects.filter(statut='completed', date_vente__date__gte=week_ago).aggregate(total=Sum('total_ttc'))['total'] or 0,
+            'ca_mois': Vente.objects.filter(statut='completed', date_vente__date__gte=month_ago).aggregate(total=Sum('total_ttc'))['total'] or 0,
+        }
+        
+        return Response(stats)
+
+    @action(detail=True, methods=['get'])
+    def printable(self, request, pk=None):
+        """Version imprimable de la vente"""
+        vente = self.get_object()
+        rows = ''.join([
+            f"<tr><td>{i+1}</td><td>{l.designation}</td><td>{l.quantite}</td><td>{l.prixU_snapshot}</td><td>{l.quantite * l.prixU_snapshot}</td></tr>"
+            for i, l in enumerate(vente.lignes.all())
+        ])
+        html = f"""
+        <html><head><meta charset='utf-8'><title>Vente {vente.numero}</title>
+        <style>table{{width:100%;border-collapse:collapse}}td,th{{border:1px solid #ddd;padding:8px;text-align:left}}</style>
+        </head><body onload='window.print()'>
+        <h2>Vente {vente.numero}</h2>
+        <p>Date: {vente.date_vente} - Client: {vente.client.nom} {vente.client.prenom} - Statut: {vente.statut}</p>
+        <p>Type de paiement: {vente.get_type_paiement_display()}</p>
+        <table><thead><tr><th>#</th><th>Désignation</th><th>Qté</th><th>PU</th><th>Total</th></tr></thead>
+        <tbody>{rows}</tbody></table>
+        <h3>Total HT: {vente.total_ht} | Remise: {vente.remise_percent}% | Total TTC: {vente.total_ttc}</h3>
+        </body></html>
+        """
+        return Response(html, content_type='text/html')
+
+class LigneVenteViewSet(viewsets.ModelViewSet):
+    queryset = LigneVente.objects.all()
+    serializer_class = LigneVenteSerializer
+
+# API pour les Devises et Taux de Change
+class CurrencyViewSet(viewsets.ModelViewSet):
+    queryset = Currency.objects.all()
+    serializer_class = CurrencySerializer
+    
+    @action(detail=False)
+    def default(self, request):
+        """Obtenir la devise par défaut"""
+        default_currency = Currency.get_default()
+        if default_currency:
+            serializer = self.get_serializer(default_currency)
+            return Response(serializer.data)
+        return Response({'error': 'Aucune devise par défaut définie'}, status=404)
+    
+    @action(detail=True, methods=['post'])
+    def set_default(self, request, pk=None):
+        """Définir une devise comme devise par défaut"""
+        currency = self.get_object()
+        Currency.objects.filter(is_default=True).update(is_default=False)
+        currency.is_default = True
+        currency.save()
+        return Response({'status': f'{currency.code} définie comme devise par défaut'})
+
+class ExchangeRateViewSet(viewsets.ModelViewSet):
+    queryset = ExchangeRate.objects.all()
+    serializer_class = ExchangeRateSerializer
+    
+    def create(self, request, *args, **kwargs):
+        """Créer ou mettre à jour un taux de change"""
+        from_currency_id = request.data.get('from_currency')
+        to_currency_id = request.data.get('to_currency')
+        rate = request.data.get('rate')
+        date = request.data.get('date', timezone.now().date())
+        
+        # Vérifier si un taux existe déjà pour cette date
+        existing_rate = ExchangeRate.objects.filter(
+            from_currency_id=from_currency_id,
+            to_currency_id=to_currency_id,
+            date=date
+        ).first()
+        
+        if existing_rate:
+            # Mettre à jour le taux existant
+            existing_rate.rate = rate
+            existing_rate.is_active = request.data.get('is_active', True)
+            existing_rate.save()
+            serializer = self.get_serializer(existing_rate)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        else:
+            # Créer un nouveau taux
+            return super().create(request, *args, **kwargs)
+    
+    @action(detail=False)
+    def convert(self, request):
+        """Convertir un montant entre deux devises"""
+        amount = request.GET.get('amount')
+        from_currency_id = request.GET.get('from_currency')
+        to_currency_id = request.GET.get('to_currency')
+        date = request.GET.get('date')  # Format YYYY-MM-DD
+        
+        if not all([amount, from_currency_id, to_currency_id]):
+            return Response({'error': 'Paramètres manquants: amount, from_currency, to_currency'}, status=400)
+        
+        try:
+            amount = Decimal(amount)
+            from_currency = Currency.objects.get(id=from_currency_id)
+            to_currency = Currency.objects.get(id=to_currency_id)
+            
+            if date:
+                from datetime import datetime
+                date = datetime.strptime(date, '%Y-%m-%d').date()
+            
+            converted_amount = ExchangeRate.convert_amount(amount, from_currency, to_currency, date)
+            
+            if converted_amount is not None:
+                rate = ExchangeRate.get_rate(from_currency, to_currency, date)
+                return Response({
+                    'original_amount': amount,
+                    'converted_amount': converted_amount,
+                    'from_currency': from_currency.code,
+                    'to_currency': to_currency.code,
+                    'exchange_rate': rate,
+                    'date': date or timezone.now().date()
+                })
+            else:
+                return Response({'error': 'Taux de change non trouvé'}, status=404)
+                
+        except Currency.DoesNotExist:
+            return Response({'error': 'Devise non trouvée'}, status=404)
+        except ValueError as e:
+            return Response({'error': f'Erreur de format: {str(e)}'}, status=400)
+    
+    @action(detail=False)
+    def rates_matrix(self, request):
+        """Obtenir une matrice des taux de change pour toutes les devises actives"""
+        currencies = Currency.objects.filter(is_active=True)
+        matrix = {}
+        
+        for from_curr in currencies:
+            matrix[from_curr.code] = {}
+            for to_curr in currencies:
+                rate = ExchangeRate.get_rate(from_curr, to_curr)
+                matrix[from_curr.code][to_curr.code] = {
+                    'rate': rate,
+                    'symbol_from': from_curr.symbol,
+                    'symbol_to': to_curr.symbol
+                }
+        
+        return Response({
+            'currencies': [{'code': c.code, 'name': c.name, 'symbol': c.symbol} for c in currencies],
+            'matrix': matrix
+        })

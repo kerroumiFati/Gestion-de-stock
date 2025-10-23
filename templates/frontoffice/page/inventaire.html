@@ -1,0 +1,54 @@
+{% load static %}
+<script src="{% static 'script/inventaire.js' %}" type="text/javascript"></script>
+<div class="container-fluid">
+  <div class="card bg-white">
+    <div class="card-header card-color">
+      <p class="h2 text-center text-uppercase font-weight-bold pt-2">Inventaires</p>
+    </div>
+    <div class="card-body container-fluid">
+      <div class="row">
+        <div class="col-sm-3 mb-2">
+          <label>Numéro</label>
+          <input id="inv_num" class="form-control" placeholder="INV-YYYY-XXXX">
+        </div>
+        <div class="col-sm-3 mb-2">
+          <label>Date</label>
+          <input id="inv_date" type="date" class="form-control">
+        </div>
+        <div class="col-sm-6 mb-2">
+          <label>Note</label>
+          <input id="inv_note" class="form-control">
+        </div>
+      </div>
+      <div class="row">
+        <div class="col">
+          <button id="btn_create_session" class="btn btn-outline-success">Créer la session</button>
+          <button id="btn_validate_session" class="btn btn-outline-primary" disabled>Valider</button>
+        </div>
+      </div>
+      <div class="row table-responsive m-auto rounded mt-3">
+        <table id="tinventaire" class="table table-hover w-100">
+          <thead>
+            <tr class="text-uppercase bg-light w-100">
+              <th>Produit</th>
+              <th>Théorique</th>
+              <th>Compté</th>
+              <th>Écart</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="inv_table"></tbody>
+        </table>
+      </div>
+      <div class="row mt-2">
+        <div class="col-sm-6">
+          <label>Ajouter produit</label>
+          <select id="inv_add_product" class="form-control"><option>Choisir...</option></select>
+        </div>
+        <div class="col-sm-2 d-flex align-items-end">
+          <button id="btn_add_line" class="btn btn-outline-secondary">Ajouter</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

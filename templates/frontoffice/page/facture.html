@@ -1,0 +1,50 @@
+{% load static %}
+<script src="{% static 'script/facture.js' %}" type="text/javascript"></script>
+<div class="container-fluid">
+  <div class="card bg-white">
+    <div class="card-header card-color">
+      <p class="h2 text-center text-uppercase font-weight-bold pt-2">Gestion des factures</p>
+    </div>
+    <div class="card-body container-fluid">
+      <div class="row">
+        <div class="col-sm-4 mb-2">
+          <label>Client</label>
+          <select id="fact_client" class="form-control"><option>Choisir...</option></select>
+        </div>
+        <div class="col-sm-4 mb-2">
+          <label>Bon de livraison</label>
+          <select id="fact_bl" class="form-control"><option>Depuis BL validé...</option></select>
+        </div>
+        <div class="col-sm-2 mb-2">
+          <label>TVA %</label>
+          <input id="fact_tva" type="number" class="form-control" value="20">
+        </div>
+        <div class="col-sm-2 mb-2">
+          <label>N° facture (optionnel)</label>
+          <input id="fact_num" type="text" class="form-control" placeholder="auto">
+        </div>
+      </div>
+      <div class="row">
+        <div class="col">
+          <button id="btn_create_from_bl" class="btn btn-outline-success">Créer depuis BL</button>
+        </div>
+      </div>
+      <div class="row table-responsive m-auto rounded mt-3">
+        <table id="tfacture" class="table table-hover w-100">
+          <thead>
+            <tr class="text-uppercase bg-light w-100">
+              <th>Id</th>
+              <th>Numéro</th>
+              <th>Date</th>
+              <th>Client</th>
+              <th>Statut</th>
+              <th>TTC</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="fact_table"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
