@@ -1,5 +1,6 @@
-[providers]
-python = "3.11"
+# Specify Python version
+[variables]
+PYTHON_VERSION = "3.11"
 
 [phases.setup]
 nixPkgs = ["python311", "python311Packages.pip"]

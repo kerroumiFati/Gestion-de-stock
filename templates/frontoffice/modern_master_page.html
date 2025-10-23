@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    
+    <title>{% block title %}Market - Gestion de Stock Moderne{% endblock %}</title>
+    
+    <!-- Preload critical resources -->
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" as="style">
+    <link rel="preload" href="{% static 'style/modern-theme.css' %}" as="style">
+    
+    <!-- Meta tags for PWA -->
+    <meta name="description" content="Système moderne de gestion de stock avec interface responsive et fonctionnalités avancées">
+    <meta name="theme-color" content="#6366f1">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Market">
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="{% static 'manifest.json' %}">
+    
+    <!-- Icons -->
+    <link rel="icon" type="image/png" sizes="32x32" href="{% static 'img/favicon-32x32.png' %}">
+    <link rel="icon" type="image/png" sizes="16x16" href="{% static 'img/favicon-16x16.png' %}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{% static 'img/apple-touch-icon.png' %}">
+    
+    {% load static %}
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Icons -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/material-design-iconic-font/2.2.0/css/material-design-iconic-font.min.css" rel="stylesheet">
+    
+    <!-- DataTables with Bootstrap 5 -->
+    <link href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+    <link href="https://cdn.datatables.net/responsive/2.4.1/css/responsive.bootstrap5.min.css" rel="stylesheet">
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.min.js"></script>
+    
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="{% static 'style/modern-theme.css' %}">
+    <link rel="stylesheet" href="{% static 'style/components.css' %}">
+    
+    {% block extra_css %}{% endblock %}
+    
+    <!-- Critical JavaScript -->
+    <script>
+        // Theme detection
+        if (localStorage.getItem('theme') === 'dark' || 
+            (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.setAttribute('data-theme', 'dark');
+        }
+        
+        // Performance observer
+        if ('PerformanceObserver' in window) {
+            const observer = new PerformanceObserver((list) => {
+                for (const entry of list.getEntries()) {
+                    if (entry.entryType === 'navigation') {
+                        console.log('Page load time:', entry.loadEventEnd - entry.fetchStart, 'ms');
+                    }
+                }
+            });
+            observer.observe({ entryTypes: ['navigation'] });
+        }
+    </script>
+</head>
+
+<body class="modern-layout">
+    <!-- Sidebar -->
+    <nav class="modern-sidebar" id="sidebar">
+        <div class="sidebar-brand">
+            <h2>
+                <i class="fas fa-store me-2"></i>
+                <span class="sidebar-brand-text">Market</span>
+            </h2>
+            <button class="sidebar-toggle" type="button">
+                <i class="fas fa-bars"></i>
+            </button>
+        </div>
+        
+        <div class="sidebar-user">
+            <img src="{% static 'img/no-photo.png' %}" alt="Avatar" class="sidebar-user-avatar">
+            <div class="sidebar-user-info">
+                <p class="sidebar-user-name">{{ user.get_full_name|default:"Admin" }}</p>
+                <p class="sidebar-user-role">{{ user.groups.first.name|default:"Administrateur" }}</p>
+            </div>
+        </div>
+        
+        <div class="sidebar-nav">
+            <div class="sidebar-nav-section">
+                <div class="sidebar-nav-title">Gestion Principale</div>
+                
+                <button class="sidebar-nav-item" onclick="loadPage('produit')" data-page="produit">
+                    <div class="sidebar-nav-icon">
+                        <i class="fas fa-box"></i>
+                    </div>
+                    <span class="sidebar-nav-text">Produits</span>
+                </button>
+                
+                <button class="sidebar-nav-item" onclick="loadPage('client')" data-page="client">
+                    <div class="sidebar-nav-icon">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <span class="sidebar-nav-text">Clients</span>
+                </button>
+                
+                <button class="sidebar-nav-item" onclick="loadPage('fournisseur')" data-page="fournisseur">
+                    <div class="sidebar-nav-icon">
+                        <i class="fas fa-truck"></i>
+                    </div>
+                    <span class="sidebar-nav-text">Fournisseurs</span>
+                </button>
+                
+                <button class="sidebar-nav-item" onclick="loadPage('categorie')" data-page="categorie">
+                    <div class="sidebar-nav-icon">
+                        <i class="fas fa-tags"></i>
+                    </div>
+                    <span class="sidebar-nav-text">Catégories</span>
+                </button>
+            </div>
+            
+            <div class="sidebar-nav-section">
+                <div class="sidebar-nav-title">Transactions</div>
+                
+                <button class="sidebar-nav-item" onclick="loadPage('achat')" data-page="achat">
+                    <div class="sidebar-nav-icon">
+                        <i class="fas fa-shopping-cart"></i>
+                    </div>
+                    <span class="sidebar-nav-text">Achats</span>
+                </button>
+                
+                <button class="sidebar-nav-item" onclick="loadPage('vente')" data-page="vente">
+                    <div class="sidebar-nav-icon">
+                        <i class="fas fa-cash-register"></i>
+                    </div>
+                    <span class="sidebar-nav-text">Ventes</span>
+                </button>
+                
+                <button class="sidebar-nav-item" onclick="loadPage('facture')" data-page="facture">
+                    <div class="sidebar-nav-icon">
+                        <i class="fas fa-file-invoice"></i>
+                    </div>
+                    <span class="sidebar-nav-text">Factures</span>
+                </button>
+            </div>
+            
+            <div class="sidebar-nav-section">
+                <div class="sidebar-nav-title">Inventaire</div>
+                
+                <button class="sidebar-nav-item" onclick="loadPage('inventaire')" data-page="inventaire">
+                    <div class="sidebar-nav-icon">
+                        <i class="fas fa-clipboard-list"></i>
+                    </div>
+                    <span class="sidebar-nav-text">Inventaires</span>
+                </button>
+                
+                <button class="sidebar-nav-item" onclick="loadPage('mouvements')" data-page="mouvements">
+                    <div class="sidebar-nav-icon">
+                        <i class="fas fa-exchange-alt"></i>
+                    </div>
+                    <span class="sidebar-nav-text">Mouvements</span>
+                </button>
+            </div>
+            
+            <div class="sidebar-nav-section">
+                <div class="sidebar-nav-title">Analyses</div>
+                
+                <button class="sidebar-nav-item" onclick="loadPage('statistiques')" data-page="statistiques">
+                    <div class="sidebar-nav-icon">
+                        <i class="fas fa-chart-bar"></i>
+                    </div>
+                    <span class="sidebar-nav-text">Statistiques</span>
+                </button>
+            </div>
+        </div>
+        
+        <div class="sidebar-footer">
+            <a href="/logout/" class="sidebar-nav-item">
+                <div class="sidebar-nav-icon">
+                    <i class="fas fa-sign-out-alt"></i>
+                </div>
+                <span class="sidebar-nav-text">Déconnexion</span>
+            </a>
+        </div>
+    </nav>
+    
+    <!-- Main Content -->
+    <main class="modern-main" id="main">
+        <!-- Header -->
+        <header class="modern-header">
+            <h1 class="header-title" id="page-title">Tableau de Bord</h1>
+            
+            <div class="header-actions">
+                <!-- Search -->
+                <div class="search-container me-3">
+                    <div class="input-group">
+                        <input type="search" class="form-control" placeholder="Rechercher..." id="global-search">
+                        <button class="btn btn-outline-secondary" type="button">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Notifications -->
+                <div class="dropdown me-3">
+                    <button class="btn btn-outline-secondary position-relative" type="button" data-bs-toggle="dropdown">
+                        <i class="fas fa-bell"></i>
+                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" id="notification-count">
+                            3
+                        </span>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><h6 class="dropdown-header">Notifications</h6></li>
+                        <li><a class="dropdown-item" href="#"><i class="fas fa-exclamation-triangle text-warning me-2"></i>Stock faible: Produit A</a></li>
+                        <li><a class="dropdown-item" href="#"><i class="fas fa-info-circle text-info me-2"></i>Nouvelle commande reçue</a></li>
+                        <li><a class="dropdown-item" href="#"><i class="fas fa-check-circle text-success me-2"></i>Inventaire terminé</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item text-center" href="#">Voir toutes</a></li>
+                    </ul>
+                </div>
+                
+                <!-- Theme Toggle -->
+                <button class="theme-toggle me-3" type="button" title="Changer le thème">
+                    <span class="visually-hidden">Toggle theme</span>
+                </button>
+                
+                <!-- User Menu -->
+                <div class="dropdown">
+                    <button class="btn btn-outline-secondary" type="button" data-bs-toggle="dropdown">
+                        <img src="{% static 'img/no-photo.png' %}" alt="Avatar" class="rounded-circle me-2" width="24" height="24">
+                        {{ user.get_full_name|default:"Admin" }}
+                        <i class="fas fa-chevron-down ms-2"></i>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="#"><i class="fas fa-user me-2"></i>Profil</a></li>
+                        <li><a class="dropdown-item" href="#"><i class="fas fa-cog me-2"></i>Paramètres</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="/logout/"><i class="fas fa-sign-out-alt me-2"></i>Déconnexion</a></li>
+                    </ul>
+                </div>
+            </div>
+        </header>
+        
+        <!-- Page Content -->
+        <div class="modern-content">
+            <div id="main-content" class="animate-fade-in-up">
+                {% block content %}
+                <!-- Default Dashboard Content -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="modern-card">
+                            <div class="modern-card-header">
+                                <h3 class="modern-card-title">
+                                    <i class="fas fa-tachometer-alt me-2"></i>
+                                    Tableau de Bord
+                                </h3>
+                            </div>
+                            <div class="modern-card-body">
+                                <p class="text-muted">Bienvenue dans votre système de gestion de stock moderne. Sélectionnez une section dans le menu pour commencer.</p>
+                                
+                                <!-- Quick Stats -->
+                                <div class="row mt-4">
+                                    <div class="col-md-3 mb-3">
+                                        <div class="stat-card bg-primary">
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <div>
+                                                    <div class="stat-number" id="total-products">-</div>
+                                                    <div class="stat-label">Produits</div>
+                                                </div>
+                                                <div class="stat-icon">
+                                                    <i class="fas fa-box"></i>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3 mb-3">
+                                        <div class="stat-card bg-success">
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <div>
+                                                    <div class="stat-number" id="total-clients">-</div>
+                                                    <div class="stat-label">Clients</div>
+                                                </div>
+                                                <div class="stat-icon">
+                                                    <i class="fas fa-users"></i>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3 mb-3">
+                                        <div class="stat-card bg-warning">
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <div>
+                                                    <div class="stat-number" id="total-sales">-</div>
+                                                    <div class="stat-label">Ventes ce mois</div>
+                                                </div>
+                                                <div class="stat-icon">
+                                                    <i class="fas fa-chart-line"></i>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3 mb-3">
+                                        <div class="stat-card bg-info">
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <div>
+                                                    <div class="stat-number" id="low-stock">-</div>
+                                                    <div class="stat-label">Stock faible</div>
+                                                </div>
+                                                <div class="stat-icon">
+                                                    <i class="fas fa-exclamation-triangle"></i>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Charts Row -->
+                                <div class="row mt-4">
+                                    <div class="col-md-8 mb-4">
+                                        <div class="modern-card h-100">
+                                            <div class="modern-card-header">
+                                                <h5 class="modern-card-title">Ventes des 7 derniers jours</h5>
+                                            </div>
+                                            <div class="modern-card-body">
+                                                <canvas id="salesChart" height="100"></canvas>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4 mb-4">
+                                        <div class="modern-card h-100">
+                                            <div class="modern-card-header">
+                                                <h5 class="modern-card-title">État du Stock</h5>
+                                            </div>
+                                            <div class="modern-card-body">
+                                                <canvas id="inventoryChart"></canvas>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endblock %}
+            </div>
+        </div>
+    </main>
+    
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="position-fixed top-0 start-0 w-100 h-100 d-none align-items-center justify-content-center" style="background: rgba(255, 255, 255, 0.9); z-index: 9999;">
+        <div class="text-center">
+            <div class="loading-spinner mb-3"></div>
+            <p class="text-muted">Chargement...</p>
+        </div>
+    </div>
+    
+    <!-- JavaScript -->
+    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- DataTables -->
+    <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
+    <script src="https://cdn.datatables.net/responsive/2.4.1/js/dataTables.responsive.min.js"></script>
+    <script src="https://cdn.datatables.net/responsive/2.4.1/js/responsive.bootstrap5.min.js"></script>
+    
+    <!-- Custom Scripts -->
+    <script src="{% static 'js/modern-ui.js' %}"></script>
+    <script src="{% static 'script/redirect.js' %}"></script>
+    
+    {% block extra_js %}{% endblock %}
+    
+    <script>
+        // Page loading function integration
+        function loadPage(page) {
+            // Update active navigation
+            document.querySelectorAll('.sidebar-nav-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            document.querySelector(`[data-page="${page}"]`)?.classList.add('active');
+            
+            // Update page title
+            const titles = {
+                'produit': 'Gestion des Produits',
+                'client': 'Gestion des Clients',
+                'fournisseur': 'Gestion des Fournisseurs',
+                'categorie': 'Gestion des Catégories',
+                'achat': 'Gestion des Achats',
+                'vente': 'Gestion des Ventes',
+                'facture': 'Gestion des Factures',
+                'inventaire': 'Gestion des Inventaires',
+                'mouvements': 'Mouvements de Stock',
+                'statistiques': 'Statistiques et Rapports'
+            };
+            
+            document.getElementById('page-title').textContent = titles[page] || 'Tableau de Bord';
+            
+            // Call existing show function
+            if (typeof show === 'function') {
+                show(page);
+            }
+        }
+        
+        // Load dashboard stats
+        function loadDashboardStats() {
+            // This would integrate with your existing API calls
+            // For now, using placeholder data
+            setTimeout(() => {
+                document.getElementById('total-products').textContent = '150';
+                document.getElementById('total-clients').textContent = '45';
+                document.getElementById('total-sales').textContent = '230';
+                document.getElementById('low-stock').textContent = '8';
+            }, 500);
+        }
+        
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', () => {
+            loadDashboardStats();
+        });
+    </script>
+</body>
+</html>

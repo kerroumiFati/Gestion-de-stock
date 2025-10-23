@@ -1,4 +1,5 @@
-<script src="script/categorie.js" type="text/javascript"></script>
+{% load static %}
+<script src="{% static 'script/categorie.js' %}" type="text/javascript"></script>
 
 <div class="container-fluid">
     <div class="modal fade" id="error" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel"
@@ -12,51 +13,121 @@
                     </button>
                 </div>
                 <div class="modal-body">
-                    <p>Impossible de supprimer cette categorie</p>
+                    <p>Impossible de supprimer cette catégorie</p>
                 </div>
             </div>
         </div>
     </div>
+    
     <div class="card bg-white">
         <div class="card-header card-color">
-            <p class="h2 text-center text-uppercase font-weight-bold pt-2">Gestion des categories</p>
+            <p class="h2 text-center text-uppercase font-weight-bold pt-2">
+                <i class="fas fa-tags mr-2"></i>Gestion des Catégories
+            </p>
         </div>
-        <div class="card-body container-fluid">
-            <div class="row">
-                <div class="col-sm-6 mb-2">
-                    <label for="nom">Nom : </label>
-                    <input class="" type="text" id="id" hidden>
-                    <input class="form-control" type="text" id="nom" required>
-
+        <form>
+            {% csrf_token %}
+            <div class="card-body container-fluid">
+                <!-- Formulaire d'ajout/modification -->
+                <div class="row">
+                    <div class="col-sm-6 mb-3">
+                        <label for="nom">Nom de la catégorie <span class="text-danger">*</span></label>
+                        <input type="text" id="id" hidden>
+                        <input class="form-control" type="text" id="nom" placeholder="Ex: Électronique" required>
+                    </div>
+                    <div class="col-sm-6 mb-3">
+                        <label for="description">Description</label>
+                        <input class="form-control" type="text" id="description" placeholder="Description de la catégorie">
+                    </div>
                 </div>
-                <div class="col-sm-6 mb-2">
-                    <label for="description">Description : </label>
-                    <input class="form-control" type="text" id="description" required>
+                
+                <div class="row">
+                    <div class="col-sm-4 mb-3">
+                        <label for="parent">Catégorie parent</label>
+                        <select class="form-control" id="parent">
+                            <option value="">Aucune (catégorie racine)</option>
+                        </select>
+                        <small class="form-text text-muted">Laissez vide pour une catégorie principale</small>
+                    </div>
+                    <div class="col-sm-4 mb-3">
+                        <label for="couleur">Couleur d'affichage</label>
+                        <div class="input-group">
+                            <input type="color" class="form-control" id="couleur" value="#007bff">
+                            <div class="input-group-append">
+                                <span class="input-group-text">
+                                    <i id="preview-icon" class="fas fa-cube" style="color: #007bff;"></i>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-sm-4 mb-3">
+                        <label for="icone">Icône (Font Awesome)</label>
+                        <select class="form-control" id="icone">
+                            <option value="fa-cube">fa-cube (Cube)</option>
+                            <option value="fa-laptop">fa-laptop (Ordinateur)</option>
+                            <option value="fa-mobile-alt">fa-mobile-alt (Mobile)</option>
+                            <option value="fa-tshirt">fa-tshirt (Vêtement)</option>
+                            <option value="fa-book">fa-book (Livre)</option>
+                            <option value="fa-car">fa-car (Automobile)</option>
+                            <option value="fa-home">fa-home (Maison)</option>
+                            <option value="fa-utensils">fa-utensils (Cuisine)</option>
+                            <option value="fa-gamepad">fa-gamepad (Jeux)</option>
+                            <option value="fa-medkit">fa-medkit (Santé)</option>
+                            <option value="fa-dumbbell">fa-dumbbell (Sport)</option>
+                            <option value="fa-palette">fa-palette (Art)</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-sm-6 mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="is_active" checked>
+                            <label class="form-check-label" for="is_active">
+                                Catégorie active
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col">
+                        <button type="button" class="btn btn-outline-success mt-2 mb-3" id="btn">
+                            <i class="fas fa-plus mr-1"></i>Ajouter
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary mt-2 mb-3 ml-2" id="btnCancel" style="display: none;">
+                            <i class="fas fa-times mr-1"></i>Annuler
+                        </button>
+                    </div>
+                </div>
+                <!-- Tableau des catégories -->
+                <div class="row">
+                    <div class="col-12">
+                        <h5 class="mb-3">
+                            <i class="fas fa-list mr-2"></i>Liste des Catégories
+                        </h5>
+                    </div>
+                </div>
+                
+                <div class="row table-responsive m-auto rounded">
+                    <table id="tcategorie" class="table table-hover w-100">
+                        <thead>
+                            <tr class="text-uppercase bg-light w-100">
+                                <th scope="col">#</th>
+                                <th scope="col">Catégorie</th>
+                                <th scope="col">Description</th>
+                                <th scope="col">Produits</th>
+                                <th scope="col">Statut</th>
+                                <th scope="col">Actions</th>
+                                <th scope="col"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-content">
+                            <!-- Les données seront chargées dynamiquement -->
+                        </tbody>
+                    </table>
                 </div>
             </div>
-            
-            <div class="row">
-                <div class="col">
-                    <button type="button" class="btn btn-outline-success mt-3 mb-3" id="btn">Ajouter</button>
-                </div>
-            </div>
-            <div class="row table-responsive m-auto rounded">
-                <table id="tcategorie" class="table table-hover w-100">
-                    <thead>
-                        <tr class="text-uppercase bg-light  w-100">
-                            <th scope="col">Id</th>
-                            <th scope="col">Nom</th>
-                            <th scope="col">Description</th>
-                            <th scope="col">Supprimer</th>
-                            <th scope="col">Modifier</th>
-                        </tr>
-                    </thead>
-                    <tbody id="table-content">
-
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
+        </form>
     </div>
 </div>

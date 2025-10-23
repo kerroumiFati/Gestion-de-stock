@@ -23,9 +23,9 @@ $PYTHON_CMD -m pip install -r requirements.txt
 # Skip migrations for Vercel (no database)
 echo "Skipping migrations for Vercel static deployment..."
 
-# Collect static files with Vercel settings
-echo "Collecting static files for Vercel..."
-DJANGO_SETTINGS_MODULE=Gestion_stock.vercel_settings $PYTHON_CMD manage.py collectstatic --noinput --clear
+# Collect static files with default settings
+echo "Collecting static files..."
+$PYTHON_CMD manage.py collectstatic --noinput --clear
 
 # Copy static files to Vercel expected location
 echo "Organizing static files for Vercel..."

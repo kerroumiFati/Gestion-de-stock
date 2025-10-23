@@ -2,8 +2,6 @@
 """Django's command-line utility for administrative tasks."""
 import os
 import sys
-import sys
-sys.path.append('/ACER/Users/et/PycharmProjects/GestionStock-django/venv/lib/python3.6/site-packages')
 
 
 def main():
