@@ -20,26 +20,41 @@ echo "Installing Python dependencies..."
 $PYTHON_CMD -m pip install --upgrade pip
 $PYTHON_CMD -m pip install -r requirements.txt
 
-# Run migrations
-echo "Running Django migrations..."
-$PYTHON_CMD manage.py migrate --noinput
+# Skip migrations for Vercel (no database)
+echo "Skipping migrations for Vercel static deployment..."
 
-# Collect static files
-echo "Collecting static files..."
-$PYTHON_CMD manage.py collectstatic --noinput --clear
+# Collect static files with Vercel settings
+echo "Collecting static files for Vercel..."
+DJANGO_SETTINGS_MODULE=Gestion_stock.vercel_settings $PYTHON_CMD manage.py collectstatic --noinput --clear
 
 # Copy static files to Vercel expected location
 echo "Organizing static files for Vercel..."
-if [ -d "staticfiles_build/static" ]; then
-    # Create the static directory that Vercel expects
-    mkdir -p static
-    # Copy all static files to the expected location
-    cp -r staticfiles_build/static/* static/
-    file_count=$(find static -type f | wc -l)
-    echo "✅ Static files organized: $file_count files in 'static' directory"
-    ls -la static/ | head -10
+
+# Check if staticfiles_build directory exists
+if [ -d "staticfiles_build" ]; then
+    echo "✅ staticfiles_build directory found"
+    ls -la staticfiles_build/
+    
+    # Check if static subdirectory exists
+    if [ -d "staticfiles_build/static" ]; then
+        # Create the static directory that Vercel expects
+        mkdir -p static
+        # Copy all static files to the expected location
+        cp -r staticfiles_build/static/* static/
+        file_count=$(find static -type f | wc -l)
+        echo "✅ Static files organized: $file_count files in 'static' directory"
+        ls -la static/ | head -10
+    else
+        echo "⚠️  staticfiles_build/static not found, using staticfiles_build directly"
+        # Use staticfiles_build as static directory
+        mv staticfiles_build static
+        file_count=$(find static -type f | wc -l)
+        echo "✅ Static files organized: $file_count files moved to 'static' directory"
+    fi
 else
-    echo "❌ Static files directory not found"
+    echo "❌ staticfiles_build directory not found after collectstatic"
+    echo "Directory contents:"
+    ls -la
     exit 1
 fi
 

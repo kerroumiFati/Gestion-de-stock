@@ -86,13 +86,26 @@ WSGI_APPLICATION = 'Gestion_stock.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/3.0/ref/settings/#databases
 
-# Check if we're on Railway (has DATABASE_URL)
+# Database configuration for different environments
 import dj_database_url
 
+# Check if we're on a cloud platform (Vercel, Railway, etc.)
 if 'DATABASE_URL' in os.environ:
-    # Railway deployment with PostgreSQL
+    # Cloud deployment with PostgreSQL
     DATABASES = {
         'default': dj_database_url.parse(os.environ.get('DATABASE_URL'))
+    }
+elif os.environ.get('VERCEL'):
+    # Vercel deployment - use PostgreSQL (SQLite not available)
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': 'postgres',
+            'USER': 'postgres', 
+            'PASSWORD': 'postgres',
+            'HOST': 'localhost',
+            'PORT': '5432',
+        }
     }
 else:
     # Local development with SQLite
