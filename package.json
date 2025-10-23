@@ -2,7 +2,6 @@
   "name": "gestion-stock",
   "version": "1.0.0",
   "scripts": {
-    "build": "python manage.py collectstatic --noinput",
     "vercel-build": "pip install -r requirements.txt && python manage.py migrate --noinput && python manage.py collectstatic --noinput"
   },
   "dependencies": {
