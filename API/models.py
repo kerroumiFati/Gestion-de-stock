@@ -350,6 +350,7 @@ class Achat(models.Model):
     date_Achat = models.DateField(default=timezone.now)
     date_expiration = models.DateField("Date d'expiration", null=True, blank=True)
     quantite = models.IntegerField()
+    prix_achat = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     client = models.ForeignKey(Client,on_delete=models.CASCADE)
     produit = models.ForeignKey(Produit,on_delete=models.CASCADE)
 

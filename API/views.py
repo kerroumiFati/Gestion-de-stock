@@ -19,8 +19,9 @@ from .audit import log_event
 logger = logging.getLogger(__name__)
 
 # Simple raw endpoint to fetch categories directly from DB for diagnostics
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
 @api_view(['GET'])
+@permission_classes([permissions.AllowAny])
 def categories_raw(request):
     try:
         rows = list(Categorie.objects.values('id','nom','description','parent','couleur','icone','is_active'))
@@ -34,6 +35,7 @@ class CategorieViewSet(viewsets.ModelViewSet):
     queryset = Categorie.objects.all().order_by('nom')
     serializer_class = CategorieSerializer
     pagination_class = None  # Désactiver la pagination pour simplifier le front
+    permission_classes = [permissions.AllowAny]
 
     def list(self, request, *args, **kwargs):
         try:
@@ -131,10 +133,12 @@ class FournisseurViewSet(viewsets.ModelViewSet):
     queryset = Fournisseur.objects.all().order_by('libelle')
     serializer_class = FournisseurSerializer
     pagination_class = None
+    permission_classes = [permissions.AllowAny]
 
 class ProduitViewSet(viewsets.ModelViewSet):
     queryset = Produit.objects.filter(is_active=True).order_by('reference')
     serializer_class = ProduitSerializer
+    permission_classes = [permissions.AllowAny]
     filterset_fields = {
         'quantite': ['gte', 'lte'],
         'code_barre': ['exact', 'icontains'],
@@ -775,6 +779,7 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated, IsAdminUser]
 
 class CountViewSet(APIView):
+    permission_classes = [permissions.AllowAny]
     def get(self, request, format=None):
         try:
             from django.db.models import Sum, Count, Q
@@ -832,6 +837,7 @@ class CountViewSet(APIView):
             return Response({'error': str(e)}, status=500)
 
 class StatisticsChartsViewSet(APIView):
+    permission_classes = [permissions.AllowAny]
     def get(self, request, format=None):
         try:
             from django.db.models import Sum, Count, Q
@@ -975,6 +981,7 @@ class StatisticsChartsViewSet(APIView):
 
 class AlertsView(APIView):
     """Aggregate alerts for stock levels: rupture, critical, low."""
+    permission_classes = [permissions.AllowAny]
     def get(self, request, format=None):
         limit = int(request.GET.get('limit', 5))
         low_qs = Produit.objects.filter(quantite__lte=F('seuil_alerte'), quantite__gt=F('seuil_critique')).order_by('quantite')

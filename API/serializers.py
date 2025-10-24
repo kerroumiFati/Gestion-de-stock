@@ -160,13 +160,20 @@ class AchatSerializer(serializers.ModelSerializer):
     client_prenom = serializers.CharField(source='client.prenom', read_only=True)
     produit_reference = serializers.CharField(source='produit.reference', read_only=True)
     produit_designation = serializers.CharField(source='produit.designation', read_only=True)
+    currency_symbol = serializers.CharField(source='produit.currency.symbol', read_only=True)
+    total_achat = serializers.SerializerMethodField()
     class Meta:
         model = Achat
         fields = (
-            'id','date_Achat','date_expiration','quantite',
+            'id','date_Achat','date_expiration','quantite','prix_achat','total_achat','currency_symbol',
             'client','client_nom','client_prenom',
             'produit','produit_reference','produit_designation'
         )
+    def get_total_achat(self, obj):
+        try:
+            return obj.prix_achat * obj.quantite
+        except Exception:
+            return 0
 
 class LigneLivraisonSerializer(serializers.ModelSerializer):
     class Meta:
