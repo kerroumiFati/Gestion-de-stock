@@ -24,8 +24,7 @@ from frontoffice.views import LoginView, LogoutView
 urlpatterns = [
     re_path(r'^$', LoginView.as_view(), name='login'),
     path('logout/', LogoutView.as_view(), name='logout'),
-    #path('admindash/produit/add/', views.post_new, name='addProduit'),
-    # path('post/<int:pk>/edit/', views.produit_edit, name='produit_edit'),
-     #path('produits/', views.produit_all, name='produits'),
-    #path('admindash/',views.counts_all)
+    path('admindash/', views.dashboard, name='admindash'),
+    path('produits/', views.produit_all, name='produits'),
+    path('page/<str:name>/', views.page, name='page'),
 ]

@@ -9,6 +9,23 @@ from API.models import Produit
 
 def login_view(request):
     return render(request, "login.html",)
+
+
+def dashboard(request):
+    # Render the original master page layout
+    return render(request, 'frontoffice/master_page.html')
+
+
+def page(request, name: str):
+    # Serve partial pages used by the sidebar navigation
+    template_path = f'frontoffice/page/{name}.html'
+    try:
+        return render(request, template_path)
+    except Exception:
+        # Basic 404 content for missing pages
+        return HttpResponse(f'Page {name} introuvable', status=404)
+
+
 class LoginView(TemplateView):
 
   template_name = 'login.html'
