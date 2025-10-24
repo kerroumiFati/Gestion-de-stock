@@ -107,6 +107,18 @@
                     <li><a href="#" onclick="show('entrepots')" class="sidebar-item">
                         <i class="fas fa-warehouse"></i><span>Entrepôts</span>
                     </a></li>
+                    {% if user.is_staff %}
+                    <li class="header-menu"><span>Administration</span></li>
+                    <li><a href="#" onclick="show('admin')" class="sidebar-item">
+                        <i class="fas fa-tools"></i><span>Tableau de bord Admin</span>
+                    </a></li>
+                    <li><a href="/users-admin/" class="sidebar-item">
+                        <i class="fas fa-user-shield"></i><span>Administration des utilisateurs</span>
+                    </a></li>
+                    <li><a href="/audit-logs/" class="sidebar-item">
+                        <i class="fas fa-clipboard-list"></i><span>Journaux d'audit</span>
+                    </a></li>
+                    {% endif %}
                 </ul>
             </div>
 

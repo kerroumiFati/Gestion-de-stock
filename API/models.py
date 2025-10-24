@@ -1,4 +1,24 @@
 from django.db import models
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
+
+class AuditLog(models.Model):
+    actor = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='audit_actions')
+    action = models.CharField(max_length=100)
+    target_model = models.CharField(max_length=100, blank=True, default='')
+    target_id = models.CharField(max_length=100, blank=True, default='')
+    target_repr = models.TextField(blank=True, default='')
+    metadata = models.TextField(blank=True, default='')  # JSON string
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.created_at} - {self.action} by {self.actor} on {self.target_model}({self.target_id})"
 from django.utils import timezone
 from decimal import Decimal
 import json

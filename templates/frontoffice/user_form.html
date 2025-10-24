@@ -1,0 +1,35 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>{{ title }}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="p-4">
+  <div class="container">
+    <h1>{{ title }}</h1>
+    <form method="post">
+      {% csrf_token %}
+      <div class="form-row">
+        <div class="form-group col-md-6">{{ form.username.label_tag }} {{ form.username }}</div>
+        <div class="form-group col-md-6">{{ form.email.label_tag }} {{ form.email }}</div>
+      </div>
+      <div class="form-row">
+        <div class="form-group col-md-6">{{ form.first_name.label_tag }} {{ form.first_name }}</div>
+        <div class="form-group col-md-6">{{ form.last_name.label_tag }} {{ form.last_name }}</div>
+      </div>
+      <div class="form-row">
+        <div class="form-group col-md-6">{{ form.password.label_tag }} {{ form.password }}</div>
+        <div class="form-group col-md-6">{{ form.groups.label_tag }} {{ form.groups }}</div>
+      </div>
+      <div class="form-row">
+        <div class="form-group col-md-6">{{ form.is_active }} {{ form.is_active.label_tag }}</div>
+        <div class="form-group col-md-6">{{ form.is_staff }} {{ form.is_staff.label_tag }}</div>
+      </div>
+      <button class="btn btn-primary" type="submit">Enregistrer</button>
+      <a class="btn btn-secondary" href="/users-admin/">Annuler</a>
+    </form>
+  </div>
+</body>
+</html>

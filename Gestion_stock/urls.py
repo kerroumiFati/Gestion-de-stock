@@ -24,7 +24,7 @@ urlpatterns = [
     path('API/', include('API.urls')),
     path('', include('frontoffice.urls')),
 
-    re_path(r'^admindash/$', TemplateView.as_view(template_name='frontoffice/master_page.html')),
+    re_path(r'^admindash/$', login_required(TemplateView.as_view(template_name='frontoffice/master_page.html'))),
     re_path(r'^admindash/statistiques$', TemplateView.as_view(template_name='frontoffice/page/statistiques.html')),
     re_path(r'^admindash/produits$', TemplateView.as_view(template_name='frontoffice/page/produit.html')),
     re_path(r'^admindash/clients$', TemplateView.as_view(template_name='frontoffice/page/client.html')),

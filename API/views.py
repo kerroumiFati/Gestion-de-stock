@@ -597,9 +597,31 @@ class InventorySessionViewSet(viewsets.ModelViewSet):
             }
         })
 
+from django.contrib.auth.models import User, Group, Permission
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
+
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all().order_by('username')
     serializer_class = UserSerializer
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+class GroupViewSet(viewsets.ModelViewSet):
+    queryset = Group.objects.all().order_by('name')
+    serializer_class = GroupSerializer
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+class PermissionViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = Permission.objects.select_related('content_type').all().order_by('content_type__app_label', 'codename')
+    serializer_class = PermissionSerializer
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+from .models import AuditLog
+from .serializers import AuditLogSerializer
+
+class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = AuditLog.objects.all()
+    serializer_class = AuditLogSerializer
+    permission_classes = [IsAuthenticated, IsAdminUser]
 
 class CountViewSet(APIView):
     def get(self, request, format=None):

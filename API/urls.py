@@ -21,6 +21,9 @@ router.register(r'lignes-vente', views.LigneVenteViewSet)
 router.register(r'currencies', views.CurrencyViewSet)
 router.register(r'exchange-rates', views.ExchangeRateViewSet)
 router.register(r'users', views.UserViewSet)
+router.register(r'roles', views.GroupViewSet)
+router.register(r'permissions', views.PermissionViewSet)
+router.register(r'audit-logs', views.AuditLogViewSet)
 # Wire up our API using automatic URL routing.
 # Additionally, we include login URLs for the browsable API.
 urlpatterns = [

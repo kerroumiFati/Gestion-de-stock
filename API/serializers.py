@@ -33,10 +33,64 @@ class CategorieTreeSerializer(serializers.ModelSerializer):
             return CategorieTreeSerializer(obj.sous_categories.filter(is_active=True), many=True).data
         return []
 
+from django.contrib.auth.models import Group, Permission
+from .models import AuditLog
+
+class GroupSerializer(serializers.ModelSerializer):
+    permissions = serializers.PrimaryKeyRelatedField(queryset=Permission.objects.all(), many=True, required=False)
+
+    class Meta:
+        model = Group
+        fields = ['id', 'name', 'permissions']
+
+class PermissionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Permission
+        fields = ['id', 'codename', 'name', 'content_type']
+
+class AuditLogSerializer(serializers.ModelSerializer):
+    actor_username = serializers.CharField(source='actor.username', read_only=True)
+
+    class Meta:
+        model = AuditLog
+        fields = ['id', 'created_at', 'actor', 'actor_username', 'action', 'target_model', 'target_id', 'target_repr', 'metadata', 'ip_address', 'user_agent']
+        read_only_fields = fields
+
 class UserSerializer(serializers.ModelSerializer):
+    groups = serializers.PrimaryKeyRelatedField(queryset=Group.objects.all(), many=True, required=False)
+    group_names = serializers.SlugRelatedField(source='groups', slug_field='name', read_only=True, many=True)
+
     class Meta:
         model = User
-        fields = ('username','password')
+        fields = ['id', 'username', 'password', 'email', 'first_name', 'last_name', 'is_active', 'is_staff', 'groups', 'group_names']
+        extra_kwargs = {
+            'password': {'write_only': True, 'required': False}
+        }
+
+    def create(self, validated_data):
+        groups = validated_data.pop('groups', [])
+        password = validated_data.pop('password', None)
+        user = User(**validated_data)
+        if password:
+            user.set_password(password)
+        else:
+            user.set_unusable_password()
+        user.save()
+        if groups:
+            user.groups.set(groups)
+        return user
+
+    def update(self, instance, validated_data):
+        groups = validated_data.pop('groups', None)
+        password = validated_data.pop('password', None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        if password:
+            instance.set_password(password)
+        instance.save()
+        if groups is not None:
+            instance.groups.set(groups)
+        return instance
 
 # Serializers pour les Devises et Taux de Change
 class CurrencySerializer(serializers.ModelSerializer):

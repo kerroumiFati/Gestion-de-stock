@@ -184,6 +184,30 @@
             </div>
         </div>
         
+        {% if user.is_staff %}
+        <div class="sidebar-nav-section">
+            <div class="sidebar-nav-title">Administration</div>
+            <button class="sidebar-nav-item" onclick="loadPage('admin')" data-page="admin">
+                <div class="sidebar-nav-icon">
+                    <i class="fas fa-tools"></i>
+                </div>
+                <span class="sidebar-nav-text">Tableau de bord Admin</span>
+            </button>
+            <a class="sidebar-nav-item" href="/users-admin/">
+                <div class="sidebar-nav-icon">
+                    <i class="fas fa-user-shield"></i>
+                </div>
+                <span class="sidebar-nav-text">Administration des utilisateurs</span>
+            </a>
+            <a class="sidebar-nav-item" href="/audit-logs/">
+                <div class="sidebar-nav-icon">
+                    <i class="fas fa-clipboard-list"></i>
+                </div>
+                <span class="sidebar-nav-text">Journaux d'audit</span>
+            </a>
+        </div>
+        {% endif %}
+
         <div class="sidebar-footer">
             <a href="/logout/" class="sidebar-nav-item">
                 <div class="sidebar-nav-icon">
