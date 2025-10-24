@@ -32,7 +32,7 @@
                     </div>
                     <div class="col-sm-4 mb-2">
                         <label for="code_barre">Code-barres : </label>
-                        <input class="form-control" type="text" id="code_barre">
+                        <input class="form-control" type="text" id="code_barre" required>
                     </div>
                     <div class="col-sm-4 mb-2">
                         <label for="designation">designation : </label>
@@ -52,13 +52,17 @@
                     </div>
                 </div>
                 <div class="row">
-                    <div class="col-sm-6 mb-2">
+                    <div class="col-sm-4 mb-2">
                         <label for="fournisseur">Fournisseur : </label>
                         <select class="form-control" id="fournisseur" required>
                             <option value="">Sélectionner un fournisseur</option>
                         </select>
                     </div>
-                    <div class="col-sm-6 mb-2">
+                    <div class="col-sm-4 mb-2">
+                        <label for="quantite">Quantité en stock :</label>
+                        <input class="form-control" type="number" id="quantite" min="0" step="1" required placeholder="0">
+                    </div>
+                    <div class="col-sm-4 mb-2">
                         <label for="nom">risk management : </label>
                         <input class="form-control" type="number" id="risk">
                         <div class="row">
@@ -88,8 +92,8 @@
                             <th scope="col">reference</th>
                             <th scope="col">code-barres</th>
                             <th scope="col">designation</th>
-                            <th scope="col">date d'expiration</th>
-                            <th scope="col">fournisseur</th>
+                            <th scope="col">Prix U</th>
+                            <th scope="col">Fournisseur</th>
                             <th scope="col">Supprimer</th>
                             <th scope="col">Modifier</th>
                         </tr>
