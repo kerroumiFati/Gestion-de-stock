@@ -420,10 +420,14 @@ class VenteCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Vente
         fields = ['numero', 'client', 'type_paiement', 'currency', 'remise_percent', 'observations', 'lignes']
+        extra_kwargs = {
+            'numero': {'required': False}
+        }
     
     def create(self, validated_data):
+        from django.db import transaction
         lignes_data = validated_data.pop('lignes')
-        
+
         # Générer un numéro automatique si pas fourni
         if not validated_data.get('numero'):
             base = 'VTE-'
@@ -434,33 +438,53 @@ class VenteCreateSerializer(serializers.ModelSerializer):
                     validated_data['numero'] = candidate
                     break
                 n += 1
-        
+
         # Définir la devise par défaut si pas spécifiée
         if not validated_data.get('currency'):
             validated_data['currency'] = Currency.get_default()
-        
-        vente = Vente.objects.create(**validated_data)
-        
-        for ligne_data in lignes_data:
-            produit = ligne_data['produit']
-            
-            # Utiliser le prix de vente du produit si pas spécifié
-            if 'prixU_snapshot' not in ligne_data:
-                ligne_data['prixU_snapshot'] = produit.prixU
-            
-            # Utiliser le nom du produit si designation pas spécifiée
-            if 'designation' not in ligne_data:
-                ligne_data['designation'] = produit.designation
-            
-            # Définir la devise de la ligne (héritée du produit)
-            if 'currency' not in ligne_data:
-                ligne_data['currency'] = produit.currency or vente.get_sale_currency()
-            
-            LigneVente.objects.create(vente=vente, **ligne_data)
-        
-        vente.recompute_totals()
-        vente.save()
-        return vente
+
+        # Pré-vérifier le stock disponible pour chaque ligne
+        insuffisants = []
+        for ld in lignes_data:
+            produit = ld['produit']
+            qty = int(ld.get('quantite') or 0)
+            if qty <= 0:
+                continue
+            if produit.quantite < qty:
+                insuffisants.append({'produit': produit.id, 'reference': produit.reference, 'stock': produit.quantite, 'demande': qty})
+        if insuffisants:
+            raise serializers.ValidationError({'detail': 'Stock insuffisant', 'lignes': insuffisants})
+
+        with transaction.atomic():
+            vente = Vente.objects.create(**validated_data)
+
+            for ligne_data in lignes_data:
+                produit = ligne_data['produit']
+                qty = int(ligne_data.get('quantite') or 0)
+
+                # Utiliser le prix de vente du produit si pas spécifié
+                if 'prixU_snapshot' not in ligne_data:
+                    ligne_data['prixU_snapshot'] = produit.prixU
+
+                # Utiliser le nom du produit si designation pas spécifiée
+                if 'designation' not in ligne_data:
+                    ligne_data['designation'] = produit.designation
+
+                # Définir la devise de la ligne (héritée du produit)
+                if 'currency' not in ligne_data:
+                    ligne_data['currency'] = produit.currency or vente.get_sale_currency()
+
+                LigneVente.objects.create(vente=vente, **ligne_data)
+
+                # Décrémenter le stock produit et créer un mouvement
+                if qty > 0:
+                    produit.quantite = produit.quantite - qty
+                    produit.save(update_fields=['quantite'])
+                    StockMove.objects.create(produit=produit, delta=-(qty), source='VENTE', ref_id=str(vente.id), note=f"Vente {vente.numero}")
+
+            vente.recompute_totals()
+            vente.save()
+            return vente
     
     def update(self, instance, validated_data):
         lignes_data = validated_data.pop('lignes', None)
