@@ -1,115 +1,143 @@
 <!DOCTYPE html>
-<html lang="en">
-
+<html lang="fr">
 <head>
-    {% load static %}
-    <!-- Required meta tags-->
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  {% load static %}
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <title>Market - Connexion</title>
 
-    <!-- Title Page-->
-    <title>Market - Login</title>
+  <!-- Fonts & Icons -->
+  <link href="{% static 'style/font-face.css' %}" rel="stylesheet">
+  <link href="{% static 'vendor/font-awesome-5/css/fontawesome-all.min.css' %}" rel="stylesheet">
+  <link href="{% static 'vendor/mdi-font/css/material-design-iconic-font.min.css' %}" rel="stylesheet">
 
-    <!-- Fontfaces CSS-->
-    <link href="{% static 'style/font-face.css' %}" rel="stylesheet">
-    <link href="{% static 'vendor/font-awesome-4.7/css/font-awesome.min.css' %} " rel="stylesheet" media="all">
-    <link href="{% static 'vendor/font-awesome-5/css/fontawesome-all.min.css' %}" rel="stylesheet" media="all">
-    <link href="{% static 'vendor/mdi-font/css/material-design-iconic-font.min.css' %}" rel="stylesheet" media="all">
+  <!-- Bootstrap -->
+  <link href="{% static 'vendor/bootstrap-4.1/bootstrap.min.css' %}" rel="stylesheet">
 
-    <!-- Bootstrap CSS-->
-    <link href="{% static 'vendor/bootstrap-4.1/bootstrap.min.css' %}" rel="stylesheet" media="all">
+  <!-- Animations/Vendors -->
+  <link href="{% static 'vendor/animsition/animsition.min.css' %}" rel="stylesheet">
+  <link href="{% static 'vendor/wow/animate.css' %}" rel="stylesheet">
+  <link href="{% static 'vendor/css-hamburgers/hamburgers.min.css' %}" rel="stylesheet">
 
-    <!-- Vendor CSS-->
-    <link href="{% static 'vendor/animsition/animsition.min.css' %}" rel="stylesheet" media="all">
-    <link href="{% static 'vendor/bootstrap-progressbar/bootstrap-progressbar-3.3.4.min.css' %}" rel="stylesheet"
-          media="all">
-    <link href="{% static 'vendor/wow/animate.css' %}" rel="stylesheet" media="all">
-    <link href="{% static 'vendor/css-hamburgers/hamburgers.min.css' %}" rel="stylesheet" media="all">
-    <link href="{% static 'vendor/slick/slick.css' %}" rel="stylesheet" media="all">
-    <link href="{% static 'vendor/select2/select2.min.css' %} " rel="stylesheet" media="all">
-    <link href="{% static 'vendor/perfect-scrollbar/perfect-scrollbar.css' %}" rel="stylesheet" media="all">
+  <!-- Theme -->
+  <link href="{% static 'style/theme.css' %}" rel="stylesheet">
 
-    <!-- Main CSS-->
-    <link href=" {% static 'style/theme.css' %}" rel="stylesheet" media="all">
-
+  <style>
+    body.login-page {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #1f6feb 0%, #2ea043 100%);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .login-card {
+      width: 100%; max-width: 420px; border: 0; border-radius: 1rem;
+      box-shadow: 0 1rem 2rem rgba(0,0,0,.15);
+      overflow: hidden; background: #ffffff;
+    }
+    .login-header {
+      background: #0d1117; color: #fff; padding: 1.75rem 1.25rem; text-align: center;
+    }
+    .login-header .brand-icon {
+      width: 72px; height: 72px; background: #161b22; border-radius: 14px;
+      display: inline-flex; align-items: center; justify-content: center; margin-bottom: .75rem;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);
+      overflow: hidden;
+    }
+    .login-header .brand-icon img { max-width: 100%; max-height: 100%; object-fit: cover; }
+    .login-body { padding: 1.75rem 1.5rem; }
+    .form-control, .btn { border-radius: .6rem; }
+    .btn-login { padding: .75rem 1rem; font-weight: 600; }
+    .form-text-muted { font-size: .85rem; color: #6c757d; }
+    .input-group .form-control { border-right: 0; }
+    .input-group .input-group-text { background: transparent; border-left: 0; cursor: pointer; }
+    .login-footer { padding: .5rem 1.5rem 1.5rem; }
+  </style>
 </head>
-
-<body class="animsition">
-<div class="page-wrapper">
-    <div class="page-content--bge5">
-        <div class="container">
-            <div class="login-wrap">
-                <div class="login-content">
-                    <div class="login-logo">
-                        <a href="./">
-                            <span class="h2 text-dark">Gestion de Stock</span>
-                        </a>
-                    </div>
-                    <div class="login-form">
-                        <form action="/" method="POST" id="checkLogin">
-                            {% csrf_token %}
-                            <div class="form-group">
-
-                                <label>Useename </label>
-                                <input class="au-input au-input--full" type="text" id="email" name="username"
-                                       placeholder="username">
-                            </div>
-                            <div class="form-group">
-                                <label>Mot de passe </label>
-                                <input class="au-input au-input--full" type="password" id="password" name="password"
-                                       placeholder="Password">
-                            </div>
-
-                            <div class="login-checkbox float-left">
-                                {% if messages %}
-                                    {% for message in messages %}
-                                        <label>
-                                            <a href="#">{{ message }}</a>
-                                        </label>
-                                    {% endfor %}
-                                {% endif %}
-                            </div>
-                            <button id="connect" name="btn_submit" class="btn au-btn--block btn-outline-success"
-                                    type="submit">Connexion
-                            </button>
-                            <!-- <div class="login-checkbox float-right">
-                                    <label>
-                                        <a href="#">Mot de passe oublié?</a>
-                                    </label>
-                                </div>-->
-                        </form>
-                    </div>
-                </div>
-            </div>
-        </div>
+<body class="animsition login-page">
+  <div class="login-card card">
+    <div class="login-header">
+      <div class="brand-icon mb-2">
+        <img src="{% static 'img/no-photo.png' %}" alt="Logo" />
+      </div>
+      <h2 class="h4 mb-0">Gestion de Stock</h2>
+      <div class="form-text-muted">Connectez-vous pour continuer</div>
     </div>
 
-</div>
+    <div class="login-body">
+      {% if messages %}
+        {% for message in messages %}
+          <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="fas fa-exclamation-triangle mr-1"></i> {{ message }}
+            <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+        {% endfor %}
+      {% endif %}
 
-<!-- Jquery JS-->
-<script src="{% static 'js/jquery-3.3.1.min.js' %}"></script>
-<!-- Bootstrap JS-->
-<script src="{% static 'vendor/bootstrap-4.1/popper.min.js' %}"></script>
-<script src=" {% static 'vendor/bootstrap-4.1/bootstrap.min.js' %}"></script>
-<!-- Vendor JS       -->
-<script src="{% static 'vendor/slick/slick.min.js' %}">
-</script>
-<script src=" {% static 'vendor/wow/wow.min.js' %}"></script>
-<script src="{% static 'vendor/animsition/animsition.min.js' %}"></script>
-<script src="{% static 'vendor/bootstrap-progressbar/bootstrap-progressbar.min.js' %}">
-</script>
-<script src=" {% static 'vendor/counter-up/jquery.waypoints.min.js' %} "></script>
-<script src=" {% static 'vendor/counter-up/jquery.counterup.min.js' %} ">
-</script>
-<script src=" {% static 'vendor/circle-progress/circle-progress.min.js' %}"></script>
-<script src=" {% static 'vendor/perfect-scrollbar/perfect-scrollbar.js' %}"></script>
-<script src=" {% static 'vendor/chartjs/Chart.bundle.min.js' %} "></script>
-<script src=" {% static 'vendor/select2/select2.min.js' %}"></script>
+      <form action="/" method="POST" id="checkLogin" novalidate>
+        {% csrf_token %}
 
+        <div class="form-group">
+          <label for="email" class="font-weight-semibold">Nom d'utilisateur</label>
+          <div class="input-group">
+            <div class="input-group-prepend">
+              <span class="input-group-text"><i class="fas fa-user"></i></span>
+            </div>
+            <input class="form-control" type="text" id="email" name="username" placeholder="Entrez votre identifiant" required>
+          </div>
+        </div>
 
-<!-- Main JS-->
-<script src=" {% static 'js/main.js' %}"></script>
-<script src=" {% static 'script/main.js' %} " type="text/javascript"></script>
+        <div class="form-group">
+          <label for="password" class="font-weight-semibold">Mot de passe</label>
+          <div class="input-group" id="password_group">
+            <div class="input-group-prepend">
+              <span class="input-group-text"><i class="fas fa-lock"></i></span>
+            </div>
+            <input class="form-control" type="password" id="password" name="password" placeholder="Votre mot de passe" required>
+            <div class="input-group-append">
+              <span class="input-group-text" id="toggle_pwd" title="Afficher/Masquer"><i class="far fa-eye"></i></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="d-flex align-items-center justify-content-between mb-3">
+          <div class="custom-control custom-checkbox">
+            <input type="checkbox" class="custom-control-input" id="remember_me">
+            <label class="custom-control-label" for="remember_me">Se souvenir de moi</label>
+          </div>
+          <!-- <a href="#" class="small">Mot de passe oublié ?</a> -->
+        </div>
+
+        <button id="connect" name="btn_submit" class="btn btn-success btn-block btn-login" type="submit">
+          <i class="fas fa-sign-in-alt mr-1"></i> Connexion
+        </button>
+      </form>
+    </div>
+
+    <div class="login-footer text-center">
+      <small class="text-muted">© {{ now|default:None }} Market • Sécurité renforcée</small>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="{% static 'js/jquery-3.3.1.min.js' %}"></script>
+  <script src="{% static 'vendor/bootstrap-4.1/popper.min.js' %}"></script>
+  <script src="{% static 'vendor/bootstrap-4.1/bootstrap.min.js' %}"></script>
+  <script>
+    (function(){
+      var toggler = document.getElementById('toggle_pwd');
+      var input = document.getElementById('password');
+      if (toggler && input){
+        toggler.addEventListener('click', function(){
+          var icon = this.querySelector('i');
+          if (input.type === 'password'){
+            input.type = 'text'; if(icon){ icon.classList.remove('fa-eye'); icon.classList.add('fa-eye-slash'); }
+          } else {
+            input.type = 'password'; if(icon){ icon.classList.remove('fa-eye-slash'); icon.classList.add('fa-eye'); }
+          }
+        });
+      }
+    })();
+  </script>
 </body>
-
 </html>

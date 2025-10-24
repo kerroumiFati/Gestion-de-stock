@@ -349,13 +349,144 @@ class StockMoveFilter(FilterSet):
     date_before = filters.DateTimeFilter(field_name='date', lookup_expr='lte')
     class Meta:
         model = StockMove
-        fields = ['produit', 'source']
+        fields = ['produit', 'source', 'warehouse']
 
-class StockMoveViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = StockMove.objects.all().select_related('produit')
+class StockMoveViewSet(viewsets.ModelViewSet):
+    queryset = StockMove.objects.all().select_related('produit','warehouse')
     serializer_class = StockMoveSerializer
     filter_backends = [DjangoFilterBackend]
     filterset_class = StockMoveFilter
+    pagination_class = None
+
+    def perform_create(self, serializer):
+        obj = serializer.save()
+        # Update stock per warehouse and aggregate product stock
+        if obj.warehouse is None:
+            # fallback: no warehouse specified, do nothing per-location
+            pass
+        else:
+            ps, _ = ProductStock.objects.get_or_create(produit=obj.produit, warehouse=obj.warehouse, defaults={'quantity': 0})
+            ps.quantity = ps.quantity + obj.delta
+            ps.save(update_fields=['quantity'])
+        # keep Produit.quantite as sum across warehouses for backward compatibility
+        total = obj.produit.stocks.aggregate(total=Sum('quantity')).get('total') or 0
+        obj.produit.quantite = total
+        obj.produit.save(update_fields=['quantite'])
+
+    @action(detail=False, methods=['post'])
+    def transfer(self, request):
+        """Transfert de stock entre entrepôts.
+        Body: { produit: id, quantite: >0, from_warehouse: id, to_warehouse: id, note: str (opt) }
+        """
+        try:
+            produit_id = int(request.data.get('produit') or request.data.get('produit_id'))
+            qty = float(request.data.get('quantite') or request.data.get('qty') or 0)
+        except (TypeError, ValueError):
+            return Response({'detail': 'Paramètres invalides'}, status=400)
+        if qty <= 0:
+            return Response({'detail': 'La quantité doit être > 0'}, status=400)
+        from_wh = request.data.get('from_warehouse') or request.data.get('from_wh')
+        to_wh = request.data.get('to_warehouse') or request.data.get('to_wh')
+        note = request.data.get('note') or ''
+        if not from_wh or not to_wh:
+            return Response({'detail': 'from_warehouse et to_warehouse requis'}, status=400)
+        try:
+            p = Produit.objects.get(pk=produit_id)
+            w_from = Warehouse.objects.get(pk=int(from_wh))
+            w_to = Warehouse.objects.get(pk=int(to_wh))
+        except (Produit.DoesNotExist, Warehouse.DoesNotExist):
+            return Response({'detail': 'Produit ou Entrepôt introuvable'}, status=404)
+        # Check stock availability on source warehouse
+        src_stock, _ = ProductStock.objects.get_or_create(produit=p, warehouse=w_from, defaults={'quantity': 0})
+        if src_stock.quantity < qty:
+            return Response({'detail': 'Stock insuffisant dans l\'entrepôt source', 'stock': src_stock.quantity, 'demande': qty}, status=400)
+        # Perform transfer: decrement source, increment destination
+        src_stock.quantity -= qty
+        src_stock.save(update_fields=['quantity'])
+        dst_stock, _ = ProductStock.objects.get_or_create(produit=p, warehouse=w_to, defaults={'quantity': 0})
+        dst_stock.quantity += qty
+        dst_stock.save(update_fields=['quantity'])
+        # Create two moves with warehouses
+        out_note = f"Transfert sortie {w_from.code} -> {w_to.code}"
+        in_note = f"Transfert entrée {w_from.code} -> {w_to.code}"
+        out_move = StockMove.objects.create(produit=p, warehouse=w_from, delta=-qty, source='TRANS', ref_id='', note=out_note + (f" | {note}" if note else ''))
+        in_move = StockMove.objects.create(produit=p, warehouse=w_to, delta=qty, source='TRANS', ref_id='', note=in_note + (f" | {note}" if note else ''))
+        # Aggregate total on product
+        total = p.stocks.aggregate(total=Sum('quantity')).get('total') or 0
+        p.quantite = total
+        p.save(update_fields=['quantite'])
+        return Response({'detail': 'Transfert enregistré', 'out': StockMoveSerializer(out_move).data, 'in': StockMoveSerializer(in_move).data}, status=201)
+
+    @action(detail=False, methods=['post'])
+    def loss(self, request):
+        """Perte / Casse / Expiration: sortie du stock.
+        Body: { produit: id, quantite: >0, type: 'PERTE'|'CASSE'|'EXP', warehouse: id, note: str (opt) }
+        """
+        try:
+            produit_id = int(request.data.get('produit') or request.data.get('produit_id'))
+            qty = float(request.data.get('quantite') or request.data.get('qty') or 0)
+        except (TypeError, ValueError):
+            return Response({'detail': 'Paramètres invalides'}, status=400)
+        move_type = (request.data.get('type') or '').upper() or 'PERTE'
+        if move_type not in ('PERTE', 'CASSE', 'EXP'):
+            return Response({'detail': "Type invalide (PERTE|CASSE|EXP)"}, status=400)
+        if qty <= 0:
+            return Response({'detail': 'La quantité doit être > 0'}, status=400)
+        note = request.data.get('note') or ''
+        warehouse_id = request.data.get('warehouse') or request.data.get('warehouse_id')
+        if not warehouse_id:
+            return Response({'detail': 'warehouse requis'}, status=400)
+        try:
+            p = Produit.objects.get(pk=produit_id)
+            w = Warehouse.objects.get(pk=int(warehouse_id))
+        except (Produit.DoesNotExist, Warehouse.DoesNotExist):
+            return Response({'detail': 'Produit ou Entrepôt introuvable'}, status=404)
+        ps, _ = ProductStock.objects.get_or_create(produit=p, warehouse=w, defaults={'quantity': 0})
+        if ps.quantity < qty:
+            return Response({'detail': 'Stock insuffisant dans cet entrepôt', 'stock': ps.quantity, 'demande': qty}, status=400)
+        ps.quantity -= qty
+        ps.save(update_fields=['quantity'])
+        move = StockMove.objects.create(produit=p, warehouse=w, delta=-qty, source=move_type, ref_id='', note=note)
+        total = p.stocks.aggregate(total=Sum('quantity')).get('total') or 0
+        p.quantite = total
+        p.save(update_fields=['quantite'])
+        return Response({'detail': 'Sortie enregistrée', 'move': StockMoveSerializer(move).data}, status=201)
+
+    @action(detail=False, methods=['post'])
+    def outflow(self, request):
+        """Échantillon / Don / Consommation interne: sortie sans vente.
+        Body: { produit: id, quantite: >0, type: 'SAMPLE'|'DON'|'CONS', note: str (opt) }
+        """
+        try:
+            produit_id = int(request.data.get('produit') or request.data.get('produit_id'))
+            qty = float(request.data.get('quantite') or request.data.get('qty') or 0)
+        except (TypeError, ValueError):
+            return Response({'detail': 'Paramètres invalides'}, status=400)
+        move_type = (request.data.get('type') or '').upper() or 'SAMPLE'
+        if move_type not in ('SAMPLE', 'DON', 'CONS'):
+            return Response({'detail': "Type invalide (SAMPLE|DON|CONS)"}, status=400)
+        if qty <= 0:
+            return Response({'detail': 'La quantité doit être > 0'}, status=400)
+        note = request.data.get('note') or ''
+        note = request.data.get('note') or ''
+        warehouse_id = request.data.get('warehouse') or request.data.get('warehouse_id')
+        if not warehouse_id:
+            return Response({'detail': 'warehouse requis'}, status=400)
+        try:
+            p = Produit.objects.get(pk=produit_id)
+            w = Warehouse.objects.get(pk=int(warehouse_id))
+        except (Produit.DoesNotExist, Warehouse.DoesNotExist):
+            return Response({'detail': 'Produit ou Entrepôt introuvable'}, status=404)
+        ps, _ = ProductStock.objects.get_or_create(produit=p, warehouse=w, defaults={'quantity': 0})
+        if ps.quantity < qty:
+            return Response({'detail': 'Stock insuffisant dans cet entrepôt', 'stock': ps.quantity, 'demande': qty}, status=400)
+        ps.quantity -= qty
+        ps.save(update_fields=['quantity'])
+        move = StockMove.objects.create(produit=p, warehouse=w, delta=-qty, source=move_type, ref_id='', note=note)
+        total = p.stocks.aggregate(total=Sum('quantity')).get('total') or 0
+        p.quantite = total
+        p.save(update_fields=['quantite'])
+        return Response({'detail': 'Sortie enregistrée', 'move': StockMoveSerializer(move).data}, status=201)
 
 class InventorySessionViewSet(viewsets.ModelViewSet):
     queryset = InventorySession.objects.all().order_by('-date')
@@ -778,6 +909,50 @@ class VenteViewSet(viewsets.ModelViewSet):
         </body></html>
         """
         return Response(html, content_type='text/html')
+
+class WarehouseViewSet(viewsets.ModelViewSet):
+    queryset = Warehouse.objects.all().order_by('name')
+    serializer_class = WarehouseSerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        include_inactive = self.request.query_params.get('include_inactive')
+        if include_inactive in (None, '', '0', 'false', 'False'):
+            qs = qs.filter(is_active=True)
+        return qs
+
+    def perform_destroy(self, instance):
+        # Prevent deletion if any product stock exists for this warehouse
+        if ProductStock.objects.filter(warehouse=instance).exists():
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError({'detail': "Impossible de supprimer: l'entrepôt est utilisé par des stocks. Mettez-le inactif à la place."})
+        return super().perform_destroy(instance)
+
+class ProductStockViewSet(viewsets.ModelViewSet):
+    queryset = ProductStock.objects.select_related('produit','warehouse').all()
+    serializer_class = ProductStockSerializer
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['produit', 'warehouse']
+    pagination_class = None
+
+    def _recompute_product_total(self, produit):
+        total = produit.stocks.aggregate(total=Sum('quantity')).get('total') or 0
+        produit.quantite = total
+        produit.save(update_fields=['quantite'])
+
+    def perform_create(self, serializer):
+        obj = serializer.save()
+        self._recompute_product_total(obj.produit)
+
+    def perform_update(self, serializer):
+        obj = serializer.save()
+        self._recompute_product_total(obj.produit)
+
+    def perform_destroy(self, instance):
+        produit = instance.produit
+        super().perform_destroy(instance)
+        self._recompute_product_total(produit)
 
 class LigneVenteViewSet(viewsets.ModelViewSet):
     queryset = LigneVente.objects.all()

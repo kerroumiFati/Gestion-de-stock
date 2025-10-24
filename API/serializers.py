@@ -193,10 +193,46 @@ class FactureSerializer(serializers.ModelSerializer):
         instance.save(update_fields=['total_ht', 'total_tva', 'total_ttc'])
         return instance
 
+class WarehouseSerializer(serializers.ModelSerializer):
+    stocks_count = serializers.SerializerMethodField()
+    stocks_total = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Warehouse
+        fields = ('id', 'name', 'code', 'is_active', 'stocks_count', 'stocks_total')
+
+    def get_stocks_count(self, obj):
+        try:
+            return obj.stocks.count()
+        except Exception:
+            return 0
+
+    def get_stocks_total(self, obj):
+        try:
+            from django.db.models import Sum
+            return obj.stocks.aggregate(total=Sum('quantity')).get('total') or 0
+        except Exception:
+            return 0
+
+class ProductStockSerializer(serializers.ModelSerializer):
+    produit_reference = serializers.CharField(source='produit.reference', read_only=True)
+    produit_designation = serializers.CharField(source='produit.designation', read_only=True)
+    warehouse_code = serializers.CharField(source='warehouse.code', read_only=True)
+    warehouse_name = serializers.CharField(source='warehouse.name', read_only=True)
+
+    class Meta:
+        model = ProductStock
+        fields = ('id', 'produit', 'produit_reference', 'produit_designation', 'warehouse', 'warehouse_code', 'warehouse_name', 'quantity')
+
 class StockMoveSerializer(serializers.ModelSerializer):
+    produit_reference = serializers.CharField(source='produit.reference', read_only=True)
+    produit_designation = serializers.CharField(source='produit.designation', read_only=True)
+    warehouse_code = serializers.CharField(source='warehouse.code', read_only=True)
+    warehouse_name = serializers.CharField(source='warehouse.name', read_only=True)
+    source_display = serializers.CharField(source='get_source_display', read_only=True)
     class Meta:
         model = StockMove
-        fields = ('id', 'produit', 'delta', 'source', 'ref_id', 'date', 'note')
+        fields = ('id', 'produit', 'produit_reference', 'produit_designation', 'warehouse', 'warehouse_code', 'warehouse_name', 'delta', 'source', 'source_display', 'ref_id', 'date', 'note')
 
 class InventoryLineSerializer(serializers.ModelSerializer):
     produit_reference = serializers.CharField(source='produit.reference', read_only=True)

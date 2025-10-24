@@ -33,6 +33,7 @@ urlpatterns = [
     re_path(r'^admindash/factures$', TemplateView.as_view(template_name='frontoffice/page/facture.html')),
     re_path(r'^admindash/inventaires$', TemplateView.as_view(template_name='frontoffice/page/inventaire.html')),
     re_path(r'^admindash/mouvements$', TemplateView.as_view(template_name='frontoffice/page/mouvements.html')),
+    re_path(r'^admindash/entrepots$', TemplateView.as_view(template_name='frontoffice/page/entrepots.html')),
     re_path(r'^admindash/ventes$', TemplateView.as_view(template_name='frontoffice/page/vente.html')),
     re_path(r'^admindash/categories$', TemplateView.as_view(template_name='frontoffice/page/categorie.html')),
 

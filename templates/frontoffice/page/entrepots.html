@@ -1,0 +1,57 @@
+{% load static %}
+<script src="{% static 'script/entrepots.js' %}" type="text/javascript"></script>
+<div class="container-fluid">
+  <div class="card bg-white">
+    <div class="card-header card-color">
+      <p class="h2 text-center text-uppercase font-weight-bold pt-2">Gestion des entrepôts</p>
+    </div>
+    <div class="card-body container-fluid">
+      <div id="wh_alerts" class="mb-3"></div>
+
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <div>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="wh_show_inactive">
+            <label class="form-check-label" for="wh_show_inactive">Afficher inactifs</label>
+          </div>
+        </div>
+      </div>
+
+      <form id="wh_form" class="mb-3">
+        <div class="form-row">
+          <div class="form-group col-md-4">
+            <label>Nom</label>
+            <input id="wh_name" type="text" class="form-control" placeholder="ex: Magasin Central" required />
+          </div>
+          <div class="form-group col-md-3">
+            <label>Code</label>
+            <input id="wh_code" type="text" class="form-control" placeholder="ex: MAG" required />
+          </div>
+          <div class="form-group col-md-3">
+            <label>Actif</label>
+            <select id="wh_active" class="form-control">
+              <option value="true">Oui</option>
+              <option value="false">Non</option>
+            </select>
+          </div>
+          <div class="form-group col-md-2 d-flex align-items-end">
+            <button id="wh_save" type="button" class="btn btn-primary mr-2">Enregistrer</button>
+            <button id="wh_reset" type="button" class="btn btn-secondary">Réinitialiser</button>
+          </div>
+        </div>
+        <input type="hidden" id="wh_id" />
+      </form>
+
+      <div class="table-responsive">
+        <table id="twh" class="table table-hover w-100">
+          <thead>
+            <tr class="text-uppercase bg-light w-100">
+              <th>Id</th><th>Code</th><th>Nom</th><th>Actif</th><th>Stocks liés</th><th></th><th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>

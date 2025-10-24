@@ -418,6 +418,30 @@ class LigneFacture(models.Model):
 ############################
 # Inventaire et mouvements #
 ############################
+class Warehouse(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    code = models.CharField(max_length=20, unique=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['name']
+        verbose_name = 'Entrepôt'
+        verbose_name_plural = 'Entrepôts'
+
+    def __str__(self):
+        return f"{self.code} - {self.name}"
+
+class ProductStock(models.Model):
+    produit = models.ForeignKey(Produit, on_delete=models.CASCADE, related_name='stocks')
+    warehouse = models.ForeignKey(Warehouse, on_delete=models.CASCADE, related_name='stocks')
+    quantity = models.IntegerField(default=0)
+
+    class Meta:
+        unique_together = ('produit', 'warehouse')
+
+    def __str__(self):
+        return f"{self.produit.reference} @ {self.warehouse.code}: {self.quantity}"
+
 class StockMove(models.Model):
     SOURCE_CHOICES = (
         ('BL', 'Bon de livraison'),
@@ -428,9 +452,10 @@ class StockMove(models.Model):
         ('AUTRE', 'Autre'),
     )
     produit = models.ForeignKey(Produit, on_delete=models.PROTECT, related_name='mouvements')
+    warehouse = models.ForeignKey('Warehouse', on_delete=models.SET_NULL, null=True, blank=True, related_name='mouvements')
     delta = models.IntegerField()  # + entrée, - sortie
     source = models.CharField(max_length=10, choices=SOURCE_CHOICES, default='AUTRE')
-    ref_id = models.CharField(max_length=50, blank=True)  # id de la pièce liée
+    ref_id = models.CharField(max_length=50, blank=True, default='')  # id de la pièce liée
     date = models.DateTimeField(default=timezone.now)
     note = models.CharField(max_length=200, blank=True)
 

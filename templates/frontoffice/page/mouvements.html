@@ -15,8 +15,12 @@
           <label>Source</label>
           <select id="mv_src" class="form-control">
             <option value="">Toutes</option>
-            <option>BL</option><option>BC</option><option>ACHAT</option><option>INV</option><option>CORR</option><option>AUTRE</option>
+            <option>BL</option><option>BC</option><option>ACHAT</option><option>INV</option><option>CORR</option><option>AUTRE</option><option>TRANS</option><option>PERTE</option><option>CASSE</option><option>EXP</option><option>SAMPLE</option><option>DON</option><option>CONS</option><option>vente</option><option>vente_cancel</option>
           </select>
+        </div>
+        <div class="col-sm-2">
+          <label>Entrepôt</label>
+          <select id="mv_wh" class="form-control"><option value="">Tous</option></select>
         </div>
         <div class="col-sm-3">
           <label>Après</label>
@@ -73,10 +77,116 @@
           </div>
         </div>
       </div>
+      <!-- Sections d'opérations -->
+      <ul class="nav nav-tabs mb-3" role="tablist">
+        <li class="nav-item">
+          <a class="nav-link active" id="tab-transfer" data-toggle="tab" href="#pane-transfer" role="tab">1- Transfert de stock</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" id="tab-loss" data-toggle="tab" href="#pane-loss" role="tab">2- Perte / Casse / Expiration</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" id="tab-outflow" data-toggle="tab" href="#pane-outflow" role="tab">3- Échantillon / Don / Consommation interne</a>
+        </li>
+      </ul>
+      <div class="tab-content mb-4">
+        <div class="tab-pane fade show active" id="pane-transfer" role="tabpanel" aria-labelledby="tab-transfer">
+          <div class="border rounded p-3">
+            <div class="form-row">
+              <div class="form-group col-md-4">
+                <label>Produit</label>
+                <select id="mv_transfer_produit" class="form-control"></select>
+              </div>
+              <div class="form-group col-md-2">
+                <label>Quantité</label>
+                <input id="mv_transfer_qty" type="number" min="0" step="1" class="form-control" />
+              </div>
+              <div class="form-group col-md-3">
+                <label>De (entrepôt)</label>
+                <select id="mv_transfer_from" class="form-control"></select>
+              </div>
+              <div class="form-group col-md-3">
+                <label>Vers (entrepôt)</label>
+                <select id="mv_transfer_to" class="form-control"></select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group col-md-12">
+                <label>Note</label>
+                <input id="mv_transfer_note" type="text" class="form-control" placeholder="Commentaire (optionnel)" />
+              </div>
+            </div>
+            <button id="mv_transfer_submit" class="btn btn-primary">Enregistrer le transfert</button>
+          </div>
+        </div>
+        <div class="tab-pane fade" id="pane-loss" role="tabpanel" aria-labelledby="tab-loss">
+          <div class="border rounded p-3">
+            <div class="form-row">
+              <div class="form-group col-md-4">
+                <label>Produit</label>
+                <select id="mv_loss_produit" class="form-control"></select>
+              </div>
+              <div class="form-group col-md-2">
+                <label>Quantité</label>
+                <input id="mv_loss_qty" type="number" min="0" step="1" class="form-control" />
+              </div>
+              <div class="form-group col-md-3">
+                <label>Type</label>
+                <select id="mv_loss_type" class="form-control">
+                  <option value="PERTE">Perte</option>
+                  <option value="CASSE">Casse</option>
+                  <option value="EXP">Expiration</option>
+                </select>
+              </div>
+              <div class="form-group col-md-3">
+                <label>Entrepôt</label>
+                <select id="mv_loss_warehouse" class="form-control"></select>
+              </div>
+              <div class="form-group col-md-12">
+                <label>Note</label>
+                <input id="mv_loss_note" type="text" class="form-control" placeholder="Commentaire (optionnel)" />
+              </div>
+            </div>
+            <button id="mv_loss_submit" class="btn btn-danger">Enregistrer la sortie</button>
+          </div>
+        </div>
+        <div class="tab-pane fade" id="pane-outflow" role="tabpanel" aria-labelledby="tab-outflow">
+          <div class="border rounded p-3">
+            <div class="form-row">
+              <div class="form-group col-md-4">
+                <label>Produit</label>
+                <select id="mv_outflow_produit" class="form-control"></select>
+              </div>
+              <div class="form-group col-md-2">
+                <label>Quantité</label>
+                <input id="mv_outflow_qty" type="number" min="0" step="1" class="form-control" />
+              </div>
+              <div class="form-group col-md-3">
+                <label>Type</label>
+                <select id="mv_outflow_type" class="form-control">
+                  <option value="SAMPLE">Échantillon</option>
+                  <option value="DON">Don</option>
+                  <option value="CONS">Consommation interne</option>
+                </select>
+              </div>
+              <div class="form-group col-md-3">
+                <label>Entrepôt</label>
+                <select id="mv_outflow_warehouse" class="form-control"></select>
+              </div>
+              <div class="form-group col-md-12">
+                <label>Note</label>
+                <input id="mv_outflow_note" type="text" class="form-control" placeholder="Commentaire (optionnel)" />
+              </div>
+            </div>
+            <button id="mv_outflow_submit" class="btn btn-warning">Enregistrer la sortie</button>
+          </div>
+        </div>
+      </div>
+
       <div class="row table-responsive m-auto rounded">
         <table id="tmouv" class="table table-hover w-100">
           <thead><tr class="text-uppercase bg-light w-100">
-            <th>Date</th><th>Produit</th><th>Delta</th><th>Source</th><th>Ref</th><th>Note</th>
+            <th>Date</th><th>Produit</th><th>Entrepôt</th><th>Delta</th><th>Source</th><th>Ref</th><th>Note</th>
           </tr></thead>
           <tbody></tbody>
         </table>
