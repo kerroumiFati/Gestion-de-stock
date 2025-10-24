@@ -25,7 +25,10 @@ SECRET_KEY = config('SECRET_KEY', default='bvie-ns68me1k$nh+p-znm3=fil$y*d*##wkb
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=True, cast=bool)
 
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,testserver,*.railway.app', cast=Csv())
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,0.0.0.0,[::1],testserver,*.railway.app', cast=Csv())
+# In DEBUG mode, allow all hosts to avoid 400 Bad Request during local/dev testing
+if DEBUG:
+    ALLOWED_HOSTS = ['*']
 
 
 # Application definition

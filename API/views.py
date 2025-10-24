@@ -6,6 +6,7 @@ from rest_framework import viewsets, generics, status
 from rest_framework import permissions
 from rest_framework.decorators import api_view, action
 from rest_framework.response import Response
+from django.http import JsonResponse
 from rest_framework.views import APIView
 
 from .serializers import *  # noqa: F401
@@ -15,10 +16,46 @@ from .models import *
 # Configure logging
 logger = logging.getLogger(__name__)
 
+# Simple raw endpoint to fetch categories directly from DB for diagnostics
+from rest_framework.decorators import api_view
+@api_view(['GET'])
+def categories_raw(request):
+    try:
+        rows = list(Categorie.objects.values('id','nom','description','parent','couleur','icone','is_active'))
+        return Response(rows)
+    except Exception as e:
+        logger.exception('categories_raw failed: %s', e)
+        return Response({'error': str(e)}, status=500)
+
 # API pour les Catégories
 class CategorieViewSet(viewsets.ModelViewSet):
-    queryset = Categorie.objects.filter(is_active=True).order_by('nom')
+    queryset = Categorie.objects.all().order_by('nom')
     serializer_class = CategorieSerializer
+    pagination_class = None  # Désactiver la pagination pour simplifier le front
+
+    def list(self, request, *args, **kwargs):
+        try:
+            logger.info('GET /API/categories/ called from %s', request.META.get('REMOTE_ADDR'))
+            print('[API] /API/categories/ called from', request.META.get('REMOTE_ADDR'))
+            qs = self.filter_queryset(self.get_queryset())
+            count = qs.count()
+            logger.info('Categories queryset count = %s', count, qs)
+            print('[API] Categories queryset count =', count)
+            serializer = self.get_serializer(qs, many=True)
+            data = serializer.data
+            # Log a compact preview of what we send to the front
+            preview = data[:3] if isinstance(data, list) else data
+            logger.info('Categories response preview (first 3): %s', preview)
+            try:
+                simple_preview = [ {'id': c.get('id'), 'nom': c.get('nom'), 'is_active': c.get('is_active')} for c in (data[:3] if isinstance(data, list) else []) ]
+            except Exception:
+                simple_preview = preview
+            print('[API] Categories response preview (first 3 simplified):', simple_preview)
+            print('[API] Categories total returned:', len(data) if isinstance(data, list) else 'non-list')
+            return Response(data)
+        except Exception as e:
+            logger.exception('Error in categories list: %s', e)
+            return Response({'error': str(e)}, status=500)
     
     def get_serializer_class(self):
         if self.action == 'tree':
@@ -91,6 +128,7 @@ class ClientViewSet(viewsets.ModelViewSet):
 class FournisseurViewSet(viewsets.ModelViewSet):
     queryset = Fournisseur.objects.all().order_by('libelle')
     serializer_class = FournisseurSerializer
+    pagination_class = None
 
 class ProduitViewSet(viewsets.ModelViewSet):
     queryset = Produit.objects.filter(is_active=True).order_by('reference')

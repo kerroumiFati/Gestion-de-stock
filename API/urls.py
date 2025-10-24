@@ -23,6 +23,7 @@ router.register(r'users', views.UserViewSet)
 # Additionally, we include login URLs for the browsable API.
 urlpatterns = [
     path('', include(router.urls)),
+    path('categories_raw/', views.categories_raw),
     path('api-auth/', include('rest_framework.urls', namespace='rest_framework')),
     #path('clients/<int:pk>/', views.ClientDetail.as_view())
     re_path(r'^prod/count/$', views.CountViewSet.as_view(), name='produits-count'),
