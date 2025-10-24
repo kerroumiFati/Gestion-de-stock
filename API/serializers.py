@@ -156,9 +156,17 @@ class ClientSerializer(serializers.ModelSerializer):
         fields = ('id','nom', 'prenom','email','telephone','adresse','produits')
 
 class AchatSerializer(serializers.ModelSerializer):
+    client_nom = serializers.CharField(source='client.nom', read_only=True)
+    client_prenom = serializers.CharField(source='client.prenom', read_only=True)
+    produit_reference = serializers.CharField(source='produit.reference', read_only=True)
+    produit_designation = serializers.CharField(source='produit.designation', read_only=True)
     class Meta:
         model = Achat
-        fields = ('id','date_Achat', 'date_expiration', 'quantite', 'client', 'produit')
+        fields = (
+            'id','date_Achat','date_expiration','quantite',
+            'client','client_nom','client_prenom',
+            'produit','produit_reference','produit_designation'
+        )
 
 class LigneLivraisonSerializer(serializers.ModelSerializer):
     class Meta:
