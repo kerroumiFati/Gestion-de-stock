@@ -259,6 +259,32 @@ class AchatViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         obj = serializer.save()
         try:
+            # Optionnel: entrepôt spécifié dans la requête
+            warehouse_id = self.request.data.get('warehouse') or self.request.data.get('warehouse_id')
+            p = obj.produit
+            qty = int(obj.quantite or 0)
+            w = None
+            if warehouse_id:
+                try:
+                    w = Warehouse.objects.get(pk=int(warehouse_id))
+                except Exception:
+                    w = None
+            # Mettre à jour le stock par entrepôt si fourni
+            if w is not None:
+                ps, _ = ProductStock.objects.get_or_create(produit=p, warehouse=w, defaults={'quantity': 0})
+                ps.quantity = ps.quantity + qty
+                ps.save(update_fields=['quantity'])
+                # Aggréger le stock total sur le produit
+                from django.db.models import Sum
+                total = p.stocks.aggregate(total=Sum('quantity')).get('total') or 0
+                p.quantite = total
+                p.save(update_fields=['quantite'])
+            else:
+                # Fallback: incrémenter directement le stock produit
+                p.quantite = (p.quantite or 0) + qty
+                p.save(update_fields=['quantite'])
+            # Créer un mouvement de stock (entrée)
+            StockMove.objects.create(produit=p, warehouse=w, delta=qty, source='ACHAT', ref_id=str(obj.id), note=f"Achat #{obj.id}")
             log_event(self.request, 'achat.create', target=obj, metadata={'id': obj.id})
         except Exception:
             pass
