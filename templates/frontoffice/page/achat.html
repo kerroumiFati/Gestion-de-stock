@@ -95,18 +95,27 @@
                 <div id="section-stock" class="mt-4" style="display:none">
                   <h4>Stocks par entrepôt</h4>
                   <div class="form-row align-items-end mb-2">
-                    <div class="form-group col-md-6">
+                    <div class="form-group col-md-4">
                       <label>Produit</label>
                       <select id="ps_prod" class="form-control"><option value="">Sélectionner un produit</option></select>
                     </div>
-                    <div class="form-group col-md-6 text-right">
+                    <div class="form-group col-md-4">
+                      <label>Entrepôt</label>
+                      <select id="ps_wh" class="form-control"><option value="">Tous les entrepôts</option></select>
+                    </div>
+                    <div class="form-group col-md-4 text-right">
                       <button id="ps_refresh" type="button" class="btn btn-outline-primary">Rafraîchir</button>
+                    </div>
+                  </div>
+                  <div class="row mb-2">
+                    <div class="col">
+                      <small id="ps_totals" class="text-muted"></small>
                     </div>
                   </div>
                   <div class="table-responsive">
                     <table id="tstock" class="table table-sm table-bordered">
                       <thead>
-                        <tr><th>Entrepôt</th><th>Quantité actuelle</th><th>Nouvelle quantité</th><th></th></tr>
+                        <tr><th>Produit</th><th>Entrepôt</th><th>Quantité actuelle</th><th>Valeur</th><th>Nouvelle quantité</th><th></th></tr>
                       </thead>
                       <tbody></tbody>
                     </table>

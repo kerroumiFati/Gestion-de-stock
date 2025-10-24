@@ -170,6 +170,16 @@
           </p>
         </div>
         <div class="card-body">
+          <div class="row mb-3">
+            <div class="col-sm-4">
+              <label for="ventes_filter" class="mr-2">Filtrer par statut</label>
+              <select id="ventes_filter" class="form-control form-control-sm">
+                <option value="all">Toutes</option>
+                <option value="draft">Brouillons</option>
+                <option value="completed">Finalisées</option>
+              </select>
+            </div>
+          </div>
           <div class="table-responsive">
             <table id="tbl_liste_ventes" class="table table-striped table-hover">
               <thead>

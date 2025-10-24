@@ -674,8 +674,26 @@ class InventorySessionViewSet(viewsets.ModelViewSet):
     serializer_class = InventorySessionSerializer
 
     def perform_create(self, serializer):
-        # Définir l'utilisateur créateur
-        serializer.save(created_by=self.request.user)
+        # Numérotation automatique INV-<YEAR>-NNNN si absente
+        from django.utils import timezone
+        from .models import InventorySession
+        numero = serializer.validated_data.get('numero')
+        if not numero or not str(numero).strip():
+            year = timezone.now().year
+            prefix = f"INV-{year}-"
+            last = InventorySession.objects.filter(numero__startswith=prefix).order_by('-numero').first()
+            seq = 1
+            if last:
+                try:
+                    seq = int(str(last.numero).split('-')[-1]) + 1
+                except Exception:
+                    seq = 1
+            numero = f"{prefix}{seq:04d}"
+        obj = serializer.save(created_by=self.request.user, numero=numero)
+        try:
+            log_event(self.request, 'inventorysession.create', target=obj, metadata={'id': obj.id, 'numero': obj.numero})
+        except Exception:
+            pass
 
     @action(detail=True, methods=['post'])
     def validate(self, request, pk=None):
@@ -1109,6 +1127,30 @@ class VenteViewSet(viewsets.ModelViewSet):
             
             vente.statut = 'completed'
             vente.save()
+
+            # Créer automatiquement un Bon de Livraison validé si absent
+            try:
+                if not vente.bon_livraison_id:
+                    from .serializers import BonLivraisonSerializer
+                    lignes_data = []
+                    for l in vente.lignes.select_related('produit'):
+                        lignes_data.append({
+                            'produit': l.produit.id,
+                            'quantite': int(l.quantite or 0),
+                            'prixU_snapshot': getattr(l, 'prixU_snapshot', getattr(l.produit, 'prixU', 0))
+                        })
+                    bl_payload = {
+                        'client': vente.client.id if vente.client_id else None,
+                        'statut': 'validated',
+                        'lignes': lignes_data,
+                    }
+                    bl_ser = BonLivraisonSerializer(data=bl_payload)
+                    bl_ser.is_valid(raise_exception=True)
+                    bl = bl_ser.save()
+                    vente.bon_livraison = bl
+                    vente.save(update_fields=['bon_livraison'])
+            except Exception as e:
+                logger.exception('Erreur creation BL lors de la finalisation de la vente: %s', e)
             
             # Créer les mouvements de stock pour diminuer les quantités
             for ligne in vente.lignes.select_related('produit'):
