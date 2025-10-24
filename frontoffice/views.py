@@ -7,8 +7,8 @@ from django.contrib import messages
 from .forms import *
 from API.models import Produit
 
-def login(requset):
-    return render(requset, "login.html",)
+def login_view(request):
+    return render(request, "login.html",)
 class LoginView(TemplateView):
 
   template_name = 'login.html'
@@ -30,9 +30,8 @@ class LogoutView(TemplateView):
   template_name = 'login.html'
 
   def get(self, request, **kwargs):
-
     logout(request)
-
+    messages.success(request, 'Vous avez été déconnecté avec succès.')
     return render(request, self.template_name)
 
 # def post_new(request):

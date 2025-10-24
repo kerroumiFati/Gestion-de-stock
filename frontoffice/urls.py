@@ -19,10 +19,11 @@ from django.urls import path
 from frontoffice import views
 from django.urls import re_path
 
-from frontoffice.views import LoginView
+from frontoffice.views import LoginView, LogoutView
 
 urlpatterns = [
-    re_path(r'^$', LoginView.as_view()),
+    re_path(r'^$', LoginView.as_view(), name='login'),
+    path('logout/', LogoutView.as_view(), name='logout'),
     #path('admindash/produit/add/', views.post_new, name='addProduit'),
     # path('post/<int:pk>/edit/', views.produit_edit, name='produit_edit'),
      #path('produits/', views.produit_all, name='produits'),

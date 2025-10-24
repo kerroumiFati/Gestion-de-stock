@@ -2,6 +2,7 @@ from django.db import models
 from django.utils import timezone
 from decimal import Decimal
 import json
+from django.contrib.auth.models import User
 
 from django.utils.formats import localize
 # Create your models here.
@@ -442,28 +443,98 @@ class StockMove(models.Model):
 class InventorySession(models.Model):
     STATUTS = (
         ('draft', 'Brouillon'),
+        ('in_progress', 'En cours'),
         ('validated', 'Validé'),
         ('canceled', 'Annulé'),
     )
     numero = models.CharField(max_length=50, unique=True)
     date = models.DateField(default=timezone.now)
-    statut = models.CharField(max_length=10, choices=STATUTS, default='draft')
+    statut = models.CharField(max_length=15, choices=STATUTS, default='draft')
     note = models.TextField(blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.PROTECT, null=True, blank=True, 
+                                 related_name='inventory_sessions_created',
+                                 help_text="Utilisateur qui a créé la session d'inventaire")
+    validated_by = models.ForeignKey(User, on_delete=models.PROTECT, null=True, blank=True,
+                                   related_name='inventory_sessions_validated',
+                                   help_text="Utilisateur qui a validé l'inventaire")
+    total_products = models.IntegerField(default=0, help_text="Nombre total de produits à inventorier")
+    completed_products = models.IntegerField(default=0, help_text="Nombre de produits déjà comptés")
+    completion_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0, 
+                                              help_text="Pourcentage de completion de l'inventaire")
 
     class Meta:
         ordering = ['-date', 'numero']
 
     def __str__(self):
-        return f"INV {self.numero} ({self.statut})"
+        return f"INV {self.numero} ({self.statut}) - {self.completion_percentage}%"
+    
+    def update_completion_percentage(self):
+        """Met à jour le pourcentage de completion de l'inventaire"""
+        total_lines = self.lignes.count()
+        completed_lines = self.lignes.filter(counted_qty__isnull=False).count()
+        
+        self.total_products = total_lines
+        self.completed_products = completed_lines
+        
+        if total_lines > 0:
+            self.completion_percentage = (completed_lines / total_lines) * 100
+        else:
+            self.completion_percentage = 0
+        
+        # Mettre à jour le statut automatiquement
+        if self.completion_percentage == 100 and self.statut == 'in_progress':
+            # Ne pas changer automatiquement en validé, mais garder en cours
+            pass
+        elif self.completion_percentage > 0 and self.statut == 'draft':
+            self.statut = 'in_progress'
+        
+        self.save(update_fields=['total_products', 'completed_products', 'completion_percentage', 'statut'])
+    
+    def can_be_validated(self):
+        """Vérifie si l'inventaire peut être validé"""
+        return self.completion_percentage == 100 and self.statut in ['in_progress', 'draft']
+    
+    def get_missing_products(self):
+        """Retourne la liste des produits non encore comptés"""
+        return self.lignes.filter(counted_qty__isnull=True)
 
 class InventoryLine(models.Model):
     session = models.ForeignKey(InventorySession, on_delete=models.CASCADE, related_name='lignes')
     produit = models.ForeignKey(Produit, on_delete=models.PROTECT)
-    counted_qty = models.IntegerField()  # quantité comptée physiquement
+    counted_qty = models.IntegerField(null=True, blank=True)  # quantité comptée physiquement
     snapshot_qty = models.IntegerField()  # quantité théorique au moment du comptage
+    counted_by = models.ForeignKey(User, on_delete=models.PROTECT, null=True, blank=True,
+                                 related_name='inventory_lines_counted',
+                                 help_text="Utilisateur qui a compté ce produit")
+    counted_at = models.DateTimeField(null=True, blank=True, 
+                                    help_text="Date et heure du comptage")
 
     def __str__(self):
-        return f"{self.produit.reference} compté {self.counted_qty} (théorique {self.snapshot_qty})"
+        if self.counted_qty is not None:
+            return f"{self.produit.reference} compté {self.counted_qty} (théorique {self.snapshot_qty})"
+        else:
+            return f"{self.produit.reference} non compté (théorique {self.snapshot_qty})"
+    
+    def save(self, *args, **kwargs):
+        # Mettre à jour counted_at si counted_qty vient d'être défini
+        if self.counted_qty is not None and not self.counted_at:
+            from django.utils import timezone
+            self.counted_at = timezone.now()
+        
+        super().save(*args, **kwargs)
+        
+        # Mettre à jour le pourcentage de la session parent
+        self.session.update_completion_percentage()
+    
+    def get_variance(self):
+        """Retourne l'écart entre quantité comptée et théorique"""
+        if self.counted_qty is not None:
+            return self.counted_qty - self.snapshot_qty
+        return None
+    
+    def is_completed(self):
+        """Vérifie si ce produit a été compté"""
+        return self.counted_qty is not None
 
 #####################
 #      Ventes       #

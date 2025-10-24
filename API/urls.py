@@ -26,5 +26,7 @@ urlpatterns = [
     path('api-auth/', include('rest_framework.urls', namespace='rest_framework')),
     #path('clients/<int:pk>/', views.ClientDetail.as_view())
     re_path(r'^prod/count/$', views.CountViewSet.as_view(), name='produits-count'),
+    re_path(r'^statistics/charts/$', views.StatisticsChartsViewSet.as_view(), name='statistics-charts'),
     re_path(r'^risk/$', views.RiskViewSet.as_view(), name='risk'),
+    re_path(r'^welcome/$', views.WelcomeView.as_view(), name='welcome'),
     ]

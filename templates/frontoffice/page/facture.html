@@ -29,6 +29,42 @@
           <button id="btn_create_from_bl" class="btn btn-outline-success">Créer depuis BL</button>
         </div>
       </div>
+      <!-- Résumé financier -->
+      <div class="row mb-3">
+        <div class="col-md-3">
+          <div class="card bg-info text-white">
+            <div class="card-body text-center">
+              <h6>Total HT</h6>
+              <h4 id="total-ht-display">0.00 €</h4>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card bg-warning text-white">
+            <div class="card-body text-center">
+              <h6>Total TVA</h6>
+              <h4 id="total-tva-display">0.00 €</h4>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card bg-success text-white">
+            <div class="card-body text-center">
+              <h6>Total TTC</h6>
+              <h4 id="total-ttc-display">0.00 €</h4>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card bg-primary text-white">
+            <div class="card-body text-center">
+              <h6>Nb Factures</h6>
+              <h4 id="total-factures-count">0</h4>
+            </div>
+          </div>
+        </div>
+      </div>
+      
       <div class="row table-responsive m-auto rounded mt-3">
         <table id="tfacture" class="table table-hover w-100">
           <thead>

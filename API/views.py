@@ -1,3 +1,4 @@
+import logging
 from django.contrib.auth import authenticate
 from django.shortcuts import render
 from django.db.models import Sum, Q, F
@@ -10,6 +11,9 @@ from rest_framework.views import APIView
 from .serializers import *  # noqa: F401
 from .serializers import StockMoveSerializer, InventorySessionSerializer
 from .models import *
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 # API pour les Catégories
 class CategorieViewSet(viewsets.ModelViewSet):
@@ -319,24 +323,110 @@ class InventorySessionViewSet(viewsets.ModelViewSet):
     queryset = InventorySession.objects.all().order_by('-date')
     serializer_class = InventorySessionSerializer
 
+    def perform_create(self, serializer):
+        # Définir l'utilisateur créateur
+        serializer.save(created_by=self.request.user)
+
     @action(detail=True, methods=['post'])
     def validate(self, request, pk=None):
         session = self.get_object()
-        if session.statut != 'draft':
-            return Response({'detail': 'Seules les sessions en brouillon peuvent être validées.'}, status=400)
+        if session.statut not in ('draft', 'in_progress'):
+            return Response({'detail': 'Seules les sessions en brouillon ou en cours peuvent être validées.'}, status=400)
+        
+        # Vérifier que tous les produits ont été comptés
+        if not session.can_be_validated():
+            return Response({
+                'detail': 'Tous les produits doivent être comptés avant de valider l\'inventaire.',
+                'completion_percentage': session.completion_percentage,
+                'missing_products': session.missing_products_count
+            }, status=400)
+        
         # pour chaque ligne, créer un mouvement d'écart et mettre à jour le stock produit
         for l in session.lignes.select_related('produit'):
-            # book stock: utiliser le champ produit.quantite (source actuelle de vérité), sinon somme des mouvements
-            book = l.snapshot_qty if l.snapshot_qty is not None else l.produit.quantite
-            delta = l.counted_qty - book
-            if delta != 0:
-                StockMove.objects.create(produit=l.produit, delta=delta, source='INV', ref_id=str(session.id), note=f'Inventaire {session.numero}')
-                # maintenir la cohérence avec le champ quantite
-                l.produit.quantite = l.produit.quantite + delta
-                l.produit.save(update_fields=['quantite'])
+            if l.counted_qty is not None:
+                # book stock: utiliser le champ produit.quantite (source actuelle de vérité), sinon somme des mouvements
+                book = l.snapshot_qty if l.snapshot_qty is not None else l.produit.quantite
+                delta = l.counted_qty - book
+                if delta != 0:
+                    StockMove.objects.create(produit=l.produit, delta=delta, source='INV', ref_id=str(session.id), note=f'Inventaire {session.numero}')
+                    # maintenir la cohérence avec le champ quantite
+                    l.produit.quantite = l.produit.quantite + delta
+                    l.produit.save(update_fields=['quantite'])
+        
         session.statut = 'validated'
-        session.save(update_fields=['statut'])
+        session.validated_by = request.user
+        session.save(update_fields=['statut', 'validated_by'])
         return Response({'detail': 'Inventaire validé'}, status=200)
+
+    @action(detail=True, methods=['post'])
+    def save_progress(self, request, pk=None):
+        """Sauvegarder le progrès de l'inventaire sans valider"""
+        session = self.get_object()
+        if session.statut not in ('draft', 'in_progress'):
+            return Response({'detail': 'Cette session ne peut plus être modifiée.'}, status=400)
+        
+        # Mettre à jour le statut en 'in_progress' si c'était en 'draft'
+        if session.statut == 'draft':
+            session.statut = 'in_progress'
+            session.save(update_fields=['statut'])
+        
+        return Response({
+            'detail': 'Progrès sauvegardé',
+            'completion_percentage': session.completion_percentage,
+            'completed_products': session.completed_products,
+            'total_products': session.total_products
+        })
+
+    @action(detail=True, methods=['post'])
+    def update_line(self, request, pk=None):
+        """Mettre à jour une ligne d'inventaire"""
+        session = self.get_object()
+        if session.statut not in ('draft', 'in_progress'):
+            return Response({'detail': 'Cette session ne peut plus être modifiée.'}, status=400)
+        
+        line_id = request.data.get('line_id')
+        counted_qty = request.data.get('counted_qty')
+        
+        try:
+            line = session.lignes.get(id=line_id)
+            if counted_qty is not None:
+                line.counted_qty = int(counted_qty)
+                line.counted_by = request.user
+                line.save()  # La méthode save() mettra à jour automatiquement le pourcentage
+            
+            return Response({
+                'detail': 'Ligne mise à jour',
+                'completion_percentage': session.completion_percentage,
+                'variance': line.get_variance()
+            })
+        except InventoryLine.DoesNotExist:
+            return Response({'detail': 'Ligne d\'inventaire non trouvée'}, status=404)
+        except (ValueError, TypeError):
+            return Response({'detail': 'Quantité invalide'}, status=400)
+
+    @action(detail=False)
+    def in_progress(self, request):
+        """Retourner les sessions d'inventaire en cours"""
+        sessions = self.queryset.filter(statut='in_progress')
+        serializer = self.get_serializer(sessions, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['get'])
+    def progress_report(self, request, pk=None):
+        """Rapport détaillé du progrès de l'inventaire"""
+        session = self.get_object()
+        missing_products = session.get_missing_products()
+        
+        return Response({
+            'session_info': self.get_serializer(session).data,
+            'missing_products': InventoryLineSerializer(missing_products, many=True).data,
+            'summary': {
+                'total_products': session.total_products,
+                'completed_products': session.completed_products,
+                'completion_percentage': session.completion_percentage,
+                'can_be_validated': session.can_be_validated()
+            }
+        })
 
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all().order_by('username')
@@ -344,19 +434,173 @@ class UserViewSet(viewsets.ModelViewSet):
 
 class CountViewSet(APIView):
     def get(self, request, format=None):
-        Produit_count = Produit.objects.all().count()
-        Client_count =  Client.objects.all().count()
+        from django.db.models import Sum, Count, Q
+        from django.utils import timezone
+        from datetime import timedelta, datetime
+        
+        # Compteurs de base
+        Produit_count = Produit.objects.filter(is_active=True).count()
+        Client_count = Client.objects.all().count()
         Fournisseur_count = Fournisseur.objects.all().count()
         Achat_count = Achat.objects.all().count()
-
+        Vente_count = Vente.objects.filter(statut='completed').count()
+        
+        # Statistiques de stock
+        produits_stock_bas = Produit.objects.filter(quantite__lte=F('seuil_alerte')).count()
+        produits_stock_critique = Produit.objects.filter(quantite__lte=F('seuil_critique')).count()
+        produits_rupture = Produit.objects.filter(quantite__lte=0).count()
+        
+        # Chiffre d'affaires
+        ca_total = Vente.objects.filter(statut='completed').aggregate(
+            total=Sum('total_ttc')
+        )['total'] or 0
+        
+        # CA ce mois
+        now = timezone.now()
+        debut_mois = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        ca_mois = Vente.objects.filter(
+            statut='completed',
+            date_vente__gte=debut_mois
+        ).aggregate(total=Sum('total_ttc'))['total'] or 0
+        
+        # Ventes aujourd'hui
+        aujourd_hui = now.date()
+        ventes_aujourd_hui = Vente.objects.filter(
+            statut='completed',
+            date_vente__date=aujourd_hui
+        ).count()
+        
         content = {
             'produits_count': Produit_count,
-            'Client_count':Client_count,
-            'Fournisseur_count':Fournisseur_count,
-            'Achat_count':Achat_count
+            'clients_count': Client_count,
+            'fournisseurs_count': Fournisseur_count,
+            'achats_count': Achat_count,
+            'ventes_count': Vente_count,
+            'ventes_aujourd_hui': ventes_aujourd_hui,
+            'ca_total': float(ca_total),
+            'ca_mois': float(ca_mois),
+            'produits_stock_bas': produits_stock_bas,
+            'produits_stock_critique': produits_stock_critique,
+            'produits_rupture': produits_rupture
         }
         return Response(content)
 
+class StatisticsChartsViewSet(APIView):
+    def get(self, request, format=None):
+        from django.db.models import Sum, Count, Q
+        from django.utils import timezone
+        from datetime import timedelta, datetime
+        import calendar
+        
+        now = timezone.now()
+        
+        # Ventes par mois (12 derniers mois)
+        ventes_par_mois = []
+        mois_labels = []
+        for i in range(11, -1, -1):
+            date = now - timedelta(days=30*i)
+            debut_mois = date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            if i == 0:
+                fin_mois = now
+            else:
+                fin_mois = (debut_mois + timedelta(days=32)).replace(day=1) - timedelta(seconds=1)
+            
+            ventes_mois = Vente.objects.filter(
+                statut='completed',
+                date_vente__gte=debut_mois,
+                date_vente__lte=fin_mois
+            ).aggregate(
+                count=Count('id'),
+                total=Sum('total_ttc')
+            )
+            
+            ventes_par_mois.append({
+                'mois': calendar.month_name[debut_mois.month][:3],
+                'ventes': ventes_mois['count'] or 0,
+                'ca': float(ventes_mois['total'] or 0)
+            })
+            mois_labels.append(calendar.month_name[debut_mois.month][:3])
+        
+        # Top 5 produits les plus vendus
+        from django.db.models import Sum
+        top_produits = LigneVente.objects.filter(
+            vente__statut='completed'
+        ).values(
+            'produit__designation',
+            'produit__reference'
+        ).annotate(
+            total_vendu=Sum('quantite')
+        ).order_by('-total_vendu')[:5]
+        
+        # Répartition des ventes par catégorie
+        ventes_par_categorie = LigneVente.objects.filter(
+            vente__statut='completed'
+        ).values(
+            'produit__categorie__nom'
+        ).annotate(
+            total_ventes=Sum('quantite'),
+            ca_categorie=Sum('prixU_snapshot')
+        ).order_by('-total_ventes')[:10]
+        
+        # Évolution du stock (mouvements des 30 derniers jours)
+        trente_jours = now - timedelta(days=30)
+        mouvements_stock = []
+        for i in range(30):
+            date = (now - timedelta(days=29-i)).date()
+            entrees = StockMove.objects.filter(
+                date__date=date,
+                delta__gt=0
+            ).aggregate(total=Sum('delta'))['total'] or 0
+            
+            sorties = abs(StockMove.objects.filter(
+                date__date=date,
+                delta__lt=0
+            ).aggregate(total=Sum('delta'))['total'] or 0)
+            
+            mouvements_stock.append({
+                'date': date.strftime('%d/%m'),
+                'entrees': entrees,
+                'sorties': sorties
+            })
+        
+        # Statut des stocks
+        stock_status = {
+            'normal': Produit.objects.filter(
+                quantite__gt=F('seuil_alerte'),
+                is_active=True
+            ).count(),
+            'alerte': Produit.objects.filter(
+                quantite__lte=F('seuil_alerte'),
+                quantite__gt=F('seuil_critique'),
+                is_active=True
+            ).count(),
+            'critique': Produit.objects.filter(
+                quantite__lte=F('seuil_critique'),
+                quantite__gt=0,
+                is_active=True
+            ).count(),
+            'rupture': Produit.objects.filter(
+                quantite__lte=0,
+                is_active=True
+            ).count()
+        }
+        
+        # Ventes par type de paiement
+        ventes_paiement = Vente.objects.filter(
+            statut='completed'
+        ).values('type_paiement').annotate(
+            count=Count('id'),
+            total=Sum('total_ttc')
+        ).order_by('-count')
+        
+        return Response({
+            'ventes_par_mois': ventes_par_mois,
+            'top_produits': list(top_produits),
+            'ventes_par_categorie': list(ventes_par_categorie),
+            'mouvements_stock': mouvements_stock,
+            'stock_status': stock_status,
+            'ventes_paiement': list(ventes_paiement)
+        })
 
 class RiskViewSet(APIView):
     def get(self, request, format=None):
@@ -368,7 +612,7 @@ class RiskViewSet(APIView):
         data = ProduitSerializer(qs, many=True).data
         return Response(data)
 
-class LoginnViewSet(APIView):
+class LoginViewSet(APIView):
     def get(self, request, format=None):
             username = request.GET.get('username', False)
             password = request.GET.get('password', False)
@@ -612,4 +856,17 @@ class ExchangeRateViewSet(viewsets.ModelViewSet):
         return Response({
             'currencies': [{'code': c.code, 'name': c.name, 'symbol': c.symbol} for c in currencies],
             'matrix': matrix
+        })
+
+class WelcomeView(APIView):
+    """
+    API endpoint that logs request metadata and returns a welcome message.
+    """
+    def get(self, request, format=None):
+        # Log request metadata
+        logger.info(f"Request received: {request.method} {request.path} from {request.META.get('REMOTE_ADDR', 'unknown')}")
+
+        # Return welcome JSON response
+        return Response({
+            'message': 'Welcome to the Gestion de Stock API!'
         })

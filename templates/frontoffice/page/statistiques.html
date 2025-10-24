@@ -1,54 +1,189 @@
 <head>
-    <meta charset="UTF-8" >
+    <meta charset="UTF-8">
+    <style>
+        .stats-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 15px;
+            padding: 20px;
+            color: white;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+        .stats-card:hover {
+            transform: translateY(-5px);
+        }
+        .stats-card.green { background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%); }
+        .stats-card.orange { background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%); }
+        .stats-card.blue { background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%); }
+        .stats-card.red { background: linear-gradient(135deg, #F44336 0%, #D32F2F 100%); }
+        .stats-card.purple { background: linear-gradient(135deg, #9C27B0 0%, #7B1FA2 100%); }
+        .stats-card.teal { background: linear-gradient(135deg, #009688 0%, #00695C 100%); }
+        
+        .chart-container {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+        
+        .chart-title {
+            color: #333;
+            font-weight: bold;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 50px;
+            color: #666;
+        }
+    </style>
 </head>
-<div class="container-fluid" style="margin-top: 5%;">
-    <div class="">
-        <p class="h2 text-center text-dark text-uppercase font-weight-bold">Statistiques </p>
-        <hr class="line-seprate">
-        <section class="statistic statistic2">
-            <div class="container">
-                <div class="row">
-                    <a href="#" class="col-md-6 col-lg-3">
-                        <div class="statistic__item statistic__item--green">
-                            <span class="desc">Produits</span>
-                            <h2 class="number" id="nbr-produits"></h2>
-                            <div class="icon">
-                                <i class="zmdi zmdi-accounts"></i>
-                            </div>
-                        </div>
-                    </a>
-                    <a href="#" class="col-md-6 col-lg-3">
-
-                        <div class="statistic__item statistic__item--orange">
-                            <span class="desc">Clients</span>
-                            <h2 class="number" id="nbr-clients"></h2>
-                            <div class="icon">
-                                <i class="zmdi zmdi-group-work"></i>
-                            </div>
-                        </div>
-                    </a>
-                    <a href="#" class="col-md-6 col-lg-3">
-                        <div class="statistic__item statistic__item--blue">
-                            <span class="desc">Fournisseurs</span>
-                            <h2 class="number" id="nbr-fournisseur"></h2>
-                            <div class="icon">
-                                <i class="zmdi zmdi-check"></i>
-                            </div>
-                        </div>
-                    </a>
-                    <a href="#" class="col-md-6 col-lg-3">
-                        <div class="statistic__item statistic__item--red">
-                            <span class="desc">Achats</span>
-                            <h2 class="number" id="nbr-achat"></h2>
-                            <div class="icon">
-                                <i class="zmdi zmdi-settings"></i>
-                            </div>
-                        </div>
-                    </a>
+<div class="container-fluid" style="margin-top: 2%;">
+    <!-- Titre Principal -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1 class="text-dark font-weight-bold mb-0">
+                    <i class="fas fa-chart-bar mr-3"></i>Tableau de Bord - Statistiques
+                </h1>
+                <div>
+                    <button class="btn btn-outline-primary btn-sm mr-2" onclick="refreshStatistics()">
+                        <i class="fas fa-sync-alt"></i> Actualiser
+                    </button>
+                    <small class="text-muted" id="last-update">Dernière mise à jour: -</small>
                 </div>
-                
             </div>
-        </section>
+            <hr class="bg-primary" style="height: 3px;">
+        </div>
+    </div>
+
+    <!-- Cartes de statistiques principales -->
+    <div class="row mb-4">
+        <div class="col-lg-2 col-md-4 col-sm-6">
+            <div class="stats-card green">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h3 id="nbr-produits" class="mb-0">-</h3>
+                        <p class="mb-0">Produits</p>
+                    </div>
+                    <i class="fas fa-box fa-2x opacity-75"></i>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-2 col-md-4 col-sm-6">
+            <div class="stats-card orange">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h3 id="nbr-clients" class="mb-0">-</h3>
+                        <p class="mb-0">Clients</p>
+                    </div>
+                    <i class="fas fa-users fa-2x opacity-75"></i>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-2 col-md-4 col-sm-6">
+            <div class="stats-card blue">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h3 id="nbr-fournisseurs" class="mb-0">-</h3>
+                        <p class="mb-0">Fournisseurs</p>
+                    </div>
+                    <i class="fas fa-truck fa-2x opacity-75"></i>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-2 col-md-4 col-sm-6">
+            <div class="stats-card red">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h3 id="nbr-ventes" class="mb-0">-</h3>
+                        <p class="mb-0">Ventes</p>
+                    </div>
+                    <i class="fas fa-shopping-cart fa-2x opacity-75"></i>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-2 col-md-4 col-sm-6">
+            <div class="stats-card purple">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h3 id="ca-total" class="mb-0">-</h3>
+                        <p class="mb-0">CA Total</p>
+                    </div>
+                    <i class="fas fa-euro-sign fa-2x opacity-75"></i>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-2 col-md-4 col-sm-6">
+            <div class="stats-card teal">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h3 id="stock-alerte" class="mb-0">-</h3>
+                        <p class="mb-0">Stock Alerte</p>
+                    </div>
+                    <i class="fas fa-exclamation-triangle fa-2x opacity-75"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Graphiques -->
+    <div class="row">
+        <!-- Ventes par mois -->
+        <div class="col-lg-8 col-md-12">
+            <div class="chart-container">
+                <h4 class="chart-title">Évolution des Ventes et du Chiffre d'Affaires</h4>
+                <canvas id="ventesChart" height="120"></canvas>
+            </div>
+        </div>
+        
+        <!-- Statut des stocks -->
+        <div class="col-lg-4 col-md-6">
+            <div class="chart-container">
+                <h4 class="chart-title">Statut des Stocks</h4>
+                <canvas id="stockChart" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Top produits -->
+        <div class="col-lg-6 col-md-12">
+            <div class="chart-container">
+                <h4 class="chart-title">Top 5 Produits les Plus Vendus</h4>
+                <canvas id="topProduitsChart" height="150"></canvas>
+            </div>
+        </div>
+        
+        <!-- Ventes par catégorie -->
+        <div class="col-lg-6 col-md-12">
+            <div class="chart-container">
+                <h4 class="chart-title">Ventes par Catégorie</h4>
+                <canvas id="categoriesChart" height="150"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Mouvements de stock -->
+        <div class="col-lg-8 col-md-12">
+            <div class="chart-container">
+                <h4 class="chart-title">Mouvements de Stock (30 derniers jours)</h4>
+                <canvas id="mouvementsChart" height="120"></canvas>
+            </div>
+        </div>
+        
+        <!-- Types de paiement -->
+        <div class="col-lg-4 col-md-6">
+            <div class="chart-container">
+                <h4 class="chart-title">Répartition des Paiements</h4>
+                <canvas id="paiementsChart" height="200"></canvas>
+            </div>
+        </div>
     </div>
 </div>
 {% load static %}

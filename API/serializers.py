@@ -199,16 +199,41 @@ class StockMoveSerializer(serializers.ModelSerializer):
         fields = ('id', 'produit', 'delta', 'source', 'ref_id', 'date', 'note')
 
 class InventoryLineSerializer(serializers.ModelSerializer):
+    produit_reference = serializers.CharField(source='produit.reference', read_only=True)
+    produit_designation = serializers.CharField(source='produit.designation', read_only=True)
+    variance = serializers.SerializerMethodField()
+    is_completed = serializers.BooleanField(source='is_completed', read_only=True)
+    counted_by_username = serializers.CharField(source='counted_by.username', read_only=True)
+    
     class Meta:
         model = InventoryLine
-        fields = ('id', 'produit', 'counted_qty', 'snapshot_qty')
+        fields = ('id', 'produit', 'produit_reference', 'produit_designation', 
+                 'counted_qty', 'snapshot_qty', 'variance', 'is_completed',
+                 'counted_by', 'counted_by_username', 'counted_at')
+    
+    def get_variance(self, obj):
+        return obj.get_variance()
 
 class InventorySessionSerializer(serializers.ModelSerializer):
     lignes = InventoryLineSerializer(many=True)
+    created_by_username = serializers.CharField(source='created_by.username', read_only=True)
+    validated_by_username = serializers.CharField(source='validated_by.username', read_only=True)
+    statut_display = serializers.CharField(source='get_statut_display', read_only=True)
+    can_be_validated = serializers.SerializerMethodField()
+    missing_products_count = serializers.SerializerMethodField()
 
     class Meta:
         model = InventorySession
-        fields = ('id', 'numero', 'date', 'statut', 'note', 'lignes')
+        fields = ('id', 'numero', 'date', 'statut', 'statut_display', 'note', 
+                 'created_by', 'created_by_username', 'validated_by', 'validated_by_username',
+                 'total_products', 'completed_products', 'completion_percentage',
+                 'can_be_validated', 'missing_products_count', 'lignes')
+    
+    def get_missing_products_count(self, obj):
+        return obj.get_missing_products().count()
+    
+    def get_can_be_validated(self, obj):
+        return obj.can_be_validated()
 
     def create(self, validated_data):
         lignes_data = validated_data.pop('lignes', [])

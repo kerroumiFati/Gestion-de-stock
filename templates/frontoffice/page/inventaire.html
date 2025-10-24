@@ -23,9 +23,58 @@
       <div class="row">
         <div class="col">
           <button id="btn_create_session" class="btn btn-outline-success">Créer la session</button>
+          <button id="btn_save_progress" class="btn btn-outline-warning" disabled>Sauvegarder progrès</button>
           <button id="btn_validate_session" class="btn btn-outline-primary" disabled>Valider</button>
         </div>
       </div>
+      <!-- Session d'inventaire active -->
+      <div class="row">
+        <div class="col-12">
+          <h5 class="mt-4 mb-3">Session d'Inventaire Active</h5>
+        </div>
+      </div>
+      
+      <!-- Barre de progression -->
+      <div id="progress_section" class="row mt-3" style="display: none;">
+        <div class="col-12">
+          <div class="card border-info">
+            <div class="card-header bg-info text-white">
+              <h6 class="mb-0">Progression de l'inventaire</h6>
+            </div>
+            <div class="card-body">
+              <div class="row">
+                <div class="col-md-6">
+                  <div class="progress mb-2" style="height: 25px;">
+                    <div id="progress_bar" class="progress-bar bg-info progress-bar-striped progress-bar-animated" 
+                         role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                      <span id="progress_text">0%</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="row">
+                    <div class="col-6">
+                      <small class="text-muted">Comptés:</small>
+                      <span id="completed_count" class="font-weight-bold">0</span>
+                    </div>
+                    <div class="col-6">
+                      <small class="text-muted">Total:</small>
+                      <span id="total_count" class="font-weight-bold">0</span>
+                    </div>
+                  </div>
+                  <div class="row mt-2">
+                    <div class="col-12">
+                      <small class="text-muted">Créé par:</small>
+                      <span id="created_by" class="font-weight-bold">-</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
       <div class="row table-responsive m-auto rounded mt-3">
         <table id="tinventaire" class="table table-hover w-100">
           <thead>
@@ -34,7 +83,10 @@
               <th>Théorique</th>
               <th>Compté</th>
               <th>Écart</th>
-              <th></th>
+              <th>Statut</th>
+              <th>Compté par</th>
+              <th>Date comptage</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody id="inv_table"></tbody>
@@ -48,6 +100,32 @@
         <div class="col-sm-2 d-flex align-items-end">
           <button id="btn_add_line" class="btn btn-outline-secondary">Ajouter</button>
         </div>
+      </div>
+      
+      <!-- Historique des sessions -->
+      <div class="row">
+        <div class="col-12">
+          <h5 class="mt-4 mb-3">Historique des Sessions d'Inventaire</h5>
+        </div>
+      </div>
+      
+      <div class="row table-responsive m-auto rounded">
+        <table id="tsessions" class="table table-hover w-100">
+          <thead>
+            <tr class="text-uppercase bg-light w-100">
+              <th>ID</th>
+              <th>Numéro</th>
+              <th>Date</th>
+              <th>Statut</th>
+              <th>Progression</th>
+              <th>Créé par</th>
+              <th>Validé par</th>
+              <th>Note</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="inv_sessions_table"></tbody>
+        </table>
       </div>
     </div>
   </div>
