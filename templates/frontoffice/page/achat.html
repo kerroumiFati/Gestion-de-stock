@@ -21,8 +21,15 @@
         <div class="card-header card-color">
             <p class="h2 text-center text-uppercase font-weight-bold pt-2">Gestion des Achats</p>
         </div>
-        <form> {% csrf_token %}
+        <div class="mb-3">
+  <ul class="nav nav-tabs" id="achatTabs">
+    <li class="nav-item"><a class="nav-link active" href="#" data-target="#section-achat">Achats</a></li>
+    <li class="nav-item"><a class="nav-link" href="#" data-target="#section-stock">Stock par entrepôt</a></li>
+  </ul>
+</div>
+<form> {% csrf_token %}
             <div class="card-body container-fluid">
+  <div id="section-achat">
                 <div class="row">
                     <div class="col-sm-6 mb-2">
                         <label for="code">date d'Achat : </label>
@@ -32,6 +39,12 @@
                     <div class="col-sm-6 mb-2">
                         <label for="nom">Qte : </label>
                         <input class="form-control" type="number" id="quantite" required>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-sm-6 mb-2">
+                        <label for="dateexp">Date d'expiration (optionnelle) : </label>
+                        <input class="form-control" type="date" id="dateexp" placeholder="Facultatif">
                     </div>
                 </div>
 
@@ -65,7 +78,29 @@
                         <button type="button" class="btn btn-outline-success mt-3 mb-3" id="btn">Ajouter</button>
                     </div>
                 </div>
-                <div class="row table-responsive m-auto rounded">
+              </div><!-- end section-achat -->
+                <div id="section-stock" class="mt-4" style="display:none">
+                  <h4>Stocks par entrepôt</h4>
+                  <div class="form-row align-items-end mb-2">
+                    <div class="form-group col-md-6">
+                      <label>Produit</label>
+                      <select id="ps_prod" class="form-control"><option value="">Sélectionner un produit</option></select>
+                    </div>
+                    <div class="form-group col-md-6 text-right">
+                      <button id="ps_refresh" type="button" class="btn btn-outline-primary">Rafraîchir</button>
+                    </div>
+                  </div>
+                  <div class="table-responsive">
+                    <table id="tstock" class="table table-sm table-bordered">
+                      <thead>
+                        <tr><th>Entrepôt</th><th>Quantité actuelle</th><th>Nouvelle quantité</th><th></th></tr>
+                      </thead>
+                      <tbody></tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div id="section-achat-table" class="row table-responsive m-auto rounded">
                     <table id="tachat" class="table table-hover w-100">
                         <thead>
                         <tr class="text-uppercase bg-light  w-100">
@@ -87,6 +122,20 @@
         </form>
     </div>
 </div>
+<script src="{% static 'script/produit_stocks.js' %}" type="text/javascript"></script>
 <script type="text/javascript">
+(function(){
+  const tabs = document.querySelectorAll('#achatTabs .nav-link');
+  function activate(target){
+    document.querySelectorAll('#achatTabs .nav-link').forEach(a=>a.classList.remove('active'));
+    tabs.forEach(a=>{ if(a.getAttribute('data-target')===target) a.classList.add('active'); });
+    document.getElementById('section-achat').style.display = (target==='#section-achat') ? '' : 'none';
+    var tachatWrap = document.getElementById('section-achat-table'); if(tachatWrap){ tachatWrap.style.display = (target==='#section-achat') ? '' : 'none'; }
+    document.getElementById('section-stock').style.display = (target==='#section-stock') ? '' : 'none';
+  }
+  tabs.forEach(a=>a.addEventListener('click', function(e){ e.preventDefault(); activate(this.getAttribute('data-target')); }));
+  // default to Achats
+  activate('#section-achat');
+})();
 
 </script>

@@ -34,5 +34,6 @@ urlpatterns = [
     re_path(r'^prod/count/$', views.CountViewSet.as_view(), name='produits-count'),
     re_path(r'^statistics/charts/$', views.StatisticsChartsViewSet.as_view(), name='statistics-charts'),
     re_path(r'^risk/$', views.RiskViewSet.as_view(), name='risk'),
+    re_path(r'^alerts/$', views.AlertsView.as_view(), name='alerts'),
     re_path(r'^welcome/$', views.WelcomeView.as_view(), name='welcome'),
     ]

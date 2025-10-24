@@ -4,6 +4,7 @@ from django.shortcuts import render
 from django.db.models import Sum, Q, F
 from rest_framework import viewsets, generics, status
 from rest_framework import permissions
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.decorators import api_view, action
 from rest_framework.response import Response
 from django.http import JsonResponse
@@ -12,6 +13,7 @@ from rest_framework.views import APIView
 from .serializers import *  # noqa: F401
 from .serializers import StockMoveSerializer, InventorySessionSerializer
 from .models import *
+from .audit import log_event
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -215,6 +217,29 @@ class ProduitViewSet(viewsets.ModelViewSet):
         
         serializer = self.get_serializer(products, many=True)
         return Response(serializer.data)
+
+    def perform_create(self, serializer):
+        obj = serializer.save()
+        try:
+            log_event(self.request, 'produit.create', target=obj, metadata={'id': obj.id, 'reference': getattr(obj, 'reference', None)})
+        except Exception:
+            pass
+
+    def perform_update(self, serializer):
+        obj = serializer.save()
+        try:
+            log_event(self.request, 'produit.update', target=obj, metadata={'id': obj.id})
+        except Exception:
+            pass
+
+    def perform_destroy(self, instance):
+        mid = instance.id
+        ref = getattr(instance, 'reference', None)
+        super().perform_destroy(instance)
+        try:
+            log_event(self.request, 'produit.delete', target=None, metadata={'id': mid, 'reference': ref})
+        except Exception:
+            pass
     # def destroy(self, request, *args, **kwargs):
     #     instance = self.get_object()
     #     self.perform_destroy(instance)
@@ -227,9 +252,54 @@ class AchatViewSet(viewsets.ModelViewSet):
     queryset = Achat.objects.all().order_by('date_Achat')
     serializer_class = AchatSerializer
 
+    def perform_create(self, serializer):
+        obj = serializer.save()
+        try:
+            log_event(self.request, 'achat.create', target=obj, metadata={'id': obj.id})
+        except Exception:
+            pass
+
+    def perform_update(self, serializer):
+        obj = serializer.save()
+        try:
+            log_event(self.request, 'achat.update', target=obj, metadata={'id': obj.id})
+        except Exception:
+            pass
+
+    def perform_destroy(self, instance):
+        mid = instance.id
+        super().perform_destroy(instance)
+        try:
+            log_event(self.request, 'achat.delete', target=None, metadata={'id': mid})
+        except Exception:
+            pass
+
 class BonLivraisonViewSet(viewsets.ModelViewSet):
     queryset = BonLivraison.objects.all().order_by('-date_creation')
     serializer_class = BonLivraisonSerializer
+
+    def perform_create(self, serializer):
+        obj = serializer.save()
+        try:
+            log_event(self.request, 'bonlivraison.create', target=obj, metadata={'id': obj.id, 'numero': getattr(obj, 'numero', None)})
+        except Exception:
+            pass
+
+    def perform_update(self, serializer):
+        obj = serializer.save()
+        try:
+            log_event(self.request, 'bonlivraison.update', target=obj, metadata={'id': obj.id})
+        except Exception:
+            pass
+
+    def perform_destroy(self, instance):
+        mid = instance.id
+        num = getattr(instance, 'numero', None)
+        super().perform_destroy(instance)
+        try:
+            log_event(self.request, 'bonlivraison.delete', target=None, metadata={'id': mid, 'numero': num})
+        except Exception:
+            pass
 
     @action(detail=True, methods=['post'])
     def valider(self, request, pk=None):
@@ -251,11 +321,22 @@ class BonLivraisonViewSet(viewsets.ModelViewSet):
             StockMove.objects.create(produit=p, delta=-(l.quantite), source='BL', ref_id=str(bon.id), note=f'BL {bon.numero}')
         bon.statut = 'validated'
         bon.save(update_fields=['statut'])
+        try:
+            log_event(self.request, 'bonlivraison.validate', target=bon, metadata={'id': bon.id, 'numero': getattr(bon, 'numero', None)})
+        except Exception:
+            pass
         return Response({'detail': 'Bon validé'}, status=200)
 
 class FactureViewSet(viewsets.ModelViewSet):
     queryset = Facture.objects.all().order_by('-date_emission')
     serializer_class = FactureSerializer
+
+    def perform_create(self, serializer):
+        obj = serializer.save()
+        try:
+            log_event(self.request, 'facture.create', target=obj, metadata={'id': obj.id, 'numero': getattr(obj, 'numero', None)})
+        except Exception:
+            pass
 
     def perform_update(self, serializer):
         instance = self.get_object()
@@ -331,6 +412,10 @@ class FactureViewSet(viewsets.ModelViewSet):
             return Response({'detail': 'Seules les factures en brouillon peuvent être émises.'}, status=400)
         facture.statut = 'issued'
         facture.save(update_fields=['statut'])
+        try:
+            log_event(self.request, 'facture.issue', target=facture, metadata={'id': facture.id, 'numero': getattr(facture, 'numero', None)})
+        except Exception:
+            pass
         return Response({'detail': 'Facture émise'}, status=200)
 
     @action(detail=True, methods=['post'])
@@ -340,6 +425,10 @@ class FactureViewSet(viewsets.ModelViewSet):
             return Response({'detail': 'La facture doit être émise pour être payée.'}, status=400)
         facture.statut = 'paid'
         facture.save(update_fields=['statut'])
+        try:
+            log_event(self.request, 'facture.pay', target=facture, metadata={'id': facture.id, 'numero': getattr(facture, 'numero', None)})
+        except Exception:
+            pass
         return Response({'detail': 'Facture payée'}, status=200)
 
 from django_filters.rest_framework import DjangoFilterBackend, FilterSet, filters
@@ -354,6 +443,43 @@ class StockMoveFilter(FilterSet):
 class StockMoveViewSet(viewsets.ModelViewSet):
     queryset = StockMove.objects.all().select_related('produit','warehouse')
     serializer_class = StockMoveSerializer
+
+    def perform_create(self, serializer):
+        obj = serializer.save()
+        # Update stock per warehouse and aggregate product stock
+        if obj.warehouse is None:
+            pass
+        else:
+            ps, _ = ProductStock.objects.get_or_create(produit=obj.produit, warehouse=obj.warehouse, defaults={'quantity': 0})
+            ps.quantity = ps.quantity + obj.delta
+            ps.save(update_fields=['quantity'])
+        total = obj.produit.stocks.aggregate(total=Sum('quantity')).get('total') or 0
+        obj.produit.quantite = total
+        obj.produit.save(update_fields=['quantite'])
+        try:
+            log_event(self.request, 'stockmove.create', target=obj, metadata={'id': obj.id, 'produit': obj.produit_id, 'warehouse': getattr(obj.warehouse, 'id', None), 'delta': obj.delta, 'source': obj.source, 'ref_id': obj.ref_id})
+        except Exception:
+            pass
+
+    def perform_update(self, serializer):
+        obj = serializer.save()
+        total = obj.produit.stocks.aggregate(total=Sum('quantity')).get('total') or 0
+        obj.produit.quantite = total
+        obj.produit.save(update_fields=['quantite'])
+        try:
+            log_event(self.request, 'stockmove.update', target=obj, metadata={'id': obj.id})
+        except Exception:
+            pass
+
+    def perform_destroy(self, instance):
+        mid = instance.id
+        prod = instance.produit_id
+        wh = getattr(instance.warehouse, 'id', None)
+        super().perform_destroy(instance)
+        try:
+            log_event(self.request, 'stockmove.delete', target=None, metadata={'id': mid, 'produit': prod, 'warehouse': wh})
+        except Exception:
+            pass
     filter_backends = [DjangoFilterBackend]
     filterset_class = StockMoveFilter
     pagination_class = None
@@ -407,6 +533,10 @@ class StockMoveViewSet(viewsets.ModelViewSet):
         dst_stock.quantity += qty
         dst_stock.save(update_fields=['quantity'])
         # Create two moves with warehouses
+        try:
+            log_event(self.request, 'stockmove.transfer', target=None, metadata={'produit': p.id, 'qty': qty, 'from': w_from.id, 'to': w_to.id, 'note': note})
+        except Exception:
+            pass
         out_note = f"Transfert sortie {w_from.code} -> {w_to.code}"
         in_note = f"Transfert entrée {w_from.code} -> {w_to.code}"
         out_move = StockMove.objects.create(produit=p, warehouse=w_from, delta=-qty, source='TRANS', ref_id='', note=out_note + (f" | {note}" if note else ''))
@@ -489,6 +619,27 @@ class StockMoveViewSet(viewsets.ModelViewSet):
         return Response({'detail': 'Sortie enregistrée', 'move': StockMoveSerializer(move).data}, status=201)
 
 class InventorySessionViewSet(viewsets.ModelViewSet):
+    def perform_create(self, serializer):
+        obj = serializer.save()
+        try:
+            log_event(self.request, 'inventorysession.create', target=obj, metadata={'id': obj.id})
+        except Exception:
+            pass
+
+    def perform_update(self, serializer):
+        obj = serializer.save()
+        try:
+            log_event(self.request, 'inventorysession.update', target=obj, metadata={'id': obj.id})
+        except Exception:
+            pass
+
+    def perform_destroy(self, instance):
+        mid = instance.id
+        super().perform_destroy(instance)
+        try:
+            log_event(self.request, 'inventorysession.delete', target=None, metadata={'id': mid})
+        except Exception:
+            pass
     queryset = InventorySession.objects.all().order_by('-date')
     serializer_class = InventorySessionSerializer
 
@@ -625,173 +776,233 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
 
 class CountViewSet(APIView):
     def get(self, request, format=None):
-        from django.db.models import Sum, Count, Q
-        from django.utils import timezone
-        from datetime import timedelta, datetime
-        
-        # Compteurs de base
-        Produit_count = Produit.objects.filter(is_active=True).count()
-        Client_count = Client.objects.all().count()
-        Fournisseur_count = Fournisseur.objects.all().count()
-        Achat_count = Achat.objects.all().count()
-        Vente_count = Vente.objects.filter(statut='completed').count()
-        
-        # Statistiques de stock
-        produits_stock_bas = Produit.objects.filter(quantite__lte=F('seuil_alerte')).count()
-        produits_stock_critique = Produit.objects.filter(quantite__lte=F('seuil_critique')).count()
-        produits_rupture = Produit.objects.filter(quantite__lte=0).count()
-        
-        # Chiffre d'affaires
-        ca_total = Vente.objects.filter(statut='completed').aggregate(
-            total=Sum('total_ttc')
-        )['total'] or 0
-        
-        # CA ce mois
-        now = timezone.now()
-        debut_mois = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        ca_mois = Vente.objects.filter(
-            statut='completed',
-            date_vente__gte=debut_mois
-        ).aggregate(total=Sum('total_ttc'))['total'] or 0
-        
-        # Ventes aujourd'hui
-        aujourd_hui = now.date()
-        ventes_aujourd_hui = Vente.objects.filter(
-            statut='completed',
-            date_vente__date=aujourd_hui
-        ).count()
-        
-        content = {
-            'produits_count': Produit_count,
-            'clients_count': Client_count,
-            'fournisseurs_count': Fournisseur_count,
-            'achats_count': Achat_count,
-            'ventes_count': Vente_count,
-            'ventes_aujourd_hui': ventes_aujourd_hui,
-            'ca_total': float(ca_total),
-            'ca_mois': float(ca_mois),
-            'produits_stock_bas': produits_stock_bas,
-            'produits_stock_critique': produits_stock_critique,
-            'produits_rupture': produits_rupture
-        }
-        return Response(content)
+        try:
+            from django.db.models import Sum, Count, Q
+            from django.utils import timezone
+            from datetime import timedelta, datetime
+            
+            # Compteurs de base
+            Produit_count = Produit.objects.filter(is_active=True).count()
+            Client_count = Client.objects.all().count()
+            Fournisseur_count = Fournisseur.objects.all().count()
+            Achat_count = Achat.objects.all().count()
+            Vente_count = Vente.objects.filter(statut='completed').count()
+            
+            # Statistiques de stock
+            produits_stock_bas = Produit.objects.filter(quantite__lte=F('seuil_alerte')).count()
+            produits_stock_critique = Produit.objects.filter(quantite__lte=F('seuil_critique')).count()
+            produits_rupture = Produit.objects.filter(quantite__lte=0).count()
+            
+            # Chiffre d'affaires
+            ca_total = Vente.objects.filter(statut='completed').aggregate(
+                total=Sum('total_ttc')
+            )['total'] or 0
+            
+            # CA ce mois
+            now = timezone.now()
+            debut_mois = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            ca_mois = Vente.objects.filter(
+                statut='completed',
+                date_vente__gte=debut_mois
+            ).aggregate(total=Sum('total_ttc'))['total'] or 0
+            
+            # Ventes aujourd'hui
+            aujourd_hui = now.date()
+            ventes_aujourd_hui = Vente.objects.filter(
+                statut='completed',
+                date_vente__date=aujourd_hui
+            ).count()
+            
+            content = {
+                'produits_count': Produit_count,
+                'clients_count': Client_count,
+                'fournisseurs_count': Fournisseur_count,
+                'achats_count': Achat_count,
+                'ventes_count': Vente_count,
+                'ventes_aujourd_hui': ventes_aujourd_hui,
+                'ca_total': float(ca_total),
+                'ca_mois': float(ca_mois),
+                'produits_stock_bas': produits_stock_bas,
+                'produits_stock_critique': produits_stock_critique,
+                'produits_rupture': produits_rupture
+            }
+            return Response(content)
+        except Exception as e:
+            logger.exception('CountViewSet failed: %s', e)
+            return Response({'error': str(e)}, status=500)
 
 class StatisticsChartsViewSet(APIView):
     def get(self, request, format=None):
-        from django.db.models import Sum, Count, Q
-        from django.utils import timezone
-        from datetime import timedelta, datetime
-        import calendar
-        
-        now = timezone.now()
-        
-        # Ventes par mois (12 derniers mois)
-        ventes_par_mois = []
-        mois_labels = []
-        for i in range(11, -1, -1):
-            date = now - timedelta(days=30*i)
-            debut_mois = date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-            if i == 0:
-                fin_mois = now
-            else:
-                fin_mois = (debut_mois + timedelta(days=32)).replace(day=1) - timedelta(seconds=1)
+        try:
+            from django.db.models import Sum, Count, Q
+            from django.utils import timezone
+            from datetime import timedelta, datetime
+            import calendar
             
-            ventes_mois = Vente.objects.filter(
-                statut='completed',
-                date_vente__gte=debut_mois,
-                date_vente__lte=fin_mois
-            ).aggregate(
+            now = timezone.now()
+            
+            # Ventes par mois (12 derniers mois)
+            ventes_par_mois = []
+            mois_labels = []
+            for i in range(11, -1, -1):
+                date = now - timedelta(days=30*i)
+                debut_mois = date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+                if i == 0:
+                    fin_mois = now
+                else:
+                    fin_mois = (debut_mois + timedelta(days=32)).replace(day=1) - timedelta(seconds=1)
+                
+                ventes_mois = Vente.objects.filter(
+                    statut='completed',
+                    date_vente__gte=debut_mois,
+                    date_vente__lte=fin_mois
+                ).aggregate(
+                    count=Count('id'),
+                    total=Sum('total_ttc')
+                )
+                
+                ventes_par_mois.append({
+                    'mois': calendar.month_name[debut_mois.month][:3],
+                    'ventes': ventes_mois['count'] or 0,
+                    'ca': float(ventes_mois['total'] or 0)
+                })
+                mois_labels.append(calendar.month_name[debut_mois.month][:3])
+            
+            # Top 5 produits les plus vendus
+            from django.db.models import Sum
+            top_produits = LigneVente.objects.filter(
+                vente__statut='completed'
+            ).values(
+                'produit__designation',
+                'produit__reference'
+            ).annotate(
+                total_vendu=Sum('quantite')
+            ).order_by('-total_vendu')[:5]
+            
+            # Répartition des ventes par catégorie
+            ventes_par_categorie_qs = LigneVente.objects.filter(
+                vente__statut='completed'
+            ).values(
+                'produit__categorie__nom'
+            ).annotate(
+                total_ventes=Sum('quantite'),
+                ca_categorie=Sum('prixU_snapshot')
+            ).order_by('-total_ventes')[:10]
+            ventes_par_categorie = []
+            for row in ventes_par_categorie_qs:
+                ventes_par_categorie.append({
+                    'produit__categorie__nom': row.get('produit__categorie__nom'),
+                    'total_ventes': row.get('total_ventes') or 0,
+                    'ca_categorie': float(row.get('ca_categorie') or 0)
+                })
+            
+            # Évolution du stock (mouvements des 30 derniers jours)
+            trente_jours = now - timedelta(days=30)
+            mouvements_stock = []
+            for i in range(30):
+                date = (now - timedelta(days=29-i)).date()
+                entrees = StockMove.objects.filter(
+                    date__date=date,
+                    delta__gt=0
+                ).aggregate(total=Sum('delta'))['total'] or 0
+                
+                sorties = abs(StockMove.objects.filter(
+                    date__date=date,
+                    delta__lt=0
+                ).aggregate(total=Sum('delta'))['total'] or 0)
+                
+                mouvements_stock.append({
+                    'date': date.strftime('%d/%m'),
+                    'entrees': entrees,
+                    'sorties': sorties
+                })
+            
+            # Statut des stocks
+            stock_status = {
+                'normal': Produit.objects.filter(
+                    quantite__gt=F('seuil_alerte'),
+                    is_active=True
+                ).count(),
+                'alerte': Produit.objects.filter(
+                    quantite__lte=F('seuil_alerte'),
+                    quantite__gt=F('seuil_critique'),
+                    is_active=True
+                ).count(),
+                'critique': Produit.objects.filter(
+                    quantite__lte=F('seuil_critique'),
+                    quantite__gt=0,
+                    is_active=True
+                ).count(),
+                'rupture': Produit.objects.filter(
+                    quantite__lte=0,
+                    is_active=True
+                ).count()
+            }
+            
+            # Ventes par type de paiement
+            ventes_paiement_qs = Vente.objects.filter(
+                statut='completed'
+            ).values('type_paiement').annotate(
                 count=Count('id'),
                 total=Sum('total_ttc')
-            )
+            ).order_by('-count')
+            ventes_paiement = []
+            for row in ventes_paiement_qs:
+                ventes_paiement.append({
+                    'type_paiement': row.get('type_paiement'),
+                    'count': row.get('count') or 0,
+                    'total': float(row.get('total') or 0)
+                })
             
-            ventes_par_mois.append({
-                'mois': calendar.month_name[debut_mois.month][:3],
-                'ventes': ventes_mois['count'] or 0,
-                'ca': float(ventes_mois['total'] or 0)
+            return Response({
+                'ventes_par_mois': ventes_par_mois,
+                'top_produits': list(top_produits),
+                'ventes_par_categorie': ventes_par_categorie,
+                'mouvements_stock': mouvements_stock,
+                'stock_status': stock_status,
+                'ventes_paiement': ventes_paiement
             })
-            mois_labels.append(calendar.month_name[debut_mois.month][:3])
-        
-        # Top 5 produits les plus vendus
-        from django.db.models import Sum
-        top_produits = LigneVente.objects.filter(
-            vente__statut='completed'
-        ).values(
-            'produit__designation',
-            'produit__reference'
-        ).annotate(
-            total_vendu=Sum('quantite')
-        ).order_by('-total_vendu')[:5]
-        
-        # Répartition des ventes par catégorie
-        ventes_par_categorie = LigneVente.objects.filter(
-            vente__statut='completed'
-        ).values(
-            'produit__categorie__nom'
-        ).annotate(
-            total_ventes=Sum('quantite'),
-            ca_categorie=Sum('prixU_snapshot')
-        ).order_by('-total_ventes')[:10]
-        
-        # Évolution du stock (mouvements des 30 derniers jours)
-        trente_jours = now - timedelta(days=30)
-        mouvements_stock = []
-        for i in range(30):
-            date = (now - timedelta(days=29-i)).date()
-            entrees = StockMove.objects.filter(
-                date__date=date,
-                delta__gt=0
-            ).aggregate(total=Sum('delta'))['total'] or 0
-            
-            sorties = abs(StockMove.objects.filter(
-                date__date=date,
-                delta__lt=0
-            ).aggregate(total=Sum('delta'))['total'] or 0)
-            
-            mouvements_stock.append({
-                'date': date.strftime('%d/%m'),
-                'entrees': entrees,
-                'sorties': sorties
+        except Exception as e:
+            logger.exception('StatisticsChartsViewSet failed: %s', e)
+            return Response({
+                'ventes_par_mois': [],
+                'top_produits': [],
+                'ventes_par_categorie': [],
+                'mouvements_stock': [],
+                'stock_status': {'normal':0,'alerte':0,'critique':0,'rupture':0},
+                'ventes_paiement': []
             })
-        
-        # Statut des stocks
-        stock_status = {
-            'normal': Produit.objects.filter(
-                quantite__gt=F('seuil_alerte'),
-                is_active=True
-            ).count(),
-            'alerte': Produit.objects.filter(
-                quantite__lte=F('seuil_alerte'),
-                quantite__gt=F('seuil_critique'),
-                is_active=True
-            ).count(),
-            'critique': Produit.objects.filter(
-                quantite__lte=F('seuil_critique'),
-                quantite__gt=0,
-                is_active=True
-            ).count(),
-            'rupture': Produit.objects.filter(
-                quantite__lte=0,
-                is_active=True
-            ).count()
+
+class AlertsView(APIView):
+    """Aggregate alerts for stock levels: rupture, critical, low."""
+    def get(self, request, format=None):
+        limit = int(request.GET.get('limit', 5))
+        low_qs = Produit.objects.filter(quantite__lte=F('seuil_alerte'), quantite__gt=F('seuil_critique')).order_by('quantite')
+        critical_qs = Produit.objects.filter(quantite__lte=F('seuil_critique'), quantite__gt=0).order_by('quantite')
+        rupture_qs = Produit.objects.filter(quantite__lte=0).order_by('quantite')
+        def map_items(qs, level):
+            items = []
+            for p in qs[:limit]:
+                items.append({
+                    'id': p.id,
+                    'reference': getattr(p, 'reference', ''),
+                    'designation': getattr(p, 'designation', ''),
+                    'quantite': p.quantite,
+                    'seuil_alerte': p.seuil_alerte,
+                    'seuil_critique': p.seuil_critique,
+                    'level': level
+                })
+            return items
+        data = {
+            'counts': {
+                'rupture': rupture_qs.count(),
+                'critique': critical_qs.count(),
+                'bas': low_qs.count(),
+                'total': rupture_qs.count() + critical_qs.count() + low_qs.count(),
+            },
+            'items': map_items(rupture_qs, 'rupture') + map_items(critical_qs, 'critique') + map_items(low_qs, 'bas')
         }
-        
-        # Ventes par type de paiement
-        ventes_paiement = Vente.objects.filter(
-            statut='completed'
-        ).values('type_paiement').annotate(
-            count=Count('id'),
-            total=Sum('total_ttc')
-        ).order_by('-count')
-        
-        return Response({
-            'ventes_par_mois': ventes_par_mois,
-            'top_produits': list(top_produits),
-            'ventes_par_categorie': list(ventes_par_categorie),
-            'mouvements_stock': mouvements_stock,
-            'stock_status': stock_status,
-            'ventes_paiement': list(ventes_paiement)
-        })
+        return Response(data)
 
 class RiskViewSet(APIView):
     def get(self, request, format=None):
@@ -815,6 +1026,29 @@ class LoginViewSet(APIView):
 # API pour les Ventes
 class VenteViewSet(viewsets.ModelViewSet):
     queryset = Vente.objects.all().order_by('-date_vente')
+    
+    def perform_create(self, serializer):
+        obj = serializer.save()
+        try:
+            log_event(self.request, 'vente.create', target=obj, metadata={'id': obj.id, 'numero': getattr(obj, 'numero', None)})
+        except Exception:
+            pass
+
+    def perform_update(self, serializer):
+        obj = serializer.save()
+        try:
+            log_event(self.request, 'vente.update', target=obj, metadata={'id': obj.id})
+        except Exception:
+            pass
+
+    def perform_destroy(self, instance):
+        mid = instance.id
+        num = getattr(instance, 'numero', None)
+        super().perform_destroy(instance)
+        try:
+            log_event(self.request, 'vente.delete', target=None, metadata={'id': mid, 'numero': num})
+        except Exception:
+            pass
     
     def get_serializer_class(self):
         if self.action in ['create', 'update', 'partial_update']:
@@ -856,6 +1090,10 @@ class VenteViewSet(viewsets.ModelViewSet):
                     note=f"Vente {vente.numero}"
                 )
             
+            try:
+                log_event(self.request, 'vente.complete', target=vente, metadata={'id': vente.id, 'numero': getattr(vente, 'numero', None)})
+            except Exception:
+                pass
             return Response({'status': 'Vente terminée'})
         return Response({'error': 'Vente déjà terminée ou annulée'}, status=400)
     
@@ -882,6 +1120,10 @@ class VenteViewSet(viewsets.ModelViewSet):
                         note=f"Annulation vente {vente.numero}"
                     )
             
+            try:
+                log_event(self.request, 'vente.cancel', target=vente, metadata={'id': vente.id, 'numero': getattr(vente, 'numero', None), 'old_statut': old_statut})
+            except Exception:
+                pass
             return Response({'status': 'Vente annulée'})
         return Response({'error': 'Vente déjà annulée'}, status=400)
     
@@ -935,6 +1177,20 @@ class VenteViewSet(viewsets.ModelViewSet):
 class WarehouseViewSet(viewsets.ModelViewSet):
     queryset = Warehouse.objects.all().order_by('name')
     serializer_class = WarehouseSerializer
+
+    def perform_create(self, serializer):
+        obj = serializer.save()
+        try:
+            log_event(self.request, 'warehouse.create', target=obj, metadata={'id': obj.id, 'code': getattr(obj, 'code', None)})
+        except Exception:
+            pass
+
+    def perform_update(self, serializer):
+        obj = serializer.save()
+        try:
+            log_event(self.request, 'warehouse.update', target=obj, metadata={'id': obj.id})
+        except Exception:
+            pass
     pagination_class = None
 
     def get_queryset(self):
@@ -984,6 +1240,29 @@ class LigneVenteViewSet(viewsets.ModelViewSet):
 class CurrencyViewSet(viewsets.ModelViewSet):
     queryset = Currency.objects.all()
     serializer_class = CurrencySerializer
+
+    def perform_create(self, serializer):
+        obj = serializer.save()
+        try:
+            log_event(self.request, 'currency.create', target=obj, metadata={'id': obj.id, 'code': obj.code})
+        except Exception:
+            pass
+
+    def perform_update(self, serializer):
+        obj = serializer.save()
+        try:
+            log_event(self.request, 'currency.update', target=obj, metadata={'id': obj.id, 'code': obj.code})
+        except Exception:
+            pass
+
+    def perform_destroy(self, instance):
+        cid = instance.id
+        code = instance.code
+        super().perform_destroy(instance)
+        try:
+            log_event(self.request, 'currency.delete', target=None, metadata={'id': cid, 'code': code})
+        except Exception:
+            pass
     
     @action(detail=False)
     def default(self, request):
@@ -1001,11 +1280,30 @@ class CurrencyViewSet(viewsets.ModelViewSet):
         Currency.objects.filter(is_default=True).update(is_default=False)
         currency.is_default = True
         currency.save()
+        try:
+            log_event(self.request, 'currency.set_default', target=currency, metadata={'id': currency.id, 'code': currency.code})
+        except Exception:
+            pass
         return Response({'status': f'{currency.code} définie comme devise par défaut'})
 
 class ExchangeRateViewSet(viewsets.ModelViewSet):
     queryset = ExchangeRate.objects.all()
     serializer_class = ExchangeRateSerializer
+
+    def perform_update(self, serializer):
+        obj = serializer.save()
+        try:
+            log_event(self.request, 'exchange_rate.update', target=obj, metadata={'id': obj.id})
+        except Exception:
+            pass
+
+    def perform_destroy(self, instance):
+        rid = instance.id
+        super().perform_destroy(instance)
+        try:
+            log_event(self.request, 'exchange_rate.delete', target=None, metadata={'id': rid})
+        except Exception:
+            pass
     
     def create(self, request, *args, **kwargs):
         """Créer ou mettre à jour un taux de change"""
@@ -1013,6 +1311,10 @@ class ExchangeRateViewSet(viewsets.ModelViewSet):
         to_currency_id = request.data.get('to_currency')
         rate = request.data.get('rate')
         date = request.data.get('date', timezone.now().date())
+        try:
+            log_event(request, 'exchange_rate.upsert', target=None, metadata={'from': from_currency_id, 'to': to_currency_id, 'rate': rate, 'date': str(date)})
+        except Exception:
+            pass
         
         # Vérifier si un taux existe déjà pour cette date
         existing_rate = ExchangeRate.objects.filter(

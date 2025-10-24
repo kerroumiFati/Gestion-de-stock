@@ -245,11 +245,9 @@
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end">
                         <li><h6 class="dropdown-header">Notifications</h6></li>
-                        <li><a class="dropdown-item" href="#"><i class="fas fa-exclamation-triangle text-warning me-2"></i>Stock faible: Produit A</a></li>
-                        <li><a class="dropdown-item" href="#"><i class="fas fa-info-circle text-info me-2"></i>Nouvelle commande reçue</a></li>
-                        <li><a class="dropdown-item" href="#"><i class="fas fa-check-circle text-success me-2"></i>Inventaire terminé</a></li>
+                        <div id="alerts-items"></div>
                         <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item text-center" href="#">Voir toutes</a></li>
+                        <li><a class="dropdown-item text-center" href="#" onclick="loadPage('statistiques');return false;">Voir toutes</a></li>
                     </ul>
                 </div>
                 
@@ -436,6 +434,38 @@
             }
         }
         
+        async function loadAlerts(){
+            try{
+                const res = await fetch('/API/alerts/');
+                if(!res.ok) throw new Error('HTTP '+res.status);
+                const data = await res.json();
+                const count = data.counts?.total || 0;
+                const badge = document.getElementById('notification-count');
+                if(badge){
+                    badge.textContent = count;
+                    badge.style.display = count>0 ? 'inline-block' : 'none';
+                }
+                const container = document.getElementById('alerts-items');
+                if(container){
+                    container.innerHTML = '';
+                    const items = data.items || [];
+                    if(items.length===0){
+                        container.innerHTML = '<li><span class="dropdown-item text-muted">Aucune alerte</span></li>';
+                    } else {
+                        items.forEach(it=>{
+                            const icon = it.level==='rupture' ? 'fas fa-times-circle text-danger' : (it.level==='critique' ? 'fas fa-exclamation-triangle text-warning' : 'fas fa-info-circle text-info');
+                            const li = document.createElement('li');
+                            li.innerHTML = `<a class="dropdown-item" href="#" onclick="loadPage('produit');return false;"><i class="${icon} me-2"></i>${it.reference || ''} - ${it.designation || ''} (${it.quantite})</a>`;
+                            container.appendChild(li);
+                        });
+                    }
+                }
+            }catch(e){
+                // fail quietly
+                console.warn('loadAlerts failed', e);
+            }
+        }
+
         // Load dashboard stats
         function loadDashboardStats() {
             // This would integrate with your existing API calls
@@ -451,6 +481,7 @@
         // Initialize dashboard
         document.addEventListener('DOMContentLoaded', () => {
             loadDashboardStats();
+            loadAlerts();
         });
     </script>
 </body>
