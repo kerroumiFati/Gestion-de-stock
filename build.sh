@@ -10,3 +10,6 @@ python manage.py collectstatic --no-input --clear
 
 # Run migrations
 python manage.py migrate
+
+# Create superuser automatically
+python create_superuser.py
