@@ -19,11 +19,6 @@
         <i class="fa fa-chart-bar"></i> Statistiques
       </a>
     </li>
-    <li class="nav-item" role="presentation">
-      <a class="nav-link" id="devises-tab" data-toggle="tab" href="#devises" role="tab">
-        <i class="fa fa-coins"></i> Devises & Taux
-      </a>
-    </li>
   </ul>
 
   <div class="tab-content" id="venteTabContent">
@@ -47,7 +42,7 @@
             <div class="col-sm-2 mb-2">
               <label>Devise</label>
               <select id="vente_currency" class="form-control">
-                <option value="">Devise par défaut</option>
+                <option value=""></option>
               </select>
             </div>
             <div class="col-sm-2 mb-2">
@@ -58,6 +53,12 @@
                 <option value="check">Chèque</option>
                 <option value="transfer">Virement</option>
                 <option value="credit">Crédit</option>
+              </select>
+            </div>
+            <div class="col-sm-3 mb-2">
+              <label>Entrepôt *</label>
+              <select id="vente_warehouse" class="form-control">
+                <option value="">Sélectionner un entrepôt...</option>
               </select>
             </div>
             <div class="col-sm-2 mb-2">
@@ -282,133 +283,5 @@
       </div>
     </div>
 
-    <!-- Onglet Devises & Taux -->
-    <div class="tab-pane fade" id="devises" role="tabpanel">
-      <div class="row mt-3">
-        <!-- Gestion des Devises -->
-        <div class="col-md-6">
-          <div class="card bg-white">
-            <div class="card-header card-color">
-              <p class="h5 text-center font-weight-bold pt-2">
-                <i class="fa fa-coins"></i> Gestion des Devises
-              </p>
-            </div>
-            <div class="card-body">
-              <!-- Formulaire d'ajout de devise -->
-              <div class="row mb-3">
-                <div class="col-sm-3">
-                  <input id="currency_code" type="text" class="form-control" placeholder="Code (EUR)" maxlength="3">
-                </div>
-                <div class="col-sm-4">
-                  <input id="currency_name" type="text" class="form-control" placeholder="Nom de la devise">
-                </div>
-                <div class="col-sm-3">
-                  <input id="currency_symbol" type="text" class="form-control" placeholder="Symbole (€)" maxlength="5">
-                </div>
-                <div class="col-sm-2">
-                  <button id="add_currency" class="btn btn-success btn-sm">
-                    <i class="fa fa-plus"></i>
-                  </button>
-                </div>
-              </div>
-              
-              <!-- Liste des devises -->
-              <div class="table-responsive">
-                <table id="tbl_currencies" class="table table-sm table-hover">
-                  <thead>
-                    <tr class="bg-light">
-                      <th>Code</th>
-                      <th>Nom</th>
-                      <th>Symbole</th>
-                      <th>Défaut</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody id="currencies_body"></tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Gestion des Taux de Change -->
-        <div class="col-md-6">
-          <div class="card bg-white">
-            <div class="card-header card-color">
-              <p class="h5 text-center font-weight-bold pt-2">
-                <i class="fa fa-exchange-alt"></i> Taux de Change
-              </p>
-            </div>
-            <div class="card-body">
-              <!-- Formulaire d'ajout de taux -->
-              <div class="row mb-3">
-                <div class="col-sm-3">
-                  <select id="rate_from_currency" class="form-control form-control-sm">
-                    <option value="">De...</option>
-                  </select>
-                </div>
-                <div class="col-sm-3">
-                  <select id="rate_to_currency" class="form-control form-control-sm">
-                    <option value="">Vers...</option>
-                  </select>
-                </div>
-                <div class="col-sm-4">
-                  <input id="rate_value" type="number" class="form-control form-control-sm" placeholder="Taux" step="0.000001">
-                </div>
-                <div class="col-sm-2">
-                  <button id="add_rate" class="btn btn-success btn-sm">
-                    <i class="fa fa-plus"></i>
-                  </button>
-                </div>
-              </div>
-              
-              <!-- Convertisseur rapide -->
-              <div class="row mb-3 border-top pt-3">
-                <div class="col-12">
-                  <h6><i class="fa fa-calculator"></i> Convertisseur</h6>
-                </div>
-                <div class="col-sm-3">
-                  <input id="convert_amount" type="number" class="form-control form-control-sm" placeholder="Montant" step="0.01">
-                </div>
-                <div class="col-sm-3">
-                  <select id="convert_from" class="form-control form-control-sm">
-                    <option value="">De...</option>
-                  </select>
-                </div>
-                <div class="col-sm-3">
-                  <select id="convert_to" class="form-control form-control-sm">
-                    <option value="">Vers...</option>
-                  </select>
-                </div>
-                <div class="col-sm-3">
-                  <button id="convert_btn" class="btn btn-info btn-sm">
-                    <i class="fa fa-calculator"></i>
-                  </button>
-                </div>
-                <div class="col-12 mt-2">
-                  <div id="convert_result" class="alert alert-info" style="display: none;"></div>
-                </div>
-              </div>
-              
-              <!-- Liste des taux -->
-              <div class="table-responsive">
-                <table id="tbl_rates" class="table table-sm table-hover">
-                  <thead>
-                    <tr class="bg-light">
-                      <th>De</th>
-                      <th>Vers</th>
-                      <th>Taux</th>
-                      <th>Date</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody id="rates_body"></tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
   </div>
 </div>

@@ -30,6 +30,7 @@ urlpatterns = [
     path('', include(router.urls)),
     path('categories_raw/', views.categories_raw),
     path('api-auth/', include('rest_framework.urls', namespace='rest_framework')),
+    path('system-config/', views.SystemConfigView.as_view(), name='system-config'),
     #path('clients/<int:pk>/', views.ClientDetail.as_view())
     re_path(r'^prod/count/$', views.CountViewSet.as_view(), name='produits-count'),
     re_path(r'^statistics/charts/$', views.StatisticsChartsViewSet.as_view(), name='statistics-charts'),

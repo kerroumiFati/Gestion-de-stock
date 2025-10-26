@@ -5,204 +5,93 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
   <title>Market - Connexion</title>
+  <meta name="theme-color" content="#14b8a6">
 
-  <!-- Fonts & Icons -->
-  <link href="{% static 'style/font-face.css' %}" rel="stylesheet">
-  <link href="{% static 'vendor/font-awesome-5/css/fontawesome-all.min.css' %}" rel="stylesheet">
-  <link href="{% static 'vendor/mdi-font/css/material-design-iconic-font.min.css' %}" rel="stylesheet">
+  <!-- Bootstrap (CDN) -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-xOolHFLEh07PJGoPkLv1Ibc5jZ1aQZr3IChmQZ6WZ5n2e5nDkLtS3qm9Ekf7bW0K" crossorigin="anonymous">
+  <!-- Font Awesome (CDN) -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" rel="stylesheet" integrity="sha512-dYzI7vZ2J4aYHpmvFjQxJXVgYtYtY0eC1mGQyE6l6czVw4GgI1g1C2kKQz3g8rYlQXx0x6xG8mM2Jqg4lB6S/Q==" crossorigin="anonymous" referrerpolicy="no-referrer" />
 
-  <!-- Bootstrap -->
-  <link href="{% static 'vendor/bootstrap-4.1/bootstrap.min.css' %}" rel="stylesheet">
+  <!-- Page-specific stylesheet -->
+  <link href="{% static 'style/login.css' %}" rel="stylesheet">
 
-  <!-- Animations/Vendors -->
-  <link href="{% static 'vendor/animsition/animsition.min.css' %}" rel="stylesheet">
-  <link href="{% static 'vendor/wow/animate.css' %}" rel="stylesheet">
-  <link href="{% static 'vendor/css-hamburgers/hamburgers.min.css' %}" rel="stylesheet">
-
-  <!-- Theme base -->
-  <link href="{% static 'style/theme.css' %}" rel="stylesheet">
-
-  <!-- Page-specific styles -->
-  <style>
-    :root {
-      --bg-1: #0ea5ea;
-      --bg-2: #2ea043;
-      --muted: #64748b;      /* slate-500 */
-      --text: #0f172a;        /* slate-900 */
-      --text-2: #334155;      /* slate-700 */
-      --border: rgba(2,6,23,.12);
-      --accent: #16a34a;      /* green-600 */
-      --accent-2: #60a5fa;    /* blue-400 */
-    }
-
-    body.login-page {
-      min-height: 100vh;
-      background: radial-gradient(1200px 800px at 10% 10%, rgba(255,255,255,.15), transparent 60%),
-                  radial-gradient(1200px 800px at 90% 20%, rgba(255,255,255,.12), transparent 60%),
-                  linear-gradient(135deg, var(--bg-1), var(--bg-2));
-      display: flex; align-items: center; justify-content: center;
-      position: relative; overflow: hidden;
-    }
-
-    .bg-bubble { position: absolute; border-radius: 50%; filter: blur(40px); opacity: .25; }
-    .bg-bubble.b1 { width: 320px; height: 320px; background: #22c55e; top: -60px; left: -60px; animation: float1 12s ease-in-out infinite; }
-    .bg-bubble.b2 { width: 240px; height: 240px; background: #60a5fa; bottom: 6vh; right: 6vw; animation: float2 14s ease-in-out infinite; }
-    @keyframes float1 { 0%,100%{ transform: translate(0,0);} 50%{ transform: translate(25px, 20px);} }
-    @keyframes float2 { 0%,100%{ transform: translate(0,0);} 50%{ transform: translate(-20px, -25px);} }
-
-    /* Card clair et lisible */
-    .login-card {
-      width: 100%; max-width: 640px;
-      border-radius: 20px;
-      background: #ffffff;
-      border: 1px solid var(--border);
-      box-shadow: 0 24px 60px rgba(0,0,0,.18);
-      overflow: hidden;
-      color: var(--text);
-    }
-
-    .login-header {
-      padding: 1.75rem 1.5rem 1rem;
-      text-align: center;
-      background: linear-gradient(to bottom, rgba(2,6,23,.04), transparent);
-    }
-
-    .brand-icon {
-      width: 160px; height: 160px; border-radius: 28px; margin: 0 auto 1.25rem;
-      display: grid; place-items: center;
-      background: #f8fafc; /* slate-50 */
-      border: 1px solid var(--border);
-      box-shadow: inset 0 0 0 1px rgba(255,255,255,.6);
-      overflow: hidden;
-    }
-    .brand-icon img { max-width: 100%; max-height: 100%; object-fit: cover; }
-
-    .login-title { color: var(--text); margin-bottom: .25rem; }
-    .login-subtitle { color: var(--muted); font-size: 1rem; }
-
-    .login-body { padding: 1.25rem 1.5rem 1.5rem; }
-
-    /* Champs plus grands et plus clairs */
-    .form-label { font-weight: 600; color: var(--text); font-size: 1rem; }
-
-    .input-group .input-group-text {
-      background: #ffffff;
-      color: var(--text-2);
-      border-color: var(--border);
-      font-size: 1.05rem;
-      padding: .75rem .9rem;
-      border-top-left-radius: .8rem;
-      border-bottom-left-radius: .8rem;
-    }
-
-    .form-control {
-      background: #ffffff;
-      border-color: var(--border);
-      color: var(--text);
-      border-radius: .8rem;
-      font-size: 1.05rem;
-      padding: .9rem 1rem;
-      height: auto;
-      line-height: 1.4;
-    }
-    .form-control::placeholder { color: #94a3b8; }
-    .form-control:focus {
-      background: #ffffff;
-      color: var(--text);
-      border-color: var(--accent-2);
-      box-shadow: 0 0 0 .2rem rgba(96,165,250,.25);
-    }
-
-    .custom-control-label { color: var(--text-2); font-size: .95rem; }
-
-    .btn-login {
-      border-radius: .9rem; padding: .95rem 1rem; font-weight: 700; letter-spacing: .2px;
-      font-size: 1.05rem;
-      background: linear-gradient(90deg, #22c55e, var(--accent));
-      border: 0; box-shadow: 0 12px 22px rgba(34,197,94,.25);
-    }
-    .btn-login:hover { filter: brightness(1.03); transform: translateY(-1px); }
-    .btn-login:active { transform: translateY(0); }
-
-    .alert { border-radius: .9rem; }
-
-    .login-footer { padding: .9rem 1.25rem 1.5rem; text-align: center; color: var(--muted); font-size: .95rem; }
-
-    .opacity-80 { opacity: .8; }
-  </style>
+  <!-- Page-specific styles moved to static/style/login.css -->
 </head>
-<body class="animsition login-page">
+<body class="login-page">
   <span class="bg-bubble b1"></span>
   <span class="bg-bubble b2"></span>
 
   <div class="login-card">
     <div class="login-header">
       <div class="brand-icon">
-        <img src="{% static 'img/no-photo.png' %}" alt="Logo" />
+        <img src="{% static 'img/iconRemovebg.png' %}" alt="Logo" />
       </div>
       <h1 class="h4 login-title mb-0">Gestion de Stock</h1>
       <p class="login-subtitle mb-0">Connectez-vous pour continuer</p>
     </div>
 
     <div class="login-body">
+      <h2 class="login-welcome">Bon retour !</h2>
+      <p class="login-desc">Veuillez vous connecter pour accéder au tableau de bord.</p>
+
       {% if messages %}
-        {% for message in messages %}
-          <div class="alert alert-danger alert-dismissible fade show" role="alert">
-            <i class="fas fa-exclamation-triangle mr-1"></i> {{ message }}
-            <button type="button" class="close" data-dismiss="alert" aria-label="Fermer">
-              <span aria-hidden="true">&times;</span>
-            </button>
-          </div>
-        {% endfor %}
+        <div aria-live="polite" aria-atomic="true">
+          {% for message in messages %}
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+              <i class="fas fa-exclamation-triangle mr-1" aria-hidden="true"></i> {{ message }}
+              <button type="button" class="close" data-dismiss="alert" aria-label="Fermer">
+                <span aria-hidden="true">&times;</span>
+              </button>
+            </div>
+          {% endfor %}
+        </div>
       {% endif %}
 
       <form action="/" method="POST" id="checkLogin" novalidate>
         {% csrf_token %}
 
         <div class="form-group">
-          <div class="input-group">
-            <div class="input-group-prepend">
-              <span class="input-group-text"><i class="fas fa-user"></i></span>
-            </div>
-            <input class="form-control" type="text" id="email" name="username" placeholder="Entrez votre identifiant" autocomplete="username" required>
+          <label for="email" class="form-label">Identifiant</label>
+          <div class="input-with-icon">
+            <i class="fas fa-user input-icon-left" aria-hidden="true"></i>
+            <input class="form-control" type="text" id="email" name="username" placeholder="Votre identifiant" autocomplete="username" required aria-describedby="username-help">
           </div>
+          <small id="username-help" class="form-text text-muted" style="margin-top:8px;">Votre nom d’utilisateur ou email.</small>
         </div>
 
-        <div class="form-group mb-2">
-          <div class="input-group" id="password_group">
-            <div class="input-group-prepend">
-              <span class="input-group-text"><i class="fas fa-lock"></i></span>
-            </div>
+        <div class="form-group">
+          <label for="password" class="form-label">Mot de passe</label>
+          <div class="input-with-icon" id="password_group">
+            <i class="fas fa-lock input-icon-left" aria-hidden="true"></i>
             <input class="form-control" type="password" id="password" name="password" placeholder="Votre mot de passe" autocomplete="current-password" required>
-            <div class="input-group-append">
-              <span class="input-group-text" id="toggle_pwd" title="Afficher/Masquer" role="button" aria-label="Afficher ou masquer le mot de passe"><i class="far fa-eye"></i></span>
-            </div>
+            <button type="button" class="input-icon-right btn-icon" id="toggle_pwd" title="Afficher/Masquer" aria-label="Afficher le mot de passe" aria-pressed="false"><i class="far fa-eye" aria-hidden="true"></i></button>
           </div>
         </div>
 
-        <div class="d-flex align-items-center justify-content-between mb-3">
+        <div class="inline-actions">
           <div class="custom-control custom-checkbox">
             <input type="checkbox" class="custom-control-input" id="remember_me">
             <label class="custom-control-label" for="remember_me">Se souvenir de moi</label>
           </div>
-          <!-- <a href="#" class="small">Mot de passe oublié ?</a> -->
+          <a href="#" class="link">Mot de passe oublié ?</a>
         </div>
 
-        <button id="connect" name="btn_submit" class="btn btn-success btn-block btn-login" type="submit">
-          <i class="fas fa-sign-in-alt mr-1"></i> Connexion
+        <button id="connect" name="btn_submit" class="btn btn-login" type="submit">
+          Se connecter
         </button>
+
+        <p class="text-muted" style="margin-top:32px; font-size:14px;">Besoin d’aide ? Contactez l’administrateur.</p>
       </form>
     </div>
 
     <div class="login-footer">
-      <small>© {{ now|default:None }} Market • Sécurité renforcée</small>
+      <small><i class="fas fa-lock lock" aria-hidden="true"></i> © {% now "Y" %} Market • Sécurité renforcée</small>
     </div>
   </div>
 
-  <!-- Scripts -->
-  <script src="{% static 'js/jquery-3.3.1.min.js' %}"></script>
-  <script src="{% static 'vendor/bootstrap-4.1/popper.min.js' %}"></script>
-  <script src="{% static 'vendor/bootstrap-4.1/bootstrap.min.js' %}"></script>
+  <!-- Scripts (CDN) -->
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-/xUj+3OJ+Y7B1h7K1QvYkBqDk9Ij/m4D4ew3Efr2E1w=" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-Fy6S3B9q64WdZWQUiU+q4/2LcWsCw3on3z7mrFh1NQ1ZbE+6tZ0Q5Iw5yXW4ZlZr" crossorigin="anonymous"></script>
   <script>
     (function(){
       var toggler = document.getElementById('toggle_pwd');
@@ -213,11 +102,10 @@
       if (toggler && input){
         toggler.addEventListener('click', function(){
           var icon = this.querySelector('i');
-          if (input.type === 'password'){
-            input.type = 'text'; if(icon){ icon.classList.remove('fa-eye'); icon.classList.add('fa-eye-slash'); }
-          } else {
-            input.type = 'password'; if(icon){ icon.classList.remove('fa-eye-slash'); icon.classList.add('fa-eye'); }
-          }
+          var isHidden = input.type === 'password';
+          input.type = isHidden ? 'text' : 'password';
+          this.setAttribute('aria-pressed', isHidden ? 'true' : 'false');
+          if(icon){ icon.classList.toggle('fa-eye'); icon.classList.toggle('fa-eye-slash'); }
         });
       }
 
@@ -225,7 +113,7 @@
         form.addEventListener('submit', function(){
           if (btn){
             btn.disabled = true;
-            btn.innerHTML = '<span class="spinner-border spinner-border-sm mr-2" role="status" aria-hidden="true"></span>Connexion...';
+            btn.innerHTML = '<span class="btn-spinner" aria-hidden="true"></span>Connexion...';
           }
         });
       }

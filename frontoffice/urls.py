@@ -20,7 +20,7 @@ from frontoffice import views
 from django.urls import re_path
 from frontoffice.views_audit import audit_list
 
-from frontoffice.views import LoginView, LogoutView
+from frontoffice.views import LoginView, LogoutView, change_password
 
 urlpatterns = [
     re_path(r'^$', LoginView.as_view(), name='login'),
@@ -37,4 +37,5 @@ urlpatterns = [
     path('users-admin/<int:user_id>/reset-password/', views.user_reset_password_confirm, name='user_reset_password'),
     path('roles-admin/', views.roles_list, name='roles_list'),
     path('audit-logs/', audit_list, name='audit_list'),
+    path('change-password/', change_password, name='change_password'),
 ]

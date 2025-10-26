@@ -1,5 +1,11 @@
 from django.contrib import admin
 from .models import *
+
+@admin.register(SystemConfig)
+class SystemConfigAdmin(admin.ModelAdmin):
+    list_display = ['default_warehouse']
+    fields = ['default_warehouse']
+    help_texts = { 'default_warehouse': 'Entrepôt par défaut utilisé pour les ventes si aucun n\'est spécifié' }
 from django.contrib.auth.models import User
 
 # Register your models here.

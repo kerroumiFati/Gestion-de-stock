@@ -25,6 +25,10 @@ def dashboard(request):
 
 def page(request, name: str):
     # Serve partial pages used by the sidebar navigation
+    # Protect the admin page for staff only
+    if name == 'admin' and not (request.user.is_authenticated and request.user.is_staff):
+        return HttpResponse('Accès refusé', status=403)
+    # Protect currency management under paramètres: page accessible but section is guarded in template
     template_path = f'frontoffice/page/{name}.html'
     try:
         return render(request, template_path)
@@ -164,3 +168,21 @@ def produit_all(request):
 def counts_all(request):
     produits = Produit.objects.all().count()
     return render(request, 'frontoffice/master_page.html', {'produits': produits})
+
+@login_required
+def change_password(request):
+    if request.method != 'POST':
+        return HttpResponse(status=405)
+    current = (request.POST.get('current_password') or '').strip()
+    newpwd = (request.POST.get('new_password') or '').strip()
+    if not request.user.check_password(current):
+        return HttpResponse(json.dumps({'error': 'Mot de passe actuel incorrect'}), status=400, content_type='application/json')
+    if len(newpwd) < 8:
+        return HttpResponse(json.dumps({'error': 'Le nouveau mot de passe doit contenir au moins 8 caractères'}), status=400, content_type='application/json')
+    request.user.set_password(newpwd)
+    request.user.save()
+    # Rester connecté après changement
+    user = authenticate(username=request.user.username, password=newpwd)
+    if user is not None:
+        login(request, user)
+    return HttpResponse(json.dumps({'status': 'ok'}), content_type='application/json')

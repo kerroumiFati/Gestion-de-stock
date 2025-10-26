@@ -1,0 +1,208 @@
+<div class="container-fluid p-3">
+  <h3 class="mb-3">Paramètres</h3>
+  <div class="row">
+    <div class="col-md-3">
+      <div class="list-group" id="settingsMenu">
+        <a href="#section-warehouse" class="list-group-item list-group-item-action active">Entrepôt</a>
+        {% if user.is_staff %}
+        <a href="#section-currencies" class="list-group-item list-group-item-action">Devises & Taux</a>
+        {% endif %}
+        <a href="#section-password" class="list-group-item list-group-item-action">Mot de passe</a>
+      </div>
+    </div>
+    <div class="col-md-9">
+      <!-- Section Entrepôt -->
+      <div id="section-warehouse" class="card mb-3">
+        <div class="card-header">Entrepôt par défaut</div>
+        <div class="card-body">
+          <div id="cfg_info" class="alert alert-info d-none" role="alert"></div>
+          <div class="form-row">
+            <div class="form-group col-md-8">
+              <label>Entrepôt par défaut</label>
+              <select id="cfg_default_warehouse" class="form-control">
+                <option value="">Sélectionner un entrepôt...</option>
+              </select>
+            </div>
+          </div>
+          <button id="cfg_save" class="btn btn-primary">Enregistrer</button>
+          <span id="cfg_status" class="ml-2 text-muted"></span>
+        </div>
+      </div>
+
+      {% if user.is_staff %}
+      <!-- Section Devises & Taux (Staff uniquement) -->
+      <div id="section-currencies" class="card mb-3">
+        <div class="card-header">Devises & Taux</div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-6">
+              <div class="card bg-white">
+                <div class="card-header card-color">
+                  <p class="h6 font-weight-bold mb-0"><i class="fa fa-coins"></i> Gestion des Devises</p>
+                </div>
+                <div class="card-body">
+                  <div class="form-row mb-2">
+                    <div class="col-sm-3"><input id="currency_code" type="text" class="form-control form-control-sm" placeholder="Code (EUR)" maxlength="3"></div>
+                    <div class="col-sm-5"><input id="currency_name" type="text" class="form-control form-control-sm" placeholder="Nom de la devise"></div>
+                    <div class="col-sm-3"><input id="currency_symbol" type="text" class="form-control form-control-sm" placeholder="Symbole (€)" maxlength="5"></div>
+                    <div class="col-sm-1"><button id="add_currency" class="btn btn-success btn-sm"><i class="fa fa-plus"></i></button></div>
+                  </div>
+                  <div class="table-responsive">
+                    <table id="tbl_currencies" class="table table-sm table-hover">
+                      <thead>
+                        <tr class="bg-light">
+                          <th>Code</th><th>Nom</th><th>Symbole</th><th>Défaut</th><th>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody id="currencies_body"></tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="card bg-white">
+                <div class="card-header card-color">
+                  <p class="h6 font-weight-bold mb-0"><i class="fa fa-exchange-alt"></i> Taux de Change</p>
+                </div>
+                <div class="card-body">
+                  <div class="form-row mb-2">
+                    <div class="col-sm-4"><select id="rate_from_currency" class="form-control form-control-sm"><option value="">De...</option></select></div>
+                    <div class="col-sm-4"><select id="rate_to_currency" class="form-control form-control-sm"><option value="">Vers...</option></select></div>
+                    <div class="col-sm-3"><input id="rate_value" type="number" class="form-control form-control-sm" placeholder="Taux" step="0.000001"></div>
+                    <div class="col-sm-1"><button id="add_rate" class="btn btn-success btn-sm"><i class="fa fa-plus"></i></button></div>
+                  </div>
+                  <div class="form-row mb-2 border-top pt-2">
+                    <div class="col-12"><small class="text-muted"><i class="fa fa-calculator"></i> Convertisseur</small></div>
+                    <div class="col-sm-3"><input id="convert_amount" type="number" class="form-control form-control-sm" placeholder="Montant" step="0.01"></div>
+                    <div class="col-sm-3"><select id="convert_from" class="form-control form-control-sm"><option value="">De...</option></select></div>
+                    <div class="col-sm-3"><select id="convert_to" class="form-control form-control-sm"><option value="">Vers...</option></select></div>
+                    <div class="col-sm-3"><button id="convert_btn" class="btn btn-info btn-sm"><i class="fa fa-calculator"></i></button></div>
+                    <div class="col-12 mt-2"><div id="convert_result" class="alert alert-info" style="display:none;"></div></div>
+                  </div>
+                  <div class="table-responsive">
+                    <table id="tbl_rates" class="table table-sm table-hover">
+                      <thead>
+                        <tr class="bg-light"><th>De</th><th>Vers</th><th>Taux</th><th>Date</th><th>Actions</th></tr>
+                      </thead>
+                      <tbody id="rates_body"></tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Section Mot de passe -->
+      <div id="section-password" class="card mb-3">
+        <div class="card-header">Changer mon mot de passe</div>
+        <div class="card-body">
+          <div class="form-row">
+            <div class="form-group col-md-4">
+              <label>Mot de passe actuel</label>
+              <input id="pwd_current" type="password" class="form-control" autocomplete="current-password">
+            </div>
+            <div class="form-group col-md-4">
+              <label>Nouveau mot de passe</label>
+              <input id="pwd_new" type="password" class="form-control" autocomplete="new-password">
+            </div>
+            <div class="form-group col-md-4">
+              <label>Confirmer</label>
+              <input id="pwd_confirm" type="password" class="form-control" autocomplete="new-password">
+            </div>
+          </div>
+          <button id="pwd_save" class="btn btn-primary">Mettre à jour</button>
+          <span id="pwd_status" class="ml-2 text-muted"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  const API_CFG = '/API/system-config/';
+  const API_WAREHOUSES = '/API/entrepots/?page_size=1000';
+  const API_CHANGE_PWD = '/change-password/';
+  const $ = window.jQuery;
+  function getCookie(name){
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+  }
+  function asList(data){
+    if (Array.isArray(data)) return data;
+    if (data && Array.isArray(data.results)) return data.results;
+    if (data && data.results && typeof data.results === 'object') return Object.values(data.results);
+    return [];
+  }
+  function fillSelect($sel, list){
+    $sel.empty();
+    $sel.append($('<option>').val('').text('Sélectionner un entrepôt...'));
+    (Array.isArray(list) ? list : []).forEach(function(w){ $sel.append($('<option>').val(w.id).text((w.code||'') + ' - ' + (w.name||w.label||''))); });
+  }
+  function loadWarehouses(){
+    return $.getJSON(API_WAREHOUSES).then(function(data){ return asList(data); });
+  }
+  function loadConfig(){
+    return $.getJSON(API_CFG);
+  }
+  function saveConfig(cfg){
+    const csrftoken = getCookie('csrftoken');
+    return $.ajax({ url: API_CFG, method: 'PUT', contentType: 'application/json', headers: csrftoken ? {'X-CSRFToken': csrftoken} : {}, data: JSON.stringify(cfg)});
+  }
+  function setStatus(sel, msg, isErr){ $(sel).text(msg).toggleClass('text-danger', !!isErr).toggleClass('text-success', !isErr); }
+  $(function(){
+    // Entrepôts
+    const $sel = $('#cfg_default_warehouse');
+    loadWarehouses().done(function(list){
+      fillSelect($sel, list);
+      loadConfig().done(function(cfg){
+        const config = cfg && (cfg[0] || cfg);
+        if(config && config.default_warehouse){
+          $sel.val(String(config.default_warehouse));
+          const whId = String(config.default_warehouse);
+          const $opt = $sel.find('option[value="'+whId+'"]');
+          const label = $opt.length ? $opt.text() : ('#'+whId);
+          $('#cfg_info').removeClass('d-none').text('Entrepôt par défaut actuel: '+label);
+        } else {
+          $('#cfg_info').removeClass('d-none').text('Aucun entrepôt par défaut défini.');
+        }
+      }).fail(function(){ setStatus('#cfg_status', 'Configuration non chargée (continuer)', true); });
+    }).fail(function(){ setStatus('#cfg_status', 'Erreur de chargement des entrepôts', true); });
+
+    $('#cfg_save').on('click', function(){
+      const wid = parseInt($sel.val()||'0', 10) || null;
+      saveConfig({ default_warehouse: wid }).done(function(){ setStatus('#cfg_status', 'Enregistré', false); }).fail(function(xhr){
+        const msg = (xhr && xhr.responseJSON && (xhr.responseJSON.detail || xhr.responseJSON.error)) || "Erreur à l'enregistrement";
+        setStatus('#cfg_status', msg, true);
+      });
+    });
+
+    // Mot de passe
+    $('#pwd_save').on('click', function(){
+      const current = ($('#pwd_current').val()||'').trim();
+      const pw1 = ($('#pwd_new').val()||'').trim();
+      const pw2 = ($('#pwd_confirm').val()||'').trim();
+      if(!current || !pw1 || !pw2){ setStatus('#pwd_status','Veuillez remplir tous les champs', true); return; }
+      if(pw1 !== pw2){ setStatus('#pwd_status','La confirmation ne correspond pas', true); return; }
+      const csrftoken = getCookie('csrftoken');
+      $.ajax({ url: API_CHANGE_PWD, method: 'POST', headers: csrftoken ? {'X-CSRFToken': csrftoken} : {}, data: { current_password: current, new_password: pw1 }}).
+        done(function(){ setStatus('#pwd_status','Mot de passe mis à jour', false); $('#pwd_current,#pwd_new,#pwd_confirm').val(''); }).
+        fail(function(xhr){ const msg = (xhr.responseJSON && (xhr.responseJSON.error||xhr.responseJSON.detail)) || xhr.statusText || 'Erreur'; setStatus('#pwd_status', msg, true); });
+    });
+
+    // Initialiser les devises & taux (si admin)
+    try {
+      var evt = new CustomEvent('fragment:loaded', { detail: { name: 'vente' } });
+      document.dispatchEvent(evt);
+      setTimeout(function(){
+        var tab = document.getElementById('devises-tab');
+        if(tab){ tab.dispatchEvent(new Event('shown.bs.tab')); }
+      }, 100);
+    } catch(e) { console.warn('init devises from paramètres failed', e); }
+  });
+})();
+</script>

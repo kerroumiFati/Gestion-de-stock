@@ -394,6 +394,8 @@ class VenteSerializer(serializers.ModelSerializer):
     type_paiement_display = serializers.CharField(source='get_type_paiement_display', read_only=True)
     currency_code = serializers.CharField(source='currency.code', read_only=True)
     currency_symbol = serializers.CharField(source='currency.symbol', read_only=True)
+    warehouse_code = serializers.CharField(source='warehouse.code', read_only=True)
+    warehouse_name = serializers.CharField(source='warehouse.name', read_only=True)
     nombre_articles = serializers.SerializerMethodField()
     total_formatted = serializers.SerializerMethodField()
     
@@ -401,6 +403,7 @@ class VenteSerializer(serializers.ModelSerializer):
         model = Vente
         fields = ['id', 'numero', 'date_vente', 'client', 'client_nom', 'client_prenom',
                  'type_paiement', 'type_paiement_display', 'statut', 'statut_display',
+                 'warehouse', 'warehouse_code', 'warehouse_name',
                  'currency', 'currency_code', 'currency_symbol', 'exchange_rate_snapshot',
                  'total_ht', 'total_ttc', 'total_formatted', 'remise_percent', 'observations',
                  'bon_livraison', 'facture', 'lignes', 'nombre_articles']
@@ -419,7 +422,7 @@ class VenteCreateSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Vente
-        fields = ['numero', 'client', 'type_paiement', 'currency', 'remise_percent', 'observations', 'lignes']
+        fields = ['numero', 'client', 'type_paiement', 'warehouse', 'currency', 'remise_percent', 'observations', 'lignes']
         extra_kwargs = {
             'numero': {'required': False}
         }
@@ -438,6 +441,13 @@ class VenteCreateSerializer(serializers.ModelSerializer):
                     validated_data['numero'] = candidate
                     break
                 n += 1
+
+        # Exiger un entrepôt: utiliser par défaut si non fourni
+        from .models import SystemConfig, Warehouse, ProductStock
+        wh = validated_data.get('warehouse')
+        if not wh or (hasattr(wh, 'is_active') and not wh.is_active):
+            wh = SystemConfig.ensure_default_warehouse()
+            validated_data['warehouse'] = wh
 
         # Définir la devise par défaut si pas spécifiée
         if not validated_data.get('currency'):
@@ -476,11 +486,17 @@ class VenteCreateSerializer(serializers.ModelSerializer):
 
                 LigneVente.objects.create(vente=vente, **ligne_data)
 
-                # Décrémenter le stock produit et créer un mouvement
+                # Décrémenter le stock produit (agrégé) et par entrepôt, et créer un mouvement avec entrepôt
                 if qty > 0:
+                    # décrément agrégé (back-compat)
                     produit.quantite = produit.quantite - qty
                     produit.save(update_fields=['quantite'])
-                    StockMove.objects.create(produit=produit, delta=-(qty), source='VENTE', ref_id=str(vente.id), note=f"Vente {vente.numero}")
+                    # décrément par entrepôt
+                    ps, _ = ProductStock.objects.get_or_create(produit=produit, warehouse=vente.warehouse, defaults={'quantity': 0})
+                    ps.quantity = max(0, (ps.quantity or 0) - qty)
+                    ps.save(update_fields=['quantity'])
+                    # mouvement de sortie rattaché à l'entrepôt
+                    StockMove.objects.create(produit=produit, warehouse=vente.warehouse, delta=-(qty), source='VENTE', ref_id=str(vente.id), note=f"Vente {vente.numero}")
 
             vente.recompute_totals()
             vente.save()

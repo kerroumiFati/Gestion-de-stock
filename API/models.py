@@ -585,6 +585,44 @@ class InventoryLine(models.Model):
 #####################
 #      Ventes       #
 #####################
+class SystemConfig(models.Model):
+    """Configuration système (singleton) pour paramètres globaux"""
+    default_warehouse = models.ForeignKey('Warehouse', on_delete=models.SET_NULL, null=True, blank=True,
+                                          related_name='as_default_for')
+    default_currency = models.ForeignKey('Currency', on_delete=models.SET_NULL, null=True, blank=True,
+                                         related_name='as_default_currency_for')
+
+    def save(self, *args, **kwargs):
+        # enforce singleton id=1
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get_solo(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    @classmethod
+    def ensure_default_warehouse(cls):
+        cfg = cls.get_solo()
+        if cfg.default_warehouse and cfg.default_warehouse.is_active:
+            return cfg.default_warehouse
+        # try to find any active warehouse
+        w = Warehouse.objects.filter(is_active=True).first()
+        if not w:
+            # create a sensible default
+            base_code = 'DEF'
+            code = base_code
+            i = 1
+            while Warehouse.objects.filter(code=code).exists():
+                i += 1
+                code = f"{base_code}{i}"
+            w = Warehouse.objects.create(name='Entrepôt par défaut', code=code, is_active=True)
+        cfg.default_warehouse = w
+        cfg.save(update_fields=['default_warehouse'])
+        return w
+
+
 class Vente(models.Model):
     STATUTS = (
         ('draft', 'Brouillon'),
@@ -604,6 +642,9 @@ class Vente(models.Model):
     client = models.ForeignKey(Client, on_delete=models.PROTECT, related_name='ventes')
     type_paiement = models.CharField(max_length=10, choices=TYPES_PAIEMENT, default='cash')
     statut = models.CharField(max_length=10, choices=STATUTS, default='draft')
+    
+    # Entrepôt d'où la vente est effectuée
+    warehouse = models.ForeignKey('Warehouse', on_delete=models.SET_NULL, null=True, blank=True, related_name='ventes', help_text="Entrepôt de sortie pour cette vente")
     
     # Gestion des devises
     currency = models.ForeignKey(Currency, on_delete=models.PROTECT, null=True, blank=True,

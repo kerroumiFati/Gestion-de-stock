@@ -9,10 +9,12 @@ from rest_framework.decorators import api_view, action
 from rest_framework.response import Response
 from django.http import JsonResponse
 from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
 
 from .serializers import *  # noqa: F401
 from .serializers import StockMoveSerializer, InventorySessionSerializer
 from .models import *
+from django.shortcuts import get_object_or_404
 from .audit import log_event
 
 # Configure logging
@@ -518,8 +520,23 @@ class StockMoveViewSet(viewsets.ModelViewSet):
         obj = serializer.save()
         # Update stock per warehouse and aggregate product stock
         if obj.warehouse is None:
-            # fallback: no warehouse specified, do nothing per-location
-            pass
+            # If warehouse not specified, try to allocate negative deltas across existing per-warehouse stocks
+            if obj.delta < 0:
+                remaining = -int(obj.delta)
+                # Consume from warehouses with highest quantity first
+                stocks = list(ProductStock.objects.filter(produit=obj.produit).select_related('warehouse').order_by('-quantity'))
+                for ps in stocks:
+                    if remaining <= 0:
+                        break
+                    take = min(ps.quantity, remaining)
+                    if take > 0:
+                        ps.quantity = ps.quantity - take
+                        ps.save(update_fields=['quantity'])
+                        remaining -= take
+                # Note: if remaining > 0 here, total product stock would go negative; keep per-warehouse at zero
+            else:
+                # Positive delta without warehouse: cannot attribute to a location; keep only product total in sync
+                pass
         else:
             ps, _ = ProductStock.objects.get_or_create(produit=obj.produit, warehouse=obj.warehouse, defaults={'quantity': 0})
             ps.quantity = ps.quantity + obj.delta
@@ -1252,6 +1269,7 @@ class VenteViewSet(viewsets.ModelViewSet):
 class WarehouseViewSet(viewsets.ModelViewSet):
     queryset = Warehouse.objects.all().order_by('name')
     serializer_class = WarehouseSerializer
+    permission_classes = [permissions.AllowAny]
 
     def perform_create(self, serializer):
         obj = serializer.save()
@@ -1312,9 +1330,39 @@ class LigneVenteViewSet(viewsets.ModelViewSet):
     serializer_class = LigneVenteSerializer
 
 # API pour les Devises et Taux de Change
+class SystemConfigView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    def get(self, request):
+        # Ensure a default warehouse exists so the UI can always display at least one option
+        cfg = SystemConfig.get_solo()
+        if not cfg.default_warehouse:
+            try:
+                cfg.default_warehouse = SystemConfig.ensure_default_warehouse()
+            except Exception:
+                pass
+        return Response({ 'default_warehouse': getattr(cfg.default_warehouse, 'id', None) })
+    def put(self, request):
+        cfg = SystemConfig.get_solo()
+        wid = request.data.get('default_warehouse')
+        if wid:
+            w = get_object_or_404(Warehouse, pk=int(wid))
+            cfg.default_warehouse = w
+        else:
+            cfg.default_warehouse = None
+        cfg.save()
+        return Response({ 'default_warehouse': getattr(cfg.default_warehouse, 'id', None) })
+
+class IsAdminOrReadOnlyAuthenticated(permissions.BasePermission):
+    """Allow authenticated users to read; only staff can write."""
+    def has_permission(self, request, view):
+        if request.method in permissions.SAFE_METHODS:
+            return request.user and request.user.is_authenticated
+        return request.user and request.user.is_staff
+
 class CurrencyViewSet(viewsets.ModelViewSet):
     queryset = Currency.objects.all()
     serializer_class = CurrencySerializer
+    permission_classes = [IsAdminOrReadOnlyAuthenticated]
 
     def perform_create(self, serializer):
         obj = serializer.save()
@@ -1364,6 +1412,7 @@ class CurrencyViewSet(viewsets.ModelViewSet):
 class ExchangeRateViewSet(viewsets.ModelViewSet):
     queryset = ExchangeRate.objects.all()
     serializer_class = ExchangeRateSerializer
+    permission_classes = [IsAdminOrReadOnlyAuthenticated]
 
     def perform_update(self, serializer):
         obj = serializer.save()

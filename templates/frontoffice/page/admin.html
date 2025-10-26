@@ -14,6 +14,7 @@
   <h2 class="mb-4"><i class="fas fa-tools mr-2"></i>Tableau de bord Administrateur</h2>
 
   <div class="row">
+    <!-- Liens d'administration -->
     <div class="col-md-3 mb-3">
       <div class="card admin-card" onclick="window.location.href='/users-admin/'">
         <div class="card-body">
@@ -85,7 +86,160 @@
         </div>
       </div>
     </div>
+
+    <div class="col-md-3 mb-3">
+      <div class="card admin-card" onclick="show && show('parametres')">
+        <div class="card-body">
+          <h5 class="card-title"><i class="fas fa-cogs mr-2"></i>Paramètres</h5>
+          <p class="card-text">Configurer l'entrepôt par défaut et autres paramètres.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-3 mb-3">
+      <div class="card admin-card">
+        <div class="card-body">
+          <h5 class="card-title"><i class="fas fa-coins mr-2"></i>Devises & Taux</h5>
+          <p class="card-text">Gérer les devises et les taux de change.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section Devises & Taux (réservée aux admins) -->
+  <div class="mt-4">
+    <h4 class="mb-3"><i class="fas fa-coins mr-2"></i>Devises & Taux</h4>
+    <div class="row">
+      <div class="col-md-6">
+        <div class="card bg-white">
+          <div class="card-header card-color">
+            <p class="h5 text-center font-weight-bold pt-2">
+              <i class="fa fa-coins"></i> Gestion des Devises
+            </p>
+          </div>
+          <div class="card-body">
+            <div class="row mb-3">
+              <div class="col-sm-3">
+                <input id="currency_code" type="text" class="form-control" placeholder="Code (EUR)" maxlength="3">
+              </div>
+              <div class="col-sm-4">
+                <input id="currency_name" type="text" class="form-control" placeholder="Nom de la devise">
+              </div>
+              <div class="col-sm-3">
+                <input id="currency_symbol" type="text" class="form-control" placeholder="Symbole (€)" maxlength="5">
+              </div>
+              <div class="col-sm-2">
+                <button id="add_currency" class="btn btn-success btn-sm">
+                  <i class="fa fa-plus"></i>
+                </button>
+              </div>
+            </div>
+            <div class="table-responsive">
+              <table id="tbl_currencies" class="table table-sm table-hover">
+                <thead>
+                  <tr class="bg-light">
+                    <th>Code</th>
+                    <th>Nom</th>
+                    <th>Symbole</th>
+                    <th>Défaut</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="currencies_body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="card bg-white">
+          <div class="card-header card-color">
+            <p class="h5 text-center font-weight-bold pt-2">
+              <i class="fa fa-exchange-alt"></i> Taux de Change
+            </p>
+          </div>
+          <div class="card-body">
+            <div class="row mb-3">
+              <div class="col-sm-3">
+                <select id="rate_from_currency" class="form-control form-control-sm">
+                  <option value="">De...</option>
+                </select>
+              </div>
+              <div class="col-sm-3">
+                <select id="rate_to_currency" class="form-control form-control-sm">
+                  <option value="">Vers...</option>
+                </select>
+              </div>
+              <div class="col-sm-4">
+                <input id="rate_value" type="number" class="form-control form-control-sm" placeholder="Taux" step="0.000001">
+              </div>
+              <div class="col-sm-2">
+                <button id="add_rate" class="btn btn-success btn-sm">
+                  <i class="fa fa-plus"></i>
+                </button>
+              </div>
+            </div>
+            <div class="row mb-3 border-top pt-3">
+              <div class="col-12">
+                <h6><i class="fa fa-calculator"></i> Convertisseur</h6>
+              </div>
+              <div class="col-sm-3">
+                <input id="convert_amount" type="number" class="form-control form-control-sm" placeholder="Montant" step="0.01">
+              </div>
+              <div class="col-sm-3">
+                <select id="convert_from" class="form-control form-control-sm">
+                  <option value="">De...</option>
+                </select>
+              </div>
+              <div class="col-sm-3">
+                <select id="convert_to" class="form-control form-control-sm">
+                  <option value="">Vers...</option>
+                </select>
+              </div>
+              <div class="col-sm-3">
+                <button id="convert_btn" class="btn btn-info btn-sm">
+                  <i class="fa fa-calculator"></i>
+                </button>
+              </div>
+              <div class="col-12 mt-2">
+                <div id="convert_result" class="alert alert-info" style="display: none;"></div>
+              </div>
+            </div>
+            <div class="table-responsive">
+              <table id="tbl_rates" class="table table-sm table-hover">
+                <thead>
+                  <tr class="bg-light">
+                    <th>De</th>
+                    <th>Vers</th>
+                    <th>Taux</th>
+                    <th>Date</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="rates_body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
+<script src="/static/script/vente.js"></script>
+<script>
+  // Initialiser les comportements devises/taux depuis vente.js sur cette page admin
+  (function(){
+    try{
+      // Simuler le chargement du fragment 'vente' pour déclencher l'init dans vente.js
+      var evt = new CustomEvent('fragment:loaded', { detail: { name: 'vente' } });
+      document.dispatchEvent(evt);
+      // Forcer un rafraîchissement initial des listes si l'ancre #devises existe
+      setTimeout(function(){
+        var tab = document.getElementById('devises-tab');
+        if(tab){ tab.dispatchEvent(new Event('shown.bs.tab')); }
+      }, 100);
+    }catch(e){ console.warn('init devises admin failed', e); }
+  })();
+</script>
 </body>
 </html>
