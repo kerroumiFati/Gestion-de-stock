@@ -26,7 +26,19 @@ from rest_framework.decorators import api_view, permission_classes
 @permission_classes([permissions.AllowAny])
 def categories_raw(request):
     try:
-        rows = list(Categorie.objects.values('id','nom','description','parent','couleur','icone','is_active'))
+        categories = Categorie.objects.all()
+        rows = []
+        for cat in categories:
+            rows.append({
+                'id': cat.id,
+                'nom': cat.nom,
+                'description': cat.description,
+                'parent': cat.parent_id,
+                'couleur': cat.couleur,
+                'icone': cat.icone,
+                'is_active': cat.is_active,
+                'products_count': cat.get_products_count()  # Calculer le nombre de produits
+            })
         return Response(rows)
     except Exception as e:
         logger.exception('categories_raw failed: %s', e)
@@ -383,59 +395,121 @@ class FactureViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def from_bl(self, request):
-        bl_id = request.data.get('bon_livraison')
-        tva_rate = request.data.get('tva_rate', 20)
-        numero = request.data.get('numero')
-        if not bl_id:
-            return Response({'detail': 'bon_livraison requis'}, status=400)
         try:
-            bl = BonLivraison.objects.select_related('client').prefetch_related('lignes__produit').get(pk=bl_id)
-        except BonLivraison.DoesNotExist:
-            return Response({'detail': 'Bon de livraison introuvable'}, status=404)
-        if bl.statut != 'validated':
-            return Response({'detail': 'Le bon de livraison doit être validé'}, status=400)
-        # Numéro automatique si absent
-        if not numero:
-            numero = f"FA-{Facture.objects.count()+1:05d}"
-        facture = Facture.objects.create(
-            numero=numero,
-            client=bl.client,
-            bon_livraison=bl,
-            tva_rate=tva_rate,
-            statut='draft'
-        )
-        for l in bl.lignes.all():
-            LigneFacture.objects.create(
-                facture=facture,
-                produit=l.produit,
-                designation=l.produit.designation,
-                quantite=l.quantite,
-                prixU_snapshot=l.produit.prixU,
+            bl_id = request.data.get('bon_livraison')
+            tva_rate = request.data.get('tva_rate', 20)
+            numero = request.data.get('numero')
+
+            if not bl_id:
+                return Response({'detail': 'bon_livraison requis'}, status=400)
+
+            try:
+                bl = BonLivraison.objects.select_related('client').prefetch_related('lignes__produit').get(pk=bl_id)
+            except BonLivraison.DoesNotExist:
+                return Response({'detail': 'Bon de livraison introuvable'}, status=404)
+
+            if bl.statut != 'validated':
+                return Response({'detail': 'Le bon de livraison doit être validé'}, status=400)
+
+            if not bl.client:
+                return Response({'detail': 'Le bon de livraison doit avoir un client associé'}, status=400)
+
+            # Numéro automatique si absent
+            if not numero:
+                # Générer un numéro unique en vérifiant les doublons
+                base = 'FA-'
+                n = Facture.objects.count() + 1
+                while True:
+                    candidate = f"{base}{n:05d}"
+                    if not Facture.objects.filter(numero=candidate).exists():
+                        numero = candidate
+                        break
+                    n += 1
+
+            # Créer la facture avec une date (pas datetime)
+            from datetime import date
+            facture = Facture.objects.create(
+                numero=numero,
+                date_emission=date.today(),  # Forcer une date, pas un datetime
+                client=bl.client,
+                bon_livraison=bl,
+                tva_rate=tva_rate,
+                statut='draft'
             )
-        facture.recompute_totals()
-        facture.save(update_fields=['total_ht', 'total_tva', 'total_ttc'])
-        return Response(FactureSerializer(facture).data, status=201)
+
+            for l in bl.lignes.all():
+                LigneFacture.objects.create(
+                    facture=facture,
+                    produit=l.produit,
+                    designation=l.produit.designation,
+                    quantite=l.quantite,
+                    prixU_snapshot=l.prixU_snapshot,  # Utiliser le prix du BL, pas le prix actuel du produit
+                )
+
+            facture.recompute_totals()
+            facture.save(update_fields=['total_ht', 'total_tva', 'total_ttc'])
+
+            try:
+                log_event(self.request, 'facture.create_from_bl', target=facture, metadata={
+                    'id': facture.id, 'numero': facture.numero, 'bl_id': bl.id
+                })
+            except Exception:
+                pass
+
+            return Response(FactureSerializer(facture).data, status=201)
+
+        except Exception as e:
+            logger.exception('Erreur lors de la création de facture depuis BL: %s', e)
+            return Response({'detail': f'Erreur: {str(e)}'}, status=500)
 
     @action(detail=True, methods=['get'])
     def printable(self, request, pk=None):
+        from django.http import HttpResponse
         f = self.get_object()
         # Simple HTML imprimable (export via impression PDF navigateur)
         rows = ''.join([
             f"<tr><td>{i+1}</td><td>{l.designation}</td><td>{l.quantite}</td><td>{l.prixU_snapshot}</td><td>{l.quantite * l.prixU_snapshot}</td></tr>"
             for i, l in enumerate(f.lignes.all())
         ])
-        html = f"""
+        html = f"""<!DOCTYPE html>
         <html><head><meta charset='utf-8'><title>Facture {f.numero}</title>
-        <style>table{{width:100%;border-collapse:collapse}}td,th{{border:1px solid #ddd;padding:8px;text-align:left}}</style>
-        </head><body onload='window.print()'>
+        <style>
+            body {{ font-family: Arial, sans-serif; margin: 20px; }}
+            h2 {{ color: #333; }}
+            table {{ width: 100%; border-collapse: collapse; margin: 20px 0; }}
+            td, th {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
+            th {{ background-color: #f2f2f2; }}
+            .totals {{ margin-top: 20px; text-align: right; }}
+            @media print {{
+                button {{ display: none; }}
+            }}
+        </style>
+        </head><body>
         <h2>Facture {f.numero}</h2>
-        <p>Date: {f.date_emission} - Client: {f.client.nom} {f.client.prenom} - Statut: {f.statut}</p>
-        <table><thead><tr><th>#</th><th>Désignation</th><th>Qté</th><th>PU</th><th>Total</th></tr></thead>
-        <tbody>{rows}</tbody></table>
-        <h3>Total HT: {f.total_ht} | TVA({f.tva_rate}%): {f.total_tva} | TTC: {f.total_ttc}</h3>
+        <p><strong>Date:</strong> {f.date_emission}</p>
+        <p><strong>Client:</strong> {f.client.nom} {f.client.prenom}</p>
+        <p><strong>Statut:</strong> {f.statut}</p>
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Désignation</th>
+                    <th>Quantité</th>
+                    <th>Prix Unitaire</th>
+                    <th>Total</th>
+                </tr>
+            </thead>
+            <tbody>{rows}</tbody>
+        </table>
+        <div class="totals">
+            <p><strong>Total HT:</strong> {f.total_ht}</p>
+            <p><strong>TVA ({f.tva_rate}%):</strong> {f.total_tva}</p>
+            <p><strong>Total TTC:</strong> {f.total_ttc}</p>
+        </div>
+        <button onclick="window.print()">Imprimer</button>
         </body></html>
         """
-        return Response(html, content_type='text/html')
+        return HttpResponse(html, content_type='text/html; charset=utf-8')
 
     @action(detail=True, methods=['post'])
     def issue(self, request, pk=None):
@@ -476,42 +550,6 @@ class StockMoveViewSet(viewsets.ModelViewSet):
     queryset = StockMove.objects.all().select_related('produit','warehouse')
     serializer_class = StockMoveSerializer
 
-    def perform_create(self, serializer):
-        obj = serializer.save()
-        # Update stock per warehouse and aggregate product stock
-        if obj.warehouse is None:
-            pass
-        else:
-            ps, _ = ProductStock.objects.get_or_create(produit=obj.produit, warehouse=obj.warehouse, defaults={'quantity': 0})
-            ps.quantity = ps.quantity + obj.delta
-            ps.save(update_fields=['quantity'])
-        total = obj.produit.stocks.aggregate(total=Sum('quantity')).get('total') or 0
-        obj.produit.quantite = total
-        obj.produit.save(update_fields=['quantite'])
-        try:
-            log_event(self.request, 'stockmove.create', target=obj, metadata={'id': obj.id, 'produit': obj.produit_id, 'warehouse': getattr(obj.warehouse, 'id', None), 'delta': obj.delta, 'source': obj.source, 'ref_id': obj.ref_id})
-        except Exception:
-            pass
-
-    def perform_update(self, serializer):
-        obj = serializer.save()
-        total = obj.produit.stocks.aggregate(total=Sum('quantity')).get('total') or 0
-        obj.produit.quantite = total
-        obj.produit.save(update_fields=['quantite'])
-        try:
-            log_event(self.request, 'stockmove.update', target=obj, metadata={'id': obj.id})
-        except Exception:
-            pass
-
-    def perform_destroy(self, instance):
-        mid = instance.id
-        prod = instance.produit_id
-        wh = getattr(instance.warehouse, 'id', None)
-        super().perform_destroy(instance)
-        try:
-            log_event(self.request, 'stockmove.delete', target=None, metadata={'id': mid, 'produit': prod, 'warehouse': wh})
-        except Exception:
-            pass
     filter_backends = [DjangoFilterBackend]
     filterset_class = StockMoveFilter
     pagination_class = None
@@ -545,6 +583,30 @@ class StockMoveViewSet(viewsets.ModelViewSet):
         total = obj.produit.stocks.aggregate(total=Sum('quantity')).get('total') or 0
         obj.produit.quantite = total
         obj.produit.save(update_fields=['quantite'])
+        try:
+            log_event(self.request, 'stockmove.create', target=obj, metadata={'id': obj.id, 'produit': obj.produit_id, 'warehouse': getattr(obj.warehouse, 'id', None), 'delta': obj.delta, 'source': obj.source, 'ref_id': obj.ref_id})
+        except Exception:
+            pass
+
+    def perform_update(self, serializer):
+        obj = serializer.save()
+        total = obj.produit.stocks.aggregate(total=Sum('quantity')).get('total') or 0
+        obj.produit.quantite = total
+        obj.produit.save(update_fields=['quantite'])
+        try:
+            log_event(self.request, 'stockmove.update', target=obj, metadata={'id': obj.id})
+        except Exception:
+            pass
+
+    def perform_destroy(self, instance):
+        mid = instance.id
+        prod = instance.produit_id
+        wh = getattr(instance.warehouse, 'id', None)
+        super().perform_destroy(instance)
+        try:
+            log_event(self.request, 'stockmove.delete', target=None, metadata={'id': mid, 'produit': prod, 'warehouse': wh})
+        except Exception:
+            pass
 
     @action(detail=False, methods=['post'])
     def transfer(self, request):
@@ -666,27 +728,6 @@ class StockMoveViewSet(viewsets.ModelViewSet):
         return Response({'detail': 'Sortie enregistrée', 'move': StockMoveSerializer(move).data}, status=201)
 
 class InventorySessionViewSet(viewsets.ModelViewSet):
-    def perform_create(self, serializer):
-        obj = serializer.save()
-        try:
-            log_event(self.request, 'inventorysession.create', target=obj, metadata={'id': obj.id})
-        except Exception:
-            pass
-
-    def perform_update(self, serializer):
-        obj = serializer.save()
-        try:
-            log_event(self.request, 'inventorysession.update', target=obj, metadata={'id': obj.id})
-        except Exception:
-            pass
-
-    def perform_destroy(self, instance):
-        mid = instance.id
-        super().perform_destroy(instance)
-        try:
-            log_event(self.request, 'inventorysession.delete', target=None, metadata={'id': mid})
-        except Exception:
-            pass
     queryset = InventorySession.objects.all().order_by('-date')
     serializer_class = InventorySessionSerializer
 
@@ -709,6 +750,21 @@ class InventorySessionViewSet(viewsets.ModelViewSet):
         obj = serializer.save(created_by=self.request.user, numero=numero)
         try:
             log_event(self.request, 'inventorysession.create', target=obj, metadata={'id': obj.id, 'numero': obj.numero})
+        except Exception:
+            pass
+
+    def perform_update(self, serializer):
+        obj = serializer.save()
+        try:
+            log_event(self.request, 'inventorysession.update', target=obj, metadata={'id': obj.id})
+        except Exception:
+            pass
+
+    def perform_destroy(self, instance):
+        mid = instance.id
+        super().perform_destroy(instance)
+        try:
+            log_event(self.request, 'inventorysession.delete', target=None, metadata={'id': mid})
         except Exception:
             pass
 
@@ -1088,8 +1144,8 @@ class LoginViewSet(APIView):
             password = request.GET.get('password', False)
             user = authenticate(username=username, password=password)
             if user is not None and user.is_active:
-                return Response(user)
-            return Response(user)
+                return Response({'status': 'success', 'username': user.username, 'id': user.id})
+            return Response({'status': 'error', 'message': 'Invalid credentials'}, status=401)
 
 # API pour les Ventes
 class VenteViewSet(viewsets.ModelViewSet):
@@ -1168,20 +1224,10 @@ class VenteViewSet(viewsets.ModelViewSet):
                     vente.save(update_fields=['bon_livraison'])
             except Exception as e:
                 logger.exception('Erreur creation BL lors de la finalisation de la vente: %s', e)
-            
-            # Créer les mouvements de stock pour diminuer les quantités
-            for ligne in vente.lignes.select_related('produit'):
-                ligne.produit.quantite = ligne.produit.quantite - ligne.quantite
-                ligne.produit.save(update_fields=['quantite'])
-                
-                StockMove.objects.create(
-                    produit=ligne.produit,
-                    delta=-ligne.quantite,
-                    source='vente',
-                    ref_id=vente.id,
-                    note=f"Vente {vente.numero}"
-                )
-            
+
+            # NOTE: Le stock est déjà décrémenté lors de la création de la vente (VenteCreateSerializer.create)
+            # Ne pas décrémenter à nouveau ici pour éviter une double décrémentation
+
             try:
                 log_event(self.request, 'vente.complete', target=vente, metadata={'id': vente.id, 'numero': getattr(vente, 'numero', None)})
             except Exception:
@@ -1191,27 +1237,39 @@ class VenteViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'])
     def cancel(self, request, pk=None):
-        """Annuler une vente"""
+        """Annuler une vente et restaurer le stock"""
         vente = self.get_object()
         if vente.statut in ['draft', 'completed']:
             old_statut = vente.statut
             vente.statut = 'canceled'
             vente.save()
-            
-            # Si la vente était terminée, restaurer le stock
-            if old_statut == 'completed':
-                for ligne in vente.lignes.select_related('produit'):
-                    ligne.produit.quantite = ligne.produit.quantite + ligne.quantite
-                    ligne.produit.save(update_fields=['quantite'])
-                    
-                    StockMove.objects.create(
+
+            # Restaurer le stock (car il a été décrémenté lors de la création de la vente)
+            for ligne in vente.lignes.select_related('produit'):
+                # Restaurer le stock agrégé
+                ligne.produit.quantite = ligne.produit.quantite + ligne.quantite
+                ligne.produit.save(update_fields=['quantite'])
+
+                # Restaurer le stock par entrepôt si un entrepôt est associé
+                if vente.warehouse:
+                    ps, _ = ProductStock.objects.get_or_create(
                         produit=ligne.produit,
-                        delta=ligne.quantite,
-                        source='vente_cancel',
-                        ref_id=vente.id,
-                        note=f"Annulation vente {vente.numero}"
+                        warehouse=vente.warehouse,
+                        defaults={'quantity': 0}
                     )
-            
+                    ps.quantity = ps.quantity + ligne.quantite
+                    ps.save(update_fields=['quantity'])
+
+                # Créer un mouvement de correction
+                StockMove.objects.create(
+                    produit=ligne.produit,
+                    warehouse=vente.warehouse,
+                    delta=ligne.quantite,
+                    source='CORR',
+                    ref_id=str(vente.id),
+                    note=f"Annulation vente {vente.numero}"
+                )
+
             try:
                 log_event(self.request, 'vente.cancel', target=vente, metadata={'id': vente.id, 'numero': getattr(vente, 'numero', None), 'old_statut': old_statut})
             except Exception:
@@ -1332,25 +1390,59 @@ class LigneVenteViewSet(viewsets.ModelViewSet):
 # API pour les Devises et Taux de Change
 class SystemConfigView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+
     def get(self, request):
-        # Ensure a default warehouse exists so the UI can always display at least one option
-        cfg = SystemConfig.get_solo()
-        if not cfg.default_warehouse:
-            try:
-                cfg.default_warehouse = SystemConfig.ensure_default_warehouse()
-            except Exception:
-                pass
-        return Response({ 'default_warehouse': getattr(cfg.default_warehouse, 'id', None) })
+        """Get system configuration"""
+        try:
+            cfg = SystemConfig.get_solo()
+            if not cfg.default_warehouse:
+                try:
+                    cfg.default_warehouse = SystemConfig.ensure_default_warehouse()
+                except Exception as e:
+                    logger.warning(f"Could not ensure default warehouse: {e}")
+
+            return Response({
+                'default_warehouse': getattr(cfg.default_warehouse, 'id', None),
+                'default_currency': getattr(cfg.default_currency, 'id', None)
+            })
+        except Exception as e:
+            logger.exception("Error in SystemConfigView.get")
+            return Response({'error': str(e)}, status=500)
+
     def put(self, request):
-        cfg = SystemConfig.get_solo()
-        wid = request.data.get('default_warehouse')
-        if wid:
-            w = get_object_or_404(Warehouse, pk=int(wid))
-            cfg.default_warehouse = w
-        else:
-            cfg.default_warehouse = None
-        cfg.save()
-        return Response({ 'default_warehouse': getattr(cfg.default_warehouse, 'id', None) })
+        """Update system configuration"""
+        try:
+            cfg = SystemConfig.get_solo()
+            wid = request.data.get('default_warehouse')
+
+            if wid:
+                try:
+                    w = Warehouse.objects.get(pk=int(wid))
+                    if not w.is_active:
+                        return Response({
+                            'error': 'Cet entrepôt est inactif. Veuillez en sélectionner un autre.'
+                        }, status=400)
+                    cfg.default_warehouse = w
+                except Warehouse.DoesNotExist:
+                    return Response({
+                        'error': f'Entrepôt #{wid} introuvable'
+                    }, status=404)
+                except ValueError:
+                    return Response({
+                        'error': 'ID d\'entrepôt invalide'
+                    }, status=400)
+            else:
+                cfg.default_warehouse = None
+
+            cfg.save()
+
+            return Response({
+                'default_warehouse': getattr(cfg.default_warehouse, 'id', None),
+                'message': 'Configuration mise à jour avec succès'
+            })
+        except Exception as e:
+            logger.exception("Error in SystemConfigView.put")
+            return Response({'error': str(e)}, status=500)
 
 class IsAdminOrReadOnlyAuthenticated(permissions.BasePermission):
     """Allow authenticated users to read; only staff can write."""

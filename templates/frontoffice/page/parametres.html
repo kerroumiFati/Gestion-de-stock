@@ -175,10 +175,30 @@
 
     $('#cfg_save').on('click', function(){
       const wid = parseInt($sel.val()||'0', 10) || null;
-      saveConfig({ default_warehouse: wid }).done(function(){ setStatus('#cfg_status', 'Enregistré', false); }).fail(function(xhr){
-        const msg = (xhr && xhr.responseJSON && (xhr.responseJSON.detail || xhr.responseJSON.error)) || "Erreur à l'enregistrement";
-        setStatus('#cfg_status', msg, true);
-      });
+      if (!wid) {
+        setStatus('#cfg_status', 'Veuillez sélectionner un entrepôt', true);
+        return;
+      }
+      setStatus('#cfg_status', 'Enregistrement...', false);
+      saveConfig({ default_warehouse: wid })
+        .done(function(resp){
+          setStatus('#cfg_status', resp.message || 'Enregistré', false);
+          // Recharger la config pour afficher le nouvel entrepôt
+          loadConfig().done(function(cfg){
+            const config = cfg && (cfg[0] || cfg);
+            if(config && config.default_warehouse){
+              const whId = String(config.default_warehouse);
+              const $opt = $sel.find('option[value="'+whId+'"]');
+              const label = $opt.length ? $opt.text() : ('#'+whId);
+              $('#cfg_info').removeClass('d-none').text('Entrepôt par défaut actuel: '+label);
+            }
+          });
+        })
+        .fail(function(xhr){
+          const msg = (xhr && xhr.responseJSON && (xhr.responseJSON.error || xhr.responseJSON.detail)) || "Erreur à l'enregistrement";
+          setStatus('#cfg_status', msg, true);
+          console.error('Save config error:', xhr);
+        });
     });
 
     // Mot de passe

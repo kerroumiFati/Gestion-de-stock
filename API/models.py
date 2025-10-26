@@ -467,9 +467,17 @@ class StockMove(models.Model):
     SOURCE_CHOICES = (
         ('BL', 'Bon de livraison'),
         ('BC', 'Bon de commande'),
-        ('ACHAT', 'Vente simple'),
+        ('ACHAT', 'Achat'),
+        ('VENTE', 'Vente'),
         ('INV', 'Inventaire'),
         ('CORR', 'Correction'),
+        ('PERTE', 'Perte'),
+        ('CASSE', 'Casse'),
+        ('EXP', 'Expiration'),
+        ('TRANS', 'Transfert'),
+        ('SAMPLE', 'Échantillon'),
+        ('DON', 'Don'),
+        ('CONS', 'Consommation interne'),
         ('AUTRE', 'Autre'),
     )
     produit = models.ForeignKey(Produit, on_delete=models.PROTECT, related_name='mouvements')

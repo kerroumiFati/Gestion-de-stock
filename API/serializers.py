@@ -7,7 +7,7 @@ from django.contrib.auth.models import User
 class CategorieSerializer(serializers.ModelSerializer):
     parent_nom = serializers.CharField(source='parent.nom', read_only=True)
     full_path = serializers.CharField(source='get_full_path', read_only=True)
-    products_count = serializers.CharField(source='get_products_count', read_only=True)
+    products_count = serializers.IntegerField(source='get_products_count', read_only=True)
     sous_categories_count = serializers.SerializerMethodField()
     
     class Meta:
@@ -186,6 +186,9 @@ class BonLivraisonSerializer(serializers.ModelSerializer):
     class Meta:
         model = BonLivraison
         fields = ('id', 'numero', 'date_creation', 'client', 'statut', 'observations', 'lignes')
+        extra_kwargs = {
+            'numero': {'required': False}  # Permet la génération automatique
+        }
 
     def create(self, validated_data):
         lignes_data = validated_data.pop('lignes', [])
@@ -232,6 +235,16 @@ class FactureSerializer(serializers.ModelSerializer):
             'tva_rate', 'total_ht', 'total_tva', 'total_ttc', 'lignes'
         )
         read_only_fields = ('total_ht', 'total_tva', 'total_ttc')
+
+    def to_representation(self, instance):
+        """Convertir datetime en date pour éviter l'erreur de sérialisation"""
+        ret = super().to_representation(instance)
+        # Convertir date_emission de datetime à date si nécessaire
+        if 'date_emission' in ret and ret['date_emission']:
+            # Si c'est un datetime string avec heure, on extrait juste la date
+            if isinstance(ret['date_emission'], str) and 'T' in ret['date_emission']:
+                ret['date_emission'] = ret['date_emission'].split('T')[0]
+        return ret
 
     def create(self, validated_data):
         lignes_data = validated_data.pop('lignes', [])

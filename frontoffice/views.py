@@ -10,6 +10,7 @@ from API.models import Produit
 from django.contrib.auth.models import User, Group
 from django.contrib.auth.decorators import user_passes_test
 from API.audit import log_event
+import json
 
 def login_view(request):
     return render(request, "login.html",)
