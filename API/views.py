@@ -1158,6 +1158,18 @@ class VenteViewSet(viewsets.ModelViewSet):
         except Exception:
             pass
 
+    def create(self, request, *args, **kwargs):
+        """Override create to return full VenteSerializer after creation"""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        instance = serializer.instance
+
+        # Return full VenteSerializer representation
+        output_serializer = VenteSerializer(instance)
+        headers = self.get_success_headers(output_serializer.data)
+        return Response(output_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
     def perform_update(self, serializer):
         obj = serializer.save()
         try:
@@ -1324,6 +1336,164 @@ class VenteViewSet(viewsets.ModelViewSet):
         """
         return Response(html, content_type='text/html')
 
+    @action(detail=True, methods=['get'])
+    def ticket(self, request, pk=None):
+        """Générer un ticket de caisse pour la vente"""
+        from django.http import HttpResponse
+        from datetime import datetime
+
+        vente = self.get_object()
+        cfg = SystemConfig.get_solo()
+
+        # Informations de l'entreprise depuis la config
+        company_name = cfg.ticket_company_name or "Votre Entreprise"
+        company_address = cfg.ticket_company_address or ""
+        company_phone = cfg.ticket_company_phone or ""
+        footer_message = cfg.ticket_footer_message or "Merci de votre visite !"
+
+        # Devise
+        currency_symbol = vente.currency.symbol if vente.currency else '€'
+
+        # Générer les lignes du ticket
+        lignes_html = ''
+        for ligne in vente.lignes.all():
+            total_ligne = ligne.quantite * ligne.prixU_snapshot
+            lignes_html += f"""
+            <tr>
+                <td style="padding: 5px 0; border-bottom: 1px dashed #ddd;">{ligne.designation}</td>
+                <td style="padding: 5px 0; border-bottom: 1px dashed #ddd; text-align: center;">{ligne.quantite}</td>
+                <td style="padding: 5px 0; border-bottom: 1px dashed #ddd; text-align: right;">{ligne.prixU_snapshot:.2f}</td>
+                <td style="padding: 5px 0; border-bottom: 1px dashed #ddd; text-align: right; font-weight: bold;">{total_ligne:.2f}</td>
+            </tr>
+            """
+
+        # Calculs
+        remise_montant = vente.total_ht * (vente.remise_percent / 100) if vente.remise_percent else 0
+
+        html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <title>Ticket - {vente.numero}</title>
+            <style>
+                body {{
+                    font-family: 'Courier New', monospace;
+                    max-width: 300px;
+                    margin: 0 auto;
+                    padding: 10px;
+                    font-size: 12px;
+                }}
+                .header {{
+                    text-align: center;
+                    margin-bottom: 15px;
+                    border-bottom: 2px solid #000;
+                    padding-bottom: 10px;
+                }}
+                .company-name {{
+                    font-size: 16px;
+                    font-weight: bold;
+                    margin-bottom: 5px;
+                }}
+                .company-info {{
+                    font-size: 10px;
+                    margin: 2px 0;
+                }}
+                .ticket-info {{
+                    margin: 15px 0;
+                    font-size: 11px;
+                }}
+                table {{
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin: 10px 0;
+                }}
+                th {{
+                    text-align: left;
+                    border-bottom: 2px solid #000;
+                    padding: 5px 0;
+                    font-size: 11px;
+                }}
+                .totals {{
+                    border-top: 2px solid #000;
+                    margin-top: 10px;
+                    padding-top: 10px;
+                }}
+                .total-line {{
+                    display: flex;
+                    justify-content: space-between;
+                    margin: 5px 0;
+                }}
+                .total-final {{
+                    font-size: 14px;
+                    font-weight: bold;
+                    border-top: 2px solid #000;
+                    padding-top: 5px;
+                    margin-top: 5px;
+                }}
+                .footer {{
+                    text-align: center;
+                    margin-top: 15px;
+                    border-top: 2px solid #000;
+                    padding-top: 10px;
+                    font-size: 10px;
+                }}
+                @media print {{
+                    body {{ margin: 0; padding: 5px; }}
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <div class="company-name">{company_name}</div>
+                {f'<div class="company-info">{company_address}</div>' if company_address else ''}
+                {f'<div class="company-info">Tél: {company_phone}</div>' if company_phone else ''}
+            </div>
+
+            <div class="ticket-info">
+                <div><strong>Ticket N°:</strong> {vente.numero}</div>
+                <div><strong>Date:</strong> {vente.date_vente.strftime('%d/%m/%Y %H:%M')}</div>
+                <div><strong>Client:</strong> {vente.client.nom} {vente.client.prenom if vente.client.prenom else ''}</div>
+                <div><strong>Paiement:</strong> {vente.get_type_paiement_display()}</div>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Article</th>
+                        <th style="text-align: center;">Qté</th>
+                        <th style="text-align: right;">P.U.</th>
+                        <th style="text-align: right;">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {lignes_html}
+                </tbody>
+            </table>
+
+            <div class="totals">
+                <div class="total-line">
+                    <span>Sous-total HT:</span>
+                    <span>{vente.total_ht:.2f} {currency_symbol}</span>
+                </div>
+                {f'<div class="total-line"><span>Remise ({vente.remise_percent}%):</span><span>-{remise_montant:.2f} {currency_symbol}</span></div>' if vente.remise_percent else ''}
+                <div class="total-line total-final">
+                    <span>TOTAL TTC:</span>
+                    <span>{vente.total_ttc:.2f} {currency_symbol}</span>
+                </div>
+            </div>
+
+            <div class="footer">
+                {footer_message}
+                <br><br>
+                -- Ticket généré le {datetime.now().strftime('%d/%m/%Y à %H:%M')} --
+            </div>
+        </body>
+        </html>
+        """
+
+        return HttpResponse(html, content_type='text/html; charset=utf-8')
+
 class WarehouseViewSet(viewsets.ModelViewSet):
     queryset = Warehouse.objects.all().order_by('name')
     serializer_class = WarehouseSerializer
@@ -1403,7 +1573,12 @@ class SystemConfigView(APIView):
 
             return Response({
                 'default_warehouse': getattr(cfg.default_warehouse, 'id', None),
-                'default_currency': getattr(cfg.default_currency, 'id', None)
+                'default_currency': getattr(cfg.default_currency, 'id', None),
+                'auto_print_ticket': cfg.auto_print_ticket,
+                'ticket_footer_message': cfg.ticket_footer_message or '',
+                'ticket_company_name': cfg.ticket_company_name or '',
+                'ticket_company_address': cfg.ticket_company_address or '',
+                'ticket_company_phone': cfg.ticket_company_phone or ''
             })
         except Exception as e:
             logger.exception("Error in SystemConfigView.get")
@@ -1433,6 +1608,18 @@ class SystemConfigView(APIView):
                     }, status=400)
             else:
                 cfg.default_warehouse = None
+
+            # Mettre à jour les paramètres de caisse si fournis
+            if 'auto_print_ticket' in request.data:
+                cfg.auto_print_ticket = bool(request.data.get('auto_print_ticket'))
+            if 'ticket_footer_message' in request.data:
+                cfg.ticket_footer_message = request.data.get('ticket_footer_message', '')
+            if 'ticket_company_name' in request.data:
+                cfg.ticket_company_name = request.data.get('ticket_company_name', '')
+            if 'ticket_company_address' in request.data:
+                cfg.ticket_company_address = request.data.get('ticket_company_address', '')
+            if 'ticket_company_phone' in request.data:
+                cfg.ticket_company_phone = request.data.get('ticket_company_phone', '')
 
             cfg.save()
 

@@ -17,6 +17,10 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/material-design-iconic-font/2.2.0/css/material-design-iconic-font.min.css" rel="stylesheet">
     <!-- DataTables CSS -->
     <link href="https://cdn.datatables.net/1.11.5/css/dataTables.bootstrap4.min.css" rel="stylesheet">
+    <!-- Select2 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap4-theme@1.5.2/dist/select2-bootstrap4.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'style/select2-custom.css' %}">
 
     <link rel="stylesheet" href="{% static 'style/style.css' %}">
     <link rel="stylesheet" href="{% static 'style/theme.css' %}">
@@ -38,6 +42,8 @@
     <script src="https://cdn.datatables.net/1.11.5/js/dataTables.bootstrap4.min.js"></script>
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Select2 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
     <link rel="icon" href="{% static 'img/no-photo.png' %}" type="image/png">
 </head>
@@ -100,6 +106,9 @@
                     <li><a href="#" onclick="show('vente')" class="sidebar-item">
                         <i class="fas fa-shopping-cart"></i><span>Ventes</span>
                     </a></li>
+                    <li><a href="/caisse/" class="sidebar-item">
+                        <i class="fas fa-cash-register"></i><span>Caisse</span>
+                    </a></li>
                     <li><a href="#" onclick="show('categorie')" class="sidebar-item">
                         <i class="fas fa-tags"></i><span>Catégories</span>
                     </a></li>
@@ -158,9 +167,8 @@
 <script src="{% static 'script/redirect.js' %}"></script>
 <script src="{% static 'js/main.js' %}"></script>
 <script src="{% static 'js/sidebar-enhancements.js' %}"></script>
-<!-- Additional Libraries (CDN) -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/wow/1.1.2/wow.min.js"></script>
+<!-- Initialisation globale de Select2 -->
+<script src="{% static 'script/select2-init.js' %}"></script>
 <script>
 (async function loadAlertsClassic(){
  try{

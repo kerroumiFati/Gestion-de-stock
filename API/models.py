@@ -600,6 +600,18 @@ class SystemConfig(models.Model):
     default_currency = models.ForeignKey('Currency', on_delete=models.SET_NULL, null=True, blank=True,
                                          related_name='as_default_currency_for')
 
+    # Paramètres de caisse
+    auto_print_ticket = models.BooleanField(default=False,
+                                           help_text="Générer automatiquement le ticket de caisse")
+    ticket_footer_message = models.TextField(blank=True,
+                                            help_text="Message à afficher au pied du ticket (merci, mentions légales, etc.)")
+    ticket_company_name = models.CharField(max_length=200, blank=True,
+                                          help_text="Nom de l'entreprise à afficher sur le ticket")
+    ticket_company_address = models.TextField(blank=True,
+                                             help_text="Adresse de l'entreprise")
+    ticket_company_phone = models.CharField(max_length=50, blank=True,
+                                           help_text="Téléphone de l'entreprise")
+
     def save(self, *args, **kwargs):
         # enforce singleton id=1
         self.pk = 1

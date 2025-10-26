@@ -1,0 +1,93 @@
+/**
+ * Styles personnalisés pour Select2
+ */
+
+/* Ajuster la hauteur du select2 pour correspondre aux autres inputs */
+.select2-container--bootstrap4 .select2-selection {
+    min-height: 38px;
+    font-size: 1rem;
+}
+
+.select2-container--bootstrap4 .select2-selection--single .select2-selection__rendered {
+    line-height: 36px;
+    padding-left: 12px;
+}
+
+.select2-container--bootstrap4 .select2-selection--single .select2-selection__arrow {
+    height: 36px;
+}
+
+/* Améliorer le dropdown */
+.select2-container--bootstrap4 .select2-dropdown {
+    border-color: #ced4da;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+/* Résultats de recherche */
+.select2-container--bootstrap4 .select2-results__option {
+    padding: 8px 12px;
+}
+
+.select2-container--bootstrap4 .select2-results__option--highlighted {
+    background-color: #007bff;
+    color: white;
+}
+
+/* Champ de recherche dans le dropdown */
+.select2-container--bootstrap4 .select2-search--dropdown .select2-search__field {
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    padding: 6px 12px;
+}
+
+.select2-container--bootstrap4 .select2-search--dropdown .select2-search__field:focus {
+    border-color: #80bdff;
+    outline: 0;
+    box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+}
+
+/* Améliorer l'apparence du placeholder */
+.select2-container--bootstrap4 .select2-selection__placeholder {
+    color: #6c757d;
+}
+
+/* Messages (aucun résultat, recherche, etc.) */
+.select2-container--bootstrap4 .select2-results__message {
+    color: #6c757d;
+    font-style: italic;
+}
+
+/* Select2 en mode "clearing" (avec le X) */
+.select2-container--bootstrap4 .select2-selection__clear {
+    color: #dc3545;
+    font-size: 1.2em;
+    margin-right: 10px;
+}
+
+.select2-container--bootstrap4 .select2-selection__clear:hover {
+    color: #c82333;
+}
+
+/* Améliorer le focus */
+.select2-container--bootstrap4.select2-container--focus .select2-selection {
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+}
+
+/* Select2 en mode désactivé */
+.select2-container--bootstrap4 .select2-selection--single.select2-selection--disabled {
+    background-color: #e9ecef;
+    cursor: not-allowed;
+}
+
+/* Style pour les longues listes */
+.select2-results__options {
+    max-height: 300px;
+}
+
+/* Responsive - adapter pour les petits écrans */
+@media (max-width: 768px) {
+    .select2-container--bootstrap4 .select2-dropdown {
+        width: 100% !important;
+    }
+}

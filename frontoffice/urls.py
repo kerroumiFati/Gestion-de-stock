@@ -27,6 +27,7 @@ urlpatterns = [
     path('logout/', LogoutView.as_view(), name='logout'),
     path('admindash/', views.dashboard, name='admindash'),
     path('produits/', views.produit_all, name='produits'),
+    path('caisse/', views.caisse, name='caisse'),
     path('page/<str:name>/', views.page, name='page'),
 
     # Users admin

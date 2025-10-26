@@ -166,6 +166,12 @@ def produit_all(request):
     return render(request, 'frontoffice/produit_all.html', context_dict)
 
 
+@login_required
+def caisse(request):
+    """Vue pour la page de caisse (point de vente)"""
+    return render(request, 'frontoffice/caisse_page.html')
+
+
 def counts_all(request):
     produits = Produit.objects.all().count()
     return render(request, 'frontoffice/master_page.html', {'produits': produits})
