@@ -11,5 +11,5 @@ python manage.py collectstatic --no-input --clear
 # Run migrations
 python manage.py migrate
 
-# Create superuser automatically
-python create_superuser.py
+# Create superuser automatically (disabled temporarily for debugging)
+# python create_superuser.py
