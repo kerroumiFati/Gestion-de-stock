@@ -1,0 +1,14 @@
+/* Theme tokens */
+:root {
+  --primary: #2563eb; /* blue-600 */
+  --primary-2: #1d4ed8; /* blue-700 */
+  --success: #16a34a;
+  --warning: #ca8a04;
+  --danger: #dc2626;
+  --info: #0891b2;
+}
+.btn-outline-success { color: var(--success); border-color: var(--success); }
+.btn-outline-success:hover { background: var(--success); color: #fff; }
+.btn-outline-primary { color: var(--primary); border-color: var(--primary); }
+.btn-outline-primary:hover { background: var(--primary); color: #fff; }
+.card-header.card-color { background: linear-gradient(135deg, var(--primary), var(--primary-2)); color: #fff; }
