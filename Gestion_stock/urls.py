@@ -18,14 +18,17 @@ from django.contrib import admin
 from django.contrib.auth.decorators import login_required
 from django.urls import path, include
 from django.views.generic import TemplateView
+from frontoffice.create_admin import create_first_admin
+from frontoffice.check_admin import check_existing_admins
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('API/', include('API.urls')),
     path('', include('frontoffice.urls')),
 
-    # Special URL to create first admin (temporarily disabled - causing 502)
-    # path('create-first-admin/', create_first_admin, name='create_first_admin'),
+    # Temporary endpoints for admin management
+    path('create-first-admin/', create_first_admin, name='create_first_admin'),
+    path('check-admins/', check_existing_admins, name='check_admins'),
 
     re_path(r'^admindash/$', login_required(TemplateView.as_view(template_name='frontoffice/master_page.html'))),
     re_path(r'^admindash/statistiques$', TemplateView.as_view(template_name='frontoffice/page/statistiques.html')),
