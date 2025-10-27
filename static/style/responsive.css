@@ -81,19 +81,35 @@
 
 /* Tablet et Desktop: Sidebar visible */
 @media (min-width: 768px) {
+    /* Position toggle button just after sidebar with smooth animation */
     #show-sidebar {
-        display: none !important;
+        display: block !important;
+        position: fixed !important;
+        top: 15px !important;
+        left: calc(var(--sidebar-width) + 15px) !important; /* Sidebar width + 15px spacing */
+        z-index: 1060 !important;
+        transition: left 0.3s ease !important;
     }
 
-    .page-wrapper:not(.toggled) .page-content {
-        margin-left: var(--sidebar-width);
-    }
-
+    /* Desktop behavior: toggled = sidebar visible (opposite of mobile) */
     .page-wrapper.toggled .sidebar-wrapper {
-        left: calc(-1 * var(--sidebar-width));
+        left: 0 !important;  /* Sidebar visible */
     }
 
     .page-wrapper.toggled .page-content {
+        margin-left: var(--sidebar-width);  /* Content shifted */
+    }
+
+    /* When NOT toggled = sidebar hidden, move button to left edge */
+    .page-wrapper:not(.toggled) .sidebar-wrapper {
+        left: calc(-1 * var(--sidebar-width)) !important;
+    }
+
+    .page-wrapper:not(.toggled) #show-sidebar {
+        left: 15px !important; /* Button moves to left edge when sidebar hidden */
+    }
+
+    .page-wrapper:not(.toggled) .page-content {
         margin-left: 0;
     }
 }

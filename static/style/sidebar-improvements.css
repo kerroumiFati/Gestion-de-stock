@@ -88,8 +88,16 @@ body { background-color: #f5f7fb; }
   .page-content { margin-left: 0; width: 100%; }
 }
 
-/* Buttons that toggle sidebar */
-#show-sidebar.btn.btn-dark { position: fixed; top: 12px; left: 12px; z-index: 1050; background: var(--sidebar-accent); border-color: var(--sidebar-accent-hover); }
+/* Buttons that toggle sidebar - Position and styling */
+#show-sidebar.btn.btn-dark {
+  position: fixed;
+  top: 15px;
+  /* Position set by media queries below */
+  z-index: 1060;
+  background: var(--sidebar-accent);
+  border-color: var(--sidebar-accent-hover);
+  transition: left 0.3s ease;
+}
 #show-sidebar.btn.btn-dark:hover { background: var(--sidebar-accent-hover); }
 
 /* Card header accent to match theme */
@@ -101,16 +109,40 @@ body { background-color: #f5f7fb; }
 
 /* Toggle behavior per breakpoint */
 @media (min-width: 993px){
-  /* Desktop: sidebar visible par défaut, toggled = repliée */
-  .page-wrapper:not(.toggled) #sidebar { margin-left: 0; }
-  .page-wrapper:not(.toggled) .page-content { margin-left: 260px; width: calc(100% - 260px); }
+  /* Desktop: sidebar visible par défaut quand TOGGLED (classe présente par défaut) */
+  .page-wrapper.toggled #sidebar {
+    margin-left: 0;
+    left: 0 !important;
+  }
+  .page-wrapper.toggled .page-content {
+    margin-left: 260px;
+    width: calc(100% - 260px);
+  }
 
-  .page-wrapper.toggled #sidebar { margin-left: -260px; }
-  .page-wrapper.toggled .page-content { margin-left: 0; width: 100%; }
+  /* Position toggle button after sidebar when visible */
+  .page-wrapper.toggled #show-sidebar {
+    left: 275px !important; /* 260px sidebar + 15px spacing */
+  }
 
-  /* Bouton d'ouverture visible seulement quand sidebar est repliée */
-  #show-sidebar { display: none; }
-  .page-wrapper.toggled #show-sidebar { display: inline-flex; }
+  /* Desktop: sidebar cachée quand NOT TOGGLED (après clic) */
+  .page-wrapper:not(.toggled) #sidebar {
+    margin-left: -260px;
+    left: -260px !important;
+  }
+  .page-wrapper:not(.toggled) .page-content {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  /* Move toggle button to left edge when sidebar hidden */
+  .page-wrapper:not(.toggled) #show-sidebar {
+    left: 15px !important;
+  }
+
+  /* Bouton d'ouverture toujours visible sur desktop */
+  #show-sidebar {
+    display: inline-flex !important;
+  }
 }
 
 @media (max-width: 992px){
@@ -122,4 +154,61 @@ body { background-color: #f5f7fb; }
   /* Bouton d'ouverture visible quand sidebar est cachée */
   .page-wrapper:not(.toggled) #show-sidebar { display: inline-flex; }
   .page-wrapper.toggled #show-sidebar { display: none; }
+}
+
+/* Modern sidebar collapse system */
+.modern-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  width: 280px;
+  transition: transform 0.3s ease;
+  z-index: 1040;
+  transform: translateX(0); /* Visible par défaut sur desktop */
+}
+
+.modern-main {
+  margin-left: 280px;
+  transition: margin-left 0.3s ease;
+}
+
+/* Sidebar collapsed state - Desktop only */
+@media (min-width: 993px) {
+  .modern-sidebar.sidebar-collapsed {
+    transform: translateX(-280px);
+  }
+
+  body.sidebar-collapsed .modern-main {
+    margin-left: 0;
+  }
+}
+
+/* Responsive behavior for modern sidebar - Mobile/Tablet */
+@media (max-width: 992px) {
+  .modern-sidebar {
+    transform: translateX(-280px); /* Caché par défaut sur mobile */
+  }
+
+  .modern-sidebar:not(.sidebar-collapsed) {
+    transform: translateX(0); /* Visible quand "ouvert" */
+  }
+
+  .modern-main {
+    margin-left: 0;
+  }
+
+  body.sidebar-collapsed .modern-main {
+    margin-left: 0;
+  }
+}
+
+/* Toggle button styling */
+.sidebar-menu-toggle {
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.sidebar-menu-toggle:hover {
+  color: #3b82f6 !important;
 }

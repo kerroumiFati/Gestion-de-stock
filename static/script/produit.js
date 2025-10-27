@@ -192,6 +192,37 @@
     bindTableActions();
     const btn = el('#btn');
     if(btn){ btn.addEventListener('click', createOrUpdate); }
+
+    // Bouton Check - vérifier les produits avec quantité faible
+    const btnRisk = el('#btnrisk');
+    if(btnRisk){
+      btnRisk.addEventListener('click', async () => {
+        const riskValue = el('#risk')?.value ? Number(el('#risk').value) : 0;
+        if(riskValue <= 0){
+          showAlert('Veuillez entrer un seuil de risque valide', 'warning');
+          return;
+        }
+
+        // Filtrer les produits dont la quantité est inférieure au seuil
+        const lowStockProducts = __cacheProduits.filter(p => (p.quantite || 0) <= riskValue);
+
+        if(lowStockProducts.length === 0){
+          showAlert(`Aucun produit avec quantité ≤ ${riskValue}`, 'info');
+        } else {
+          showAlert(`${lowStockProducts.length} produit(s) avec quantité ≤ ${riskValue}`, 'warning');
+        }
+      });
+    }
+
+    // Bouton Refresh - recharger les données
+    const btnRef = el('#btnref');
+    if(btnRef){
+      btnRef.addEventListener('click', async () => {
+        showAlert('Actualisation des données...', 'info');
+        await loadProduits();
+        showAlert('Données actualisées avec succès', 'success');
+      });
+    }
   }
 
   // Initialize when the produit fragment is loaded via redirect.js

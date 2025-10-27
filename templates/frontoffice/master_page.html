@@ -170,10 +170,25 @@
             }
         }
 
-        /* Desktop */
+        /* Desktop - Position toggle button after sidebar */
         @media (min-width: 768px) {
+            .sidebar-wrapper {
+                /* Sidebar visible by default on desktop */
+            }
+
+            /* Position toggle button just after sidebar with spacing */
             #show-sidebar {
-                display: none !important;
+                display: block !important;
+                position: fixed !important;
+                top: 15px !important;
+                left: 275px !important; /* 260px sidebar + 15px spacing */
+                z-index: 1060 !important;
+                transition: left 0.3s ease !important;
+            }
+
+            /* When sidebar is hidden, move button to the left edge */
+            .page-wrapper:not(.toggled) #show-sidebar {
+                left: 15px !important;
             }
         }
     </style>

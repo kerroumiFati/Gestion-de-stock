@@ -9,21 +9,29 @@
     border: 1px solid #ced4da !important;
     border-radius: 0.25rem !important;
     background-color: #fff !important;
+    display: flex !important;
+    align-items: center !important;
 }
 
 .select2-container--bootstrap4 .select2-selection--single {
     border: 1px solid #ced4da !important;
     background-color: #fff !important;
+    display: flex !important;
+    align-items: center !important;
 }
 
 .select2-container--bootstrap4 .select2-selection--single .select2-selection__rendered {
-    line-height: 36px;
+    line-height: 1.5;
     padding-left: 12px;
+    padding-right: 12px;
     color: #495057;
+    flex: 1;
 }
 
 .select2-container--bootstrap4 .select2-selection--single .select2-selection__arrow {
     height: 36px;
+    display: flex;
+    align-items: center;
 }
 
 /* Améliorer le dropdown */
