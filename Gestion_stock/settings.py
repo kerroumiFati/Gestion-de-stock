@@ -174,7 +174,9 @@ STATICFILES_DIRS = [
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 # Use whitenoise for serving static files in production
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+# Using StaticFilesStorage instead of Compressed for better compatibility
+if not config('DEBUG', default=True, cast=bool):
+    STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 
 # CORS settings
 CORS_ALLOWED_ORIGINS = [

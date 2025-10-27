@@ -2,14 +2,13 @@
 # exit on error
 set -o errexit
 
-# Install dependencies
+echo "===> Installing dependencies..."
 pip install -r requirements.txt
 
-# Collect static files
+echo "===> Collecting static files..."
 python manage.py collectstatic --no-input --clear
 
-# Run migrations
+echo "===> Running migrations..."
 python manage.py migrate
 
-# Create superuser automatically (disabled temporarily for debugging)
-# python create_superuser.py
+echo "===> Build completed successfully!"
