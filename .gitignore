@@ -9,7 +9,7 @@ db.sqlite3-journal
 media/
 staticfiles/
 staticfiles_build/
-static/
+# static/ - REMOVED: We need to commit our static files to Git
 
 # Virtual Environment
 venv/
