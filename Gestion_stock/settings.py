@@ -165,18 +165,21 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 
-# Directories where Django will search for static files
-STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, "static"),
-]
+# In development, look for static files in the 'static' directory
+# In production, all files will be in STATIC_ROOT after collectstatic
+if config('DEBUG', default=True, cast=bool):
+    STATICFILES_DIRS = [
+        os.path.join(BASE_DIR, "static"),
+    ]
+else:
+    # In production, don't use STATICFILES_DIRS (files are collected to STATIC_ROOT)
+    STATICFILES_DIRS = []
 
 # Directory where collectstatic will collect static files for deployment
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 # Use whitenoise for serving static files in production
-# Using StaticFilesStorage instead of Compressed for better compatibility
-if not config('DEBUG', default=True, cast=bool):
-    STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 
 # CORS settings
 CORS_ALLOWED_ORIGINS = [
