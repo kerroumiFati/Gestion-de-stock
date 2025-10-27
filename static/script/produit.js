@@ -53,22 +53,41 @@
 
   async function loadCategories(){
     try{
+      console.log('[Produit] Chargement des catégories...');
       const data = await fetchJSON(api.categories);
       const sel = el('#categorie');
-      if(!sel) return;
+      if(!sel){
+        console.warn('[Produit] Element #categorie non trouvé');
+        return;
+      }
+      // Filtrer les catégories actives uniquement
+      const activeCategories = Array.isArray(data) ? data.filter(c => c.is_active !== false) : data;
+      console.log(`[Produit] ${activeCategories.length} catégories actives chargées`);
       sel.innerHTML = '<option value="">Sélectionner une catégorie</option>' +
-        data.map(c=>`<option value="${c.id}">${c.nom}</option>`).join('');
-    }catch(e){ console.warn('categories load failed', e); }
+        activeCategories.map(c=>`<option value="${c.id}">${c.nom}</option>`).join('');
+    }catch(e){
+      console.error('[Produit] Erreur chargement catégories:', e);
+      showAlert('Erreur de chargement des catégories', 'warning');
+    }
   }
 
   async function loadFournisseurs(){
     try{
+      console.log('[Produit] Chargement des fournisseurs...');
       const data = await fetchJSON(api.fournisseurs);
       const sel = el('#fournisseur');
-      if(!sel) return;
+      if(!sel){
+        console.warn('[Produit] Element #fournisseur non trouvé');
+        return;
+      }
+      const fournisseurs = Array.isArray(data) ? data : (data.results || []);
+      console.log(`[Produit] ${fournisseurs.length} fournisseurs chargés`);
       sel.innerHTML = '<option value="">Sélectionner un fournisseur</option>' +
-        data.map(f=>`<option value="${f.id}">${f.libelle}</option>`).join('');
-    }catch(e){ console.warn('fournisseurs load failed', e); }
+        fournisseurs.map(f=>`<option value="${f.id}">${f.libelle}</option>`).join('');
+    }catch(e){
+      console.error('[Produit] Erreur chargement fournisseurs:', e);
+      showAlert('Erreur de chargement des fournisseurs', 'warning');
+    }
   }
 
   async function loadProduits(){
@@ -183,12 +202,28 @@
   }
 
   function init(){
-    if(__rovodev_inited) return; // avoid re-entry
-    if(!el('#tproduit')) return; // not on this page yet
+    if(__rovodev_inited){
+      console.log('[Produit] Déjà initialisé, skip');
+      return; // avoid re-entry
+    }
+    if(!el('#tproduit')){
+      console.log('[Produit] Table #tproduit non trouvée, attente...');
+      return; // not on this page yet
+    }
+    console.log('[Produit] Initialisation...');
     __rovodev_inited = true;
-    loadCategories();
-    loadFournisseurs();
-    loadProduits();
+
+    // Charger les données en parallèle
+    Promise.all([
+      loadCategories(),
+      loadFournisseurs(),
+      loadProduits()
+    ]).then(() => {
+      console.log('[Produit] Toutes les données chargées avec succès');
+    }).catch(err => {
+      console.error('[Produit] Erreur lors du chargement initial:', err);
+    });
+
     bindTableActions();
     const btn = el('#btn');
     if(btn){ btn.addEventListener('click', createOrUpdate); }

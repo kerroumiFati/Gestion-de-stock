@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python manage.py runserver:*)"
+      "Bash(python manage.py runserver:*)",
+      "Bash(curl:*)",
+      "Bash(python -m json.tool:*)"
     ],
     "deny": [],
     "ask": []

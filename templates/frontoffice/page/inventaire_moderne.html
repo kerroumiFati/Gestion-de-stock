@@ -1,0 +1,1072 @@
+{% load static %}
+
+<!-- Styles spécifiques pour l'inventaire moderne -->
+<style>
+.inventory-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 20px;
+    border-radius: 10px 10px 0 0;
+    margin-bottom: 20px;
+}
+
+.quick-stats-card {
+    border-left: 4px solid;
+    transition: all 0.3s ease;
+}
+
+.quick-stats-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+}
+
+.stat-icon {
+    font-size: 2.5rem;
+    opacity: 0.3;
+}
+
+.scanner-container {
+    position: relative;
+    background: #f8f9fa;
+    border: 2px dashed #dee2e6;
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+    min-height: 200px;
+}
+
+.scanner-video {
+    width: 100%;
+    max-width: 400px;
+    border-radius: 10px;
+    display: none;
+}
+
+.scanner-video.active {
+    display: block;
+}
+
+.stock-level-badge {
+    padding: 8px 15px;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.stock-rupture { background: #ffebee; color: #c62828; }
+.stock-critique { background: #fff3e0; color: #e65100; }
+.stock-alerte { background: #fff9c4; color: #f57f17; }
+.stock-normal { background: #e8f5e9; color: #2e7d32; }
+
+.product-card {
+    transition: all 0.2s;
+    cursor: pointer;
+    border: 2px solid transparent;
+}
+
+.product-card:hover {
+    border-color: #667eea;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+}
+
+.product-card.selected {
+    border-color: #667eea;
+    background: #f8f9ff;
+}
+
+.quick-action-btn {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    font-size: 1.5rem;
+    transition: all 0.3s;
+}
+
+.quick-action-btn:hover {
+    transform: scale(1.1);
+}
+
+.filter-chip {
+    display: inline-block;
+    padding: 6px 12px;
+    margin: 4px;
+    background: #e0e7ff;
+    color: #4c51bf;
+    border-radius: 16px;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.filter-chip:hover {
+    background: #c7d2fe;
+}
+
+.filter-chip.active {
+    background: #4c51bf;
+    color: white;
+}
+
+.alert-pulse {
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.keyboard-hint {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: rgba(0,0,0,0.8);
+    color: white;
+    padding: 10px 15px;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    z-index: 1000;
+    display: none;
+}
+
+.keyboard-hint.show {
+    display: block;
+}
+
+.count-input {
+    font-size: 1.5rem;
+    font-weight: 600;
+    text-align: center;
+    border: 2px solid #667eea;
+}
+
+.warehouse-badge {
+    background: #e0e7ff;
+    color: #4c51bf;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+#scannerOverlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.95);
+    z-index: 9999;
+    display: none;
+    align-items: center;
+    justify-content: center;
+}
+
+#scannerOverlay.active {
+    display: flex;
+}
+
+.scanner-frame {
+    position: relative;
+    max-width: 500px;
+    width: 90%;
+}
+
+.scanner-controls {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 10px;
+}
+
+.scan-result {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #4caf50;
+    color: white;
+    padding: 15px 30px;
+    border-radius: 8px;
+    display: none;
+    animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+    from { transform: translateX(-50%) translateY(-20px); opacity: 0; }
+    to { transform: translateX(-50%) translateY(0); opacity: 1; }
+}
+
+.scan-result.show {
+    display: block;
+}
+</style>
+
+<div class="container-fluid p-4">
+    <!-- En-tête Principal -->
+    <div class="inventory-header">
+        <div class="row align-items-center">
+            <div class="col-md-6">
+                <h2 class="mb-0"><i class="fas fa-clipboard-check me-2"></i>Inventaire Intelligent</h2>
+                <p class="mb-0 mt-2 opacity-75">Gestion rapide et précise de votre stock</p>
+            </div>
+            <div class="col-md-6 text-end">
+                <button class="btn btn-light btn-lg" onclick="openBarcodeScanner()" id="btn_scanner">
+                    <i class="fas fa-barcode me-2"></i>Scanner
+                    <small class="d-block" style="font-size: 0.7rem; opacity: 0.8;">(Optionnel)</small>
+                </button>
+                <button class="btn btn-outline-light btn-lg ms-2" onclick="showKeyboardShortcuts()">
+                    <i class="fas fa-keyboard me-2"></i>Raccourcis
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistiques Rapides -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card quick-stats-card border-success">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <small class="text-muted text-uppercase">Stock Normal</small>
+                            <h3 class="mb-0 text-success" id="stat_normal">0</h3>
+                        </div>
+                        <i class="fas fa-check-circle stat-icon text-success"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card quick-stats-card border-warning">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <small class="text-muted text-uppercase">Alertes</small>
+                            <h3 class="mb-0 text-warning" id="stat_alerte">0</h3>
+                        </div>
+                        <i class="fas fa-exclamation-triangle stat-icon text-warning"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card quick-stats-card border-danger">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <small class="text-muted text-uppercase">Critiques</small>
+                            <h3 class="mb-0 text-danger" id="stat_critique">0</h3>
+                        </div>
+                        <i class="fas fa-exclamation-circle stat-icon text-danger"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card quick-stats-card border-dark">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <small class="text-muted text-uppercase">Ruptures</small>
+                            <h3 class="mb-0 text-dark" id="stat_rupture">0</h3>
+                        </div>
+                        <i class="fas fa-times-circle stat-icon text-dark"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtres et Recherche -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row align-items-center">
+                <div class="col-md-4">
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-search"></i></span>
+                        <input type="text" id="search_product" class="form-control"
+                               placeholder="Rechercher (Ctrl+F)..." autofocus>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <select id="filter_category" class="form-select">
+                        <option value="">Toutes les catégories</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <select id="filter_warehouse" class="form-select">
+                        <option value="">Tous les entrepôts</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <select id="filter_status" class="form-select">
+                        <option value="">Tous les statuts</option>
+                        <option value="rupture">Rupture</option>
+                        <option value="critique">Critique</option>
+                        <option value="alerte">Alerte</option>
+                        <option value="normal">Normal</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="mt-3" id="active_filters">
+                <!-- Les filtres actifs apparaîtront ici -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Saisie Rapide -->
+    <div class="card mb-4" id="quick_entry_card" style="display: none;">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0"><i class="fas fa-bolt me-2"></i>Saisie Rapide</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <label>Produit Sélectionné</label>
+                    <div class="alert alert-info" id="selected_product_info">
+                        Aucun produit sélectionné
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <label>Stock Actuel</label>
+                    <input type="text" id="current_stock" class="form-control" readonly>
+                </div>
+                <div class="col-md-2">
+                    <label>Type</label>
+                    <select id="movement_type" class="form-select">
+                        <option value="entry">Entrée (+)</option>
+                        <option value="exit">Sortie (-)</option>
+                        <option value="count">Comptage</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label>Quantité</label>
+                    <input type="number" id="movement_quantity" class="form-control count-input"
+                           placeholder="0" min="0">
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button class="btn btn-success w-100" onclick="executeQuickMovement()">
+                        <i class="fas fa-check me-2"></i>Valider (Enter)
+                    </button>
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-md-12">
+                    <label>Note (optionnel)</label>
+                    <input type="text" id="movement_note" class="form-control"
+                           placeholder="Raison du mouvement...">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Liste des Produits en Mode Carte -->
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-boxes me-2"></i>Produits (<span id="product_count">0</span>)</h5>
+            <div class="btn-group" role="group">
+                <button type="button" class="btn btn-sm btn-outline-secondary active" id="view_grid" onclick="switchView('grid')">
+                    <i class="fas fa-th"></i> Grille
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="view_table" onclick="switchView('table')">
+                    <i class="fas fa-list"></i> Liste
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            <!-- Vue Grille -->
+            <div id="products_grid" class="row">
+                <!-- Les produits seront chargés dynamiquement ici -->
+            </div>
+
+            <!-- Vue Table -->
+            <div id="products_table" class="table-responsive" style="display: none;">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Produit</th>
+                            <th>Catégorie</th>
+                            <th>Entrepôt</th>
+                            <th>Stock</th>
+                            <th>Seuil</th>
+                            <th>Statut</th>
+                            <th>Code-barres</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="products_table_body">
+                        <!-- Les produits seront chargés dynamiquement ici -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Scanner de Codes-barres (Overlay) -->
+<div id="scannerOverlay">
+    <div class="scanner-frame">
+        <video id="scanner_video" autoplay playsinline></video>
+        <canvas id="scanner_canvas" style="display:none;"></canvas>
+        <div class="scan-result" id="scan_result">
+            <i class="fas fa-check me-2"></i><span id="scan_result_text">Produit trouvé!</span>
+        </div>
+        <div class="scanner-controls">
+            <button class="btn btn-danger btn-lg" onclick="closeBarcodeScanner()">
+                <i class="fas fa-times me-2"></i>Fermer
+            </button>
+            <button class="btn btn-light btn-lg" onclick="toggleTorch()">
+                <i class="fas fa-lightbulb"></i>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Hints de Raccourcis Clavier -->
+<div class="keyboard-hint" id="keyboard_hint">
+    <div><kbd>Ctrl</kbd> + <kbd>F</kbd> : Rechercher</div>
+    <div><kbd>Ctrl</kbd> + <kbd>S</kbd> : Scanner</div>
+    <div><kbd>Enter</kbd> : Valider saisie</div>
+    <div><kbd>Esc</kbd> : Annuler</div>
+    <div><kbd>?</kbd> : Afficher l'aide</div>
+</div>
+
+<!-- Script JavaScript -->
+<script src="https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js"></script>
+<script>
+// Variables globales
+let allProducts = [];
+let selectedProduct = null;
+let currentView = 'grid';
+let inventaireInitialized = false;
+
+// Fonction d'initialisation
+function initInventaire() {
+    if (inventaireInitialized) {
+        console.log('[Inventaire] Déjà initialisé');
+        return;
+    }
+
+    // Vérifier que les éléments existent
+    if (!document.getElementById('products_grid') || !document.getElementById('stat_normal')) {
+        console.log('[Inventaire] Éléments DOM non trouvés, attente...');
+        return;
+    }
+
+    console.log('[Inventaire] Initialisation...');
+    inventaireInitialized = true;
+
+    loadProducts();
+    loadCategories();
+    loadWarehouses();
+    setupEventListeners();
+    setupKeyboardShortcuts();
+}
+
+// Écouter l'événement de chargement de fragment (pour navigation AJAX)
+document.addEventListener('fragment:loaded', function(e) {
+    try {
+        if (e && e.detail && e.detail.name === 'inventaire') {
+            console.log('[Inventaire] Fragment chargé, initialisation...');
+            inventaireInitialized = false; // Reset pour permettre réinit
+            setTimeout(initInventaire, 100); // Petit délai pour s'assurer que le DOM est prêt
+        }
+    } catch (err) {
+        console.error('[Inventaire] Erreur fragment:loaded', err);
+    }
+});
+
+// Fallback pour chargement direct (non-AJAX)
+if (document.readyState !== 'loading') {
+    initInventaire();
+} else {
+    document.addEventListener('DOMContentLoaded', initInventaire);
+}
+
+// Charger tous les produits
+async function loadProducts() {
+    try {
+        console.log('[Inventaire] Chargement des produits...');
+        const response = await fetch('/API/produits/', {
+            credentials: 'same-origin',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        allProducts = Array.isArray(data) ? data : (data.results || []);
+        console.log(`[Inventaire] ${allProducts.length} produits chargés`);
+
+        displayProducts(allProducts);
+        updateStats();
+    } catch (error) {
+        console.error('[Inventaire] Erreur chargement produits:', error);
+        showToast('Erreur de chargement des produits: ' + error.message, 'error');
+        // Afficher un message dans la grille
+        const grid = document.getElementById('products_grid');
+        if (grid) {
+            grid.innerHTML = `
+                <div class="col-12">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Impossible de charger les produits. Vérifiez votre connexion.
+                        <br><small>Erreur: ${error.message}</small>
+                    </div>
+                </div>
+            `;
+        }
+    }
+}
+
+// Charger les catégories
+async function loadCategories() {
+    try {
+        console.log('[Inventaire] Chargement des catégories...');
+        const response = await fetch('/API/categories/', {
+            credentials: 'same-origin'
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        const categories = Array.isArray(data) ? data : (data.results || []);
+        const activeCategories = categories.filter(c => c.is_active !== false);
+
+        console.log(`[Inventaire] ${activeCategories.length} catégories actives chargées`);
+
+        const select = document.getElementById('filter_category');
+        if (select) {
+            activeCategories.forEach(cat => {
+                const option = document.createElement('option');
+                option.value = cat.id;
+                option.textContent = cat.nom;
+                select.appendChild(option);
+            });
+        }
+    } catch (error) {
+        console.error('[Inventaire] Erreur chargement catégories:', error);
+    }
+}
+
+// Charger les entrepôts
+async function loadWarehouses() {
+    try {
+        console.log('[Inventaire] Chargement des entrepôts...');
+        const response = await fetch('/API/entrepots/', {
+            credentials: 'same-origin'
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        const warehouses = Array.isArray(data) ? data : (data.results || []);
+        console.log(`[Inventaire] ${warehouses.length} entrepôts chargés`);
+
+        const select = document.getElementById('filter_warehouse');
+        if (select) {
+            warehouses.forEach(wh => {
+                const option = document.createElement('option');
+                option.value = wh.id;
+                option.textContent = wh.name;
+                select.appendChild(option);
+            });
+        }
+    } catch (error) {
+        console.error('[Inventaire] Erreur chargement entrepôts:', error);
+    }
+}
+
+// Afficher les produits (Vue Grille)
+function displayProducts(products) {
+    console.log(`[Inventaire] Affichage de ${products.length} produits`);
+
+    const grid = document.getElementById('products_grid');
+    const tableBody = document.getElementById('products_table_body');
+
+    if (!grid || !tableBody) {
+        console.error('[Inventaire] Éléments #products_grid ou #products_table_body non trouvés');
+        return;
+    }
+
+    grid.innerHTML = '';
+    tableBody.innerHTML = '';
+
+    const countElem = document.getElementById('product_count');
+    if (countElem) {
+        countElem.textContent = products.length;
+    }
+
+    if (products.length === 0) {
+        grid.innerHTML = `
+            <div class="col-12">
+                <div class="alert alert-info text-center">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Aucun produit trouvé. Ajoutez des produits via le menu "Produits".
+                </div>
+            </div>
+        `;
+        return;
+    }
+
+    products.forEach(product => {
+        // Vue Grille
+        const cardCol = document.createElement('div');
+        cardCol.className = 'col-md-4 col-lg-3 mb-3';
+        cardCol.innerHTML = `
+            <div class="card product-card h-100" onclick="selectProduct(${product.id})">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <h6 class="card-title mb-0">${product.designation}</h6>
+                        <span class="badge ${getStockBadgeClass(product)}">
+                            ${getStockStatusText(product)}
+                        </span>
+                    </div>
+                    <p class="text-muted small mb-2">
+                        <i class="fas fa-tag me-1"></i>${product.categorie_nom || 'N/A'}
+                    </p>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="text-muted">Stock:</span>
+                        <strong class="fs-4 ${getStockColorClass(product)}">${product.quantite}</strong>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="text-muted">Seuil:</span>
+                        <span>${product.seuil_alerte || 0}</span>
+                    </div>
+                    ${product.code_barre ? `
+                    <div class="text-center mt-2">
+                        <small class="text-muted"><i class="fas fa-barcode me-1"></i>${product.code_barre}</small>
+                    </div>
+                    ` : ''}
+                    <div class="btn-group w-100 mt-3" role="group">
+                        <button class="btn btn-sm btn-outline-success" onclick="quickEntry(${product.id}, event)">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="quickExit(${product.id}, event)">
+                            <i class="fas fa-minus"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-info" onclick="showDetails(${product.id}, event)">
+                            <i class="fas fa-info"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        grid.appendChild(cardCol);
+
+        // Vue Table
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td><strong>${product.designation}</strong><br><small class="text-muted">${product.reference}</small></td>
+            <td>${product.categorie_nom || 'N/A'}</td>
+            <td><span class="warehouse-badge"><i class="fas fa-warehouse me-1"></i>Principal</span></td>
+            <td><strong class="fs-5 ${getStockColorClass(product)}">${product.quantite}</strong></td>
+            <td>${product.seuil_alerte || 0}</td>
+            <td><span class="stock-level-badge ${getStockBadgeClass(product)}">${getStockStatusText(product)}</span></td>
+            <td>${product.code_barre || '-'}</td>
+            <td>
+                <button class="btn btn-sm btn-success" onclick="quickEntry(${product.id}, event)">
+                    <i class="fas fa-plus"></i>
+                </button>
+                <button class="btn btn-sm btn-danger" onclick="quickExit(${product.id}, event)">
+                    <i class="fas fa-minus"></i>
+                </button>
+                <button class="btn btn-sm btn-info" onclick="showDetails(${product.id}, event)">
+                    <i class="fas fa-eye"></i>
+                </button>
+            </td>
+        `;
+        tableBody.appendChild(row);
+    });
+}
+
+// Obtenir la classe CSS du badge de statut
+function getStockBadgeClass(product) {
+    if (product.quantite === 0) return 'stock-rupture';
+    if (product.quantite <= (product.seuil_critique || 0)) return 'stock-critique';
+    if (product.quantite <= (product.seuil_alerte || 0)) return 'stock-alerte';
+    return 'stock-normal';
+}
+
+// Obtenir le texte du statut
+function getStockStatusText(product) {
+    if (product.quantite === 0) return 'RUPTURE';
+    if (product.quantite <= (product.seuil_critique || 0)) return 'CRITIQUE';
+    if (product.quantite <= (product.seuil_alerte || 0)) return 'ALERTE';
+    return 'NORMAL';
+}
+
+// Obtenir la classe de couleur du stock
+function getStockColorClass(product) {
+    if (product.quantite === 0) return 'text-danger';
+    if (product.quantite <= (product.seuil_critique || 0)) return 'text-danger';
+    if (product.quantite <= (product.seuil_alerte || 0)) return 'text-warning';
+    return 'text-success';
+}
+
+// Mettre à jour les statistiques
+function updateStats() {
+    const stats = {
+        normal: 0,
+        alerte: 0,
+        critique: 0,
+        rupture: 0
+    };
+
+    allProducts.forEach(product => {
+        const status = getStockStatusText(product).toLowerCase();
+        stats[status]++;
+    });
+
+    const statNormal = document.getElementById('stat_normal');
+    const statAlerte = document.getElementById('stat_alerte');
+    const statCritique = document.getElementById('stat_critique');
+    const statRupture = document.getElementById('stat_rupture');
+
+    if (statNormal) statNormal.textContent = stats.normal;
+    if (statAlerte) statAlerte.textContent = stats.alerte;
+    if (statCritique) statCritique.textContent = stats.critique;
+    if (statRupture) statRupture.textContent = stats.rupture;
+
+    console.log('[Inventaire] Stats:', stats);
+}
+
+// Sélectionner un produit
+function selectProduct(productId) {
+    selectedProduct = allProducts.find(p => p.id === productId);
+    if (!selectedProduct) return;
+
+    // Mettre à jour l'UI
+    document.querySelectorAll('.product-card').forEach(card => {
+        card.classList.remove('selected');
+    });
+    event.currentTarget.classList.add('selected');
+
+    // Afficher la carte de saisie rapide
+    document.getElementById('quick_entry_card').style.display = 'block';
+    document.getElementById('selected_product_info').innerHTML = `
+        <strong>${selectedProduct.designation}</strong><br>
+        <small>${selectedProduct.reference}</small>
+    `;
+    document.getElementById('current_stock').value = selectedProduct.quantite;
+    document.getElementById('movement_quantity').focus();
+}
+
+// Actions rapides
+function quickEntry(productId, event) {
+    event.stopPropagation();
+    selectProduct(productId);
+    document.getElementById('movement_type').value = 'entry';
+}
+
+function quickExit(productId, event) {
+    event.stopPropagation();
+    selectProduct(productId);
+    document.getElementById('movement_type').value = 'exit';
+}
+
+function showDetails(productId, event) {
+    event.stopPropagation();
+    const product = allProducts.find(p => p.id === productId);
+    if (!product) return;
+
+    alert(`Détails du produit:\n\nRéférence: ${product.reference}\nDésignation: ${product.designation}\nStock: ${product.quantite}\nPrix: ${product.prixU || 'N/A'}`);
+}
+
+// Exécuter un mouvement rapide
+async function executeQuickMovement() {
+    if (!selectedProduct) {
+        showToast('Veuillez sélectionner un produit', 'warning');
+        return;
+    }
+
+    const type = document.getElementById('movement_type').value;
+    const quantity = parseInt(document.getElementById('movement_quantity').value);
+    const note = document.getElementById('movement_note').value;
+
+    if (!quantity || quantity <= 0) {
+        showToast('Quantité invalide', 'error');
+        return;
+    }
+
+    try {
+        const delta = type === 'entry' ? quantity : (type === 'exit' ? -quantity : 0);
+
+        const response = await fetch('/API/mouvements/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                produit: selectedProduct.id,
+                delta: delta,
+                source: type === 'entry' ? 'ACHAT' : 'VENTE',
+                note: note
+            })
+        });
+
+        if (response.ok) {
+            showToast('Mouvement enregistré avec succès', 'success');
+            // Recharger les produits
+            await loadProducts();
+            // Réinitialiser le formulaire
+            document.getElementById('movement_quantity').value = '';
+            document.getElementById('movement_note').value = '';
+        } else {
+            throw new Error('Erreur lors de l\'enregistrement');
+        }
+    } catch (error) {
+        console.error('Erreur:', error);
+        showToast('Erreur lors de l\'enregistrement', 'error');
+    }
+}
+
+// Scanner de codes-barres
+function openBarcodeScanner() {
+    // Vérifier si Quagga est disponible
+    if (typeof Quagga === 'undefined') {
+        showToast('Le scanner de codes-barres n\'est pas disponible. Utilisez la recherche manuelle.', 'warning');
+        return;
+    }
+
+    const overlay = document.getElementById('scannerOverlay');
+    overlay.classList.add('active');
+
+    Quagga.init({
+        inputStream: {
+            type: "LiveStream",
+            constraints: {
+                width: 640,
+                height: 480,
+                facingMode: "environment"
+            },
+            target: document.querySelector('#scanner_video')
+        },
+        decoder: {
+            readers: ["ean_reader", "code_128_reader", "code_39_reader", "upc_reader", "ean_8_reader"]
+        },
+        locate: true
+    }, function(err) {
+        if (err) {
+            console.error('Erreur scanner:', err);
+            closeBarcodeScanner();
+
+            // Messages d'erreur plus explicites
+            if (err.name === 'NotFoundError' || err.message.includes('not found')) {
+                showToast('Aucune caméra détectée. Veuillez connecter une caméra ou utiliser la recherche manuelle.', 'error');
+            } else if (err.name === 'NotAllowedError' || err.message.includes('permission')) {
+                showToast('Accès caméra refusé. Autorisez l\'accès dans les paramètres du navigateur.', 'error');
+            } else if (err.name === 'NotReadableError') {
+                showToast('Caméra déjà utilisée par une autre application.', 'error');
+            } else {
+                showToast('Erreur d\'accès à la caméra: ' + err.message, 'error');
+            }
+            return;
+        }
+        Quagga.start();
+    });
+
+    Quagga.onDetected(function(result) {
+        const code = result.codeResult.code;
+        console.log('Code scanné:', code);
+
+        // Rechercher le produit
+        const product = allProducts.find(p => p.code_barre === code);
+        if (product) {
+            document.getElementById('scan_result_text').textContent = `Produit: ${product.designation}`;
+            document.getElementById('scan_result').classList.add('show');
+            setTimeout(() => {
+                document.getElementById('scan_result').classList.remove('show');
+                closeBarcodeScanner();
+                selectProduct(product.id);
+            }, 2000);
+        } else {
+            showToast('Produit non trouvé', 'warning');
+        }
+    });
+}
+
+function closeBarcodeScanner() {
+    try {
+        if (typeof Quagga !== 'undefined' && Quagga.CameraAccess) {
+            Quagga.stop();
+        }
+    } catch (e) {
+        console.warn('Erreur fermeture scanner:', e);
+    }
+    document.getElementById('scannerOverlay').classList.remove('active');
+}
+
+function toggleTorch() {
+    try {
+        // Fonctionnalité torche (si supportée par l'appareil)
+        if (typeof Quagga === 'undefined' || !Quagga.CameraAccess) {
+            showToast('Lampe non disponible', 'warning');
+            return;
+        }
+
+        const track = Quagga.CameraAccess.getActiveTrack();
+        if (track && track.getCapabilities && track.getCapabilities().torch) {
+            const constraints = track.getConstraints();
+            track.applyConstraints({
+                advanced: [{ torch: !constraints.torch }]
+            });
+        } else {
+            showToast('Lampe non supportée sur cet appareil', 'warning');
+        }
+    } catch (e) {
+        console.warn('Erreur lampe:', e);
+        showToast('Lampe non disponible', 'warning');
+    }
+}
+
+// Changer de vue
+function switchView(view) {
+    currentView = view;
+    document.getElementById('view_grid').classList.toggle('active', view === 'grid');
+    document.getElementById('view_table').classList.toggle('active', view === 'table');
+    document.getElementById('products_grid').style.display = view === 'grid' ? 'flex' : 'none';
+    document.getElementById('products_table').style.display = view === 'table' ? 'block' : 'none';
+}
+
+// Configuration des écouteurs d'événements
+function setupEventListeners() {
+    console.log('[Inventaire] Configuration des événements...');
+
+    // Recherche
+    const searchInput = document.getElementById('search_product');
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            const query = this.value.toLowerCase();
+            const filtered = allProducts.filter(p =>
+                (p.designation && p.designation.toLowerCase().includes(query)) ||
+                (p.reference && p.reference.toLowerCase().includes(query)) ||
+                (p.code_barre && p.code_barre.toLowerCase().includes(query))
+            );
+            console.log(`[Inventaire] Recherche "${query}": ${filtered.length} résultats`);
+            displayProducts(filtered);
+        });
+    }
+
+    // Filtres
+    ['filter_category', 'filter_warehouse', 'filter_status'].forEach(id => {
+        const elem = document.getElementById(id);
+        if (elem) {
+            elem.addEventListener('change', applyFilters);
+        }
+    });
+
+    // Enter pour valider
+    const quantityInput = document.getElementById('movement_quantity');
+    if (quantityInput) {
+        quantityInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                executeQuickMovement();
+            }
+        });
+    }
+}
+
+// Appliquer les filtres
+function applyFilters() {
+    let filtered = [...allProducts];
+
+    const category = document.getElementById('filter_category').value;
+    const warehouse = document.getElementById('filter_warehouse').value;
+    const status = document.getElementById('filter_status').value;
+
+    if (category) {
+        filtered = filtered.filter(p => p.categorie === parseInt(category));
+    }
+
+    if (status) {
+        filtered = filtered.filter(p => getStockStatusText(p).toLowerCase() === status);
+    }
+
+    displayProducts(filtered);
+}
+
+// Raccourcis clavier
+function setupKeyboardShortcuts() {
+    console.log('[Inventaire] Configuration des raccourcis clavier...');
+
+    document.addEventListener('keydown', function(e) {
+        // Ctrl+F : Recherche
+        if (e.ctrlKey && e.key === 'f') {
+            e.preventDefault();
+            const searchInput = document.getElementById('search_product');
+            if (searchInput) searchInput.focus();
+        }
+
+        // Ctrl+S : Scanner
+        if (e.ctrlKey && e.key === 's') {
+            e.preventDefault();
+            openBarcodeScanner();
+        }
+
+        // Esc : Annuler/Fermer
+        if (e.key === 'Escape') {
+            const overlay = document.getElementById('scannerOverlay');
+            if (overlay && overlay.classList.contains('active')) {
+                closeBarcodeScanner();
+            } else {
+                const card = document.getElementById('quick_entry_card');
+                if (card) card.style.display = 'none';
+                selectedProduct = null;
+            }
+        }
+
+        // ? : Afficher l'aide
+        if (e.key === '?') {
+            showKeyboardShortcuts();
+        }
+    });
+}
+
+function showKeyboardShortcuts() {
+    const hint = document.getElementById('keyboard_hint');
+    hint.classList.add('show');
+    setTimeout(() => {
+        hint.classList.remove('show');
+    }, 5000);
+}
+
+// Utilitaires
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+function showToast(message, type = 'info') {
+    // Implémenter un système de toast simple
+    const toast = document.createElement('div');
+    toast.className = `alert alert-${type === 'error' ? 'danger' : type} position-fixed`;
+    toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}
+</script>

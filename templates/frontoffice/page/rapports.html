@@ -1,0 +1,291 @@
+{% extends 'frontoffice/modern_master_page.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">
+        <i class="fas fa-file-export"></i> Exports de Rapports
+    </h1>
+
+    <div class="row">
+        <!-- Rapport Valorisation du Stock -->
+        <div class="col-md-4 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-box"></i> Valorisation du Stock
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="card-text">
+                        Export de la valeur totale du stock avec calcul par produit.
+                    </p>
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-success" onclick="exportReport('stock-valuation', 'excel')">
+                            <i class="fas fa-file-excel"></i> Export Excel
+                        </button>
+                        <button class="btn btn-danger" onclick="exportReport('stock-valuation', 'pdf')">
+                            <i class="fas fa-file-pdf"></i> Export PDF
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Rapport des Ventes -->
+        <div class="col-md-4 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-shopping-cart"></i> Rapport des Ventes
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="card-text">
+                        Export détaillé des ventes avec CA et statistiques.
+                    </p>
+
+                    <!-- Sélection de dates -->
+                    <div class="mb-3">
+                        <label class="form-label">Période:</label>
+                        <div class="row">
+                            <div class="col-6">
+                                <input type="date" id="sales_start_date" class="form-control form-control-sm">
+                            </div>
+                            <div class="col-6">
+                                <input type="date" id="sales_end_date" class="form-control form-control-sm">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-success" onclick="exportSalesReport('excel')">
+                            <i class="fas fa-file-excel"></i> Export Excel
+                        </button>
+                        <button class="btn btn-danger" onclick="exportSalesReport('pdf')">
+                            <i class="fas fa-file-pdf"></i> Export PDF
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Rapport d'Inventaire -->
+        <div class="col-md-4 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-clipboard-list"></i> Inventaire Complet
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="card-text">
+                        Export de tous les produits avec leurs caractéristiques.
+                    </p>
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-success" onclick="exportReport('inventory', 'excel')">
+                            <i class="fas fa-file-excel"></i> Export Excel
+                        </button>
+                        <button class="btn btn-danger" onclick="exportReport('inventory', 'pdf')">
+                            <i class="fas fa-file-pdf"></i> Export PDF
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Historique des exports -->
+    <div class="card mt-4">
+        <div class="card-header">
+            <h5 class="mb-0">
+                <i class="fas fa-history"></i> Historique des Exports
+            </h5>
+        </div>
+        <div class="card-body">
+            <div id="export-history" class="table-responsive">
+                <p class="text-muted">Chargement...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Configuration
+const API_BASE = '/API';
+
+// Fonction générique d'export
+async function exportReport(reportType, format) {
+    const endpoints = {
+        'stock-valuation': `${API_BASE}/reports/stock-valuation/`,
+        'inventory': `${API_BASE}/reports/inventory/`
+    };
+
+    const url = `${endpoints[reportType]}?format=${format}`;
+
+    try {
+        showLoading();
+        const response = await fetch(url, {
+            credentials: 'include',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        });
+
+        if (response.ok) {
+            const blob = await response.blob();
+            downloadBlob(blob, response.headers, format);
+            showSuccess(`Rapport ${format.toUpperCase()} téléchargé avec succès!`);
+            loadExportHistory();
+        } else {
+            const error = await response.json();
+            showError('Erreur: ' + (error.error || 'Erreur inconnue'));
+        }
+    } catch (e) {
+        showError('Erreur réseau: ' + e.message);
+    } finally {
+        hideLoading();
+    }
+}
+
+// Export des ventes avec dates
+async function exportSalesReport(format) {
+    const startDate = document.getElementById('sales_start_date').value;
+    const endDate = document.getElementById('sales_end_date').value;
+
+    const params = new URLSearchParams({format});
+    if (startDate) params.append('start_date', startDate);
+    if (endDate) params.append('end_date', endDate);
+
+    const url = `${API_BASE}/reports/sales/?${params}`;
+
+    try {
+        showLoading();
+        const response = await fetch(url, {
+            credentials: 'include',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        });
+
+        if (response.ok) {
+            const blob = await response.blob();
+            downloadBlob(blob, response.headers, format);
+            showSuccess(`Rapport des ventes ${format.toUpperCase()} téléchargé!`);
+            loadExportHistory();
+        } else {
+            const error = await response.json();
+            showError('Erreur: ' + (error.error || 'Erreur inconnue'));
+        }
+    } catch (e) {
+        showError('Erreur réseau: ' + e.message);
+    } finally {
+        hideLoading();
+    }
+}
+
+// Télécharger le blob
+function downloadBlob(blob, headers, format) {
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+
+    // Extraire le nom de fichier du header Content-Disposition
+    const contentDisposition = headers.get('Content-Disposition');
+    let filename = `rapport.${format === 'pdf' ? 'pdf' : 'xlsx'}`;
+
+    if (contentDisposition) {
+        const matches = /filename="?([^"]+)"?/.exec(contentDisposition);
+        if (matches && matches[1]) {
+            filename = matches[1];
+        }
+    }
+
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+}
+
+// Charger l'historique des exports depuis audit logs
+async function loadExportHistory() {
+    try {
+        const response = await fetch(`${API_BASE}/audit-logs/?action__startswith=report.&limit=10`, {
+            credentials: 'include'
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            const logs = data.results || data;
+
+            if (logs.length === 0) {
+                document.getElementById('export-history').innerHTML =
+                    '<p class="text-muted">Aucun export récent</p>';
+                return;
+            }
+
+            const tableHtml = `
+                <table class="table table-sm table-hover">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Utilisateur</th>
+                            <th>Rapport</th>
+                            <th>Format</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${logs.map(log => `
+                            <tr>
+                                <td>${new Date(log.created_at).toLocaleString('fr-FR')}</td>
+                                <td>${log.actor_username || 'N/A'}</td>
+                                <td>${log.target_repr}</td>
+                                <td>
+                                    <span class="badge ${log.metadata?.format === 'pdf' ? 'bg-danger' : 'bg-success'}">
+                                        ${(log.metadata?.format || 'N/A').toUpperCase()}
+                                    </span>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+
+            document.getElementById('export-history').innerHTML = tableHtml;
+        }
+    } catch (e) {
+        console.error('Erreur chargement historique:', e);
+    }
+}
+
+// Notifications
+function showLoading() {
+    // Implémenter votre système de loading
+    console.log('Génération du rapport en cours...');
+}
+
+function hideLoading() {
+    console.log('Terminé');
+}
+
+function showSuccess(message) {
+    alert(message);
+}
+
+function showError(message) {
+    alert(message);
+}
+
+// Charger l'historique au chargement de la page
+document.addEventListener('DOMContentLoaded', function() {
+    loadExportHistory();
+
+    // Définir les dates par défaut (dernier mois)
+    const today = new Date();
+    const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, today.getDate());
+
+    document.getElementById('sales_end_date').valueAsDate = today;
+    document.getElementById('sales_start_date').valueAsDate = lastMonth;
+});
+</script>
+{% endblock %}

@@ -37,4 +37,9 @@ urlpatterns = [
     re_path(r'^risk/$', views.RiskViewSet.as_view(), name='risk'),
     re_path(r'^alerts/$', views.AlertsView.as_view(), name='alerts'),
     re_path(r'^welcome/$', views.WelcomeView.as_view(), name='welcome'),
+
+    # Exports de rapports (Excel & PDF)
+    path('reports/stock-valuation/', views.export_stock_valuation, name='export-stock-valuation'),
+    path('reports/sales/', views.export_sales_report, name='export-sales-report'),
+    path('reports/inventory/', views.export_inventory_report, name='export-inventory-report'),
     ]

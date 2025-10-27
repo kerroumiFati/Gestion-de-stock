@@ -12,7 +12,7 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 
 from .serializers import *  # noqa: F401
-from .serializers import StockMoveSerializer, InventorySessionSerializer
+from .serializers import StockMoveSerializer, InventorySessionSerializer, InventoryLineSerializer
 from .models import *
 from django.shortcuts import get_object_or_404
 from .audit import log_event
@@ -820,30 +820,99 @@ class InventorySessionViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def update_line(self, request, pk=None):
-        """Mettre à jour une ligne d'inventaire"""
+        """Mettre à jour une ligne d'inventaire (accepte line_id OU produit_id)"""
         session = self.get_object()
         if session.statut not in ('draft', 'in_progress'):
             return Response({'detail': 'Cette session ne peut plus être modifiée.'}, status=400)
-        
+
         line_id = request.data.get('line_id')
+        produit_id = request.data.get('produit_id')
         counted_qty = request.data.get('counted_qty')
-        
+
+        if counted_qty is None:
+            return Response({'detail': 'counted_qty est requis'}, status=400)
+
         try:
-            line = session.lignes.get(id=line_id)
-            if counted_qty is not None:
-                line.counted_qty = int(counted_qty)
-                line.counted_by = request.user
-                line.save()  # La méthode save() mettra à jour automatiquement le pourcentage
-            
-            return Response({
-                'detail': 'Ligne mise à jour',
-                'completion_percentage': session.completion_percentage,
-                'variance': line.get_variance()
-            })
-        except InventoryLine.DoesNotExist:
-            return Response({'detail': 'Ligne d\'inventaire non trouvée'}, status=404)
+            counted_qty = int(counted_qty)
+            if counted_qty < 0:
+                return Response({'detail': 'La quantité ne peut pas être négative'}, status=400)
         except (ValueError, TypeError):
             return Response({'detail': 'Quantité invalide'}, status=400)
+
+        # Méthode 1: Mise à jour par line_id
+        if line_id:
+            try:
+                line = session.lignes.get(id=line_id)
+                line.counted_qty = counted_qty
+                line.counted_by = request.user
+                line.save()
+
+                session.update_completion_percentage()
+
+                return Response({
+                    'detail': 'Ligne mise à jour',
+                    'completion_percentage': session.completion_percentage,
+                    'variance': line.get_variance(),
+                    'line': InventoryLineSerializer(line).data
+                })
+            except InventoryLine.DoesNotExist:
+                return Response({'detail': 'Ligne d\'inventaire non trouvée'}, status=404)
+
+        # Méthode 2: Mise à jour/création par produit_id
+        elif produit_id:
+            try:
+                produit = Produit.objects.get(id=produit_id)
+            except Produit.DoesNotExist:
+                return Response({'detail': 'Produit non trouvé'}, status=404)
+
+            # Chercher si la ligne existe déjà
+            from .models import InventoryLine
+            line = InventoryLine.objects.filter(session=session, produit=produit).first()
+
+            if line:
+                # Mise à jour
+                line.counted_qty = counted_qty
+                line.counted_by = request.user
+                from django.utils import timezone
+                line.counted_at = timezone.now()
+                line.save()
+            else:
+                # Création
+                from django.utils import timezone
+                line = InventoryLine.objects.create(
+                    session=session,
+                    produit=produit,
+                    snapshot_qty=produit.quantite,
+                    counted_qty=counted_qty,
+                    counted_by=request.user,
+                    counted_at=timezone.now()
+                )
+
+            # Mettre à jour la progression de la session
+            session.update_completion_percentage()
+
+            # Recharger la session avec toutes les lignes
+            session.refresh_from_db()
+            serializer = self.get_serializer(session)
+
+            # Log l'événement
+            try:
+                log_event(
+                    actor=request.user,
+                    action='inventoryline.update',
+                    target_model='InventoryLine',
+                    target_id=line.id,
+                    target_repr=f'{session.numero} - {produit.designation}',
+                    metadata={'produit_id': produit_id, 'counted_qty': counted_qty},
+                    request=request
+                )
+            except Exception:
+                pass
+
+            return Response(serializer.data)
+
+        else:
+            return Response({'detail': 'line_id ou produit_id est requis'}, status=400)
 
     @action(detail=False)
     def in_progress(self, request):
@@ -1797,6 +1866,169 @@ class ExchangeRateViewSet(viewsets.ModelViewSet):
             'currencies': [{'code': c.code, 'name': c.name, 'symbol': c.symbol} for c in currencies],
             'matrix': matrix
         })
+
+
+# ==============================================
+# VUES POUR EXPORTS DE RAPPORTS (Excel & PDF)
+# ==============================================
+
+from django.http import HttpResponse
+from datetime import datetime
+from .reports import (
+    generate_stock_valuation_excel,
+    generate_stock_valuation_pdf,
+    generate_sales_report_excel,
+    generate_sales_report_pdf,
+    generate_inventory_report_excel,
+    generate_inventory_report_pdf
+)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def export_stock_valuation(request):
+    """
+    Export du rapport de valorisation du stock
+    Query params:
+        - format: excel ou pdf (défaut: excel)
+        - warehouse: ID de l'entrepôt (optionnel)
+    """
+    export_format = request.GET.get('format', 'excel').lower()
+    warehouse_id = request.GET.get('warehouse', None)
+
+    try:
+        if export_format == 'pdf':
+            buffer = generate_stock_valuation_pdf(warehouse_id)
+            response = HttpResponse(buffer, content_type='application/pdf')
+            filename = f'valorisation_stock_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf'
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        else:
+            buffer = generate_stock_valuation_excel(warehouse_id)
+            response = HttpResponse(
+                buffer,
+                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+            filename = f'valorisation_stock_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+
+        log_event(
+            actor=request.user,
+            action='report.export_stock_valuation',
+            target_model='Report',
+            target_id=0,
+            target_repr=f'Stock Valuation ({export_format})',
+            metadata={'format': export_format, 'warehouse_id': warehouse_id},
+            request=request
+        )
+
+        return response
+
+    except Exception as e:
+        logger.exception(f"Erreur lors de l'export du rapport de valorisation: {e}")
+        return Response({'error': str(e)}, status=500)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def export_sales_report(request):
+    """
+    Export du rapport des ventes
+    Query params:
+        - format: excel ou pdf (défaut: excel)
+        - start_date: date de début (format YYYY-MM-DD)
+        - end_date: date de fin (format YYYY-MM-DD)
+    """
+    export_format = request.GET.get('format', 'excel').lower()
+    start_date_str = request.GET.get('start_date', None)
+    end_date_str = request.GET.get('end_date', None)
+
+    start_date = None
+    end_date = None
+
+    try:
+        if start_date_str:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        if end_date_str:
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+
+        if export_format == 'pdf':
+            buffer = generate_sales_report_pdf(start_date, end_date)
+            response = HttpResponse(buffer, content_type='application/pdf')
+            filename = f'rapport_ventes_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf'
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        else:
+            buffer = generate_sales_report_excel(start_date, end_date)
+            response = HttpResponse(
+                buffer,
+                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+            filename = f'rapport_ventes_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+
+        log_event(
+            actor=request.user,
+            action='report.export_sales',
+            target_model='Report',
+            target_id=0,
+            target_repr=f'Sales Report ({export_format})',
+            metadata={
+                'format': export_format,
+                'start_date': start_date_str,
+                'end_date': end_date_str
+            },
+            request=request
+        )
+
+        return response
+
+    except ValueError as e:
+        return Response({'error': f'Format de date invalide: {str(e)}'}, status=400)
+    except Exception as e:
+        logger.exception(f"Erreur lors de l'export du rapport de ventes: {e}")
+        return Response({'error': str(e)}, status=500)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def export_inventory_report(request):
+    """
+    Export du rapport d'inventaire complet
+    Query params:
+        - format: excel ou pdf (défaut: excel)
+    """
+    export_format = request.GET.get('format', 'excel').lower()
+
+    try:
+        if export_format == 'pdf':
+            buffer = generate_inventory_report_pdf()
+            response = HttpResponse(buffer, content_type='application/pdf')
+            filename = f'inventaire_complet_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf'
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        else:
+            buffer = generate_inventory_report_excel()
+            response = HttpResponse(
+                buffer,
+                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+            filename = f'inventaire_complet_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+
+        log_event(
+            actor=request.user,
+            action='report.export_inventory',
+            target_model='Report',
+            target_id=0,
+            target_repr=f'Inventory Report ({export_format})',
+            metadata={'format': export_format},
+            request=request
+        )
+
+        return response
+
+    except Exception as e:
+        logger.exception(f"Erreur lors de l'export du rapport d'inventaire: {e}")
+        return Response({'error': str(e)}, status=500)
+
 
 class WelcomeView(APIView):
     """

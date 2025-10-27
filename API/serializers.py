@@ -320,38 +320,71 @@ class InventoryLineSerializer(serializers.ModelSerializer):
     produit_reference = serializers.CharField(source='produit.reference', read_only=True)
     produit_designation = serializers.CharField(source='produit.designation', read_only=True)
     variance = serializers.SerializerMethodField()
-    is_completed = serializers.BooleanField(source='is_completed', read_only=True)
-    counted_by_username = serializers.CharField(source='counted_by.username', read_only=True)
-    
+    is_completed = serializers.SerializerMethodField()
+    counted_by_username = serializers.SerializerMethodField()
+
     class Meta:
         model = InventoryLine
-        fields = ('id', 'produit', 'produit_reference', 'produit_designation', 
+        fields = ('id', 'produit', 'produit_reference', 'produit_designation',
                  'counted_qty', 'snapshot_qty', 'variance', 'is_completed',
                  'counted_by', 'counted_by_username', 'counted_at')
-    
+
     def get_variance(self, obj):
-        return obj.get_variance()
+        try:
+            return obj.get_variance() if hasattr(obj, 'get_variance') else None
+        except Exception:
+            return None
+
+    def get_is_completed(self, obj):
+        try:
+            return obj.is_completed() if hasattr(obj, 'is_completed') else False
+        except Exception:
+            return False
+
+    def get_counted_by_username(self, obj):
+        try:
+            return obj.counted_by.username if obj.counted_by else None
+        except Exception:
+            return None
 
 class InventorySessionSerializer(serializers.ModelSerializer):
-    lignes = InventoryLineSerializer(many=True)
-    created_by_username = serializers.CharField(source='created_by.username', read_only=True)
-    validated_by_username = serializers.CharField(source='validated_by.username', read_only=True)
-    statut_display = serializers.CharField(source='get_statut_display', read_only=True)
+    lignes = InventoryLineSerializer(many=True, required=False)
+    created_by_username = serializers.SerializerMethodField()
+    validated_by_username = serializers.SerializerMethodField()
+    statut_display = serializers.CharField(source='get_statut_display', read_only=True, required=False)
     can_be_validated = serializers.SerializerMethodField()
     missing_products_count = serializers.SerializerMethodField()
 
     class Meta:
         model = InventorySession
-        fields = ('id', 'numero', 'date', 'statut', 'statut_display', 'note', 
+        fields = ('id', 'numero', 'date', 'statut', 'statut_display', 'note',
                  'created_by', 'created_by_username', 'validated_by', 'validated_by_username',
                  'total_products', 'completed_products', 'completion_percentage',
                  'can_be_validated', 'missing_products_count', 'lignes')
-    
+
+    def get_created_by_username(self, obj):
+        try:
+            return obj.created_by.username if obj.created_by else None
+        except Exception:
+            return None
+
+    def get_validated_by_username(self, obj):
+        try:
+            return obj.validated_by.username if obj.validated_by else None
+        except Exception:
+            return None
+
     def get_missing_products_count(self, obj):
-        return obj.get_missing_products().count()
-    
+        try:
+            return obj.get_missing_products().count() if hasattr(obj, 'get_missing_products') else 0
+        except Exception:
+            return 0
+
     def get_can_be_validated(self, obj):
-        return obj.can_be_validated()
+        try:
+            return obj.can_be_validated() if hasattr(obj, 'can_be_validated') else False
+        except Exception:
+            return False
 
     def create(self, validated_data):
         lignes_data = validated_data.pop('lignes', [])

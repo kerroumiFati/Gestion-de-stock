@@ -230,12 +230,19 @@
             
             <div class="sidebar-nav-section">
                 <div class="sidebar-nav-title">Analyses</div>
-                
+
                 <button class="sidebar-nav-item" onclick="loadPage('statistiques')" data-page="statistiques">
                     <div class="sidebar-nav-icon">
                         <i class="fas fa-chart-bar"></i>
                     </div>
                     <span class="sidebar-nav-text">Statistiques</span>
+                </button>
+
+                <button class="sidebar-nav-item" onclick="loadPage('rapports')" data-page="rapports">
+                    <div class="sidebar-nav-icon">
+                        <i class="fas fa-file-export"></i>
+                    </div>
+                    <span class="sidebar-nav-text">Rapports</span>
                 </button>
             </div>
         </div>
@@ -484,9 +491,10 @@
                 'achat': 'Gestion des Achats',
                 'vente': 'Gestion des Ventes',
                 'facture': 'Gestion des Factures',
-                'inventaire': 'Gestion des Inventaires',
+                'inventaire': 'Inventaire Intelligent',
                 'mouvements': 'Mouvements de Stock',
-                'statistiques': 'Statistiques et Rapports'
+                'statistiques': 'Statistiques et Rapports',
+                'rapports': 'Exports de Rapports'
             };
             
             document.getElementById('page-title').textContent = titles[page] || 'Tableau de Bord';
