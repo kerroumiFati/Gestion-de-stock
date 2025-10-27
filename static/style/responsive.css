@@ -1,0 +1,506 @@
+/**
+ * Responsive CSS pour GestionStock
+ * Support: Mobile (320px+), Tablet (768px+), Desktop (1024px+)
+ */
+
+/* ============================================
+   VARIABLES ET BASE
+   ============================================ */
+:root {
+    --sidebar-width: 260px;
+    --header-height: 60px;
+}
+
+/* ============================================
+   MOBILE FIRST - BASE (320px+)
+   ============================================ */
+
+/* Container général */
+.page-wrapper {
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+.page-content {
+    width: 100%;
+    padding: 15px;
+    transition: all 0.3s ease;
+}
+
+/* ============================================
+   SIDEBAR RESPONSIVE
+   ============================================ */
+
+/* Mobile: Sidebar cachée par défaut */
+@media (max-width: 767px) {
+    .sidebar-wrapper {
+        position: fixed;
+        left: -260px;
+        top: 0;
+        bottom: 0;
+        width: 260px;
+        z-index: 1050;
+        transition: left 0.3s ease;
+        box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+    }
+
+    .sidebar-wrapper.active {
+        left: 0;
+    }
+
+    .page-wrapper.toggled .sidebar-wrapper {
+        left: 0;
+    }
+
+    .page-content {
+        margin-left: 0 !important;
+        width: 100%;
+    }
+
+    /* Bouton pour afficher/masquer sidebar */
+    #show-sidebar {
+        position: fixed;
+        top: 10px;
+        left: 10px;
+        z-index: 1040;
+        display: block !important;
+    }
+
+    /* Overlay pour fermer la sidebar */
+    .page-wrapper.toggled::before {
+        content: '';
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 1049;
+    }
+}
+
+/* Tablet et Desktop: Sidebar visible */
+@media (min-width: 768px) {
+    #show-sidebar {
+        display: none !important;
+    }
+
+    .page-wrapper:not(.toggled) .page-content {
+        margin-left: var(--sidebar-width);
+    }
+
+    .page-wrapper.toggled .sidebar-wrapper {
+        left: calc(-1 * var(--sidebar-width));
+    }
+
+    .page-wrapper.toggled .page-content {
+        margin-left: 0;
+    }
+}
+
+/* ============================================
+   TABLEAUX RESPONSIVE
+   ============================================ */
+
+/* Container scrollable pour les tableaux */
+.table-responsive {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 767px) {
+    table {
+        font-size: 0.85rem;
+    }
+
+    table th,
+    table td {
+        padding: 0.5rem !important;
+        white-space: nowrap;
+    }
+
+    /* Cacher certaines colonnes sur mobile */
+    table .hide-mobile {
+        display: none;
+    }
+
+    /* DataTables responsive */
+    .dataTables_wrapper {
+        overflow-x: auto;
+    }
+
+    .dataTables_length,
+    .dataTables_filter {
+        margin-bottom: 10px;
+    }
+
+    .dataTables_length select {
+        width: auto;
+        display: inline-block;
+    }
+}
+
+/* ============================================
+   FORMULAIRES RESPONSIVE
+   ============================================ */
+
+@media (max-width: 767px) {
+    .modal-dialog {
+        margin: 0.5rem;
+        max-width: calc(100% - 1rem);
+    }
+
+    .modal-body {
+        padding: 1rem;
+    }
+
+    .form-group label {
+        font-size: 0.9rem;
+    }
+
+    .form-control,
+    .btn {
+        font-size: 0.9rem;
+    }
+
+    /* Select2 responsive */
+    .select2-container {
+        width: 100% !important;
+    }
+
+    .select2-selection {
+        min-height: 38px !important;
+    }
+}
+
+/* ============================================
+   CARDS ET PANELS
+   ============================================ */
+
+@media (max-width: 767px) {
+    .card {
+        margin-bottom: 15px;
+    }
+
+    .card-header {
+        padding: 10px 15px;
+        font-size: 1rem;
+    }
+
+    .card-body {
+        padding: 15px;
+    }
+
+    /* Grid de cards: 1 colonne sur mobile */
+    .row > [class*="col-"] {
+        margin-bottom: 15px;
+    }
+}
+
+@media (min-width: 768px) and (max-width: 991px) {
+    /* Tablet: 2 colonnes */
+    .row > .col-md-3 {
+        flex: 0 0 50%;
+        max-width: 50%;
+    }
+}
+
+/* ============================================
+   BOUTONS RESPONSIVE
+   ============================================ */
+
+@media (max-width: 767px) {
+    .btn {
+        padding: 0.5rem 1rem;
+        font-size: 0.9rem;
+    }
+
+    .btn-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+    }
+
+    .btn-group .btn {
+        flex: 1 1 auto;
+        min-width: 100px;
+    }
+
+    /* Boutons empilés sur mobile */
+    .btn-block-mobile {
+        display: block;
+        width: 100%;
+        margin-bottom: 10px;
+    }
+}
+
+/* ============================================
+   PAGE CAISSE RESPONSIVE
+   ============================================ */
+
+@media (max-width: 767px) {
+    /* Panier */
+    #panier_table {
+        font-size: 0.85rem;
+    }
+
+    #panier_table th,
+    #panier_table td {
+        padding: 5px !important;
+    }
+
+    /* Pavé numérique */
+    #numpad {
+        max-width: 100%;
+    }
+
+    .numpad-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+    }
+
+    .numpad-btn {
+        padding: 15px;
+        font-size: 1.2rem;
+    }
+
+    /* Totaux */
+    .total-display {
+        font-size: 1.2rem;
+    }
+
+    /* Actions empilées */
+    .caisse-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .caisse-actions .btn {
+        width: 100%;
+    }
+}
+
+/* ============================================
+   NAVIGATION ET HEADER
+   ============================================ */
+
+@media (max-width: 767px) {
+    .sidebar-header .user-info {
+        font-size: 0.9rem;
+    }
+
+    .sidebar-menu ul li a {
+        padding: 10px 15px;
+        font-size: 0.95rem;
+    }
+
+    .sidebar-menu ul li a i {
+        font-size: 1.1rem;
+        margin-right: 10px;
+    }
+
+    .header-menu span {
+        font-size: 0.85rem;
+    }
+}
+
+/* ============================================
+   STATISTIQUES ET GRAPHIQUES
+   ============================================ */
+
+@media (max-width: 767px) {
+    canvas {
+        max-height: 250px !important;
+    }
+
+    .chart-container {
+        position: relative;
+        height: 250px;
+        margin-bottom: 20px;
+    }
+
+    /* Stats cards */
+    .stat-card {
+        margin-bottom: 15px;
+    }
+
+    .stat-card h3 {
+        font-size: 1.5rem;
+    }
+
+    .stat-card p {
+        font-size: 0.9rem;
+    }
+}
+
+/* ============================================
+   LOGIN PAGE RESPONSIVE
+   ============================================ */
+
+@media (max-width: 767px) {
+    .login-container {
+        margin: 0;
+        padding: 15px;
+        min-height: 100vh;
+    }
+
+    .login-box {
+        padding: 30px 20px;
+        border-radius: 10px;
+    }
+
+    .login-box h2 {
+        font-size: 1.5rem;
+    }
+
+    .login-box .form-control {
+        font-size: 1rem;
+    }
+}
+
+/* ============================================
+   UTILITAIRES RESPONSIVE
+   ============================================ */
+
+/* Cacher sur mobile */
+@media (max-width: 767px) {
+    .d-none-mobile {
+        display: none !important;
+    }
+}
+
+/* Cacher sur desktop */
+@media (min-width: 768px) {
+    .d-none-desktop {
+        display: none !important;
+    }
+}
+
+/* Texte responsive */
+@media (max-width: 767px) {
+    .text-mobile-center {
+        text-align: center !important;
+    }
+
+    .text-mobile-left {
+        text-align: left !important;
+    }
+}
+
+/* Padding responsive */
+@media (max-width: 767px) {
+    .p-mobile-0 {
+        padding: 0 !important;
+    }
+
+    .p-mobile-1 {
+        padding: 0.25rem !important;
+    }
+
+    .p-mobile-2 {
+        padding: 0.5rem !important;
+    }
+
+    .p-mobile-3 {
+        padding: 1rem !important;
+    }
+}
+
+/* ============================================
+   IMPRESSIONS
+   ============================================ */
+
+@media print {
+    .sidebar-wrapper,
+    #show-sidebar,
+    .btn,
+    .navbar,
+    .dataTables_filter,
+    .dataTables_length,
+    .dataTables_info,
+    .dataTables_paginate {
+        display: none !important;
+    }
+
+    .page-content {
+        margin-left: 0 !important;
+        padding: 0 !important;
+    }
+
+    body {
+        font-size: 12pt;
+    }
+
+    table {
+        page-break-inside: avoid;
+    }
+}
+
+/* ============================================
+   ANIMATIONS ET TRANSITIONS
+   ============================================ */
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* ============================================
+   FIX POUR LES TRÈS PETITS ÉCRANS (320px)
+   ============================================ */
+
+@media (max-width: 374px) {
+    body {
+        font-size: 14px;
+    }
+
+    .btn {
+        padding: 0.4rem 0.8rem;
+        font-size: 0.85rem;
+    }
+
+    .modal-title {
+        font-size: 1rem;
+    }
+
+    table {
+        font-size: 0.75rem;
+    }
+}
+
+/* ============================================
+   GRANDS ÉCRANS (1200px+)
+   ============================================ */
+
+@media (min-width: 1200px) {
+    .container-fluid {
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+
+    .page-content {
+        padding: 30px;
+    }
+}
+
+/* ============================================
+   MODE PAYSAGE MOBILE
+   ============================================ */
+
+@media (max-width: 767px) and (orientation: landscape) {
+    .sidebar-wrapper {
+        width: 220px;
+    }
+
+    .page-content {
+        padding: 10px;
+    }
+}
