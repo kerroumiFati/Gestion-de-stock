@@ -27,6 +27,11 @@ router.register(r'audit-logs', views.AuditLogViewSet)
 # Wire up our API using automatic URL routing.
 # Additionally, we include login URLs for the browsable API.
 urlpatterns = [
+    # Exports de rapports (Excel & PDF) - DOIT ÊTRE AVANT le router
+    path('reports/stock-valuation/', views.export_stock_valuation, name='export-stock-valuation'),
+    path('reports/sales/', views.export_sales_report, name='export-sales-report'),
+    path('reports/inventory/', views.export_inventory_report, name='export-inventory-report'),
+
     path('', include(router.urls)),
     path('categories_raw/', views.categories_raw),
     path('api-auth/', include('rest_framework.urls', namespace='rest_framework')),
@@ -37,9 +42,4 @@ urlpatterns = [
     re_path(r'^risk/$', views.RiskViewSet.as_view(), name='risk'),
     re_path(r'^alerts/$', views.AlertsView.as_view(), name='alerts'),
     re_path(r'^welcome/$', views.WelcomeView.as_view(), name='welcome'),
-
-    # Exports de rapports (Excel & PDF)
-    path('reports/stock-valuation/', views.export_stock_valuation, name='export-stock-valuation'),
-    path('reports/sales/', views.export_sales_report, name='export-sales-report'),
-    path('reports/inventory/', views.export_inventory_report, name='export-inventory-report'),
     ]

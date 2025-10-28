@@ -19,6 +19,7 @@ from django.urls import path
 from frontoffice import views
 from django.urls import re_path
 from frontoffice.views_audit import audit_list
+from frontoffice import views_reports
 
 from frontoffice.views import LoginView, LogoutView, change_password
 
@@ -29,6 +30,11 @@ urlpatterns = [
     path('produits/', views.produit_all, name='produits'),
     path('caisse/', views.caisse, name='caisse'),
     path('page/<str:name>/', views.page, name='page'),
+
+    # Exports de rapports (nouvelles routes simplifiées)
+    path('reports/stock-valuation/', views_reports.export_stock_valuation, name='export-stock-valuation'),
+    path('reports/sales/', views_reports.export_sales_report, name='export-sales-report'),
+    path('reports/inventory/', views_reports.export_inventory_report, name='export-inventory-report'),
 
     # Users admin
     path('users-admin/', views.users_list, name='users_list'),

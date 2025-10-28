@@ -127,6 +127,9 @@
             <button type="button" class="btn btn-outline-primary" id="btn_view_counting" onclick="switchToView('counting')" disabled>
                 <i class="fas fa-clipboard-check me-2"></i>Comptage
             </button>
+            <button type="button" class="btn btn-outline-primary" id="btn_view_details" onclick="switchToView('details')" disabled>
+                <i class="fas fa-eye me-2"></i>Détails
+            </button>
         </div>
         <span class="ms-3 text-muted" id="current_session_indicator"></span>
     </div>
@@ -205,6 +208,7 @@
     <!-- VUE 2: COMPTAGE DANS LA SESSION -->
     <!-- ============================================ -->
     <div id="view_counting" class="view-section">
+
         <!-- En-tête Session Active -->
         <div class="card mb-4" style="border-left: 4px solid #667eea;">
             <div class="card-body">
@@ -319,6 +323,116 @@
             </div>
         </div>
     </div>
+
+    <!-- ============================================ -->
+    <!-- VUE 3: DÉTAILS SESSION VALIDÉE -->
+    <!-- ============================================ -->
+    <div id="view_details" class="view-section">
+        <!-- En-tête Session -->
+        <div class="card mb-4" style="border-left: 4px solid #10b981;">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h4 class="mb-2" id="detail_session_numero">Session: INV-2025-XXXX</h4>
+                        <div class="text-muted">
+                            <i class="fas fa-calendar me-2"></i><span id="detail_session_date">27/10/2025</span>
+                            <i class="fas fa-user ms-4 me-2"></i>Créé par: <span id="detail_session_created_by">Admin</span>
+                            <i class="fas fa-user-check ms-4 me-2"></i>Validé par: <span id="detail_session_validated_by">Admin</span>
+                        </div>
+                        <div class="mt-2" id="detail_session_note_container" style="display: none;">
+                            <i class="fas fa-sticky-note me-2 text-muted"></i>
+                            <span id="detail_session_note" class="text-muted"></span>
+                        </div>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <span class="session-status-badge status-validated">
+                            <i class="fas fa-check-circle me-1"></i>Validée
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Statistiques de la Session -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card text-center" style="border-left: 4px solid #10b981;">
+                    <div class="card-body">
+                        <h2 class="mb-0 text-success" id="detail_completion">100%</h2>
+                        <small class="text-muted">Complétion</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center" style="border-left: 4px solid #667eea;">
+                    <div class="card-body">
+                        <h2 class="mb-0" id="detail_total_products">0</h2>
+                        <small class="text-muted">Produits Comptés</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center" style="border-left: 4px solid #f59e0b;">
+                    <div class="card-body">
+                        <h2 class="mb-0 text-warning" id="detail_ecarts_count">0</h2>
+                        <small class="text-muted">Écarts Détectés</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center" style="border-left: 4px solid #ef4444;">
+                    <div class="card-body">
+                        <h2 class="mb-0 text-danger" id="detail_ecarts_negatifs">0</h2>
+                        <small class="text-muted">Manquants</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Résumé des Écarts -->
+        <div class="card mb-4" id="detail_ecarts_summary" style="display: none;">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0"><i class="fas fa-exclamation-triangle me-2"></i>Résumé des Écarts Importants</h5>
+            </div>
+            <div class="card-body">
+                <div id="detail_ecarts_list"></div>
+            </div>
+        </div>
+
+        <!-- Détails des Produits Comptés -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-clipboard-list me-2"></i>
+                    Détails du Comptage
+                </h5>
+                <button class="btn btn-sm btn-outline-primary" onclick="exportSessionDetails()">
+                    <i class="fas fa-download me-1"></i>Exporter
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Produit</th>
+                                <th>Référence</th>
+                                <th>Catégorie</th>
+                                <th class="text-center">Stock Théorique</th>
+                                <th class="text-center">Quantité Comptée</th>
+                                <th class="text-center">Écart</th>
+                                <th>Compté Par</th>
+                                <th>Date Comptage</th>
+                            </tr>
+                        </thead>
+                        <tbody id="detail_products_table">
+                            <!-- Lignes chargées dynamiquement -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -401,9 +515,11 @@ function switchToView(view) {
 
     document.getElementById('view_sessions').classList.toggle('active', view === 'sessions');
     document.getElementById('view_counting').classList.toggle('active', view === 'counting');
+    document.getElementById('view_details').classList.toggle('active', view === 'details');
 
     document.getElementById('btn_view_sessions').classList.toggle('active', view === 'sessions');
     document.getElementById('btn_view_counting').classList.toggle('active', view === 'counting');
+    document.getElementById('btn_view_details').classList.toggle('active', view === 'details');
 }
 
 // Charger toutes les sessions
@@ -575,32 +691,128 @@ async function viewSession(sessionId, event) {
         const response = await fetch(`/API/inventaires/${sessionId}/`);
         const session = await response.json();
 
-        // Afficher les détails dans une alerte ou modale
-        let details = `Session: ${session.numero}\n`;
-        details += `Date: ${session.date}\n`;
-        details += `Statut: ${session.statut}\n`;
-        details += `Créé par: ${session.created_by_username || 'N/A'}\n`;
-        details += `Validé par: ${session.validated_by_username || 'N/A'}\n`;
-        details += `Progression: ${Math.round(session.completion_percentage || 0)}%\n`;
-        details += `Note: ${session.note || 'Aucune'}\n\n`;
-        details += `Produits comptés: ${session.completed_products}/${session.total_products}\n\n`;
+        activeSession = session;
+        sessionProducts = session.lignes || [];
 
-        if (session.lignes && session.lignes.length > 0) {
-            details += `Détails des produits:\n`;
-            session.lignes.forEach(line => {
-                const ecart = line.counted_qty - line.snapshot_qty;
-                details += `- ${line.produit_designation}: `;
-                details += `Théo=${line.snapshot_qty}, Compté=${line.counted_qty || '-'}, `;
-                details += `Écart=${ecart >= 0 ? '+' : ''}${ecart}\n`;
-            });
+        // Mettre à jour l'indicateur
+        document.getElementById('current_session_indicator').innerHTML = `
+            <i class="fas fa-eye me-1"></i>
+            <strong>${session.numero}</strong>
+            <span class="badge bg-success ms-2">Validée</span>
+        `;
+
+        // Activer le bouton détails
+        document.getElementById('btn_view_details').disabled = false;
+
+        // Remplir les informations
+        document.getElementById('detail_session_numero').textContent = `Session: ${session.numero}`;
+        document.getElementById('detail_session_date').textContent = session.date || '';
+        document.getElementById('detail_session_created_by').textContent = session.created_by_username || 'N/A';
+        document.getElementById('detail_session_validated_by').textContent = session.validated_by_username || 'N/A';
+
+        // Note
+        if (session.note) {
+            document.getElementById('detail_session_note').textContent = session.note;
+            document.getElementById('detail_session_note_container').style.display = 'block';
+        } else {
+            document.getElementById('detail_session_note_container').style.display = 'none';
         }
 
-        alert(details);
+        // Statistiques
+        document.getElementById('detail_completion').textContent = Math.round(session.completion_percentage || 0) + '%';
+        document.getElementById('detail_total_products').textContent = session.total_products || 0;
+
+        // Calculer écarts
+        const lignes = session.lignes || [];
+        const ecartsPositifs = lignes.filter(l => l.counted_qty && (l.counted_qty - l.snapshot_qty) > 0).length;
+        const ecartsNegatifs = lignes.filter(l => l.counted_qty && (l.counted_qty - l.snapshot_qty) < 0).length;
+        const totalEcarts = ecartsPositifs + ecartsNegatifs;
+
+        document.getElementById('detail_ecarts_count').textContent = totalEcarts;
+        document.getElementById('detail_ecarts_negatifs').textContent = ecartsNegatifs;
+
+        // Résumé des écarts importants (>10% ou >5 unités)
+        const importantEcarts = lignes.filter(l => {
+            if (!l.counted_qty) return false;
+            const ecart = Math.abs(l.counted_qty - l.snapshot_qty);
+            const pourcentage = l.snapshot_qty > 0 ? (ecart / l.snapshot_qty) * 100 : 0;
+            return ecart > 5 || pourcentage > 10;
+        });
+
+        if (importantEcarts.length > 0) {
+            document.getElementById('detail_ecarts_summary').style.display = 'block';
+            const ecartsList = document.getElementById('detail_ecarts_list');
+            ecartsList.innerHTML = importantEcarts.map(l => {
+                const ecart = l.counted_qty - l.snapshot_qty;
+                const pourcentage = l.snapshot_qty > 0 ? Math.round((Math.abs(ecart) / l.snapshot_qty) * 100) : 0;
+                const colorClass = ecart >= 0 ? 'text-success' : 'text-danger';
+                return `
+                    <div class="alert alert-warning mb-2">
+                        <strong>${l.produit_designation}</strong> (${l.produit_reference})
+                        <br>Théorique: ${l.snapshot_qty} → Compté: ${l.counted_qty}
+                        <br><span class="${colorClass} fw-bold">Écart: ${ecart >= 0 ? '+' : ''}${ecart} (${pourcentage}%)</span>
+                    </div>
+                `;
+            }).join('');
+        } else {
+            document.getElementById('detail_ecarts_summary').style.display = 'none';
+        }
+
+        // Tableau des produits
+        displaySessionDetails(lignes);
+
+        // Basculer vers vue détails
+        switchToView('details');
 
     } catch (error) {
         console.error('Erreur visualisation session:', error);
         alert('Erreur lors de la visualisation de la session');
     }
+}
+
+// Afficher les détails des produits dans le tableau
+function displaySessionDetails(lignes) {
+    const tbody = document.getElementById('detail_products_table');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+
+    if (lignes.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Aucun produit compté</td></tr>';
+        return;
+    }
+
+    lignes.forEach(line => {
+        const ecart = (line.counted_qty || 0) - (line.snapshot_qty || 0);
+        const ecartClass = ecart > 0 ? 'text-success' : (ecart < 0 ? 'text-danger' : 'text-muted');
+        const ecartIcon = ecart > 0 ? 'fa-arrow-up' : (ecart < 0 ? 'fa-arrow-down' : 'fa-equals');
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td><strong>${line.produit_designation || 'N/A'}</strong></td>
+            <td>${line.produit_reference || ''}</td>
+            <td><span class="badge bg-light text-dark">${line.produit_categorie || 'N/A'}</span></td>
+            <td class="text-center"><strong>${line.snapshot_qty || 0}</strong></td>
+            <td class="text-center"><strong>${line.counted_qty != null ? line.counted_qty : '-'}</strong></td>
+            <td class="text-center">
+                <span class="${ecartClass} fw-bold">
+                    <i class="fas ${ecartIcon} me-1"></i>
+                    ${ecart >= 0 ? '+' : ''}${ecart}
+                </span>
+            </td>
+            <td>${line.counted_by_username || 'N/A'}</td>
+            <td>${line.counted_at ? new Date(line.counted_at).toLocaleString('fr-FR') : '-'}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+// Exporter les détails de la session
+function exportSessionDetails() {
+    if (!activeSession) return;
+
+    // Redirection vers l'API d'export (à créer si nécessaire)
+    window.open(`/API/reports/inventory-session/?session_id=${activeSession.id}&format=excel`, '_blank');
 }
 
 // Créer une nouvelle session

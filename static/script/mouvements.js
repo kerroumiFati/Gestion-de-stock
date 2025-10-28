@@ -79,6 +79,15 @@
 
   function setupFilter(){
     $('#mv_filter').on('click', function(){ reloadJournal(); });
+    $('#mv_refresh').on('click', function(){
+      // Animation de rotation de l'icône pendant le rechargement
+      const btn = $(this);
+      const icon = btn.find('i');
+      icon.addClass('fa-spin');
+      reloadJournal().finally(function(){
+        icon.removeClass('fa-spin');
+      });
+    });
     $('#mv_reset').on('click', function(){
       $('#mv_prod').val('');
       $('#mv_src').val('');

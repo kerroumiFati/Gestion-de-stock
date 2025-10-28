@@ -1912,13 +1912,10 @@ def export_stock_valuation(request):
             response['Content-Disposition'] = f'attachment; filename="{filename}"'
 
         log_event(
-            actor=request.user,
+            request=request,
             action='report.export_stock_valuation',
-            target_model='Report',
-            target_id=0,
-            target_repr=f'Stock Valuation ({export_format})',
-            metadata={'format': export_format, 'warehouse_id': warehouse_id},
-            request=request
+            target=None,
+            metadata={'format': export_format, 'warehouse_id': warehouse_id}
         )
 
         return response
@@ -1966,17 +1963,14 @@ def export_sales_report(request):
             response['Content-Disposition'] = f'attachment; filename="{filename}"'
 
         log_event(
-            actor=request.user,
+            request=request,
             action='report.export_sales',
-            target_model='Report',
-            target_id=0,
-            target_repr=f'Sales Report ({export_format})',
+            target=None,
             metadata={
                 'format': export_format,
                 'start_date': start_date_str,
                 'end_date': end_date_str
-            },
-            request=request
+            }
         )
 
         return response
@@ -2014,13 +2008,10 @@ def export_inventory_report(request):
             response['Content-Disposition'] = f'attachment; filename="{filename}"'
 
         log_event(
-            actor=request.user,
+            request=request,
             action='report.export_inventory',
-            target_model='Report',
-            target_id=0,
-            target_repr=f'Inventory Report ({export_format})',
-            metadata={'format': export_format},
-            request=request
+            target=None,
+            metadata={'format': export_format}
         )
 
         return response

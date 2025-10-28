@@ -247,11 +247,8 @@ def generate_stock_valuation_excel(warehouse_id=None):
     current_row = gen.add_title("RAPPORT DE VALORISATION DU STOCK")
     current_row = gen.add_metadata(current_row)
 
-    # Requête
-    products = Produit.objects.filter(is_active=True).select_related('categorie', 'fournisseur', 'currency')
-
     if warehouse_id:
-        # Stock par entrepôt
+        # Stock par entrepôt spécifique
         warehouse = Warehouse.objects.get(pk=warehouse_id)
         gen.ws[f'A{current_row}'] = f"Entrepôt: {warehouse.name}"
         current_row += 2
@@ -260,24 +257,41 @@ def generate_stock_valuation_excel(warehouse_id=None):
             warehouse=warehouse,
             quantity__gt=0
         ).select_related('produit', 'produit__categorie')
-
-        products = [ps.produit for ps in product_stocks]
     else:
+        # Tous les entrepôts - calculer la somme des stocks
         gen.ws[f'A{current_row}'] = "Tous les entrepôts"
         current_row += 2
+
+        # Obtenir tous les stocks groupés par produit
+        product_stocks = ProductStock.objects.filter(
+            quantity__gt=0
+        ).select_related('produit', 'produit__categorie')
 
     # En-têtes
     headers = ['Référence', 'Désignation', 'Catégorie', 'Qté Stock', 'Prix Unit.', 'Valeur Stock', 'Statut']
     gen.set_column_widths([15, 30, 20, 12, 15, 18, 15])
     current_row = gen.add_header_row(headers, current_row)
 
+    # Regrouper les stocks par produit et calculer les totaux
+    from collections import defaultdict
+    product_totals = defaultdict(int)
+
+    for ps in product_stocks:
+        product_totals[ps.produit.id] += ps.quantity
+
     # Données
     data_rows = []
     total_value = Decimal('0.00')
     total_qty = 0
 
+    # Récupérer les produits avec stock
+    products = Produit.objects.filter(
+        id__in=product_totals.keys(),
+        is_active=True
+    ).select_related('categorie')
+
     for product in products:
-        qty = product.quantite
+        qty = product_totals[product.id]
         if qty <= 0:
             continue
 
@@ -315,10 +329,8 @@ def generate_stock_valuation_pdf(warehouse_id=None):
     gen.add_title()
     gen.add_metadata()
 
-    # Requête
-    products = Produit.objects.filter(is_active=True, quantite__gt=0).select_related('categorie', 'fournisseur')
-
     if warehouse_id:
+        # Stock par entrepôt spécifique
         warehouse = Warehouse.objects.get(pk=warehouse_id)
         gen.elements.append(Paragraph(f"<b>Entrepôt:</b> {warehouse.name}", gen.styles['Normal']))
         gen.elements.append(Spacer(1, 12))
@@ -326,8 +338,28 @@ def generate_stock_valuation_pdf(warehouse_id=None):
         product_stocks = ProductStock.objects.filter(
             warehouse=warehouse,
             quantity__gt=0
-        ).select_related('produit')
-        products = [ps.produit for ps in product_stocks]
+        ).select_related('produit', 'produit__categorie')
+    else:
+        # Tous les entrepôts
+        gen.elements.append(Paragraph("<b>Tous les entrepôts</b>", gen.styles['Normal']))
+        gen.elements.append(Spacer(1, 12))
+
+        product_stocks = ProductStock.objects.filter(
+            quantity__gt=0
+        ).select_related('produit', 'produit__categorie')
+
+    # Regrouper les stocks par produit
+    from collections import defaultdict
+    product_totals = defaultdict(int)
+
+    for ps in product_stocks:
+        product_totals[ps.produit.id] += ps.quantity
+
+    # Récupérer les produits avec stock
+    products = Produit.objects.filter(
+        id__in=product_totals.keys(),
+        is_active=True
+    ).select_related('categorie')
 
     # Tableau
     table_data = [['Référence', 'Désignation', 'Catégorie', 'Qté', 'Prix Unit.', 'Valeur Stock', 'Statut']]
@@ -336,7 +368,7 @@ def generate_stock_valuation_pdf(warehouse_id=None):
     total_qty = 0
 
     for product in products:
-        qty = product.quantite
+        qty = product_totals[product.id]
         unit_price = product.prixU or Decimal('0.00')
         value = qty * unit_price
         total_value += value
