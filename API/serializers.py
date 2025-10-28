@@ -156,18 +156,20 @@ class ClientSerializer(serializers.ModelSerializer):
         fields = ('id','nom', 'prenom','email','telephone','adresse','produits')
 
 class AchatSerializer(serializers.ModelSerializer):
-    client_nom = serializers.CharField(source='client.nom', read_only=True)
-    client_prenom = serializers.CharField(source='client.prenom', read_only=True)
+    fournisseur_nom = serializers.CharField(source='fournisseur.libelle', read_only=True)
+    fournisseur_prenom = serializers.CharField(source='fournisseur.telephone', read_only=True)
     produit_reference = serializers.CharField(source='produit.reference', read_only=True)
     produit_designation = serializers.CharField(source='produit.designation', read_only=True)
     currency_symbol = serializers.CharField(source='produit.currency.symbol', read_only=True)
+    warehouse_name = serializers.CharField(source='warehouse.name', read_only=True)
     total_achat = serializers.SerializerMethodField()
     class Meta:
         model = Achat
         fields = (
             'id','date_Achat','date_expiration','quantite','prix_achat','total_achat','currency_symbol',
-            'client','client_nom','client_prenom',
-            'produit','produit_reference','produit_designation'
+            'fournisseur','fournisseur_nom','fournisseur_prenom',
+            'produit','produit_reference','produit_designation',
+            'warehouse','warehouse_name'
         )
     def get_total_achat(self, obj):
         try:
@@ -465,12 +467,13 @@ class VenteSerializer(serializers.ModelSerializer):
 
 class VenteCreateSerializer(serializers.ModelSerializer):
     lignes = LigneVenteSerializer(many=True)
-    
+
     class Meta:
         model = Vente
-        fields = ['numero', 'client', 'type_paiement', 'warehouse', 'currency', 'remise_percent', 'observations', 'lignes']
+        fields = ['numero', 'client', 'type_paiement', 'statut', 'warehouse', 'currency', 'remise_percent', 'observations', 'lignes']
         extra_kwargs = {
-            'numero': {'required': False}
+            'numero': {'required': False},
+            'statut': {'required': False}
         }
     
     def create(self, validated_data):
@@ -499,17 +502,22 @@ class VenteCreateSerializer(serializers.ModelSerializer):
         if not validated_data.get('currency'):
             validated_data['currency'] = Currency.get_default()
 
-        # Pré-vérifier le stock disponible pour chaque ligne
-        insuffisants = []
-        for ld in lignes_data:
-            produit = ld['produit']
-            qty = int(ld.get('quantite') or 0)
-            if qty <= 0:
-                continue
-            if produit.quantite < qty:
-                insuffisants.append({'produit': produit.id, 'reference': produit.reference, 'stock': produit.quantite, 'demande': qty})
-        if insuffisants:
-            raise serializers.ValidationError({'detail': 'Stock insuffisant', 'lignes': insuffisants})
+        # Définir le statut par défaut à 'draft' si pas spécifié
+        if 'statut' not in validated_data:
+            validated_data['statut'] = 'draft'
+
+        # Pré-vérifier le stock disponible pour chaque ligne SEULEMENT si la vente est completed
+        if validated_data.get('statut') == 'completed':
+            insuffisants = []
+            for ld in lignes_data:
+                produit = ld['produit']
+                qty = int(ld.get('quantite') or 0)
+                if qty <= 0:
+                    continue
+                if produit.quantite < qty:
+                    insuffisants.append({'produit': produit.id, 'reference': produit.reference, 'stock': produit.quantite, 'demande': qty})
+            if insuffisants:
+                raise serializers.ValidationError({'detail': 'Stock insuffisant', 'lignes': insuffisants})
 
         with transaction.atomic():
             vente = Vente.objects.create(**validated_data)
@@ -532,8 +540,8 @@ class VenteCreateSerializer(serializers.ModelSerializer):
 
                 LigneVente.objects.create(vente=vente, **ligne_data)
 
-                # Décrémenter le stock produit (agrégé) et par entrepôt, et créer un mouvement avec entrepôt
-                if qty > 0:
+                # Décrémenter le stock SEULEMENT si la vente est finalisée (completed)
+                if qty > 0 and vente.statut == 'completed':
                     # décrément agrégé (back-compat)
                     produit.quantite = produit.quantite - qty
                     produit.save(update_fields=['quantite'])

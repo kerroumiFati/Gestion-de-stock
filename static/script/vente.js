@@ -357,29 +357,25 @@
       prixU_snapshot: l.prixU_snapshot,
       currency: l.currency ? parseInt(l.currency,10) : undefined
     };});
-    // Create sale as draft
+
+    // Définir le statut selon le bouton cliqué
+    if(isFinal){
+      payload.statut = 'completed'; // Vente finalisée directement
+    } else {
+      payload.statut = 'draft'; // Vente en brouillon
+    }
+
+    // Créer la vente avec le statut approprié
     $.ajax({ url:'/API/ventes/', method:'POST', contentType:'application/json', headers:{ 'X-CSRFToken': getCSRFToken() }, data: JSON.stringify(payload) })
       .done(function(resp){
         const id = resp.id; const num = resp.numero || id;
-        function afterAll(){
-          $('#vente_status').text('Vente enregistrée (#'+num+')'+(isFinal?' et finalisée':''))
-            .removeClass('text-danger').addClass('text-success');
-          clearSale();
-          // refresh list and switch to list tab
-          loadSalesList();
-          $('a#liste-ventes-tab').tab('show');
-        }
-        if(isFinal && id){
-          $.ajax({ url:'/API/ventes/'+id+'/complete/', method:'POST', headers:{ 'X-CSRFToken': getCSRFToken() } })
-            .done(function(){ afterAll(); })
-            .fail(function(xhr){
-              console.warn('Complete sale error', xhr);
-              // Still refresh and show list with draft status
-              afterAll();
-            });
-        } else {
-          afterAll();
-        }
+        const statusText = isFinal ? 'finalisée' : 'enregistrée en brouillon';
+        $('#vente_status').text('Vente '+statusText+' (#'+num+')')
+          .removeClass('text-danger').addClass('text-success');
+        clearSale();
+        // refresh list and switch to list tab
+        loadSalesList();
+        $('a#liste-ventes-tab').tab('show');
       })
       .fail(function(xhr){
         let msg = 'Bad Request';
@@ -438,7 +434,8 @@
     const list = asList(rows);
     if(!list.length){ $tbody.append('<tr><td colspan="7" class="text-center text-muted">Aucune vente</td></tr>'); return; }
     list.forEach(function(v){
-      const tr = $('<tr>');
+      const tr = $('<tr>').css('cursor', 'pointer').addClass('sale-row');
+      tr.attr('data-sale-id', v.id);
       tr.append('<td>'+(v.numero || v.id)+'</td>');
       tr.append('<td>'+(v.date_vente || '').toString().replace('T',' ').slice(0,16)+'</td>');
       tr.append('<td>'+(v.client_nom || '')+' '+(v.client_prenom || '')+'</td>');
@@ -447,8 +444,9 @@
       tr.append('<td>'+ (typeof v.total_ttc!=="undefined" ? v.total_ttc : '') +'</td>');
       var actions = '';
       if((v.statut||'') === 'draft'){
-        actions += '<button class="btn btn-sm btn-success finalize-sale" data-id="'+v.id+'"><i class="fa fa-check"></i> Finaliser</button>';
+        actions += '<button class="btn btn-sm btn-success finalize-sale" data-id="'+v.id+'"><i class="fa fa-check"></i> Finaliser</button> ';
       }
+      actions += '<button class="btn btn-sm btn-info view-sale-details" data-id="'+v.id+'"><i class="fa fa-eye"></i> Détails</button>';
       tr.append('<td>'+ (actions || '') +'</td>');
       $tbody.append(tr);
     });
@@ -458,6 +456,108 @@
     $.ajax({ url:'/API/ventes/?page_size=100', method:'GET', dataType:'json' })
       .done(function(data){ SALES_LIST = asList(data); applySalesFilterAndRender(); })
       .fail(function(xhr){ dbg('loadSalesList fail', xhr.status, xhr.responseText || xhr.statusText); });
+  }
+
+  function loadSaleDetails(saleId){
+    return $.ajax({ url:'/API/ventes/'+saleId+'/', method:'GET', dataType:'json' });
+  }
+
+  function showSaleDetailsModal(saleId){
+    // Ouvrir la modal
+    $('#saleDetailsModal').modal('show');
+
+    // Réinitialiser le contenu avec un loader
+    $('#saleDetailsContent').html('<div class="text-center py-5"><i class="fa fa-spinner fa-spin fa-3x text-muted"></i><p class="mt-3 text-muted">Chargement des détails...</p></div>');
+
+    // Charger les détails de la vente
+    loadSaleDetails(saleId)
+      .done(function(sale){
+        renderSaleDetailsInModal(sale);
+      })
+      .fail(function(xhr){
+        $('#saleDetailsContent').html('<div class="alert alert-danger m-3"><i class="fa fa-exclamation-triangle"></i> Erreur de chargement: '+(xhr.responseText || xhr.statusText)+'</div>');
+      });
+  }
+
+  function renderSaleDetailsInModal(sale){
+    const $container = $('#saleDetailsContent');
+    if(!$container.length) return;
+
+    // Mise à jour du titre de la modal
+    $('#saleDetailsModalLabel').html('<i class="fa fa-file-invoice"></i> Détails de la vente #'+(sale.numero || sale.id));
+
+    let html = '<div class="container-fluid">';
+
+    // En-tête avec informations principales
+    html += '<div class="row mb-4">';
+    html += '<div class="col-md-6">';
+    html += '<div class="card border-primary mb-3">';
+    html += '<div class="card-header bg-primary text-white"><i class="fa fa-info-circle"></i> Informations générales</div>';
+    html += '<div class="card-body">';
+    html += '<p class="mb-2"><strong><i class="fa fa-calendar"></i> Date:</strong> '+(sale.date_vente || '').toString().replace('T',' ').slice(0,16)+'</p>';
+    html += '<p class="mb-2"><strong><i class="fa fa-user"></i> Client:</strong> '+(sale.client_nom || '')+' '+(sale.client_prenom || '')+'</p>';
+    html += '<p class="mb-2"><strong><i class="fa fa-tag"></i> Statut:</strong> <span class="badge badge-'+(sale.statut==='completed'?'success':'warning')+'">'+(sale.statut || '')+'</span></p>';
+    html += '<p class="mb-2"><strong><i class="fa fa-credit-card"></i> Paiement:</strong> '+(sale.type_paiement || '')+'</p>';
+    html += '<p class="mb-0"><strong><i class="fa fa-warehouse"></i> Entrepôt:</strong> '+(sale.warehouse_name || sale.warehouse || 'N/A')+'</p>';
+    html += '</div></div>';
+    html += '</div>';
+
+    html += '<div class="col-md-6">';
+    html += '<div class="card border-success mb-3">';
+    html += '<div class="card-header bg-success text-white"><i class="fa fa-money-bill-wave"></i> Montants</div>';
+    html += '<div class="card-body">';
+    html += '<p class="mb-2"><strong>Total HT:</strong> <span class="float-right">'+(sale.total_ht || 0)+' '+(sale.currency_symbol || '€')+'</span></p>';
+    if(sale.remise_percent > 0){
+      html += '<p class="mb-2"><strong>Remise ('+(sale.remise_percent || 0)+'%):</strong> <span class="float-right text-danger">-'+((sale.total_ht || 0) * (sale.remise_percent || 0) / 100).toFixed(2)+' '+(sale.currency_symbol || '€')+'</span></p>';
+    }
+    html += '<hr class="my-2">';
+    html += '<h5 class="mb-0"><strong>Total TTC:</strong> <span class="float-right text-success">'+(sale.total_ttc || 0)+' '+(sale.currency_symbol || '€')+'</span></h5>';
+    html += '</div></div>';
+    if(sale.observations){
+      html += '<div class="alert alert-info mb-0"><strong><i class="fa fa-comment"></i> Observations:</strong><br>'+(sale.observations || '')+'</div>';
+    }
+    html += '</div>';
+    html += '</div>';
+
+    // Tableau des produits
+    html += '<div class="row">';
+    html += '<div class="col-12">';
+    html += '<h5 class="mb-3"><i class="fa fa-boxes"></i> Produits <span class="badge badge-secondary">'+(sale.lignes ? sale.lignes.length : 0)+'</span></h5>';
+
+    const lignes = sale.lignes || [];
+    if(lignes.length === 0){
+      html += '<div class="alert alert-warning"><i class="fa fa-exclamation-triangle"></i> Aucun produit dans cette vente</div>';
+    } else {
+      html += '<div class="table-responsive" style="max-height: 400px; overflow-y: auto;">';
+      html += '<table class="table table-sm table-bordered table-hover mb-0">';
+      html += '<thead class="thead-dark" style="position: sticky; top: 0; z-index: 1;">';
+      html += '<tr><th style="width: 15%;">Référence</th><th style="width: 40%;">Désignation</th><th style="width: 15%;">Prix unitaire</th><th style="width: 10%;">Quantité</th><th style="width: 20%;">Total</th></tr>';
+      html += '</thead>';
+      html += '<tbody>';
+      lignes.forEach(function(ligne){
+        const ref = ligne.produit_reference || 'N/A';
+        const desig = ligne.designation || 'N/A';
+        const prix = parseFloat(ligne.prixU_snapshot || 0);
+        const qty = parseInt(ligne.quantite || 0, 10);
+        const total = prix * qty;
+        const sym = ligne.currency_symbol || sale.currency_symbol || '€';
+        html += '<tr>';
+        html += '<td><code>'+ref+'</code></td>';
+        html += '<td>'+desig+'</td>';
+        html += '<td class="text-right">'+(isNaN(prix) ? '0.00' : prix.toFixed(2))+' '+sym+'</td>';
+        html += '<td class="text-center"><span class="badge badge-primary">'+qty+'</span></td>';
+        html += '<td class="text-right"><strong>'+(isNaN(total) ? '0.00' : total.toFixed(2))+' '+sym+'</strong></td>';
+        html += '</tr>';
+      });
+      html += '</tbody>';
+      html += '</table>';
+      html += '</div>';
+    }
+    html += '</div>';
+    html += '</div>';
+    html += '</div>';
+
+    $container.html(html);
   }
 
   function init(){
@@ -480,7 +580,8 @@
     $(document).off('change', '#ventes_filter').on('change', '#ventes_filter', function(){ applySalesFilterAndRender(); });
 
     // handle finalize click
-    $(document).off('click', '.finalize-sale').on('click', '.finalize-sale', function(){
+    $(document).off('click', '.finalize-sale').on('click', '.finalize-sale', function(e){
+      e.stopPropagation(); // Empêcher le clic de se propager à la ligne
       var id = $(this).data('id');
       if(!id) return;
       if(!confirm('Finaliser cette vente ?')) return;
@@ -489,6 +590,26 @@
         .done(function(){ loadSalesList(); })
         .fail(function(xhr){ alert('Erreur finalisation: '+ (xhr.responseText || xhr.statusText)); })
         .always(function(){ $btn.prop('disabled', false).removeClass('disabled'); });
+    });
+
+    // handle view details click
+    $(document).off('click', '.view-sale-details').on('click', '.view-sale-details', function(e){
+      e.stopPropagation(); // Empêcher le clic de se propager à la ligne
+      var id = $(this).data('id');
+      if(!id) return;
+      showSaleDetailsModal(id);
+    });
+
+    // handle sale row click
+    $(document).off('click', '.sale-row').on('click', '.sale-row', function(){
+      var id = $(this).data('sale-id');
+      if(!id) return;
+      showSaleDetailsModal(id);
+    });
+
+    // handle print button
+    $(document).off('click', '#printSaleDetails').on('click', '#printSaleDetails', function(){
+      window.print();
     });
 
     // reload list when switching to the list tab

@@ -15,7 +15,7 @@
           <label>Source</label>
           <select id="mv_src" class="form-control">
             <option value="">Toutes</option>
-            <option>BL</option><option>BC</option><option>ACHAT</option><option>INV</option><option>CORR</option><option>AUTRE</option><option>TRANS</option><option>PERTE</option><option>CASSE</option><option>EXP</option><option>SAMPLE</option><option>DON</option><option>CONS</option><option>vente</option><option>vente_cancel</option>
+            <option>BL</option><option>BC</option><option>ACHAT</option><option>INV</option><option>CORR</option><option>AUTRE</option><option>TRANS</option><option>PERTE</option><option>CASSE</option><option>EXP</option><option>SAMPLE</option><option>DON</option><option>CONS</option><option>VENTE</option><option>RETOUR</option>
           </select>
         </div>
         <div class="col-sm-2">
@@ -90,6 +90,9 @@
         </li>
         <li class="nav-item">
           <a class="nav-link" id="tab-outflow" data-toggle="tab" href="#pane-outflow" role="tab">3- Échantillon / Don / Consommation interne</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" id="tab-return" data-toggle="tab" href="#pane-return" role="tab">4- Retour fournisseur</a>
         </li>
       </ul>
       <div class="tab-content mb-4">
@@ -182,6 +185,62 @@
               </div>
             </div>
             <button id="mv_outflow_submit" class="btn btn-warning">Enregistrer la sortie</button>
+          </div>
+        </div>
+
+        <!-- Nouvel onglet : Retour fournisseur -->
+        <div class="tab-pane fade" id="pane-return" role="tabpanel" aria-labelledby="tab-return">
+          <div class="border rounded p-3 bg-light">
+            <div class="alert alert-info mb-3">
+              <i class="fa fa-info-circle"></i> <strong>Retour fournisseur :</strong> Enregistrer un retour de produit défectueux ou non conforme vers le fournisseur. Le stock sera décrémenté de l'entrepôt.
+            </div>
+            <div class="form-row">
+              <div class="form-group col-md-4">
+                <label><i class="fa fa-box"></i> Produit *</label>
+                <select id="mv_return_produit" class="form-control"></select>
+              </div>
+              <div class="form-group col-md-2">
+                <label><i class="fa fa-sort-numeric-up"></i> Quantité *</label>
+                <input id="mv_return_qty" type="number" min="1" step="1" class="form-control" placeholder="Ex: 5" />
+              </div>
+              <div class="form-group col-md-3">
+                <label><i class="fa fa-user-tie"></i> Fournisseur *</label>
+                <select id="mv_return_fournisseur" class="form-control">
+                  <option value="">Sélectionner un fournisseur</option>
+                </select>
+              </div>
+              <div class="form-group col-md-3">
+                <label><i class="fa fa-warehouse"></i> Entrepôt *</label>
+                <select id="mv_return_warehouse" class="form-control"></select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group col-md-4">
+                <label><i class="fa fa-exclamation-triangle"></i> Motif du retour *</label>
+                <select id="mv_return_reason" class="form-control">
+                  <option value="">Sélectionner un motif</option>
+                  <option value="DEFECTUEUX">Produit défectueux</option>
+                  <option value="NON_CONFORME">Non conforme à la commande</option>
+                  <option value="PERIME">Produit périmé</option>
+                  <option value="ENDOMMAGE">Endommagé lors de la livraison</option>
+                  <option value="QUALITE">Problème de qualité</option>
+                  <option value="AUTRE">Autre</option>
+                </select>
+              </div>
+              <div class="form-group col-md-8">
+                <label><i class="fa fa-comment"></i> Note / Détails</label>
+                <textarea id="mv_return_note" class="form-control" rows="2" placeholder="Décrivez le problème ou ajoutez des informations complémentaires..."></textarea>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group col-md-6">
+                <label><i class="fa fa-calendar"></i> Date du retour</label>
+                <input id="mv_return_date" type="date" class="form-control" />
+              </div>
+            </div>
+            <button id="mv_return_submit" class="btn btn-danger btn-lg">
+              <i class="fa fa-undo"></i> Enregistrer le retour fournisseur
+            </button>
           </div>
         </div>
       </div>

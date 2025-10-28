@@ -747,6 +747,92 @@ class StockMoveViewSet(viewsets.ModelViewSet):
         p.save(update_fields=['quantite'])
         return Response({'detail': 'Sortie enregistrée', 'move': StockMoveSerializer(move).data}, status=201)
 
+    @action(detail=False, methods=['post'])
+    def return_supplier(self, request):
+        """Retour fournisseur: retour de produit défectueux ou non conforme au fournisseur.
+        Body: { produit: id, quantite: >0, fournisseur: id, warehouse: id, reason: str, note: str (opt), date: str (opt) }
+        """
+        try:
+            produit_id = int(request.data.get('produit') or request.data.get('produit_id'))
+            qty = float(request.data.get('quantite') or request.data.get('qty') or 0)
+        except (TypeError, ValueError):
+            return Response({'detail': 'Paramètres invalides'}, status=400)
+
+        if qty <= 0:
+            return Response({'detail': 'La quantité doit être > 0'}, status=400)
+
+        fournisseur_id = request.data.get('fournisseur') or request.data.get('fournisseur_id')
+        warehouse_id = request.data.get('warehouse') or request.data.get('warehouse_id')
+        reason = request.data.get('reason') or ''
+        note = request.data.get('note') or ''
+        date_str = request.data.get('date')
+
+        if not fournisseur_id:
+            return Response({'detail': 'fournisseur requis'}, status=400)
+        if not warehouse_id:
+            return Response({'detail': 'warehouse requis'}, status=400)
+        if not reason:
+            return Response({'detail': 'motif de retour requis'}, status=400)
+
+        try:
+            p = Produit.objects.get(pk=produit_id)
+            f = Fournisseur.objects.get(pk=int(fournisseur_id))
+            w = Warehouse.objects.get(pk=int(warehouse_id))
+        except Produit.DoesNotExist:
+            return Response({'detail': 'Produit introuvable'}, status=404)
+        except Fournisseur.DoesNotExist:
+            return Response({'detail': 'Fournisseur introuvable'}, status=404)
+        except Warehouse.DoesNotExist:
+            return Response({'detail': 'Entrepôt introuvable'}, status=404)
+
+        # Vérifier le stock disponible
+        ps, _ = ProductStock.objects.get_or_create(produit=p, warehouse=w, defaults={'quantity': 0})
+        if ps.quantity < qty:
+            return Response({
+                'detail': 'Stock insuffisant dans cet entrepôt',
+                'stock': ps.quantity,
+                'demande': qty
+            }, status=400)
+
+        # Décrémenter le stock
+        ps.quantity -= qty
+        ps.save(update_fields=['quantity'])
+
+        # Créer le mouvement de stock
+        ref_id = f'RETOUR-F{f.id}'
+        move = StockMove.objects.create(
+            produit=p,
+            warehouse=w,
+            delta=-qty,
+            source='RETOUR',
+            ref_id=ref_id,
+            note=note,
+            date=date_str if date_str else timezone.now()
+        )
+
+        # Mettre à jour le stock agrégé
+        total = p.stocks.aggregate(total=Sum('quantity')).get('total') or 0
+        p.quantite = total
+        p.save(update_fields=['quantite'])
+
+        try:
+            log_event(request, 'mouvement.return', target=p, metadata={
+                'produit': p.id,
+                'fournisseur': f.id,
+                'fournisseur_libelle': f.libelle,
+                'quantite': qty,
+                'reason': reason,
+                'warehouse': w.id
+            })
+        except Exception:
+            pass
+
+        return Response({
+            'detail': 'Retour fournisseur enregistré',
+            'move': StockMoveSerializer(move).data,
+            'fournisseur': f.libelle
+        }, status=201)
+
 class InventorySessionViewSet(viewsets.ModelViewSet):
     queryset = InventorySession.objects.all().order_by('-date')
     serializer_class = InventorySessionSerializer
@@ -1302,6 +1388,33 @@ class VenteViewSet(viewsets.ModelViewSet):
             vente.statut = 'completed'
             vente.save()
 
+            # Décrémenter les stocks maintenant que la vente est finalisée (passe de draft à completed)
+            from .models import ProductStock, StockMove
+            for ligne in vente.lignes.select_related('produit'):
+                produit = ligne.produit
+                qty = int(ligne.quantite or 0)
+                if qty > 0:
+                    # décrément agrégé (back-compat)
+                    produit.quantite = produit.quantite - qty
+                    produit.save(update_fields=['quantite'])
+                    # décrément par entrepôt
+                    ps, _ = ProductStock.objects.get_or_create(
+                        produit=produit,
+                        warehouse=vente.warehouse,
+                        defaults={'quantity': 0}
+                    )
+                    ps.quantity = max(0, (ps.quantity or 0) - qty)
+                    ps.save(update_fields=['quantity'])
+                    # mouvement de sortie rattaché à l'entrepôt
+                    StockMove.objects.create(
+                        produit=produit,
+                        warehouse=vente.warehouse,
+                        delta=-(qty),
+                        source='VENTE',
+                        ref_id=str(vente.id),
+                        note=f"Vente {vente.numero} - finalisée"
+                    )
+
             # Créer automatiquement un Bon de Livraison validé si absent
             try:
                 if not vente.bon_livraison_id:
@@ -1325,9 +1438,6 @@ class VenteViewSet(viewsets.ModelViewSet):
                     vente.save(update_fields=['bon_livraison'])
             except Exception as e:
                 logger.exception('Erreur creation BL lors de la finalisation de la vente: %s', e)
-
-            # NOTE: Le stock est déjà décrémenté lors de la création de la vente (VenteCreateSerializer.create)
-            # Ne pas décrémenter à nouveau ici pour éviter une double décrémentation
 
             try:
                 log_event(self.request, 'vente.complete', target=vente, metadata={'id': vente.id, 'numero': getattr(vente, 'numero', None)})

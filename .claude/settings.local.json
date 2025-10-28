@@ -3,7 +3,9 @@
     "allow": [
       "Bash(python manage.py runserver:*)",
       "Bash(curl:*)",
-      "Bash(python -m json.tool:*)"
+      "Bash(python -m json.tool:*)",
+      "Bash(python manage.py makemigrations:*)",
+      "Bash(python manage.py:*)"
     ],
     "deny": [],
     "ask": []

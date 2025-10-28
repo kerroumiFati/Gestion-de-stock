@@ -36,6 +36,14 @@
     });
   }
 
+  function loadFournisseurs(selectors){
+    return $.get(apiBase + '/fournisseurs/').then(function(items){
+      const opts = ['<option value="">Sélectionner un fournisseur</option>'];
+      items.forEach(f => { opts.push(`<option value="${f.id}">${f.libelle}</option>`); });
+      (selectors || []).forEach(sel => { $(sel).html(opts.join('')); });
+    });
+  }
+
   function reloadJournal(){
     const params = {};
     const prod = $('#mv_prod').val();
@@ -185,17 +193,73 @@
     });
   }
 
+  function setupReturn(){
+    // Définir la date par défaut à aujourd'hui
+    const today = new Date().toISOString().split('T')[0];
+    $('#mv_return_date').val(today);
+
+    $('#mv_return_submit').on('click', function(){
+      const produit = $('#mv_return_produit').val();
+      const quantite = parseFloat($('#mv_return_qty').val() || '0');
+      const fournisseur = $('#mv_return_fournisseur').val();
+      const warehouse = $('#mv_return_warehouse').val();
+      const reason = $('#mv_return_reason').val();
+      const note = $('#mv_return_note').val();
+      const date = $('#mv_return_date').val();
+
+      // Validations
+      if (!produit){ return notify('error', 'Veuillez sélectionner un produit'); }
+      if (quantite <= 0){ return notify('error', 'La quantité doit être supérieure à 0'); }
+      if (!fournisseur){ return notify('error', 'Veuillez sélectionner un fournisseur'); }
+      if (!warehouse){ return notify('error', 'Veuillez sélectionner un entrepôt'); }
+      if (!reason){ return notify('error', 'Veuillez sélectionner un motif de retour'); }
+
+      // Construire la note complète avec le motif
+      const reasonText = $('#mv_return_reason option:selected').text();
+      const fullNote = `RETOUR FOURNISSEUR - ${reasonText}${note ? ': ' + note : ''}`;
+
+      const data = {
+        produit: produit,
+        quantite: quantite,
+        fournisseur: fournisseur,
+        warehouse: warehouse,
+        reason: reason,
+        note: fullNote,
+        date: date
+      };
+
+      postJSON(apiBase + '/mouvements/return_supplier/', data)
+        .then(function(){
+          notify('success', 'Retour fournisseur enregistré avec succès');
+          // Réinitialiser le formulaire
+          $('#mv_return_produit').val('');
+          $('#mv_return_qty').val('');
+          $('#mv_return_fournisseur').val('');
+          $('#mv_return_reason').val('');
+          $('#mv_return_note').val('');
+          $('#mv_return_date').val(today);
+          reloadJournal();
+        })
+        .catch(function(xhr){
+          const msg = (xhr && xhr.responseJSON && (xhr.responseJSON.detail || xhr.responseJSON.error)) || 'Erreur lors de l\'enregistrement du retour';
+          notify('error', msg);
+        });
+    });
+  }
+
   function init(){
     if (!$('#tmouv').length) return; // not on mouvements page
     // Ensure selects exist before loading
     Promise.all([
-      loadProducts(['#mv_transfer_produit', '#mv_loss_produit', '#mv_outflow_produit']),
-      loadWarehouses(['#mv_transfer_from', '#mv_transfer_to', '#mv_loss_warehouse', '#mv_outflow_warehouse', '#mv_wh'])
+      loadProducts(['#mv_transfer_produit', '#mv_loss_produit', '#mv_outflow_produit', '#mv_return_produit']),
+      loadWarehouses(['#mv_transfer_from', '#mv_transfer_to', '#mv_loss_warehouse', '#mv_outflow_warehouse', '#mv_return_warehouse', '#mv_wh']),
+      loadFournisseurs(['#mv_return_fournisseur'])
     ]).then(reloadJournal);
     setupFilter();
     setupTransfer();
     setupLoss();
     setupOutflow();
+    setupReturn();
   }
 
   $(document).ready(init);

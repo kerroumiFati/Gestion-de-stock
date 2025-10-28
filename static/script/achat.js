@@ -1,7 +1,7 @@
-// Achats - remplir le select client simplement
+// Achats - remplir le select fournisseur simplement
 (function($){
   const DEBUG = true; function dbg(...a){ if(DEBUG) try{ console.log('[Achat]', ...a);}catch(e){} }
-  const API_CLIENTS = '/API/clients/';
+  const API_FOURNISSEURS = '/API/fournisseurs/';
   const API_PRODUITS = '/API/produits/';
   const API_ENTREPOTS = '/API/entrepots/';
 
@@ -21,31 +21,32 @@
     return getCookie('csrftoken') || (document.querySelector('input[name="csrfmiddlewaretoken"]') && document.querySelector('input[name="csrfmiddlewaretoken"]').value) || '';
   }
 
-  function loadClients(){
-    const $sel = $('#client');
-    if(!$sel.length){ dbg('loadClients: #client not found, skip'); return; }
+  function loadFournisseurs(){
+    const $sel = $('#fournisseur');
+    if(!$sel.length){ dbg('loadFournisseurs: #fournisseur not found, skip'); return; }
     // garder la première option
     const first = $sel.find('option').first().clone();
     $sel.empty().append(first);
 
-    $.ajax({ url: API_CLIENTS + '?page_size=1000', method: 'GET', dataType: 'json' })
+    $.ajax({ url: API_FOURNISSEURS + '?page_size=1000', method: 'GET', dataType: 'json' })
       .done(function(data){
         const list = asList(data);
-        dbg('loadClients: size =', list.length, list);
+        dbg('loadFournisseurs: size =', list.length, list);
         let defaultId = null;
-        list.forEach(function(c){
-          const label = [c.nom, c.prenom].filter(Boolean).join(' ');
-          const $opt = $('<option>').val(c.id).text(label || ('Client #' + c.id)).appendTo($sel);
-          // detect a "Divers" client by name
+        list.forEach(function(f){
+          // Fournisseur utilise 'libelle' au lieu de nom/prenom
+          const label = f.libelle || ('Fournisseur #' + f.id);
+          const $opt = $('<option>').val(f.id).text(label).appendTo($sel);
+          // detect a "Divers" fournisseur by name
           const nameLc = (label || '').toLowerCase();
-          if(defaultId === null && (nameLc === 'divers' || nameLc === 'client divers' || nameLc.includes('divers'))){
-            defaultId = c.id;
+          if(defaultId === null && (nameLc === 'divers' || nameLc === 'fournisseur divers' || nameLc.includes('divers'))){
+            defaultId = f.id;
           }
         });
         if(defaultId !== null){ $sel.val(defaultId); }
       })
       .fail(function(xhr){
-        dbg('loadClients: fail', xhr.status, xhr.responseText || xhr.statusText);
+        dbg('loadFournisseurs: fail', xhr.status, xhr.responseText || xhr.statusText);
       });
   }
 
@@ -129,11 +130,11 @@
       date_expiration: ($('#dateexp').val()||'').toString().slice(0,10) || null,
       quantite: parseInt(($('#quantite').val()||'0').toString(), 10),
       prix_achat: isNaN(prix) ? 0 : prix,
-      client: parseInt(($('#client').val()||'0').toString(), 10) || null,
+      fournisseur: parseInt(($('#fournisseur').val()||'0').toString(), 10) || null,
       produit: parseInt(($('#sproduit').val()||'0').toString(), 10) || null,
       warehouse: parseInt(($('#warehouse').val()||'0').toString(), 10) || null
     };
-    if(!data.client) delete data.client;
+    if(!data.fournisseur) delete data.fournisseur;
     if(!data.produit) delete data.produit;
     if(!data.warehouse) delete data.warehouse;
     if(!data.date_expiration) data.date_expiration = null; // explicit null
@@ -143,7 +144,7 @@
   function createAchat(){
     const payload = buildAchatPayload();
     if(!payload.produit){ alert('Veuillez sélectionner un produit'); return; }
-    if(!payload.client){ alert('Veuillez sélectionner un client'); return; }
+    if(!payload.fournisseur){ alert('Veuillez sélectionner un fournisseur'); return; }
     if(!payload.quantite || payload.quantite <= 0){ alert('Quantité invalide'); return; }
     return $.ajax({ url:'/API/achats/', method:'POST', contentType:'application/json', headers:{ 'X-CSRFToken': getCSRFToken() }, data: JSON.stringify(payload) })
       .done(function(){
@@ -189,7 +190,7 @@
       if(achat.date_expiration) $('#dateexp').val((achat.date_expiration||'').toString().slice(0,10)); else $('#dateexp').val('');
       if(achat.quantite != null) $('#quantite').val(achat.quantite);
       if(achat.prix_achat != null) $('#prix_achat').val(achat.prix_achat);
-      if(achat.client) $('#client').val(achat.client);
+      if(achat.fournisseur) $('#fournisseur').val(achat.fournisseur);
       if(achat.produit) $('#sproduit').val(achat.produit);
       updateTotalAchat();
     } catch(e) {}
@@ -207,7 +208,7 @@
     if(!$tbody.length) return;
     $tbody.empty();
     if(!list || !list.length){
-      $tbody.append('<tr><td colspan="7" class="text-center text-muted">Aucun achat</td></tr>');
+      $tbody.append('<tr><td colspan="9" class="text-center text-muted">Aucun achat</td></tr>');
       return;
     }
     list.forEach(function(a){
@@ -215,9 +216,9 @@
       tr.append('<td>'+(a.id||'')+'</td>');
       tr.append('<td>'+(a.date_Achat||'')+'</td>');
       tr.append('<td>'+(a.quantite||0)+'</td>');
-      var clientTxt = (a.client_nom||'') + (a.client_prenom?(' '+a.client_prenom):'');
+      var fournisseurTxt = (a.fournisseur_nom||'') + (a.fournisseur_prenom?(' '+a.fournisseur_prenom):'');
       var prodTxt = (a.produit_reference? (a.produit_reference+' - ') : '') + (a.produit_designation||'');
-      tr.append('<td>'+ (clientTxt || a.client || '') +'</td>');
+      tr.append('<td>'+ (fournisseurTxt || a.fournisseur || '') +'</td>');
       tr.append('<td>'+ (prodTxt || a.produit || '') +'</td>');
       var prix = (typeof a.prix_achat !== 'undefined') ? a.prix_achat : '';
       var total = (a.total_achat != null) ? a.total_achat : '';
@@ -275,7 +276,7 @@
     });
     // reactive total calc
     $(document).off('input', '#quantite, #prix_achat').on('input', '#quantite, #prix_achat', updateTotalAchat);
-    loadClients();
+    loadFournisseurs();
     loadWarehouses();
     bindProduitFilters();
     loadAchats();

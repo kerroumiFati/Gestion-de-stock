@@ -342,20 +342,22 @@ class Client(models.Model):
     email = models.EmailField(max_length=50)
     telephone = models.CharField(max_length=50)
     adresse = models.CharField(max_length=50)
-    produits = models.ManyToManyField(Produit , through='Achat',blank=True)
+
     def __str__(self):
-        return '{} by {}'.format(self.nom, self.prenom)
+        return '{} {}'.format(self.nom, self.prenom)
 
 class Achat(models.Model):
     date_Achat = models.DateField(default=timezone.now)
     date_expiration = models.DateField("Date d'expiration", null=True, blank=True)
     quantite = models.IntegerField()
     prix_achat = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    client = models.ForeignKey(Client,on_delete=models.CASCADE)
-    produit = models.ForeignKey(Produit,on_delete=models.CASCADE)
+    fournisseur = models.ForeignKey(Fournisseur, on_delete=models.CASCADE, null=True, blank=True)
+    produit = models.ForeignKey(Produit, on_delete=models.CASCADE)
+    warehouse = models.ForeignKey('Warehouse', on_delete=models.SET_NULL, null=True, blank=True,
+                                 related_name='achats', help_text="Entrepôt de destination pour cet achat")
 
     def __str__(self):
-        return '{} by {}'.format(self.date_Achat, self.quantite)
+        return '{} - {} unités'.format(self.date_Achat, self.quantite)
 
     class Meta:
         ordering = ['date_Achat',]
@@ -478,12 +480,13 @@ class StockMove(models.Model):
         ('SAMPLE', 'Échantillon'),
         ('DON', 'Don'),
         ('CONS', 'Consommation interne'),
+        ('RETOUR', 'Retour fournisseur'),
         ('AUTRE', 'Autre'),
     )
     produit = models.ForeignKey(Produit, on_delete=models.PROTECT, related_name='mouvements')
     warehouse = models.ForeignKey('Warehouse', on_delete=models.SET_NULL, null=True, blank=True, related_name='mouvements')
     delta = models.IntegerField()  # + entrée, - sortie
-    source = models.CharField(max_length=10, choices=SOURCE_CHOICES, default='AUTRE')
+    source = models.CharField(max_length=15, choices=SOURCE_CHOICES, default='AUTRE')
     ref_id = models.CharField(max_length=50, blank=True, default='')  # id de la pièce liée
     date = models.DateTimeField(default=timezone.now)
     note = models.CharField(max_length=200, blank=True)
