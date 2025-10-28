@@ -105,8 +105,14 @@
           <td>${p.categorie_nom||''}</td>
           <td>${p.prixU!=null? toFixed2(p.prixU): ''} ${p.currency_symbol||''}</td>
           <td>${p.fournisseur_nom||''}</td>
-          <td><button class="btn btn-sm btn-outline-danger act-del">Supprimer</button></td>
-          <td><button class="btn btn-sm btn-outline-primary act-edit">Modifier</button></td>
+          <td class="text-center">
+            <button class="btn btn-sm action-btn-product btn-edit act-edit" title="Modifier">
+              <i class="fas fa-edit"></i> Modifier
+            </button>
+            <button class="btn btn-sm action-btn-product btn-delete act-del ml-1" title="Supprimer">
+              <i class="fas fa-trash"></i> Supprimer
+            </button>
+          </td>
         </tr>`;
       }).join('');
     }catch(e){ console.warn('produits load failed', e); }
@@ -134,9 +140,10 @@
       return;
     }
     // Vérification unicité côté client pour éviter une erreur 400 inutile
-    const refExists = __cacheProduits.some(p => (p.reference||'').toLowerCase() === (payload.reference||'').toLowerCase());
-    const cbExists = __cacheProduits.some(p => (p.code_barre||'').toLowerCase() === (payload.code_barre||'').toLowerCase());
-    if(!id && (refExists || cbExists)){
+    // Exclure le produit en cours de modification lors de la vérification
+    const refExists = __cacheProduits.some(p => p.id !== id && (p.reference||'').toLowerCase() === (payload.reference||'').toLowerCase());
+    const cbExists = __cacheProduits.some(p => p.id !== id && (p.code_barre||'').toLowerCase() === (payload.code_barre||'').toLowerCase());
+    if(refExists || cbExists){
       const fields = [refExists? 'référence':'' , cbExists? 'code-barres':'' ].filter(Boolean).join(' et ');
       showAlert('Un produit avec la même ' + fields + ' existe déjà. Merci de choisir une autre valeur.', 'warning');
       return;
@@ -149,12 +156,33 @@
       };
       const url = id? api.produits + id + '/' : api.produits;
       await fetchJSON(url, opts);
-      showAlert(id? 'Produit mis à jour' : 'Produit créé', 'success');
+      showAlert(id? 'Produit mis à jour avec succès' : 'Produit créé avec succès', 'success');
       clearForm();
       await loadProduits();
     }catch(e){
       console.error('save produit failed', e);
-      showAlert('Erreur lors de l\'enregistrement du produit', 'danger');
+
+      // Afficher le message d'erreur exact du serveur
+      let errorMsg = 'Erreur lors de l\'enregistrement du produit';
+
+      if(e.data && typeof e.data === 'object'){
+        // Extraire les messages d'erreur du serveur
+        const errors = [];
+        for(const [field, messages] of Object.entries(e.data)){
+          if(Array.isArray(messages)){
+            errors.push(`${field}: ${messages.join(', ')}`);
+          } else {
+            errors.push(`${field}: ${messages}`);
+          }
+        }
+        if(errors.length > 0){
+          errorMsg = errors.join(' | ');
+        }
+      } else if(e.data && typeof e.data === 'string'){
+        errorMsg = e.data;
+      }
+
+      showAlert(errorMsg, 'danger');
     }
   }
 

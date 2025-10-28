@@ -1,110 +1,380 @@
 {% load static %}
 <script src="{% static 'script/produit.js' %}" type="text/javascript"></script>
+
+<style>
+/* Design sobre et professionnel pour Gestion des produits */
+.products-container {
+    padding: 20px 0;
+}
+
+.products-title {
+    font-size: 1.8rem;
+    font-weight: 600;
+    color: #2d3748;
+    margin-bottom: 25px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.products-title i {
+    color: #4a5568;
+}
+
+.form-section {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 30px;
+    margin-bottom: 25px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.form-section-header {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #2d3748;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.form-section-header i {
+    color: #4a5568;
+}
+
+.form-label-product {
+    font-weight: 500;
+    color: #4a5568;
+    margin-bottom: 6px;
+    font-size: 0.9rem;
+}
+
+.form-control-product {
+    border: 1px solid #cbd5e0;
+    border-radius: 6px;
+    padding: 10px 15px;
+    transition: all 0.2s ease;
+}
+
+.form-control-product:focus {
+    border-color: #4a5568;
+    box-shadow: 0 0 0 3px rgba(74, 85, 104, 0.1);
+    outline: none;
+}
+
+.btn-product {
+    border-radius: 6px;
+    padding: 10px 20px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-product-primary {
+    background: #2d3748;
+    color: white;
+    border: none;
+}
+
+.btn-product-primary:hover {
+    background: #1a202c;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(45, 55, 72, 0.2);
+    color: white;
+}
+
+.btn-product-secondary {
+    background: #e2e8f0;
+    color: #2d3748;
+    border: 1px solid #cbd5e0;
+}
+
+.btn-product-secondary:hover {
+    background: #cbd5e0;
+    color: #2d3748;
+}
+
+.table-section {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 25px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.table-product {
+    margin-bottom: 0;
+}
+
+.table-product thead th {
+    background: #f7fafc;
+    border: none;
+    padding: 15px 12px;
+    font-weight: 600;
+    color: #4a5568;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+
+.table-product tbody td {
+    padding: 12px;
+    border-bottom: 1px solid #e2e8f0;
+    vertical-align: middle;
+}
+
+.table-product tbody tr:hover {
+    background: #f7fafc;
+}
+
+.action-btn-product {
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    border: none;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.action-btn-product:hover {
+    transform: scale(1.05);
+}
+
+.btn-edit {
+    background: #4a5568;
+    color: white;
+}
+
+.btn-edit:hover {
+    background: #2d3748;
+    color: white;
+}
+
+.btn-delete {
+    background: #e2e8f0;
+    color: #4a5568;
+}
+
+.btn-delete:hover {
+    background: #cbd5e0;
+    color: #2d3748;
+}
+
+.action-buttons-group {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid #e2e8f0;
+}
+
+.risk-management-box {
+    background: #f7fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 15px;
+}
+
+/* État vide du tableau */
+.table-product tbody:empty::after {
+    content: 'Aucun produit enregistré';
+    display: block;
+    text-align: center;
+    padding: 40px;
+    color: #a0aec0;
+    font-style: italic;
+}
+
+/* Amélioration des inputs number */
+input[type="number"].form-control-product {
+    -moz-appearance: textfield;
+}
+
+input[type="number"].form-control-product::-webkit-inner-spin-button,
+input[type="number"].form-control-product::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+/* Badge pour le statut du stock */
+.stock-badge {
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.stock-badge-ok {
+    background: #f0f0f0;
+    color: #4a5568;
+}
+
+.stock-badge-low {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.stock-badge-critical {
+    background: #f8d7da;
+    color: #721c24;
+}
+</style>
+
 <div class="container-fluid">
+    <!-- Modal d'erreur -->
     <div class="modal fade" id="error" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel"
          aria-hidden="true">
         <div class="modal-dialog" role="document">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="exampleModalLabel">Erreur</h5>
+            <div class="modal-content" style="border-radius: 10px; border: none;">
+                <div class="modal-header" style="background: #f7fafc; border-bottom: 1px solid #e2e8f0;">
+                    <h5 class="modal-title" id="exampleModalLabel" style="color: #2d3748; font-weight: 600;">
+                        <i class="fas fa-exclamation-triangle"></i> Erreur
+                    </h5>
                     <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                         <span aria-hidden="true">&times;</span>
                     </button>
                 </div>
-                <div class="modal-body">
-                    <p>Impossible de supprimer ce produit</p>
+                <div class="modal-body" style="padding: 20px;">
+                    <p style="margin: 0; color: #4a5568;">
+                        <i class="fas fa-info-circle"></i>
+                        Le produit a été marqué comme inactif car il est référencé dans des transactions (achats, ventes, mouvements).
+                    </p>
+                    <p style="margin: 10px 0 0 0; color: #718096; font-size: 0.9rem;">
+                        Il n'apparaîtra plus dans la liste des produits actifs.
+                    </p>
                 </div>
             </div>
         </div>
     </div>
-    <div class="card bg-white">
-        <div class="card-header card-color">
-            <p class="h2 text-center text-uppercase font-weight-bold pt-2">Gestion des produits</p>
-        </div>
-        <form id="product-form"> {% csrf_token %}
-            <div class="card-body container-fluid">
-               <div id="product-alerts" class="mb-3"></div>
+
+    <div class="products-container">
+        <h1 class="products-title">
+            <i class="fas fa-boxes"></i> Gestion des Produits
+        </h1>
+
+        <!-- Formulaire de produit -->
+        <div class="form-section">
+            <h5 class="form-section-header">
+                <i class="fas fa-edit"></i> Ajouter / Modifier un Produit
+            </h5>
+
+            <form id="product-form"> {% csrf_token %}
+                <div id="product-alerts" class="mb-3"></div>
+                <!-- Informations de base -->
                 <div class="row">
-                    <div class="col-sm-4 mb-2">
-                        <label for="reference">Reference : </label>
-                        <input class="" type="text" id="id" hidden>
-                        <input class="form-control" type="text" id="reference" required>
+                    <div class="col-md-4 mb-3">
+                        <label for="reference" class="form-label-product">
+                            <i class="fas fa-barcode"></i> Référence
+                        </label>
+                        <input type="text" id="id" hidden>
+                        <input class="form-control form-control-product" type="text" id="reference" required>
                     </div>
-                    <div class="col-sm-4 mb-2">
-                        <label for="code_barre">Code-barres : </label>
-                        <input class="form-control" type="text" id="code_barre" required>
+                    <div class="col-md-4 mb-3">
+                        <label for="code_barre" class="form-label-product">
+                            <i class="fas fa-qrcode"></i> Code-barres
+                        </label>
+                        <input class="form-control form-control-product" type="text" id="code_barre" required>
                     </div>
-                    <div class="col-sm-4 mb-2">
-                        <label for="designation">designation : </label>
-                        <input class="form-control" type="text" id="designation" required>
+                    <div class="col-md-4 mb-3">
+                        <label for="designation" class="form-label-product">
+                            <i class="fas fa-tag"></i> Désignation
+                        </label>
+                        <input class="form-control form-control-product" type="text" id="designation" required>
                     </div>
                 </div>
+
+                <!-- Catégorie et Prix -->
                 <div class="row">
-                    <div class="col-sm-6 mb-2">
-                        <label for="categorie">Catégorie : </label>
-                        <select class="form-control" id="categorie" required>
+                    <div class="col-md-6 mb-3">
+                        <label for="categorie" class="form-label-product">
+                            <i class="fas fa-folder"></i> Catégorie
+                        </label>
+                        <select class="form-control form-control-product" id="categorie" required>
                             <option value="">Sélectionner une catégorie</option>
                         </select>
                     </div>
-                    <div class="col-sm-6 mb-2">
-                        <label for="prixU">Prix U :</label>
-                        <input class="form-control" type="number" id="prixU" step="0.01" min="0" placeholder="0.00">
+                    <div class="col-md-6 mb-3">
+                        <label for="prixU" class="form-label-product">
+                            <i class="fas fa-dollar-sign"></i> Prix Unitaire
+                        </label>
+                        <input class="form-control form-control-product" type="number" id="prixU" step="0.01" min="0" placeholder="0.00">
                     </div>
                 </div>
+
+                <!-- Fournisseur, Stock et Risk Management -->
                 <div class="row">
-                    <div class="col-sm-4 mb-2">
-                        <label for="fournisseur">Fournisseur : </label>
-                        <select class="form-control" id="fournisseur" required>
+                    <div class="col-md-4 mb-3">
+                        <label for="fournisseur" class="form-label-product">
+                            <i class="fas fa-truck"></i> Fournisseur
+                        </label>
+                        <select class="form-control form-control-product" id="fournisseur" required>
                             <option value="">Sélectionner un fournisseur</option>
                         </select>
                     </div>
-                    <div class="col-sm-4 mb-2">
-                        <label for="quantite">Quantité en stock :</label>
-                        <input class="form-control" type="number" id="quantite" min="0" step="1" required placeholder="0">
+                    <div class="col-md-4 mb-3">
+                        <label for="quantite" class="form-label-product">
+                            <i class="fas fa-cubes"></i> Quantité en stock
+                        </label>
+                        <input class="form-control form-control-product" type="number" id="quantite" min="0" step="1" required placeholder="0">
                     </div>
-                    <div class="col-sm-4 mb-2">
-                        <label for="nom">risk management : </label>
-                        <input class="form-control" type="number" id="risk">
-                        <div class="row">
-                            <div class="col">
-                                <button type="button" class="btn btn-outline-success mt-3 mb-3" id="btnrisk">Check</button>
-                            </div>
-                            <div class="col">
-                                <button type="button" class="btn btn-outline-success mt-3 mb-3" id="btnref">Refresh</button>
-                            </div>
-                         </div>
-                    </div>
-                </div>
-
-
-
-                <div class="row">
-                    <div class="col">
-                        <button type="button" class="btn btn-outline-success mt-3 mb-3" id="btn">Ajouter</button>
+                    <div class="col-md-4 mb-3">
+                        <label for="risk" class="form-label-product">
+                            <i class="fas fa-exclamation-triangle"></i> Risk Management
+                        </label>
+                        <input class="form-control form-control-product" type="number" id="risk">
+                        <div class="d-flex gap-2 mt-2">
+                            <button type="button" class="btn btn-product btn-product-secondary flex-fill" id="btnrisk">
+                                <i class="fas fa-check"></i> Check
+                            </button>
+                            <button type="button" class="btn btn-product btn-product-secondary flex-fill" id="btnref">
+                                <i class="fas fa-sync"></i> Refresh
+                            </button>
+                        </div>
                     </div>
                 </div>
-                <hr />
-                <div class="row table-responsive m-auto rounded">
-                    <table id="tproduit" class="table table-hover w-100">
-                        <thead>
-                        <tr class="text-uppercase bg-light  w-100">
-                            <th scope="col">Id</th>
-                            <th scope="col">reference</th>
-                            <th scope="col">code-barres</th>
-                            <th scope="col">designation</th>
+
+                <!-- Bouton d'action -->
+                <div class="action-buttons-group">
+                    <button type="button" class="btn btn-product btn-product-primary" id="btn">
+                        <i class="fas fa-plus"></i> Ajouter le produit
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Tableau des produits -->
+        <div class="table-section">
+            <h5 class="form-section-header">
+                <i class="fas fa-list"></i> Liste des Produits
+            </h5>
+
+            <div class="table-responsive">
+                <table id="tproduit" class="table table-product table-hover">
+                    <thead>
+                        <tr>
+                            <th scope="col">ID</th>
+                            <th scope="col">Référence</th>
+                            <th scope="col">Code-barres</th>
+                            <th scope="col">Désignation</th>
                             <th scope="col">Catégorie</th>
                             <th scope="col">Prix U</th>
                             <th scope="col">Fournisseur</th>
-                            <th scope="col">Supprimer</th>
-                            <th scope="col">Modifier</th>
+                            <th scope="col" class="text-center">Actions</th>
                         </tr>
-                        </thead>
-                        <tbody id="table-content">
-
-                        </tbody>
-                    </table>
-                </div>
+                    </thead>
+                    <tbody id="table-content">
+                    </tbody>
+                </table>
             </div>
-        </form>
+        </div>
     </div>
 </div>

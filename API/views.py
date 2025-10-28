@@ -258,13 +258,33 @@ class ProduitViewSet(viewsets.ModelViewSet):
             log_event(self.request, 'produit.delete', target=None, metadata={'id': mid, 'reference': ref})
         except Exception:
             pass
-    # def destroy(self, request, *args, **kwargs):
-    #     instance = self.get_object()
-    #     self.perform_destroy(instance)
-    #     return Response(status=status.HTTP_204_NO_CONTENT)
-    #
-    # def perform_destroy(self, instance):
-    #     instance.delete()
+    def destroy(self, request, *args, **kwargs):
+        """Suppression logique (soft delete) du produit"""
+        instance = self.get_object()
+
+        try:
+            # Marquer comme inactif au lieu de supprimer
+            instance.is_active = False
+            instance.save()
+
+            # Enregistrer l'audit log
+            log_event(
+                request=request,
+                action='produit.delete',
+                target=instance,
+                metadata={'reference': instance.reference}
+            )
+
+            return Response(
+                {'message': 'Produit désactivé avec succès'},
+                status=status.HTTP_204_NO_CONTENT
+            )
+        except Exception as e:
+            logger.exception(f"Erreur lors de la suppression du produit {instance.id}: {e}")
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 class AchatViewSet(viewsets.ModelViewSet):
     queryset = Achat.objects.all().order_by('date_Achat')
