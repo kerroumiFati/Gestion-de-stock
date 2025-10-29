@@ -1,111 +1,510 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <title>Admin - Tableau de bord</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-      .admin-card { cursor: pointer; transition: transform .1s ease; }
-      .admin-card:hover { transform: translateY(-2px); }
-    </style>
-</head>
-<body>
-<div class="container-fluid p-3">
-  <h2 class="mb-4"><i class="fas fa-tools mr-2"></i>Tableau de bord Administrateur</h2>
+{% load static %}
+<link rel="stylesheet" href="{% static 'style/modern-pages.css' %}">
 
-  <div class="row">
-    <!-- Liens d'administration -->
-    <div class="col-md-3 mb-3">
-      <div class="card admin-card" onclick="window.location.href='/users-admin/'">
-        <div class="card-body">
-          <h5 class="card-title"><i class="fas fa-user-shield mr-2"></i>Utilisateurs</h5>
-          <p class="card-text">Créer, modifier, supprimer des utilisateurs et leur attribuer des rôles.</p>
+<style>
+/* Design moderne pour le dashboard admin */
+.admin-dashboard {
+  padding: 20px 0;
+}
+
+.dashboard-header {
+  background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);
+  border-radius: 12px;
+  padding: 35px 30px;
+  margin-bottom: 40px;
+  box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
+  border: none;
+}
+
+.dashboard-header h2 {
+  font-size: 2rem;
+  font-weight: 600;
+  margin: 0;
+  color: white;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.dashboard-header h2 i {
+  color: white;
+  opacity: 0.9;
+}
+
+.dashboard-header p {
+  margin: 10px 0 0 0;
+  color: white;
+  opacity: 0.9;
+  font-size: 1rem;
+  font-weight: 400;
+}
+
+/* Cards des modules */
+.admin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 25px;
+  margin-bottom: 30px;
+}
+
+.admin-module-card {
+  background: white;
+  border-radius: 12px;
+  padding: 25px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  border: 2px solid transparent;
+  transition: all 0.3s ease;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+
+.admin-module-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #3b82f6 0%, #1e40af 100%);
+  transform: scaleX(0);
+  transition: transform 0.3s ease;
+}
+
+.admin-module-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 25px rgba(59, 130, 246, 0.2);
+  border-color: #3b82f6;
+}
+
+.admin-module-card:hover::before {
+  transform: scaleX(1);
+}
+
+.module-icon {
+  width: 60px;
+  height: 60px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.8rem;
+  margin-bottom: 15px;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: white;
+  transition: all 0.3s ease;
+}
+
+.admin-module-card:hover .module-icon {
+  background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+  transform: scale(1.05);
+}
+
+/* Variations subtiles de bleu pour les icônes */
+.module-card-1 .module-icon { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); }
+.module-card-2 .module-icon { background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%); }
+.module-card-3 .module-icon { background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%); }
+.module-card-4 .module-icon { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); }
+.module-card-5 .module-icon { background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%); }
+.module-card-6 .module-icon { background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%); }
+.module-card-7 .module-icon { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); }
+.module-card-8 .module-icon { background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%); }
+.module-card-9 .module-icon { background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%); }
+.module-card-10 .module-icon { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); }
+
+.module-title {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #2d3748;
+  margin-bottom: 10px;
+}
+
+.module-description {
+  color: #718096;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.module-arrow {
+  position: absolute;
+  right: 20px;
+  bottom: 20px;
+  color: #cbd5e0;
+  font-size: 1.5rem;
+  transition: all 0.3s;
+}
+
+.admin-module-card:hover .module-arrow {
+  color: #3b82f6;
+  transform: translateX(5px);
+}
+
+/* Section groupée */
+.section-group {
+  margin-bottom: 40px;
+}
+
+.section-group-title {
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: #2d3748;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.section-group-title i {
+  color: #3b82f6;
+  font-size: 1.4rem;
+}
+
+/* Section Actions Rapides - Design sobre et professionnel */
+.quick-actions-section {
+  background: #f7fafc;
+  border: 2px solid #e2e8f0;
+}
+
+.quick-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 20px;
+}
+
+.quick-action-btn {
+  background: white;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-align: left;
+  width: 100%;
+}
+
+.quick-action-btn:hover {
+  border-color: #3b82f6;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(59, 130, 246, 0.3);
+}
+
+.quick-action-icon {
+  width: 50px;
+  height: 50px;
+  border-radius: 10px;
+  background: #eff6ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  color: #3b82f6;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+}
+
+.quick-action-btn:hover .quick-action-icon {
+  background: white;
+  color: #1e40af;
+  transform: scale(1.1);
+}
+
+.quick-action-text {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #2d3748;
+  transition: color 0.3s ease;
+}
+
+.quick-action-btn:hover .quick-action-text {
+  color: white;
+}
+</style>
+
+<div class="container-fluid admin-dashboard">
+  <!-- Header avec dégradé -->
+  <div class="dashboard-header">
+    <h2>
+      <i class="fas fa-crown"></i>
+      Tableau de bord Administrateur
+    </h2>
+    <p>Gérez tous les aspects de votre système de gestion de stock</p>
+  </div>
+
+  <!-- Gestion des Accès -->
+  <div class="section-group">
+    <h3 class="section-group-title">
+      <i class="fas fa-shield-alt"></i>
+      Gestion des Accès & Sécurité
+    </h3>
+    <div class="admin-grid">
+      <div class="admin-module-card module-card-1" onclick="window.location.href='/users-admin/'">
+        <div class="module-icon">
+          <i class="fas fa-user-shield"></i>
         </div>
+        <h5 class="module-title">Utilisateurs</h5>
+        <p class="module-description">
+          Créer, modifier et gérer les comptes utilisateurs de votre système
+        </p>
+        <i class="fas fa-arrow-right module-arrow"></i>
       </div>
-    </div>
 
-    <div class="col-md-3 mb-3">
-      <div class="card admin-card" onclick="window.location.href='/roles-admin/'">
-        <div class="card-body">
-          <h5 class="card-title"><i class="fas fa-users-cog mr-2"></i>Rôles & Permissions</h5>
-          <p class="card-text">Consulter les rôles et leurs permissions.</p>
+      <div class="admin-module-card module-card-2" onclick="window.location.href='/roles-admin/'">
+        <div class="module-icon">
+          <i class="fas fa-users-cog"></i>
         </div>
+        <h5 class="module-title">Rôles & Permissions</h5>
+        <p class="module-description">
+          Définir les rôles et attribuer les permissions d'accès
+        </p>
+        <i class="fas fa-arrow-right module-arrow"></i>
       </div>
-    </div>
 
-    <div class="col-md-3 mb-3">
-      <div class="card admin-card" onclick="show && show('produit')">
-        <div class="card-body">
-          <h5 class="card-title"><i class="fas fa-box mr-2"></i>Produits</h5>
-          <p class="card-text">Gérer le catalogue des produits.</p>
+      <div class="admin-module-card module-card-3" onclick="window.location.href='/audit-logs/'">
+        <div class="module-icon">
+          <i class="fas fa-history"></i>
         </div>
-      </div>
-    </div>
-
-    <div class="col-md-3 mb-3">
-      <div class="card admin-card" onclick="show && show('client')">
-        <div class="card-body">
-          <h5 class="card-title"><i class="fas fa-users mr-2"></i>Clients</h5>
-          <p class="card-text">Gérer les clients.</p>
-        </div>
-      </div>
-    </div>
-
-    <div class="col-md-3 mb-3">
-      <div class="card admin-card" onclick="show && show('fournisseur')">
-        <div class="card-body">
-          <h5 class="card-title"><i class="fas fa-truck mr-2"></i>Fournisseurs</h5>
-          <p class="card-text">Gérer les fournisseurs et achats.</p>
-        </div>
-      </div>
-    </div>
-
-    <div class="col-md-3 mb-3">
-      <div class="card admin-card" onclick="show && show('inventaire')">
-        <div class="card-body">
-          <h5 class="card-title"><i class="fas fa-clipboard-list mr-2"></i>Inventaires</h5>
-          <p class="card-text">Lancer et suivre les sessions d'inventaire.</p>
-        </div>
-      </div>
-    </div>
-
-    <div class="col-md-3 mb-3">
-      <div class="card admin-card" onclick="show && show('facture')">
-        <div class="card-body">
-          <h5 class="card-title"><i class="fas fa-file-invoice mr-2"></i>Factures</h5>
-          <p class="card-text">Gérer la facturation et les ventes.</p>
-        </div>
-      </div>
-    </div>
-
-    <div class="col-md-3 mb-3">
-      <div class="card admin-card" onclick="show && show('statistiques')">
-        <div class="card-body">
-          <h5 class="card-title"><i class="fas fa-chart-line mr-2"></i>Statistiques</h5>
-          <p class="card-text">Suivre les indicateurs clés.</p>
-        </div>
-      </div>
-    </div>
-
-    <div class="col-md-3 mb-3">
-      <div class="card admin-card" onclick="show && show('parametres')">
-        <div class="card-body">
-          <h5 class="card-title"><i class="fas fa-cogs mr-2"></i>Paramètres</h5>
-          <p class="card-text">Configurer l'entrepôt par défaut et autres paramètres.</p>
-        </div>
-      </div>
-    </div>
-
-    <div class="col-md-3 mb-3">
-      <div class="card admin-card" onclick="window.location.href='/audit-logs/'">
-        <div class="card-body">
-          <h5 class="card-title"><i class="fas fa-history mr-2"></i>Historique Audit</h5>
-          <p class="card-text">Consulter l'historique des actions utilisateurs.</p>
-        </div>
+        <h5 class="module-title">Journal d'Audit</h5>
+        <p class="module-description">
+          Consulter l'historique des actions et modifications
+        </p>
+        <i class="fas fa-arrow-right module-arrow"></i>
       </div>
     </div>
   </div>
+
+  <!-- Gestion des Données -->
+  <div class="section-group">
+    <h3 class="section-group-title">
+      <i class="fas fa-database"></i>
+      Gestion des Données de Base
+    </h3>
+    <div class="admin-grid">
+      <div class="admin-module-card module-card-4" onclick="loadPage && loadPage('produit')">
+        <div class="module-icon">
+          <i class="fas fa-box"></i>
+        </div>
+        <h5 class="module-title">Produits</h5>
+        <p class="module-description">
+          Gérer le catalogue complet des produits et leurs prix
+        </p>
+        <i class="fas fa-arrow-right module-arrow"></i>
+      </div>
+
+      <div class="admin-module-card module-card-5" onclick="loadPage && loadPage('client')">
+        <div class="module-icon">
+          <i class="fas fa-users"></i>
+        </div>
+        <h5 class="module-title">Clients</h5>
+        <p class="module-description">
+          Gérer la base de données clients et leurs informations
+        </p>
+        <i class="fas fa-arrow-right module-arrow"></i>
+      </div>
+
+      <div class="admin-module-card module-card-6" onclick="loadPage && loadPage('fournisseur')">
+        <div class="module-icon">
+          <i class="fas fa-truck"></i>
+        </div>
+        <h5 class="module-title">Fournisseurs</h5>
+        <p class="module-description">
+          Gérer les fournisseurs et les relations d'achat
+        </p>
+        <i class="fas fa-arrow-right module-arrow"></i>
+      </div>
+
+      <div class="admin-module-card module-card-7" onclick="loadPage && loadPage('categorie')">
+        <div class="module-icon">
+          <i class="fas fa-tags"></i>
+        </div>
+        <h5 class="module-title">Catégories</h5>
+        <p class="module-description">
+          Organiser les produits par catégories et sous-catégories
+        </p>
+        <i class="fas fa-arrow-right module-arrow"></i>
+      </div>
+    </div>
+  </div>
+
+  <!-- Gestion des Stocks -->
+  <div class="section-group">
+    <h3 class="section-group-title">
+      <i class="fas fa-warehouse"></i>
+      Gestion des Stocks & Inventaires
+    </h3>
+    <div class="admin-grid">
+      <div class="admin-module-card module-card-8" onclick="loadPage && loadPage('inventaire')">
+        <div class="module-icon">
+          <i class="fas fa-clipboard-list"></i>
+        </div>
+        <h5 class="module-title">Inventaires</h5>
+        <p class="module-description">
+          Lancer et suivre les sessions d'inventaire physique
+        </p>
+        <i class="fas fa-arrow-right module-arrow"></i>
+      </div>
+
+      <div class="admin-module-card module-card-9" onclick="loadPage && loadPage('mouvements')">
+        <div class="module-icon">
+          <i class="fas fa-exchange-alt"></i>
+        </div>
+        <h5 class="module-title">Mouvements de Stock</h5>
+        <p class="module-description">
+          Suivre tous les mouvements et transferts de stock
+        </p>
+        <i class="fas fa-arrow-right module-arrow"></i>
+      </div>
+
+      <div class="admin-module-card module-card-10" onclick="loadPage && loadPage('entrepots')">
+        <div class="module-icon">
+          <i class="fas fa-warehouse"></i>
+        </div>
+        <h5 class="module-title">Entrepôts</h5>
+        <p class="module-description">
+          Gérer les entrepôts et leurs stocks respectifs
+        </p>
+        <i class="fas fa-arrow-right module-arrow"></i>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rapports & Analyses -->
+  <div class="section-group">
+    <h3 class="section-group-title">
+      <i class="fas fa-chart-line"></i>
+      Rapports & Analyses
+    </h3>
+    <div class="admin-grid">
+      <div class="admin-module-card module-card-4" onclick="loadPage && loadPage('statistiques')">
+        <div class="module-icon">
+          <i class="fas fa-chart-bar"></i>
+        </div>
+        <h5 class="module-title">Statistiques</h5>
+        <p class="module-description">
+          Visualiser les indicateurs clés et performances
+        </p>
+        <i class="fas fa-arrow-right module-arrow"></i>
+      </div>
+
+      <div class="admin-module-card module-card-5" onclick="loadPage && loadPage('rapports')">
+        <div class="module-icon">
+          <i class="fas fa-file-export"></i>
+        </div>
+        <h5 class="module-title">Rapports</h5>
+        <p class="module-description">
+          Générer et exporter des rapports personnalisés
+        </p>
+        <i class="fas fa-arrow-right module-arrow"></i>
+      </div>
+
+      <div class="admin-module-card module-card-6" onclick="loadPage && loadPage('vente')">
+        <div class="module-icon">
+          <i class="fas fa-cash-register"></i>
+        </div>
+        <h5 class="module-title">Ventes</h5>
+        <p class="module-description">
+          Gérer les ventes et les factures clients
+        </p>
+        <i class="fas fa-arrow-right module-arrow"></i>
+      </div>
+    </div>
+  </div>
+
+  <!-- Configuration -->
+  <div class="section-group">
+    <h3 class="section-group-title">
+      <i class="fas fa-cog"></i>
+      Configuration & Paramètres
+    </h3>
+    <div class="admin-grid">
+      <div class="admin-module-card module-card-7" onclick="loadPage && loadPage('parametres')">
+        <div class="module-icon">
+          <i class="fas fa-sliders-h"></i>
+        </div>
+        <h5 class="module-title">Paramètres Système</h5>
+        <p class="module-description">
+          Configurer les paramètres globaux de l'application
+        </p>
+        <i class="fas fa-arrow-right module-arrow"></i>
+      </div>
+
+      <div class="admin-module-card module-card-8" onclick="loadPage && loadPage('facture')">
+        <div class="module-icon">
+          <i class="fas fa-file-invoice"></i>
+        </div>
+        <h5 class="module-title">Factures</h5>
+        <p class="module-description">
+          Gérer la facturation et les documents commerciaux
+        </p>
+        <i class="fas fa-arrow-right module-arrow"></i>
+      </div>
+
+      <div class="admin-module-card module-card-9" onclick="loadPage && loadPage('achat')">
+        <div class="module-icon">
+          <i class="fas fa-shopping-cart"></i>
+        </div>
+        <h5 class="module-title">Achats</h5>
+        <p class="module-description">
+          Gérer les commandes et achats fournisseurs
+        </p>
+        <i class="fas fa-arrow-right module-arrow"></i>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick Actions -->
+  <div class="modern-section quick-actions-section">
+    <h5 style="font-weight: 600; margin-bottom: 25px; color: #2d3748; display: flex; align-items: center; gap: 10px;">
+      <i class="fas fa-bolt" style="color: #4a5568;"></i>
+      Actions Rapides
+    </h5>
+    <div class="quick-actions-grid">
+      <button class="quick-action-btn" onclick="loadPage && loadPage('produit')">
+        <div class="quick-action-icon">
+          <i class="fa fa-plus"></i>
+        </div>
+        <span class="quick-action-text">Ajouter un produit</span>
+      </button>
+
+      <button class="quick-action-btn" onclick="loadPage && loadPage('vente')">
+        <div class="quick-action-icon">
+          <i class="fa fa-shopping-bag"></i>
+        </div>
+        <span class="quick-action-text">Nouvelle vente</span>
+      </button>
+
+      <button class="quick-action-btn" onclick="loadPage && loadPage('inventaire')">
+        <div class="quick-action-icon">
+          <i class="fa fa-clipboard-check"></i>
+        </div>
+        <span class="quick-action-text">Nouvel inventaire</span>
+      </button>
+
+      <button class="quick-action-btn" onclick="loadPage && loadPage('statistiques')">
+        <div class="quick-action-icon">
+          <i class="fa fa-chart-line"></i>
+        </div>
+        <span class="quick-action-text">Voir les stats</span>
+      </button>
+    </div>
+  </div>
 </div>
+
 <script>
-</body>
-</html>
+// Fonction helper pour loadPage si elle n'existe pas déjà
+if(typeof loadPage === 'undefined'){
+  function loadPage(page){
+    console.log('Navigation vers:', page);
+    // Essayer d'utiliser la fonction show si disponible
+    if(typeof show !== 'undefined'){
+      show(page);
+    }
+  }
+}
+</script>

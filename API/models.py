@@ -205,6 +205,37 @@ class Categorie(models.Model):
         return count
 
 #####################
+#   Types de Prix   #
+#####################
+class TypePrix(models.Model):
+    """Types de prix : détaillant, grossiste, promotionnel, etc."""
+    code = models.CharField(max_length=20, unique=True, help_text="Code unique du type de prix (ex: DETAIL, GROSS, PROMO)")
+    libelle = models.CharField(max_length=100, help_text="Libellé du type de prix")
+    description = models.TextField(blank=True, help_text="Description du type de prix")
+    ordre = models.IntegerField(default=0, help_text="Ordre d'affichage")
+    is_default = models.BooleanField(default=False, help_text="Type de prix par défaut")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['ordre', 'libelle']
+        verbose_name = "Type de prix"
+        verbose_name_plural = "Types de prix"
+
+    def __str__(self):
+        return f"{self.code} - {self.libelle}"
+
+    def save(self, *args, **kwargs):
+        # S'assurer qu'un seul type de prix est par défaut
+        if self.is_default:
+            TypePrix.objects.filter(is_default=True).exclude(pk=self.pk).update(is_default=False)
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get_default(cls):
+        return cls.objects.filter(is_default=True, is_active=True).first()
+
+#####################
 #    Produits       #
 #####################
 class Produit(models.Model):
@@ -334,6 +365,59 @@ class Produit(models.Model):
             # Suggestion : 2 fois le seuil d'alerte
             return max(self.seuil_alerte * 2, 30)
         return 0
+
+#####################
+#   Prix Produits   #
+#####################
+class PrixProduit(models.Model):
+    """Prix multiples pour un produit selon le type de client/quantité"""
+    produit = models.ForeignKey(Produit, on_delete=models.CASCADE, related_name='prix_multiples',
+                                help_text="Produit concerné")
+    type_prix = models.ForeignKey(TypePrix, on_delete=models.PROTECT, related_name='prix',
+                                  help_text="Type de prix (détaillant, grossiste, etc.)")
+    prix = models.DecimalField("Prix", max_digits=10, decimal_places=2,
+                               help_text="Montant du prix pour ce type")
+    currency = models.ForeignKey(Currency, on_delete=models.PROTECT, null=True, blank=True,
+                                help_text="Devise du prix (si vide, hérite de la devise du produit)")
+
+    # Optionnel : quantité minimum pour ce prix
+    quantite_min = models.IntegerField("Quantité minimum", default=1,
+                                       help_text="Quantité minimum pour appliquer ce prix")
+
+    # Validité temporelle (pour les promotions)
+    date_debut = models.DateField("Date de début", null=True, blank=True,
+                                  help_text="Date de début de validité (laisser vide si permanent)")
+    date_fin = models.DateField("Date de fin", null=True, blank=True,
+                                help_text="Date de fin de validité (laisser vide si permanent)")
+
+    is_active = models.BooleanField("Prix actif", default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['produit', 'type_prix__ordre']
+        verbose_name = "Prix produit"
+        verbose_name_plural = "Prix produits"
+        unique_together = ['produit', 'type_prix']  # Un seul prix par type pour un produit
+
+    def __str__(self):
+        currency_symbol = self.currency.symbol if self.currency else self.produit.currency.symbol if self.produit.currency else '€'
+        return f"{self.produit.reference} - {self.type_prix.libelle}: {self.prix} {currency_symbol}"
+
+    def is_valid_now(self):
+        """Vérifie si ce prix est valide aujourd'hui"""
+        if not self.is_active:
+            return False
+        today = timezone.now().date()
+        if self.date_debut and today < self.date_debut:
+            return False
+        if self.date_fin and today > self.date_fin:
+            return False
+        return True
+
+    def get_effective_currency(self):
+        """Retourne la devise effective (propre ou héritée du produit)"""
+        return self.currency or self.produit.currency or Currency.get_default()
 
 
 class Client(models.Model):

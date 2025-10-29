@@ -36,13 +36,17 @@ urlpatterns = [
     path('reports/sales/', views_reports.export_sales_report, name='export-sales-report'),
     path('reports/inventory/', views_reports.export_inventory_report, name='export-inventory-report'),
 
-    # Users admin
+    # Users admin (nouvelle interface moderne)
+    path('admin-users/', views.admin_users, name='admin_users'),
+
+    # Users admin (anciennes routes - à garder pour compatibilité)
     path('users-admin/', views.users_list, name='users_list'),
     path('users-admin/new/', views.user_create, name='user_create'),
     path('users-admin/<int:user_id>/edit/', views.user_edit, name='user_edit'),
     path('users-admin/<int:user_id>/delete/', views.user_delete, name='user_delete'),
     path('users-admin/<int:user_id>/reset-password/', views.user_reset_password_confirm, name='user_reset_password'),
     path('roles-admin/', views.roles_list, name='roles_list'),
+    path('roles-admin/<int:role_id>/permissions/', views.role_edit_permissions, name='role_edit_permissions'),
     path('audit-logs/', audit_list, name='audit_list'),
     path('change-password/', change_password, name='change_password'),
 ]

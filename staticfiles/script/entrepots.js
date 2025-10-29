@@ -8,10 +8,12 @@
     if (parts.length === 2) return parts.pop().split(';').shift();
   }
   function notify(type, msg){
-    const cls = type === 'success' ? 'alert-success' : type === 'warning' ? 'alert-warning' : 'alert-danger';
-    const box = $('<div>').addClass('alert '+cls+' alert-dismissible fade show').text(msg);
-    box.append('<button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>');
+    const cls = type === 'success' ? 'modern-alert-success' : type === 'warning' ? 'modern-alert-warning' : 'modern-alert-danger';
+    const icon = type === 'success' ? 'check-circle' : type === 'warning' ? 'exclamation-triangle' : 'times-circle';
+    const box = $('<div>').addClass('modern-alert '+cls+' alert-dismissible fade show');
+    box.html('<i class="fa fa-'+icon+'"></i> ' + msg + '<button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>');
     $('#wh_alerts').empty().append(box);
+    setTimeout(function(){ box.fadeOut(function(){ box.remove(); }); }, 5000);
   }
   function ajaxJSON(opts){
     const csrftoken = getCookie('csrftoken');
@@ -33,35 +35,43 @@
     return $.get(apiBase + '/entrepots/', include_inactive ? {include_inactive: 1} : {}).then(function(items){
       const tbody = $('#twh tbody');
       tbody.empty();
+
+      if(!items || items.length === 0){
+        tbody.append('<tr><td colspan="6" class="text-center text-muted">Aucun entrepôt</td></tr>');
+        return;
+      }
+
       items.forEach(function(w){
         const tr = $('<tr>');
-        tr.append($('<td>').text(w.id));
-        tr.append($('<td>').text(w.code));
+        tr.append($('<td>').html('<strong>' + w.id + '</strong>'));
+        tr.append($('<td>').html('<code style="background: #eff6ff; padding: 3px 8px; border-radius: 4px; color: #1e40af; font-weight: 600;">' + w.code + '</code>'));
         tr.append($('<td>').text(w.name));
-        tr.append($('<td>').text(w.is_active ? 'Oui' : 'Non'));
-        tr.append($('<td>').text((w.stocks_count || 0) + ' lignes / ' + (w.stocks_total || 0)));
-        const btnToggle = $('<button class=\"btn btn-sm btn-outline-secondary mr-2\"></button>')
-          .text(w.is_active ? 'Désactiver' : 'Activer')
-          .on('click', function(){
-            ajaxJSON({ url: apiBase + '/entrepots/'+w.id+'/', method:'PATCH', data: JSON.stringify({is_active: !w.is_active}) })
-              .then(function(){ notify('success', 'Statut mis à jour'); loadList(); })
-              .catch(function(xhr){ notify('error', (xhr.responseJSON && (xhr.responseJSON.detail || xhr.responseJSON.error)) || 'Erreur mise à jour'); });
-          });
-        const btnEdit = $('<button class="btn btn-sm btn-outline-primary">Modifier</button>').on('click', function(){
+
+        // Badge de statut avec le nouveau design
+        const statusBadge = w.is_active ?
+          '<span class="status-badge status-badge-active"><i class="fa fa-check-circle"></i> Actif</span>' :
+          '<span class="status-badge status-badge-inactive"><i class="fa fa-times-circle"></i> Inactif</span>';
+        tr.append($('<td>').html(statusBadge));
+
+        tr.append($('<td>').html('<span class="modern-badge modern-badge-info">' + (w.stocks_count || 0) + ' lignes</span> / <span class="modern-badge modern-badge-default">' + (w.stocks_total || 0) + '</span>'));
+
+        // Boutons avec le nouveau design
+        const btnEdit = $('<button type="button" class="btn-edit-warehouse"><i class="fa fa-edit"></i> Modifier</button>').on('click', function(){
           $('#wh_id').val(w.id);
           $('#wh_name').val(w.name);
           $('#wh_code').val(w.code);
           $('#wh_active').val(String(!!w.is_active));
           $('html,body').animate({scrollTop:0}, 200);
         });
-        const btnDel = $('<button class="btn btn-sm btn-outline-danger">Supprimer</button>').on('click', function(){
+
+        const btnDel = $('<button type="button" class="btn-delete-warehouse ml-2"><i class="fa fa-trash"></i> Supprimer</button>').on('click', function(){
           if (!confirm('Supprimer cet entrepôt ?')) return;
           ajaxJSON({ url: apiBase + '/entrepots/'+w.id+'/', method:'DELETE' })
             .then(function(){ notify('success', 'Entrepôt supprimé'); loadList(); })
             .catch(function(xhr){ notify('error', (xhr.responseJSON && (xhr.responseJSON.detail || xhr.responseJSON.error)) || 'Erreur suppression'); });
         });
-        tr.append($('<td>').append(btnToggle).append(btnEdit));
-        tr.append($('<td>').append(btnDel));
+
+        tr.append($('<td>').append(btnEdit).append(btnDel));
         tbody.append(tr);
       });
     });
@@ -88,6 +98,12 @@
 
   function init(){
     if (!$('#twh').length) return;
+
+    // Détruire DataTable si elle existe déjà
+    if ($.fn.DataTable && $.fn.DataTable.isDataTable('#twh')) {
+      $('#twh').DataTable().destroy();
+    }
+
     resetForm();
     loadList();
     $('#wh_save').on('click', save);
@@ -96,4 +112,11 @@
   }
 
   $(document).ready(init);
+
+  // Support pour le système de chargement de fragments
+  document.addEventListener('fragment:loaded', function(e){
+    if(e && e.detail && e.detail.name === 'entrepots'){
+      init();
+    }
+  });
 })();

@@ -1,0 +1,358 @@
+{% load static %}
+<link rel="stylesheet" href="{% static 'style/modern-pages.css' %}">
+<script src="{% static 'script/admin_users_fragment.js' %}" type="text/javascript"></script>
+
+<div class="container-fluid page-container">
+    <!-- Titre de page -->
+    <h1 class="page-title">
+        <i class="fa fa-shield-alt"></i>
+        Administration - Utilisateurs & Permissions
+    </h1>
+
+    <!-- Stats Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="stat-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 10px; text-align: center;">
+                <i class="fa fa-users fa-2x"></i>
+                <h3 id="stat_users_count" style="margin: 10px 0; font-size: 2.5rem; font-weight: 700;">0</h3>
+                <p style="margin: 0;">Utilisateurs</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; padding: 20px; border-radius: 10px; text-align: center;">
+                <i class="fa fa-user-tag fa-2x"></i>
+                <h3 id="stat_roles_count" style="margin: 10px 0; font-size: 2.5rem; font-weight: 700;">0</h3>
+                <p style="margin: 0;">Rôles</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; padding: 20px; border-radius: 10px; text-align: center;">
+                <i class="fa fa-key fa-2x"></i>
+                <h3 id="stat_permissions_count" style="margin: 10px 0; font-size: 2.5rem; font-weight: 700;">0</h3>
+                <p style="margin: 0;">Permissions</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); color: white; padding: 20px; border-radius: 10px; text-align: center;">
+                <i class="fa fa-user-check fa-2x"></i>
+                <h3 id="stat_active_count" style="margin: 10px 0; font-size: 2.5rem; font-weight: 700;">0</h3>
+                <p style="margin: 0;">Actifs</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Onglets de navigation -->
+    <div class="modern-tabs">
+        <button class="modern-tab active" data-target="users">
+            <i class="fa fa-users"></i> Utilisateurs
+        </button>
+        <button class="modern-tab" data-target="roles">
+            <i class="fa fa-user-tag"></i> Rôles
+        </button>
+        <button class="modern-tab" data-target="permissions">
+            <i class="fa fa-key"></i> Permissions
+        </button>
+        <button class="modern-tab" data-target="audit">
+            <i class="fa fa-history"></i> Journal d'audit
+        </button>
+    </div>
+
+    <!-- Section Utilisateurs -->
+    <div id="tab-users" class="tab-content-section modern-section">
+        <div class="section-header">
+            <i class="fa fa-users"></i>
+            Gestion des Utilisateurs
+        </div>
+
+        <div class="mb-3">
+            <button class="modern-btn modern-btn-primary" id="btn_new_user">
+                <i class="fa fa-plus"></i> Nouvel utilisateur
+            </button>
+            <input type="text" id="search_users" class="form-control modern-input d-inline-block ml-3" style="width: 300px;" placeholder="Rechercher...">
+        </div>
+
+        <div class="table-responsive">
+            <table class="table modern-table">
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>Nom complet</th>
+                        <th>Email</th>
+                        <th>Rôles</th>
+                        <th>Statut</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="users_table_body">
+                    <tr>
+                        <td colspan="6" class="text-center text-muted">Chargement...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Section Rôles -->
+    <div id="tab-roles" class="tab-content-section modern-section" style="display: none;">
+        <div class="section-header">
+            <i class="fa fa-user-tag"></i>
+            Gestion des Rôles
+        </div>
+
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <label class="modern-label">Nom du rôle</label>
+                <input type="text" id="role_name" class="form-control modern-input" placeholder="Ex: Gestionnaire">
+            </div>
+            <div class="col-md-8 d-flex align-items-end">
+                <button type="button" class="modern-btn modern-btn-primary" id="btn_add_role">
+                    <i class="fa fa-plus"></i> Créer le rôle
+                </button>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table modern-table">
+                <thead>
+                    <tr>
+                        <th>Nom du rôle</th>
+                        <th>Nombre de permissions</th>
+                        <th>Nombre d'utilisateurs</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="roles_table_body">
+                    <tr>
+                        <td colspan="4" class="text-center text-muted">Chargement...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Section Permissions -->
+    <div id="tab-permissions" class="tab-content-section modern-section" style="display: none;">
+        <div class="section-header">
+            <i class="fa fa-key"></i>
+            Attribution des Permissions
+        </div>
+
+        <div class="modern-alert modern-alert-info mb-3">
+            <i class="fa fa-info-circle"></i>
+            <strong>Gestion des permissions :</strong> Sélectionnez un rôle pour gérer ses permissions
+        </div>
+
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <label class="modern-label">Sélectionner un rôle</label>
+                <select id="perm_role_select" class="form-control modern-select">
+                    <option value="">Choisir un rôle...</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="permissions_container" style="display: none;">
+            <h6 class="mb-3">Permissions disponibles :</h6>
+            <div class="row">
+                <div class="col-md-6" id="permissions_col_1"></div>
+                <div class="col-md-6" id="permissions_col_2"></div>
+            </div>
+            <div class="mt-3">
+                <button type="button" class="modern-btn modern-btn-primary" id="btn_save_permissions">
+                    <i class="fa fa-save"></i> Sauvegarder les permissions
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section Audit -->
+    <div id="tab-audit" class="tab-content-section modern-section" style="display: none;">
+        <div class="section-header">
+            <i class="fa fa-history"></i>
+            Journal d'Audit
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-3">
+                <label class="modern-label">Filtrer par action</label>
+                <select id="audit_filter_action" class="form-control modern-select">
+                    <option value="">Toutes les actions</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="modern-label">Filtrer par utilisateur</label>
+                <select id="audit_filter_user" class="form-control modern-select">
+                    <option value="">Tous les utilisateurs</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="modern-label">Date</label>
+                <input type="date" id="audit_filter_date" class="form-control modern-input">
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <button class="modern-btn modern-btn-secondary" id="btn_filter_audit">
+                    <i class="fa fa-filter"></i> Filtrer
+                </button>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table modern-table">
+                <thead>
+                    <tr>
+                        <th>Date/Heure</th>
+                        <th>Utilisateur</th>
+                        <th>Action</th>
+                        <th>Cible</th>
+                        <th>Détails</th>
+                    </tr>
+                </thead>
+                <tbody id="audit_table_body">
+                    <tr>
+                        <td colspan="5" class="text-center text-muted">Chargement...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Utilisateur -->
+<div class="modal fade modern-modal" id="userModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fa fa-user"></i> <span id="user_modal_title">Nouvel Utilisateur</span>
+                </h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div id="user_alerts"></div>
+                <form id="user_form">
+                    <input type="hidden" id="user_id">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="modern-label"><i class="fa fa-user"></i> Username *</label>
+                            <input type="text" id="user_username" class="form-control modern-input" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="modern-label"><i class="fa fa-envelope"></i> Email</label>
+                            <input type="email" id="user_email" class="form-control modern-input">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="modern-label"><i class="fa fa-user"></i> Prénom</label>
+                            <input type="text" id="user_firstname" class="form-control modern-input">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="modern-label"><i class="fa fa-user"></i> Nom</label>
+                            <input type="text" id="user_lastname" class="form-control modern-input">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="modern-label"><i class="fa fa-lock"></i> Mot de passe</label>
+                            <input type="password" id="user_password" class="form-control modern-input">
+                            <small class="text-muted">Laisser vide pour ne pas changer</small>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="modern-label"><i class="fa fa-user-tag"></i> Rôles</label>
+                            <select id="user_groups" class="form-control modern-select" multiple size="3">
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="modern-checkbox-container">
+                                <input type="checkbox" id="user_is_active" checked>
+                                <label for="user_is_active">Compte actif</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="modern-checkbox-container">
+                                <input type="checkbox" id="user_is_staff">
+                                <label for="user_is_staff">Accès administrateur</label>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="modern-btn modern-btn-secondary" data-dismiss="modal">
+                    <i class="fa fa-times"></i> Annuler
+                </button>
+                <button type="button" class="modern-btn modern-btn-primary" id="btn_save_user">
+                    <i class="fa fa-save"></i> Enregistrer
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Styles spécifiques pour la page users */
+.tab-content-section {
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.permission-checkbox {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    background: #f7fafc;
+    border-radius: 6px;
+    margin-bottom: 8px;
+    transition: all 0.2s;
+}
+
+.permission-checkbox:hover {
+    background: #edf2f7;
+}
+
+.permission-checkbox input[type="checkbox"] {
+    margin-right: 10px;
+    width: 18px;
+    height: 18px;
+}
+
+.permission-checkbox label {
+    margin: 0;
+    flex: 1;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+</style>
+
+<script>
+// Gestion des onglets
+(function(){
+    const tabs = document.querySelectorAll('.modern-tab');
+    const sections = document.querySelectorAll('.tab-content-section');
+
+    tabs.forEach(tab => {
+        tab.addEventListener('click', function(){
+            const target = this.getAttribute('data-target');
+
+            // Désactiver tous les onglets
+            tabs.forEach(t => t.classList.remove('active'));
+            // Activer l'onglet cliqué
+            this.classList.add('active');
+
+            // Cacher toutes les sections
+            sections.forEach(s => s.style.display = 'none');
+            // Afficher la section cible
+            const targetSection = document.getElementById('tab-' + target);
+            if(targetSection) targetSection.style.display = 'block';
+        });
+    });
+})();
+</script>

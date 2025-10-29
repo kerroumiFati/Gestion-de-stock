@@ -1,14 +1,205 @@
 {% load static %}
 <script src="{% static 'script/fournisseur.js' %}" type="text/javascript"></script>
-<div class="container-fluid">
-    <div class="modal fade" id="error" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel"
-         aria-hidden="true">
+
+<style>
+/* Styles modernes pour la page fournisseurs */
+.page-container { padding: 20px 0; }
+
+.page-title {
+    font-size: 1.8rem;
+    font-weight: 600;
+    color: #2d3748;
+    margin-bottom: 25px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.page-title i {
+    color: #3b82f6;
+    font-size: 2rem;
+}
+
+.modern-section {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 30px;
+    margin-bottom: 25px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.section-header {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #2d3748;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.section-header i { color: #3b82f6; }
+
+.modern-label {
+    font-weight: 500;
+    color: #4a5568;
+    margin-bottom: 6px;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.modern-label i {
+    color: #3b82f6;
+    font-size: 0.9rem;
+}
+
+.modern-input {
+    border: 1px solid #cbd5e0;
+    border-radius: 6px;
+    padding: 10px 15px;
+    transition: all 0.2s ease;
+    font-size: 0.95rem;
+    width: 100%;
+}
+
+.modern-input:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    outline: none;
+}
+
+.modern-btn {
+    border-radius: 6px;
+    padding: 10px 20px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border: none;
+    cursor: pointer;
+}
+
+.modern-btn-primary {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    color: white;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+.modern-btn-primary:hover {
+    background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+    color: white;
+}
+
+.modern-btn-secondary {
+    background: #e2e8f0;
+    color: #2d3748;
+    border: 1px solid #cbd5e0;
+}
+
+.modern-btn-secondary:hover {
+    background: #cbd5e0;
+    color: #2d3748;
+}
+
+.modern-table {
+    margin-bottom: 0;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.modern-table thead th {
+    background: #f7fafc;
+    border: none;
+    padding: 15px 12px;
+    font-weight: 600;
+    color: #4a5568;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.modern-table tbody td {
+    padding: 12px;
+    border-bottom: 1px solid #e2e8f0;
+    vertical-align: middle;
+}
+
+.modern-table tbody tr:hover {
+    background: #f7fafc;
+}
+
+.action-btn {
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    border: none;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.action-btn-edit {
+    background: #3b82f6;
+    color: white;
+}
+
+.action-btn-edit:hover {
+    background: #2563eb;
+    color: white;
+    transform: scale(1.05);
+}
+
+.action-btn-delete {
+    background: #e2e8f0;
+    color: #4a5568;
+}
+
+.action-btn-delete:hover {
+    background: #cbd5e0;
+    color: #2d3748;
+    transform: scale(1.05);
+}
+
+.modern-modal .modal-content {
+    border-radius: 10px;
+    border: none;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+}
+
+.modern-modal .modal-header {
+    background: #f7fafc;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.modern-modal .modal-title {
+    color: #2d3748;
+    font-weight: 600;
+}
+</style>
+
+<div class="container-fluid page-container">
+    <!-- Modal Erreur -->
+    <div class="modal fade modern-modal" id="error" tabindex="-1" role="dialog">
         <div class="modal-dialog" role="document">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="exampleModalLabel">Erreur</h5>
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                        <span aria-hidden="true">&times;</span>
+                    <h5 class="modal-title">
+                        <i class="fa fa-exclamation-circle"></i> Erreur
+                    </h5>
+                    <button type="button" class="close" data-dismiss="modal">
+                        <span>&times;</span>
                     </button>
                 </div>
                 <div class="modal-body">
@@ -17,58 +208,104 @@
             </div>
         </div>
     </div>
-    <div class="card bg-white">
-        <div class="card-header card-color">
-            <p class="h2 text-center text-uppercase font-weight-bold pt-2">Gestion des Fournisseurs</p>
-        </div>
-        <form> {% csrf_token %}
-            <div class="card-body container-fluid">
-                <div class="row">
-                    <div class="col-sm-6 mb-2">
-                        <label for="nom">libelle : </label>
-                        <input class="" type="text" id="id" hidden>
-                        <input class="form-control" type="text" id="libelle" required>
-                    </div>
-                    <div class="col-sm-6 mb-2">
-                        <label for="email">Email : </label>
-                        <input class="form-control" type="text" id="email" required>
-                    </div>
 
-                    <div class="col-sm-6 mb-2">
-                        <label for="addresse">adresse: </label>
-                        <input class="form-control" type="text" id="addresse" required>
-                    </div>
-                    <div class="col-sm-6 mb-2">
-                        <label for="addresse">Tel: </label>
-                        <input class="form-control" type="text" id="tel" required>
-                    </div>
+    <!-- Titre de page -->
+    <h1 class="page-title">
+        <i class="fa fa-truck"></i>
+        Gestion des Fournisseurs
+    </h1>
+
+    <!-- Section Formulaire -->
+    <div class="modern-section">
+        <div class="section-header">
+            <i class="fa fa-user-tie"></i>
+            Ajouter / Modifier un Fournisseur
+        </div>
+
+        <form> {% csrf_token %}
+            <input type="text" id="id" hidden>
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="modern-label" for="libelle">
+                        <i class="fa fa-building"></i> Libellé / Nom
+                    </label>
+                    <input class="form-control modern-input" type="text" id="libelle" required>
                 </div>
 
+                <div class="col-md-6 mb-3">
+                    <label class="modern-label" for="email">
+                        <i class="fa fa-envelope"></i> Email
+                    </label>
+                    <input class="form-control modern-input" type="email" id="email" required>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="modern-label" for="tel">
+                        <i class="fa fa-phone"></i> Téléphone
+                    </label>
+                    <input class="form-control modern-input" type="text" id="tel" required>
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="modern-label" for="addresse">
+                        <i class="fa fa-map-marker-alt"></i> Adresse
+                    </label>
+                    <input class="form-control modern-input" type="text" id="addresse" required>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col">
+                    <button type="button" class="modern-btn modern-btn-primary" id="btn">
+                        <i class="fa fa-plus"></i> Ajouter
+                    </button>
+                    <button type="button" class="modern-btn modern-btn-secondary ml-2" onclick="resetFormFournisseur()">
+                        <i class="fa fa-undo"></i> Réinitialiser
+                    </button>
+                </div>
             </div>
         </form>
-        <div class="row">
-            <div class="col">
-                <button type="button" class="btn btn-outline-success mt-3 mb-3" id="btn">Ajouter</button>
-            </div>
+    </div>
+
+    <!-- Section Liste des fournisseurs -->
+    <div class="modern-section">
+        <div class="section-header">
+            <i class="fa fa-list"></i>
+            Liste des Fournisseurs
         </div>
-        <div class="row table-responsive m-auto rounded">
-            <table id="tfourni" class="table table-hover w-100">
+
+        <div class="table-responsive">
+            <table id="tfourni" class="table modern-table" data-no-datatable="true">
                 <thead>
-                <tr class="text-uppercase bg-light  w-100">
-                    <th scope="col">Id</th>
-                    <th scope="col">Libelle</th>
-                    <th scope="col">Email</th>
-                    <th scope="col">tel</th>
-                    <th scope="col">Adresse</th>
-                    <th scope="col">Supprimer</th>
-                    <th scope="col">Modifier</th>
-                </tr>
+                    <tr>
+                        <th>ID</th>
+                        <th>Libellé</th>
+                        <th>Email</th>
+                        <th>Téléphone</th>
+                        <th>Adresse</th>
+                        <th>Actions</th>
+                    </tr>
                 </thead>
                 <tbody id="table-content">
-
+                    <tr>
+                        <td colspan="6" class="text-center text-muted">Chargement...</td>
+                    </tr>
                 </tbody>
             </table>
         </div>
     </div>
 </div>
-</div>
+
+<script>
+function resetFormFournisseur(){
+    document.getElementById('id').value = '';
+    document.getElementById('libelle').value = '';
+    document.getElementById('email').value = '';
+    document.getElementById('tel').value = '';
+    document.getElementById('addresse').value = '';
+    document.getElementById('btn').innerHTML = '<i class="fa fa-plus"></i> Ajouter';
+}
+</script>

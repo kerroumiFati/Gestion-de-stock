@@ -1,57 +1,371 @@
 {% load static %}
 <script src="{% static 'script/entrepots.js' %}" type="text/javascript"></script>
-<div class="container-fluid">
-  <div class="card bg-white">
-    <div class="card-header card-color">
-      <p class="h2 text-center text-uppercase font-weight-bold pt-2">Gestion des entrepôts</p>
+
+<style>
+/* Styles complets pour la page entrepôts */
+.page-container {
+    padding: 20px 0;
+}
+
+.page-title {
+    font-size: 1.8rem;
+    font-weight: 600;
+    color: #2d3748;
+    margin-bottom: 25px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.page-title i {
+    color: #3b82f6;
+    font-size: 2rem;
+}
+
+.modern-section {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 30px;
+    margin-bottom: 25px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.section-header {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #2d3748;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.section-header i {
+    color: #3b82f6;
+}
+
+.modern-label {
+    font-weight: 500;
+    color: #4a5568;
+    margin-bottom: 6px;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.modern-label i {
+    color: #3b82f6;
+    font-size: 0.9rem;
+}
+
+.modern-input,
+.modern-select {
+    border: 1px solid #cbd5e0;
+    border-radius: 6px;
+    padding: 10px 15px;
+    transition: all 0.2s ease;
+    font-size: 0.95rem;
+    width: 100%;
+}
+
+.modern-input:focus,
+.modern-select:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    outline: none;
+}
+
+.modern-btn {
+    border-radius: 6px;
+    padding: 10px 20px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border: none;
+    cursor: pointer;
+}
+
+.modern-btn-primary {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    color: white;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+.modern-btn-primary:hover {
+    background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+    color: white;
+}
+
+.modern-btn-secondary {
+    background: #e2e8f0;
+    color: #2d3748;
+    border: 1px solid #cbd5e0;
+}
+
+.modern-btn-secondary:hover {
+    background: #cbd5e0;
+    color: #2d3748;
+}
+
+.modern-table {
+    margin-bottom: 0;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.modern-table thead th {
+    background: #f7fafc;
+    border: none;
+    padding: 15px 12px;
+    font-weight: 600;
+    color: #4a5568;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.modern-table tbody td {
+    padding: 12px;
+    border-bottom: 1px solid #e2e8f0;
+    vertical-align: middle;
+}
+
+.modern-table tbody tr:hover {
+    background: #f7fafc;
+}
+
+.modern-badge {
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.modern-badge-info {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.modern-badge-default {
+    background: #e2e8f0;
+    color: #4a5568;
+}
+
+.modern-checkbox-container {
+    background: #f7fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 15px;
+    margin-bottom: 15px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+}
+
+.modern-checkbox-container:hover {
+    background: #edf2f7;
+    border-color: #cbd5e0;
+}
+
+.modern-checkbox-container input[type="checkbox"] {
+    margin-right: 10px;
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+.modern-checkbox-container label {
+    margin: 0;
+    cursor: pointer;
+    font-weight: 500;
+    flex: 1;
+}
+
+.modern-alert {
+    border-radius: 8px;
+    padding: 15px 20px;
+    margin-bottom: 20px;
+    border-left: 4px solid;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.modern-alert-success {
+    background: #f0fff4;
+    border-left-color: #48bb78;
+    color: #22543d;
+}
+
+.modern-alert-warning {
+    background: #fffaf0;
+    border-left-color: #ed8936;
+    color: #7c2d12;
+}
+
+.modern-alert-danger {
+    background: #fff5f5;
+    border-left-color: #f56565;
+    color: #742a2a;
+}
+
+.status-badge {
+    padding: 5px 12px;
+    border-radius: 5px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.status-badge-active {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.status-badge-inactive {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.btn-edit-warehouse,
+.btn-delete-warehouse {
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    border: none;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn-edit-warehouse {
+    background: #3b82f6;
+    color: white;
+}
+
+.btn-edit-warehouse:hover {
+    background: #2563eb;
+    color: white;
+    transform: scale(1.05);
+}
+
+.btn-delete-warehouse {
+    background: #e2e8f0;
+    color: #4a5568;
+}
+
+.btn-delete-warehouse:hover {
+    background: #cbd5e0;
+    color: #2d3748;
+    transform: scale(1.05);
+}
+</style>
+
+<div class="container-fluid page-container">
+  <!-- Titre de page -->
+  <h1 class="page-title">
+    <i class="fa fa-warehouse"></i>
+    Gestion des Entrepôts
+  </h1>
+
+  <!-- Section Formulaire -->
+  <div class="modern-section">
+    <div class="section-header">
+      <i class="fa fa-plus-circle"></i>
+      Ajouter / Modifier un Entrepôt
     </div>
-    <div class="card-body container-fluid">
-      <div id="wh_alerts" class="mb-3"></div>
 
-      <div class="d-flex justify-content-between align-items-center mb-2">
-        <div>
-          <div class="form-check">
-            <input class="form-check-input" type="checkbox" id="wh_show_inactive">
-            <label class="form-check-label" for="wh_show_inactive">Afficher inactifs</label>
-          </div>
+    <div id="wh_alerts" class="mb-3"></div>
+
+    <form id="wh_form">
+      <input type="hidden" id="wh_id" />
+
+      <div class="row">
+        <div class="col-md-4 mb-3">
+          <label class="modern-label">
+            <i class="fa fa-building"></i> Nom de l'entrepôt *
+          </label>
+          <input id="wh_name" type="text" class="form-control modern-input" placeholder="Ex: Magasin Central" required />
+        </div>
+
+        <div class="col-md-3 mb-3">
+          <label class="modern-label">
+            <i class="fa fa-barcode"></i> Code *
+          </label>
+          <input id="wh_code" type="text" class="form-control modern-input" placeholder="Ex: MAG01" required />
+        </div>
+
+        <div class="col-md-3 mb-3">
+          <label class="modern-label">
+            <i class="fa fa-toggle-on"></i> Statut
+          </label>
+          <select id="wh_active" class="form-control modern-select">
+            <option value="true">Actif</option>
+            <option value="false">Inactif</option>
+          </select>
+        </div>
+
+        <div class="col-md-2 mb-3 d-flex align-items-end">
+          <button id="wh_save" type="button" class="modern-btn modern-btn-primary w-100">
+            <i class="fa fa-save"></i> Enregistrer
+          </button>
         </div>
       </div>
 
-      <form id="wh_form" class="mb-3">
-        <div class="form-row">
-          <div class="form-group col-md-4">
-            <label>Nom</label>
-            <input id="wh_name" type="text" class="form-control" placeholder="ex: Magasin Central" required />
-          </div>
-          <div class="form-group col-md-3">
-            <label>Code</label>
-            <input id="wh_code" type="text" class="form-control" placeholder="ex: MAG" required />
-          </div>
-          <div class="form-group col-md-3">
-            <label>Actif</label>
-            <select id="wh_active" class="form-control">
-              <option value="true">Oui</option>
-              <option value="false">Non</option>
-            </select>
-          </div>
-          <div class="form-group col-md-2 d-flex align-items-end">
-            <button id="wh_save" type="button" class="btn btn-primary mr-2">Enregistrer</button>
-            <button id="wh_reset" type="button" class="btn btn-secondary">Réinitialiser</button>
-          </div>
+      <div class="row">
+        <div class="col-md-12">
+          <button id="wh_reset" type="button" class="modern-btn modern-btn-secondary">
+            <i class="fa fa-undo"></i> Réinitialiser
+          </button>
         </div>
-        <input type="hidden" id="wh_id" />
-      </form>
-
-      <div class="table-responsive">
-        <table id="twh" class="table table-hover w-100">
-          <thead>
-            <tr class="text-uppercase bg-light w-100">
-              <th>Id</th><th>Code</th><th>Nom</th><th>Actif</th><th>Stocks liés</th><th></th><th></th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
       </div>
+    </form>
+  </div>
+
+  <!-- Section Liste des entrepôts -->
+  <div class="modern-section">
+    <div class="section-header">
+      <i class="fa fa-list"></i>
+      Liste des Entrepôts
+    </div>
+
+    <div class="mb-3">
+      <div class="modern-checkbox-container" style="width: fit-content;">
+        <input class="form-check-input" type="checkbox" id="wh_show_inactive">
+        <label for="wh_show_inactive">Afficher les entrepôts inactifs</label>
+      </div>
+    </div>
+
+    <div class="table-responsive">
+      <table id="twh" class="table modern-table" data-no-datatable="true">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Code</th>
+            <th>Nom</th>
+            <th>Statut</th>
+            <th>Stocks liés</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td colspan="6" class="text-center text-muted">Chargement...</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   </div>
 </div>

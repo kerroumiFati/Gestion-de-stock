@@ -103,11 +103,50 @@ class ExchangeRateSerializer(serializers.ModelSerializer):
     to_currency_code = serializers.CharField(source='to_currency.code', read_only=True)
     from_currency_symbol = serializers.CharField(source='from_currency.symbol', read_only=True)
     to_currency_symbol = serializers.CharField(source='to_currency.symbol', read_only=True)
-    
+
     class Meta:
         model = ExchangeRate
         fields = ['id', 'from_currency', 'to_currency', 'from_currency_code', 'to_currency_code',
                  'from_currency_symbol', 'to_currency_symbol', 'rate', 'date', 'is_active']
+
+# Serializers pour les Types de Prix et Prix Produits
+class TypePrixSerializer(serializers.ModelSerializer):
+    nombre_prix = serializers.SerializerMethodField()
+
+    class Meta:
+        model = TypePrix
+        fields = ['id', 'code', 'libelle', 'description', 'ordre', 'is_default', 'is_active',
+                 'created_at', 'nombre_prix']
+
+    def get_nombre_prix(self, obj):
+        return obj.prix.filter(is_active=True).count()
+
+class PrixProduitSerializer(serializers.ModelSerializer):
+    type_prix_libelle = serializers.CharField(source='type_prix.libelle', read_only=True)
+    type_prix_code = serializers.CharField(source='type_prix.code', read_only=True)
+    produit_reference = serializers.CharField(source='produit.reference', read_only=True)
+    produit_designation = serializers.CharField(source='produit.designation', read_only=True)
+    currency_code = serializers.CharField(source='currency.code', read_only=True)
+    currency_symbol = serializers.CharField(source='currency.symbol', read_only=True)
+    prix_formatted = serializers.SerializerMethodField()
+    is_valid = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PrixProduit
+        fields = ['id', 'produit', 'produit_reference', 'produit_designation',
+                 'type_prix', 'type_prix_libelle', 'type_prix_code',
+                 'prix', 'currency', 'currency_code', 'currency_symbol', 'prix_formatted',
+                 'quantite_min', 'date_debut', 'date_fin',
+                 'is_active', 'is_valid', 'created_at', 'updated_at']
+
+    def get_prix_formatted(self, obj):
+        currency = obj.get_effective_currency()
+        symbol = currency.symbol if currency else '€'
+        return f"{obj.prix} {symbol}"
+
+    def get_is_valid(self, obj):
+        return obj.is_valid_now()
+
 class FournisseurSerializer(serializers.ModelSerializer):
     class Meta:
         model = Fournisseur
@@ -123,7 +162,9 @@ class ProduitSerializer(serializers.ModelSerializer):
     stock_status = serializers.SerializerMethodField()
     stock_status_display = serializers.CharField(source='get_stock_status_display', read_only=True)
     stock_class = serializers.CharField(source='get_stock_class', read_only=True)
-    
+    prix_multiples = PrixProduitSerializer(many=True, read_only=True)
+    nombre_prix = serializers.SerializerMethodField()
+
     class Meta:
         model = Produit
         fields = (
@@ -133,6 +174,7 @@ class ProduitSerializer(serializers.ModelSerializer):
             'quantite', 'seuil_alerte', 'seuil_critique', 'unite_mesure',
             'fournisseur', 'fournisseur_nom',
             'stock_mouvements', 'stock_status', 'stock_status_display', 'stock_class',
+            'prix_multiples', 'nombre_prix',
             'is_active', 'created_at', 'updated_at'
         )
     
@@ -149,6 +191,10 @@ class ProduitSerializer(serializers.ModelSerializer):
     
     def get_stock_status(self, obj):
         return obj.get_stock_status()
+
+    def get_nombre_prix(self, obj):
+        return obj.prix_multiples.filter(is_active=True).count()
+
 class ClientSerializer(serializers.ModelSerializer):
     produits = ProduitSerializer(many=True,read_only=True)
     class Meta:

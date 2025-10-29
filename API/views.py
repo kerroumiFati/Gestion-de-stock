@@ -2151,6 +2151,65 @@ def export_inventory_report(request):
         return Response({'error': str(e)}, status=500)
 
 
+#####################
+# Types de Prix API #
+#####################
+class TypePrixViewSet(viewsets.ModelViewSet):
+    queryset = TypePrix.objects.all().order_by('ordre', 'libelle')
+    serializer_class = TypePrixSerializer
+    permission_classes = [permissions.AllowAny]
+    filterset_fields = ['is_active', 'is_default']
+
+    def perform_create(self, serializer):
+        obj = serializer.save()
+        try:
+            log_event(self.request, 'typeprix.create', target=obj, metadata={'code': obj.code})
+        except Exception:
+            pass
+
+    def perform_update(self, serializer):
+        obj = serializer.save()
+        try:
+            log_event(self.request, 'typeprix.update', target=obj, metadata={'code': obj.code})
+        except Exception:
+            pass
+
+#####################
+# Prix Produits API #
+#####################
+class PrixProduitViewSet(viewsets.ModelViewSet):
+    queryset = PrixProduit.objects.all().order_by('produit', 'type_prix__ordre')
+    serializer_class = PrixProduitSerializer
+    permission_classes = [permissions.AllowAny]
+    filterset_fields = ['produit', 'type_prix', 'is_active']
+
+    def perform_create(self, serializer):
+        obj = serializer.save()
+        try:
+            log_event(self.request, 'prixproduit.create', target=obj,
+                     metadata={'produit': obj.produit.id, 'type_prix': obj.type_prix.code, 'prix': str(obj.prix)})
+        except Exception:
+            pass
+
+    def perform_update(self, serializer):
+        obj = serializer.save()
+        try:
+            log_event(self.request, 'prixproduit.update', target=obj,
+                     metadata={'produit': obj.produit.id, 'type_prix': obj.type_prix.code, 'prix': str(obj.prix)})
+        except Exception:
+            pass
+
+    def perform_destroy(self, instance):
+        produit_id = instance.produit.id
+        type_prix_code = instance.type_prix.code
+        super().perform_destroy(instance)
+        try:
+            log_event(self.request, 'prixproduit.delete', target=None,
+                     metadata={'produit': produit_id, 'type_prix': type_prix_code})
+        except Exception:
+            pass
+
+
 class WelcomeView(APIView):
     """
     API endpoint that logs request metadata and returns a welcome message.

@@ -3,17 +3,27 @@
   if(window.__rovodev_produit_loaded){ return; }
   window.__rovodev_produit_loaded = true;
   let __rovodev_inited = false;
+  const apiBase = '/API';
   const api = {
     produits: '/API/produits/',
     categories: '/API/categories/',
     fournisseurs: '/API/fournisseurs/'
   };
   let __cacheProduits = [];
+  let __cacheTypesPrix = [];
+  let __cachePrixProduits = [];
 
   const el = sel => document.querySelector(sel);
   function toFixed2(n){
     const v = Number(n||0);
     return isFinite(v) ? v.toFixed(2) : '0.00';
+  }
+
+  function asList(data){
+    if(Array.isArray(data)) return data;
+    if(data && Array.isArray(data.results)) return data.results;
+    if(data && typeof data === 'object') return Object.values(data);
+    return [];
   }
 
   function getCookie(name){
@@ -94,28 +104,59 @@
     try{
       const data = await fetchJSON(api.produits);
       __cacheProduits = Array.isArray(data) ? data : [];
-      const tbody = el('#tproduit tbody#table-content') || el('#tproduit tbody');
-      if(!tbody) return;
-      tbody.innerHTML = __cacheProduits.map(p=>{
-        return `<tr data-id="${p.id}">
-          <td>${p.id}</td>
-          <td>${p.reference||''}</td>
-          <td>${p.code_barre||''}</td>
-          <td>${p.designation||''}</td>
-          <td>${p.categorie_nom||''}</td>
-          <td>${p.prixU!=null? toFixed2(p.prixU): ''} ${p.currency_symbol||''}</td>
-          <td>${p.fournisseur_nom||''}</td>
-          <td class="text-center">
-            <button class="btn btn-sm action-btn-product btn-edit act-edit" title="Modifier">
-              <i class="fas fa-edit"></i> Modifier
-            </button>
-            <button class="btn btn-sm action-btn-product btn-delete act-del ml-1" title="Supprimer">
-              <i class="fas fa-trash"></i> Supprimer
-            </button>
-          </td>
-        </tr>`;
-      }).join('');
+      console.log('[Produit] loadProduits: nombre produits:', __cacheProduits.length);
+      renderProduitsWithPrices();
     }catch(e){ console.warn('produits load failed', e); }
+  }
+
+  function renderProduitsWithPrices(){
+    const tbody = el('#tproduit tbody#table-content') || el('#tproduit tbody');
+    console.log('[Produit] renderProduitsWithPrices: tbody trouvé?', !!tbody);
+    if(!tbody){
+      console.warn('[Produit] tbody #table-content introuvable!');
+      return;
+    }
+
+    const selectedPriceType = $('#display_price_type').val();
+    console.log('[Produit] Type de prix sélectionné:', selectedPriceType);
+
+    tbody.innerHTML = __cacheProduits.map(p=>{
+      let prixDisplay = p.prixU;
+      let priceLabel = '';
+
+      // Si un type de prix est sélectionné, chercher le prix correspondant
+      if(selectedPriceType){
+        const prixMultiple = __cachePrixProduits.find(pm =>
+          String(pm.produit) === String(p.id) &&
+          String(pm.type_prix) === String(selectedPriceType) &&
+          pm.is_active
+        );
+        if(prixMultiple){
+          prixDisplay = prixMultiple.prix;
+          priceLabel = `<small class="text-muted">(${prixMultiple.type_prix_code})</small>`;
+        } else {
+          priceLabel = `<small class="text-muted">(défaut)</small>`;
+        }
+      }
+
+      return `<tr data-id="${p.id}">
+        <td>${p.id}</td>
+        <td>${p.reference||''}</td>
+        <td>${p.code_barre||''}</td>
+        <td>${p.designation||''}</td>
+        <td>${p.categorie_nom||''}</td>
+        <td>${prixDisplay!=null? toFixed2(prixDisplay): ''} ${p.currency_symbol||''} ${priceLabel}</td>
+        <td>${p.fournisseur_nom||''}</td>
+        <td class="text-center">
+          <button class="btn btn-sm action-btn-product btn-edit act-edit" title="Modifier">
+            <i class="fas fa-edit"></i> Modifier
+          </button>
+          <button class="btn btn-sm action-btn-product btn-delete act-del ml-1" title="Supprimer">
+            <i class="fas fa-trash"></i> Supprimer
+          </button>
+        </td>
+      </tr>`;
+    }).join('');
   }
 
   function collectForm(){
@@ -195,8 +236,15 @@
   function showAlert(msg, level){
     const box = el('#product-alerts');
     if(!box) return;
-    box.innerHTML = `<div class="alert alert-${level||'info'}">${msg}</div>`;
-    setTimeout(()=>{ box.innerHTML=''; }, 3000);
+    const alertClass = level === 'success' ? 'alert-success' : level === 'warning' ? 'alert-warning' : level === 'danger' ? 'alert-danger' : 'alert-info';
+    const icon = level === 'success' ? 'check-circle' : level === 'warning' ? 'exclamation-triangle' : level === 'danger' ? 'times-circle' : 'info-circle';
+    box.innerHTML = `<div class="alert ${alertClass} alert-dismissible fade show" role="alert">
+      <i class="fa fa-${icon}"></i> ${msg}
+      <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+        <span aria-hidden="true">&times;</span>
+      </button>
+    </div>`;
+    setTimeout(()=>{ box.innerHTML=''; }, 5000);
   }
 
   function bindTableActions(){
@@ -248,13 +296,53 @@
       loadProduits()
     ]).then(() => {
       console.log('[Produit] Toutes les données chargées avec succès');
+      // Remplir les selects de prix maintenant que les produits sont chargés
+      fillPrixProduitsSelects();
     }).catch(err => {
       console.error('[Produit] Erreur lors du chargement initial:', err);
     });
 
+    // Charger les prix multiples
+    loadTypesPrix();
+    loadPrixProduits();
+    loadAllPrixProduits();
+
     bindTableActions();
     const btn = el('#btn');
     if(btn){ btn.addEventListener('click', createOrUpdate); }
+
+    // Event handler pour changer le type de prix affiché
+    $(document).off('change', '#display_price_type').on('change', '#display_price_type', function(){
+      console.log('[Produit] Changement de type de prix affiché');
+      renderProduitsWithPrices();
+    });
+
+    // Event handlers pour la gestion des prix multiples
+    console.log('[Produit] Attachement des event handlers pour prix multiples');
+    $(document).off('click', '#btn_add_type_prix').on('click', '#btn_add_type_prix', function(e){
+      e.preventDefault();
+      console.log('[Produit] Bouton type prix cliqué');
+      addTypePrix();
+    });
+    $(document).off('click', '[data-action="delete-type-prix"]').on('click', '[data-action="delete-type-prix"]', function(e){
+      e.preventDefault();
+      deleteTypePrix($(this).data('id'));
+    });
+    $(document).off('click', '[data-action="toggle-default"]').on('click', '[data-action="toggle-default"]', function(e){
+      e.preventDefault();
+      setDefaultTypePrix($(this).data('id'));
+    });
+    $(document).off('click', '#btn_add_prix_prod').on('click', '#btn_add_prix_prod', function(e){
+      e.preventDefault();
+      addPrixProduit();
+    });
+    $(document).off('click', '[data-action="delete-prix-prod"]').on('click', '[data-action="delete-prix-prod"]', function(e){
+      e.preventDefault();
+      deletePrixProduit($(this).data('id'));
+    });
+    $(document).off('change', '#prix_prod_filter').on('change', '#prix_prod_filter', function(){
+      loadPrixProduits();
+    });
 
     // Bouton Check - vérifier les produits avec quantité faible
     const btnRisk = el('#btnrisk');
@@ -286,6 +374,258 @@
         showAlert('Données actualisées avec succès', 'success');
       });
     }
+  }
+
+  /******************************************
+   * GESTION DES PRIX MULTIPLES
+   ******************************************/
+
+  // Fonction helper pour CSRF Token
+  function getCSRFToken(){
+    const cookieValue = document.cookie
+      .split('; ')
+      .find(row => row.startsWith('csrftoken='));
+    return cookieValue ? cookieValue.split('=')[1] : '';
+  }
+
+  // Types de Prix
+  function loadTypesPrix(){
+    $.ajax({ url: apiBase + '/types-prix/?page_size=1000', method: 'GET', dataType: 'json' })
+      .done(function(data){
+        const list = asList(data);
+        __cacheTypesPrix = list;
+        renderTypesPrix(list);
+        fillTypesPrixSelects(list);
+        fillDisplayPriceTypeSelect(list);
+      })
+      .fail(function(xhr){ console.warn('Erreur chargement types prix', xhr); });
+  }
+
+  function fillDisplayPriceTypeSelect(list){
+    const $sel = $('#display_price_type');
+    if(!$sel.length) return;
+
+    const opts = ['<option value="">Prix de base (prixU)</option>'];
+    list.forEach(function(t){
+      if(t.is_active){
+        opts.push('<option value="'+t.id+'">'+t.libelle+' ('+t.code+')</option>');
+      }
+    });
+    $sel.html(opts.join(''));
+  }
+
+  function loadAllPrixProduits(){
+    $.ajax({ url: apiBase + '/prix-produits/?page_size=10000', method: 'GET', dataType: 'json' })
+      .done(function(data){
+        __cachePrixProduits = asList(data);
+        console.log('[Produit] Prix produits chargés:', __cachePrixProduits.length);
+        // Recharger l'affichage des produits avec les prix
+        renderProduitsWithPrices();
+      })
+      .fail(function(xhr){ console.warn('Erreur chargement prix produits', xhr); });
+  }
+
+  function renderTypesPrix(list){
+    const $tbody = $('#types_prix_body');
+    if(!$tbody.length) return;
+    $tbody.empty();
+    if(!list || !list.length){
+      $tbody.append('<tr><td colspan="7" class="text-center text-muted">Aucun type de prix défini</td></tr>');
+      return;
+    }
+    list.forEach(function(t){
+      const tr = $('<tr>');
+      tr.append('<td><strong>'+t.code+'</strong></td>');
+      tr.append('<td>'+t.libelle+'</td>');
+      tr.append('<td>'+t.ordre+'</td>');
+      tr.append('<td>'+(t.is_default ? '<span class="badge badge-success">Oui</span>' : 'Non')+'</td>');
+      tr.append('<td>'+(t.is_active ? '<span class="badge badge-success">Actif</span>' : '<span class="badge badge-secondary">Inactif</span>')+'</td>');
+      tr.append('<td><span class="badge badge-primary">'+(t.nombre_prix || 0)+'</span></td>');
+      const actions = '<button type="button" class="btn btn-sm btn-edit" data-action="toggle-default" data-id="'+t.id+'">Définir par défaut</button> ' +
+                     '<button type="button" class="btn btn-sm btn-delete" data-action="delete-type-prix" data-id="'+t.id+'">Supprimer</button>';
+      tr.append('<td>'+actions+'</td>');
+      $tbody.append(tr);
+    });
+  }
+
+  function fillTypesPrixSelects(list){
+    const $sel = $('#prix_prod_type');
+    if(!$sel.length) return;
+    const first = $sel.find('option').first().clone();
+    $sel.empty().append(first);
+    list.forEach(function(t){
+      if(t.is_active){
+        $('<option>').val(t.id).text(t.libelle + ' (' + t.code + ')').appendTo($sel);
+      }
+    });
+  }
+
+  function addTypePrix(){
+    console.log('[Produit] addTypePrix appelé');
+    const code = ($('#type_prix_code').val() || '').trim().toUpperCase();
+    const libelle = ($('#type_prix_libelle').val() || '').trim();
+    const ordre = parseInt($('#type_prix_ordre').val() || '0', 10);
+
+    console.log('[Produit] Données:', { code, libelle, ordre });
+
+    if(!code){ alert('Code requis'); return; }
+    if(!libelle){ alert('Libellé requis'); return; }
+
+    const data = { code, libelle, ordre };
+
+    $.ajax({ url: apiBase + '/types-prix/', method: 'POST', contentType: 'application/json',
+             headers: { 'X-CSRFToken': getCSRFToken() }, data: JSON.stringify(data) })
+      .done(function(resp){
+        console.log('[Produit] Type prix ajouté:', resp);
+        $('#type_prix_code').val('');
+        $('#type_prix_libelle').val('');
+        $('#type_prix_ordre').val('0');
+        loadTypesPrix(); // Recharge les types et met à jour le select d'affichage
+        showAlert('Type de prix ajouté avec succès', 'success');
+      })
+      .fail(function(xhr){
+        console.error('[Produit] Erreur ajout type prix:', xhr);
+        const msg = (xhr.responseJSON && (xhr.responseJSON.detail || xhr.responseJSON.error)) || 'Erreur ajout type prix';
+        showAlert(msg, 'danger');
+      });
+  }
+
+  function deleteTypePrix(id){
+    if(!confirm('Supprimer ce type de prix ? Les prix associés seront également supprimés.')) return;
+    $.ajax({ url: apiBase + '/types-prix/' + id + '/', method: 'DELETE', headers: { 'X-CSRFToken': getCSRFToken() } })
+      .done(function(){
+        loadTypesPrix();
+        loadPrixProduits();
+        showAlert('Type de prix supprimé', 'success');
+      })
+      .fail(function(xhr){
+        const msg = (xhr.responseJSON && (xhr.responseJSON.detail || xhr.responseJSON.error)) || 'Erreur suppression';
+        showAlert(msg, 'danger');
+      });
+  }
+
+  function setDefaultTypePrix(id){
+    $.ajax({ url: apiBase + '/types-prix/' + id + '/', method: 'PATCH', contentType: 'application/json',
+             headers: { 'X-CSRFToken': getCSRFToken() }, data: JSON.stringify({ is_default: true }) })
+      .done(function(){
+        loadTypesPrix();
+        showAlert('Type de prix défini par défaut', 'success');
+      })
+      .fail(function(xhr){
+        const msg = (xhr.responseJSON && (xhr.responseJSON.detail || xhr.responseJSON.error)) || 'Erreur mise à jour';
+        showAlert(msg, 'danger');
+      });
+  }
+
+  // Prix Produits
+  function loadPrixProduits(produitFilter){
+    const params = {};
+    const filter = produitFilter || $('#prix_prod_filter').val();
+    if(filter) params.produit = filter;
+
+    $.ajax({ url: apiBase + '/prix-produits/', method: 'GET', dataType: 'json', data: params })
+      .done(function(data){
+        const list = asList(data);
+        renderPrixProduits(list);
+      })
+      .fail(function(xhr){ console.warn('Erreur chargement prix produits', xhr); });
+  }
+
+  function renderPrixProduits(list){
+    const $tbody = $('#prix_produits_body');
+    if(!$tbody.length) return;
+    $tbody.empty();
+    if(!list || !list.length){
+      $tbody.append('<tr><td colspan="7" class="text-center text-muted">Aucun prix défini</td></tr>');
+      return;
+    }
+    list.forEach(function(p){
+      const tr = $('<tr>');
+      tr.append('<td><code>'+p.produit_reference+'</code> - '+p.produit_designation+'</td>');
+      tr.append('<td><strong>'+p.type_prix_libelle+'</strong> ('+p.type_prix_code+')</td>');
+      tr.append('<td class="text-right"><strong>'+p.prix+'</strong> '+(p.currency_symbol || '€')+'</td>');
+      tr.append('<td class="text-center">'+p.quantite_min+'</td>');
+      let validite = 'Permanent';
+      if(p.date_debut || p.date_fin){
+        validite = (p.date_debut || '...') + ' → ' + (p.date_fin || '...');
+      }
+      tr.append('<td>'+validite+'</td>');
+      const statusBadge = p.is_valid ? '<span class="badge badge-success">Valide</span>' : '<span class="badge badge-warning">Expiré</span>';
+      tr.append('<td>'+statusBadge+'</td>');
+      const actions = '<button type="button" class="btn btn-sm btn-delete" data-action="delete-prix-prod" data-id="'+p.id+'">Supprimer</button>';
+      tr.append('<td>'+actions+'</td>');
+      $tbody.append(tr);
+    });
+  }
+
+  function fillPrixProduitsSelects(){
+    // Remplir les selects de produits pour la gestion des prix en utilisant le cache
+    const $selProduit = $('#prix_prod_produit');
+    const $selFilter = $('#prix_prod_filter');
+
+    if(!$selProduit.length && !$selFilter.length) return;
+
+    const list = __cacheProduits || [];
+    const opts = ['<option value="">Sélectionner un produit</option>'];
+    const optsFilter = ['<option value="">Tous les produits</option>'];
+
+    list.forEach(function(prod){
+      const label = (prod.reference || '') + ' - ' + (prod.designation || '');
+      opts.push('<option value="'+prod.id+'">'+label+'</option>');
+      optsFilter.push('<option value="'+prod.id+'">'+label+'</option>');
+    });
+
+    if($selProduit.length) $selProduit.html(opts.join(''));
+    if($selFilter.length) $selFilter.html(optsFilter.join(''));
+
+    console.log('[Produit] Selects de prix remplis avec', list.length, 'produits');
+  }
+
+  function addPrixProduit(){
+    const produit = parseInt($('#prix_prod_produit').val() || '0', 10);
+    const type_prix = parseInt($('#prix_prod_type').val() || '0', 10);
+    const prix = parseFloat($('#prix_prod_prix').val() || '0');
+    const quantite_min = parseInt($('#prix_prod_qte_min').val() || '1', 10);
+    const date_debut = $('#prix_prod_date_debut').val() || null;
+    const date_fin = $('#prix_prod_date_fin').val() || null;
+
+    if(!produit){ alert('Veuillez sélectionner un produit'); return; }
+    if(!type_prix){ alert('Veuillez sélectionner un type de prix'); return; }
+    if(!prix || prix <= 0){ alert('Prix invalide'); return; }
+
+    const data = { produit, type_prix, prix, quantite_min, date_debut, date_fin };
+
+    $.ajax({ url: apiBase + '/prix-produits/', method: 'POST', contentType: 'application/json',
+             headers: { 'X-CSRFToken': getCSRFToken() }, data: JSON.stringify(data) })
+      .done(function(){
+        $('#prix_prod_produit').val('');
+        $('#prix_prod_type').val('');
+        $('#prix_prod_prix').val('');
+        $('#prix_prod_qte_min').val('1');
+        $('#prix_prod_date_debut').val('');
+        $('#prix_prod_date_fin').val('');
+        loadPrixProduits();
+        loadAllPrixProduits(); // Recharge tous les prix pour mettre à jour l'affichage
+        showAlert('Prix produit ajouté avec succès', 'success');
+      })
+      .fail(function(xhr){
+        const msg = (xhr.responseJSON && (xhr.responseJSON.detail || xhr.responseJSON.error)) || 'Erreur ajout prix';
+        showAlert(msg, 'danger');
+      });
+  }
+
+  function deletePrixProduit(id){
+    if(!confirm('Supprimer ce prix ?')) return;
+    $.ajax({ url: apiBase + '/prix-produits/' + id + '/', method: 'DELETE', headers: { 'X-CSRFToken': getCSRFToken() } })
+      .done(function(){
+        loadPrixProduits();
+        loadAllPrixProduits(); // Recharge tous les prix pour mettre à jour l'affichage
+        showAlert('Prix supprimé', 'success');
+      })
+      .fail(function(xhr){
+        const msg = (xhr.responseJSON && (xhr.responseJSON.detail || xhr.responseJSON.error)) || 'Erreur suppression';
+        showAlert(msg, 'danger');
+      });
   }
 
   // Initialize when the produit fragment is loaded via redirect.js

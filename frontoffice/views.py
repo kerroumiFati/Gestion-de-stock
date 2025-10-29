@@ -148,6 +148,31 @@ def roles_list(request):
     roles = Group.objects.all().order_by('name')
     return render(request, 'frontoffice/roles_list.html', {'roles': roles})
 
+@staff_required
+def role_edit_permissions(request, role_id):
+    """Interface pour modifier les permissions d'un rôle"""
+    from django.contrib.auth.models import Group, Permission
+    role = Group.objects.get(pk=role_id)
+    all_permissions = Permission.objects.all().order_by('content_type__model', 'codename')
+
+    if request.method == 'POST':
+        # Récupérer les permissions cochées
+        selected_perms = request.POST.getlist('permissions')
+        role.permissions.set(selected_perms)
+        from API.views import log_event
+        log_event(request, 'role.update_permissions', target=None, metadata={'role': role.name, 'permissions_count': len(selected_perms)})
+        return redirect('/roles-admin/')
+
+    return render(request, 'frontoffice/role_permissions.html', {
+        'role': role,
+        'all_permissions': all_permissions
+    })
+
+@staff_required
+def admin_users(request):
+    """Nouvelle interface moderne pour la gestion des utilisateurs, rôles et permissions"""
+    return render(request, 'frontoffice/admin_users.html')
+
 # def post_new(request):
  #   if request.method == "POST":
   #      form = ProduitForm(request.POST)

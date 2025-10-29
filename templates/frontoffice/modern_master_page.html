@@ -257,18 +257,18 @@
                 </div>
                 <span class="sidebar-nav-text">Tableau de bord Admin</span>
             </button>
-            <a class="sidebar-nav-item" href="/users-admin/">
+            <button class="sidebar-nav-item" onclick="loadPage('users')" data-page="users">
                 <div class="sidebar-nav-icon">
                     <i class="fas fa-user-shield"></i>
                 </div>
-                <span class="sidebar-nav-text">Administration des utilisateurs</span>
-            </a>
-            <a class="sidebar-nav-item" href="/audit-logs/">
+                <span class="sidebar-nav-text">Utilisateurs & Permissions</span>
+            </button>
+            <button class="sidebar-nav-item" onclick="loadPage('parametres')" data-page="parametres">
                 <div class="sidebar-nav-icon">
-                    <i class="fas fa-clipboard-list"></i>
+                    <i class="fas fa-cog"></i>
                 </div>
-                <span class="sidebar-nav-text">Journaux d'audit</span>
-            </a>
+                <span class="sidebar-nav-text">Paramètres</span>
+            </button>
         </div>
         {% endif %}
 

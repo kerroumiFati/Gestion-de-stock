@@ -85,6 +85,10 @@
             if (whSelected && String(whSelected) !== String(w.id)) return;
             const existing = byWh[String(w.id)];
             const qty = existing ? (parseFloat(existing.quantity || 0) || 0) : 0;
+
+            // Ne pas afficher les lignes avec quantité 0
+            if (qty <= 0) return;
+
             const value = isFinite(unit*qty) ? (unit*qty).toFixed(2) : '-';
             const tr = $('<tr>');
             const prodLabel = (p.reference || '') + ' - ' + (p.designation || '');
@@ -94,8 +98,10 @@
             tr.append($('<td>').text(value));
             const input = $('<input type="number" class="form-control form-control-sm" />').val(qty);
             tr.append($('<td>').append(input));
-            const btn = $('<button class="btn btn-sm btn-outline-secondary">Edit</button>');
-            btn.on('click', function(){
+            const btn = $('<button type="button" class="btn btn-sm btn-outline-secondary">Edit</button>');
+            btn.on('click', function(e){
+              e.preventDefault();
+              e.stopPropagation();
               const newQty = parseInt(input.val()||'0', 10);
               const payload = JSON.stringify({ produit: parseInt(prod,10), warehouse: w.id, quantity: newQty });
               if (existing){
@@ -114,10 +120,14 @@
         } else {
           // No product filter: show existing rows from API as-is
           rows.forEach(function(r){
+            const qty = parseFloat(r.quantity || 0) || 0;
+
+            // Ne pas afficher les lignes avec quantité 0
+            if (qty <= 0) return;
+
             const w = whMap[String(r.warehouse)] || {};
             const p = PRODUCT_MAP[String(r.produit)] || {};
             const unit = parseFloat(p.prixU || p.prixu || 0) || 0;
-            const qty = parseFloat(r.quantity || 0) || 0;
             const value = isFinite(unit*qty) ? (unit*qty).toFixed(2) : '-';
             const tr = $('<tr>');
             const prodLabel = (p.reference || '') + ' - ' + (p.designation || '');
@@ -127,8 +137,10 @@
             tr.append($('<td>').text(value));
             const input = $('<input type="number" class="form-control form-control-sm" />').val(qty);
             tr.append($('<td>').append(input));
-            const btn = $('<button class="btn btn-sm btn-outline-secondary">Edit</button>');
-            btn.on('click', function(){
+            const btn = $('<button type="button" class="btn btn-sm btn-outline-secondary">Edit</button>');
+            btn.on('click', function(e){
+              e.preventDefault();
+              e.stopPropagation();
               const newQty = parseInt(input.val()||'0', 10);
               ajaxJSON({ url: apiBase + '/stocks/' + r.id + '/', method:'PATCH', data: JSON.stringify({quantity:newQty}) })
                 .then(function(){ loadStocks(); })

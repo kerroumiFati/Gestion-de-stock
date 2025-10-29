@@ -261,7 +261,7 @@ input[type="number"].form-control-product::-webkit-outer-spin-button {
             <i class="fas fa-boxes"></i> Gestion des Produits
         </h1>
 
-        <!-- Formulaire de produit -->
+        <!-- SECTION 1 : Formulaire de produit -->
         <div class="form-section">
             <h5 class="form-section-header">
                 <i class="fas fa-edit"></i> Ajouter / Modifier un Produit
@@ -351,29 +351,188 @@ input[type="number"].form-control-product::-webkit-outer-spin-button {
             </form>
         </div>
 
-        <!-- Tableau des produits -->
-        <div class="table-section">
-            <h5 class="form-section-header">
-                <i class="fas fa-list"></i> Liste des Produits
-            </h5>
+        <!-- SECTION 2 : Onglets (Liste Produits / Types Prix / Prix Produits) -->
+        <div class="form-section">
+            <!-- Onglets -->
+            <ul class="nav nav-tabs mb-3" id="productTabs" role="tablist">
+                <li class="nav-item">
+                    <a class="nav-link active" id="liste-produits-tab" data-toggle="tab" href="#liste-produits" role="tab">
+                        <i class="fa fa-list"></i> Liste des Produits
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" id="types-prix-tab" data-toggle="tab" href="#types-prix" role="tab">
+                        <i class="fa fa-list-ul"></i> Types de Prix
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" id="prix-produits-tab" data-toggle="tab" href="#prix-produits" role="tab">
+                        <i class="fa fa-dollar-sign"></i> Prix par Produit
+                    </a>
+                </li>
+            </ul>
 
-            <div class="table-responsive">
-                <table id="tproduit" class="table table-product table-hover">
-                    <thead>
-                        <tr>
-                            <th scope="col">ID</th>
-                            <th scope="col">Référence</th>
-                            <th scope="col">Code-barres</th>
-                            <th scope="col">Désignation</th>
-                            <th scope="col">Catégorie</th>
-                            <th scope="col">Prix U</th>
-                            <th scope="col">Fournisseur</th>
-                            <th scope="col" class="text-center">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="table-content">
-                    </tbody>
-                </table>
+            <div class="tab-content" id="productTabContent">
+                <!-- Onglet 1 : Liste des Produits -->
+                <div class="tab-pane fade show active" id="liste-produits" role="tabpanel">
+                    <!-- Sélecteur de type de prix -->
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label-product">
+                                <i class="fa fa-tag"></i> Afficher les prix :
+                            </label>
+                            <select id="display_price_type" class="form-control form-control-product">
+                                <option value="">Prix de base (prixU)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-8">
+                            <div class="alert alert-info mb-0" style="padding: 10px;">
+                                <i class="fa fa-info-circle"></i> <small>Sélectionnez un type de prix pour afficher les prix correspondants dans le tableau ci-dessous</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table id="tproduit" class="table table-product table-hover">
+                            <thead>
+                                <tr>
+                                    <th scope="col">ID</th>
+                                    <th scope="col">Référence</th>
+                                    <th scope="col">Code-barres</th>
+                                    <th scope="col">Désignation</th>
+                                    <th scope="col">Catégorie</th>
+                                    <th scope="col">Prix U</th>
+                                    <th scope="col">Fournisseur</th>
+                                    <th scope="col" class="text-center">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="table-content">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Onglet 2 : Types de Prix -->
+                <div class="tab-pane fade" id="types-prix" role="tabpanel">
+                    <div class="alert alert-info">
+                        <i class="fa fa-info-circle"></i> <strong>Types de prix :</strong> Définissez les différents types de prix (Détaillant, Grossiste, Promotionnel, etc.)
+                    </div>
+
+                    <!-- Formulaire d'ajout de type de prix -->
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <label class="form-label-product">Code *</label>
+                            <input type="text" id="type_prix_code" class="form-control form-control-product" placeholder="Ex: DETAIL">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label-product">Libellé *</label>
+                            <input type="text" id="type_prix_libelle" class="form-control form-control-product" placeholder="Ex: Prix Détaillant">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label-product">Ordre d'affichage</label>
+                            <input type="number" id="type_prix_ordre" class="form-control form-control-product" min="0" value="0">
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button type="button" id="btn_add_type_prix" class="btn btn-product-primary w-100">
+                                <i class="fa fa-plus"></i> Ajouter
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Tableau des types de prix -->
+                    <div class="table-responsive">
+                        <table class="table table-product table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Code</th>
+                                    <th>Libellé</th>
+                                    <th>Ordre</th>
+                                    <th>Défaut</th>
+                                    <th>Statut</th>
+                                    <th>Nb Prix</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="types_prix_body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Onglet Prix Produits -->
+                <div class="tab-pane fade" id="prix-produits" role="tabpanel">
+                    <div class="alert alert-info">
+                        <i class="fa fa-info-circle"></i> <strong>Prix multiples :</strong> Définissez plusieurs prix pour un même produit selon le type de client ou la quantité
+                    </div>
+
+                    <!-- Formulaire d'ajout de prix produit -->
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <label class="form-label-product">Produit *</label>
+                            <select id="prix_prod_produit" class="form-control form-control-product">
+                                <option value="">Sélectionner un produit</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label-product">Type de Prix *</label>
+                            <select id="prix_prod_type" class="form-control form-control-product">
+                                <option value="">Sélectionner un type</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label-product">Prix *</label>
+                            <input type="number" id="prix_prod_prix" class="form-control form-control-product" min="0" step="0.01" placeholder="0.00">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label-product">Qté Min</label>
+                            <input type="number" id="prix_prod_qte_min" class="form-control form-control-product" min="1" value="1">
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button type="button" id="btn_add_prix_prod" class="btn btn-product-primary w-100">
+                                <i class="fa fa-plus"></i> Ajouter
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Dates de validité (pour promotions) -->
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <label class="form-label-product">Date début (optionnel)</label>
+                            <input type="date" id="prix_prod_date_debut" class="form-control form-control-product">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label-product">Date fin (optionnel)</label>
+                            <input type="date" id="prix_prod_date_fin" class="form-control form-control-product">
+                        </div>
+                    </div>
+
+                    <!-- Filtre par produit -->
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label-product">Filtrer par produit</label>
+                            <select id="prix_prod_filter" class="form-control form-control-product">
+                                <option value="">Tous les produits</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Tableau des prix produits -->
+                    <div class="table-responsive">
+                        <table class="table table-product table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Produit</th>
+                                    <th>Type de Prix</th>
+                                    <th>Prix</th>
+                                    <th>Qté Min</th>
+                                    <th>Validité</th>
+                                    <th>Statut</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="prix_produits_body"></tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

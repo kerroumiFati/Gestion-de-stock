@@ -3,46 +3,295 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <title>Administration des utilisateurs</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestion des Utilisateurs - UltraThink</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+  <link rel="stylesheet" href="{% static 'style/modern-pages.css' %}">
+  <style>
+    body {
+      background: #f7fafc;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+
+    /* Sidebar */
+    .admin-sidebar {
+      position: fixed;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 260px;
+      background: #2d3748;
+      color: white;
+      padding: 20px 0;
+      overflow-y: auto;
+      z-index: 1000;
+      box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+    }
+
+    .admin-sidebar-header {
+      padding: 0 20px 20px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      margin-bottom: 20px;
+    }
+
+    .admin-sidebar-header h4 {
+      color: white;
+      font-weight: 600;
+      margin: 0;
+      font-size: 1.2rem;
+    }
+
+    .sidebar-menu {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .sidebar-menu-item {
+      margin: 0;
+    }
+
+    .sidebar-menu-link {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 20px;
+      color: #cbd5e0;
+      text-decoration: none;
+      transition: all 0.2s;
+      border-left: 3px solid transparent;
+    }
+
+    .sidebar-menu-link:hover {
+      background: rgba(255,255,255,0.05);
+      color: white;
+      text-decoration: none;
+    }
+
+    .sidebar-menu-link.active {
+      background: rgba(255,255,255,0.1);
+      color: white;
+      border-left-color: #4299e1;
+      font-weight: 600;
+    }
+
+    .sidebar-menu-link i {
+      width: 20px;
+      text-align: center;
+    }
+
+    /* Content */
+    .admin-content {
+      margin-left: 260px;
+      padding: 30px;
+      min-height: 100vh;
+    }
+
+    .page-header {
+      background: white;
+      border-radius: 10px;
+      padding: 25px 30px;
+      margin-bottom: 30px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      border: 1px solid #e2e8f0;
+    }
+
+    .page-title {
+      font-size: 1.8rem;
+      font-weight: 600;
+      color: #2d3748;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 10px;
+      padding: 20px;
+      color: white;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .stat-card h3 {
+      font-size: 2.5rem;
+      font-weight: 700;
+      margin: 10px 0;
+    }
+
+    .modern-section {
+      background: white;
+      border-radius: 10px;
+      padding: 25px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      border: 1px solid #e2e8f0;
+    }
+  </style>
 </head>
-<body class="p-4">
-  <div class="container">
-    <h1>Utilisateurs</h1>
-    <div class="mb-3">
-      <a href="/users-admin/new/" class="btn btn-primary">Nouvel utilisateur</a>
-      <a href="/roles-admin/" class="btn btn-secondary">Rôles</a>
+<body>
+  <!-- Sidebar -->
+  <div class="admin-sidebar">
+    <div class="admin-sidebar-header">
+      <h4><i class="fa fa-shield-alt"></i> Administration</h4>
+      <small>Gestion des accès</small>
     </div>
-    <table class="table table-striped">
-      <thead>
-        <tr>
-          <th>Username</th>
-          <th>Nom</th>
-          <th>Email</th>
-          <th>Rôles</th>
-          <th>Actif</th>
-          <th>Staff</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for u in users %}
-        <tr>
-          <td>{{ u.username }}</td>
-          <td>{{ u.first_name }} {{ u.last_name }}</td>
-          <td>{{ u.email }}</td>
-          <td>{% for g in u.groups.all %}<span class="badge badge-info">{{ g.name }}</span> {% empty %}-{% endfor %}</td>
-          <td>{{ u.is_active|yesno:"Oui,Non" }}</td>
-          <td>{{ u.is_staff|yesno:"Oui,Non" }}</td>
-          <td>
-            <a class="btn btn-sm btn-outline-primary" href="/users-admin/{{ u.id }}/edit/">Modifier</a>
-            <a class="btn btn-sm btn-warning" href="/users-admin/{{ u.id }}/reset-password/">Réinitialiser le mot de passe</a>
-            <a class="btn btn-sm btn-outline-danger" href="/users-admin/{{ u.id }}/delete/">Supprimer</a>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <ul class="sidebar-menu">
+      <li class="sidebar-menu-item">
+        <a href="/users-admin/" class="sidebar-menu-link active">
+          <i class="fa fa-users"></i>
+          <span>Utilisateurs</span>
+        </a>
+      </li>
+      <li class="sidebar-menu-item">
+        <a href="/roles-admin/" class="sidebar-menu-link">
+          <i class="fa fa-user-tag"></i>
+          <span>Rôles</span>
+        </a>
+      </li>
+      <li class="sidebar-menu-item">
+        <a href="/audit-logs/" class="sidebar-menu-link">
+          <i class="fa fa-history"></i>
+          <span>Journal d'audit</span>
+        </a>
+      </li>
+      <li class="sidebar-menu-item" style="margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px;">
+        <a href="/admindash/" class="sidebar-menu-link">
+          <i class="fa fa-arrow-left"></i>
+          <span>Retour au dashboard</span>
+        </a>
+      </li>
+    </ul>
   </div>
+
+  <!-- Main Content -->
+  <div class="admin-content">
+    <div class="page-header">
+      <h1 class="page-title">
+        <i class="fa fa-users"></i>
+        Gestion des Utilisateurs
+      </h1>
+    </div>
+
+    <!-- Stats -->
+    <div class="row mb-4">
+      <div class="col-md-4">
+        <div class="stat-card">
+          <i class="fa fa-users fa-2x"></i>
+          <h3>{{ users|length }}</h3>
+          <p>Utilisateurs Total</p>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="stat-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+          <i class="fa fa-user-check fa-2x"></i>
+          <h3>{{ users|length }}</h3>
+          <p>Comptes Actifs</p>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="stat-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+          <i class="fa fa-user-shield fa-2x"></i>
+          <h3>{{ users|length }}</h3>
+          <p>Administrateurs</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section principale -->
+    <div class="modern-section">
+      <div class="mb-3 d-flex justify-content-between align-items-center">
+        <div>
+          <a href="/users-admin/new/" class="modern-btn modern-btn-primary">
+            <i class="fa fa-plus"></i> Nouvel utilisateur
+          </a>
+        </div>
+        <div>
+          <input type="text" id="search_users" class="form-control modern-input" style="width: 300px;" placeholder="Rechercher un utilisateur...">
+        </div>
+      </div>
+
+      <div class="table-responsive">
+        <table class="table modern-table" id="users_table">
+          <thead>
+            <tr>
+              <th>Username</th>
+              <th>Nom complet</th>
+              <th>Email</th>
+              <th>Rôles</th>
+              <th>Statut</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for u in users %}
+            <tr data-username="{{ u.username }}" data-email="{{ u.email }}" data-name="{{ u.first_name }} {{ u.last_name }}">
+              <td><strong>{{ u.username }}</strong></td>
+              <td>{{ u.first_name }} {{ u.last_name }}</td>
+              <td>{{ u.email }}</td>
+              <td>
+                {% for g in u.groups.all %}
+                  <span class="modern-badge modern-badge-info">{{ g.name }}</span>
+                {% empty %}
+                  <span class="text-muted">-</span>
+                {% endfor %}
+              </td>
+              <td>
+                {% if u.is_active %}
+                  <span class="modern-badge modern-badge-success">Actif</span>
+                {% else %}
+                  <span class="modern-badge modern-badge-default">Inactif</span>
+                {% endif %}
+                {% if u.is_staff %}
+                  <span class="modern-badge modern-badge-warning ml-1"><i class="fa fa-crown"></i> Admin</span>
+                {% endif %}
+              </td>
+              <td>
+                <a class="action-btn action-btn-edit" href="/users-admin/{{ u.id }}/edit/">
+                  <i class="fa fa-edit"></i> Modifier
+                </a>
+                <a class="action-btn action-btn-edit ml-1" href="/users-admin/{{ u.id }}/reset-password/" style="background: #ed8936; color: white;">
+                  <i class="fa fa-key"></i> Mot de passe
+                </a>
+                <a class="action-btn action-btn-delete ml-1" href="/users-admin/{{ u.id }}/delete/">
+                  <i class="fa fa-trash"></i> Supprimer
+                </a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    // Recherche en temps réel
+    $(document).ready(function(){
+      $('#search_users').on('input', function(){
+        const query = $(this).val().toLowerCase();
+
+        $('#users_table tbody tr').each(function(){
+          const username = $(this).data('username') || '';
+          const email = $(this).data('email') || '';
+          const name = $(this).data('name') || '';
+
+          const text = (username + ' ' + email + ' ' + name).toLowerCase();
+
+          if(text.includes(query)){
+            $(this).show();
+          } else {
+            $(this).hide();
+          }
+        });
+      });
+    });
+  </script>
 </body>
 </html>

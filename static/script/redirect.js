@@ -48,7 +48,17 @@
 
         // initialize datatables or plugins if present
         if(window.$ && $.fn && $.fn.DataTable){
-          $('.table').each(function(){ if(!$.fn.dataTable.isDataTable(this)){ $(this).DataTable(); } });
+          $('.table').each(function(){
+            // Ne pas initialiser DataTable si l'attribut data-no-datatable est présent
+            if($(this).attr('data-no-datatable') === 'true') return;
+            if(!$.fn.dataTable.isDataTable(this)){
+              try {
+                $(this).DataTable();
+              } catch(e) {
+                console.warn('DataTable init failed for table:', this.id, e);
+              }
+            }
+          });
         }
 
         // Notify listeners that a fragment has been loaded
