@@ -1770,9 +1770,21 @@ class SystemConfigView(APIView):
                 except Exception as e:
                     logger.warning(f"Could not ensure default warehouse: {e}")
 
+            # Inclure les détails de la devise par défaut
+            currency_data = None
+            if cfg.default_currency:
+                currency_data = {
+                    'id': cfg.default_currency.id,
+                    'code': cfg.default_currency.code,
+                    'name': cfg.default_currency.name,
+                    'symbol': cfg.default_currency.symbol
+                }
+
             return Response({
                 'default_warehouse': getattr(cfg.default_warehouse, 'id', None),
                 'default_currency': getattr(cfg.default_currency, 'id', None),
+                'default_currency_details': currency_data,
+                'language': cfg.language or 'fr',
                 'auto_print_ticket': cfg.auto_print_ticket,
                 'ticket_footer_message': cfg.ticket_footer_message or '',
                 'ticket_company_name': cfg.ticket_company_name or '',
@@ -1807,6 +1819,32 @@ class SystemConfigView(APIView):
                     }, status=400)
             else:
                 cfg.default_warehouse = None
+
+            # Mettre à jour la devise par défaut si fournie
+            cid = request.data.get('default_currency')
+            if cid:
+                try:
+                    from .models import Currency
+                    curr = Currency.objects.get(pk=int(cid))
+                    cfg.default_currency = curr
+                except Currency.DoesNotExist:
+                    return Response({
+                        'error': f'Devise #{cid} introuvable'
+                    }, status=404)
+                except ValueError:
+                    return Response({
+                        'error': 'ID de devise invalide'
+                    }, status=400)
+            elif 'default_currency' in request.data and not cid:
+                cfg.default_currency = None
+
+            # Mettre à jour la langue si fournie
+            if 'language' in request.data:
+                lang = request.data.get('language', 'fr')
+                if lang in ['fr', 'en', 'ar']:
+                    cfg.language = lang
+                else:
+                    return Response({'error': 'Langue non supportée'}, status=400)
 
             # Mettre à jour les paramètres de caisse si fournis
             if 'auto_print_ticket' in request.data:

@@ -253,8 +253,8 @@
     <!-- Menu à onglets -->
     <ul class="nav settings-tabs" role="tablist">
         <li class="nav-item">
-            <button class="settings-tab active" data-tab="warehouse">
-                <i class="fas fa-warehouse"></i> Entrepôt
+            <button class="settings-tab active" data-tab="general">
+                <i class="fas fa-sliders-h"></i> Général
             </button>
         </li>
         <li class="nav-item">
@@ -278,8 +278,92 @@
 
     <!-- Sections de contenu -->
     <div class="tab-content">
-        <!-- Section Entrepôt -->
-        <div id="section-warehouse" class="settings-section active">
+        <!-- Section Général -->
+        <div id="section-general" class="settings-section active">
+            <div class="section-card">
+                <h5 class="section-header">
+                    <i class="fas fa-cog"></i> Configuration Générale du Système
+                </h5>
+
+                <div class="info-alert mb-4">
+                    <i class="fas fa-info-circle"></i> <strong>Paramètres par défaut :</strong>
+                    Ces paramètres seront appliqués par défaut dans toute l'application
+                </div>
+
+                <!-- Langue -->
+                <div class="row">
+                    <div class="col-md-6 mb-4">
+                        <div style="background: #f7fafc; border-radius: 8px; padding: 20px; border: 1px solid #e2e8f0;">
+                            <h6 class="mb-2" style="font-weight: 600; color: #4a5568;">
+                                <i class="fas fa-language"></i> Langue de l'interface
+                            </h6>
+                            <div id="current_language_display" class="mb-3 p-2" style="background: white; border-radius: 4px; border: 1px solid #cbd5e0; font-size: 0.9rem;">
+                                <strong>Actuel :</strong> <span id="current_language_text" style="color: #2d3748;">-</span>
+                            </div>
+                            <select id="cfg_language" class="form-control form-control-modern">
+                                <option value="fr">🇫🇷 Français</option>
+                                <option value="en">🇬🇧 English</option>
+                                <option value="ar">🇩🇿 العربية (Arabe)</option>
+                            </select>
+                            <small class="form-text text-muted mt-2">
+                                Langue d'affichage de l'application
+                            </small>
+                        </div>
+                    </div>
+
+                    <!-- Devise -->
+                    <div class="col-md-6 mb-4">
+                        <div style="background: #f7fafc; border-radius: 8px; padding: 20px; border: 1px solid #e2e8f0;">
+                            <h6 class="mb-2" style="font-weight: 600; color: #4a5568;">
+                                <i class="fas fa-coins"></i> Devise par défaut
+                            </h6>
+                            <div id="current_currency_display" class="mb-3 p-2" style="background: white; border-radius: 4px; border: 1px solid #cbd5e0; font-size: 0.9rem;">
+                                <strong>Actuel :</strong> <span id="current_currency_text" style="color: #2d3748;">-</span>
+                            </div>
+                            <select id="cfg_default_currency" class="form-control form-control-modern">
+                                <option value="">Sélectionner une devise...</option>
+                            </select>
+                            <small class="form-text text-muted mt-2">
+                                Devise utilisée par défaut dans les transactions
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="divider"></div>
+
+                <!-- Entrepôt -->
+                <h6 class="mb-3" style="font-weight: 600; color: #4a5568;">
+                    <i class="fas fa-warehouse"></i> Entrepôt par défaut
+                </h6>
+
+                <div id="cfg_info" class="info-alert d-none mb-3">
+                    <strong><i class="fas fa-info-circle"></i> Information:</strong>
+                    <span id="cfg_info_text"></span>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-12 mb-3">
+                        <select id="cfg_default_warehouse" class="form-control form-control-modern">
+                            <option value="">Sélectionner un entrepôt...</option>
+                        </select>
+                        <small class="form-text text-muted">
+                            Cet entrepôt sera utilisé par défaut pour les nouvelles opérations de stock
+                        </small>
+                    </div>
+                </div>
+
+                <div class="mt-4">
+                    <button id="general_save" class="btn btn-modern btn-modern-primary">
+                        <i class="fas fa-save"></i> Enregistrer tous les paramètres
+                    </button>
+                    <span id="general_status" class="ml-3"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section Entrepôt (supprimée - maintenant dans Général) -->
+        <div id="section-warehouse" class="settings-section" style="display:none;">
             <div class="section-card">
                 <h5 class="section-header">
                     <i class="fas fa-warehouse"></i> Configuration de l'Entrepôt par Défaut
@@ -592,17 +676,71 @@
     );
   }
 
+  function loadCurrencies(){
+    return $.getJSON('/API/currencies/?page_size=1000').then(function(data){
+      const list = Array.isArray(data) ? data : (data && Array.isArray(data.results)) ? data.results : [];
+      return list;
+    });
+  }
+
+  function fillCurrencySelect($sel, list){
+    $sel.empty();
+    $sel.append($('<option>').val('').text('Sélectionner une devise...'));
+    (Array.isArray(list) ? list : []).forEach(function(c){
+      $sel.append($('<option>').val(c.id).text(c.code + ' - ' + c.name + ' (' + c.symbol + ')'));
+    });
+  }
+
   $(function(){
-    // Entrepôts
-    const $sel = $('#cfg_default_warehouse');
+    // Section Général - Charger tous les paramètres
+    const $warehouseSel = $('#cfg_default_warehouse');
+
+    // Charger les entrepôts
     loadWarehouses().done(function(list){
-      fillSelect($sel, list);
-      loadConfig().done(function(cfg){
-        const config = cfg && (cfg[0] || cfg);
-        if(config && config.default_warehouse){
-          $sel.val(String(config.default_warehouse));
+      fillSelect($warehouseSel, list);
+    }).fail(function(){
+      setStatus('#general_status', 'Erreur de chargement des entrepôts', true);
+    });
+
+    // Charger les devises
+    loadCurrencies().done(function(list){
+      fillCurrencySelect($('#cfg_default_currency'), list);
+    });
+
+    // Charger la configuration actuelle
+    loadConfig().done(function(cfg){
+      const config = cfg && (cfg[0] || cfg);
+      if(config){
+        // Langue - afficher la valeur actuelle
+        const langCode = config.language || 'fr';
+        $('#cfg_language').val(langCode);
+
+        const langMap = {
+          'fr': '🇫🇷 Français',
+          'en': '🇬🇧 English',
+          'ar': '🇩🇿 العربية (Arabe)'
+        };
+        $('#current_language_text').text(langMap[langCode] || langCode);
+
+        // Devise - afficher la valeur actuelle
+        if(config.default_currency){
+          $('#cfg_default_currency').val(String(config.default_currency));
+
+          // Attendre que les devises soient chargées pour afficher le nom
+          setTimeout(function(){
+            const $selectedOption = $('#cfg_default_currency option:selected');
+            const currencyLabel = $selectedOption.text() || 'Devise #' + config.default_currency;
+            $('#current_currency_text').text(currencyLabel);
+          }, 500);
+        } else {
+          $('#current_currency_text').text('Aucune devise par défaut définie');
+        }
+
+        // Entrepôt - afficher dans la section Information
+        if(config.default_warehouse){
+          $warehouseSel.val(String(config.default_warehouse));
           const whId = String(config.default_warehouse);
-          const $opt = $sel.find('option[value="'+whId+'"]');
+          const $opt = $warehouseSel.find('option[value="'+whId+'"]');
           const label = $opt.length ? $opt.text() : ('#'+whId);
           $('#cfg_info').removeClass('d-none');
           $('#cfg_info_text').text('Entrepôt actuel: '+label);
@@ -610,37 +748,71 @@
           $('#cfg_info').removeClass('d-none');
           $('#cfg_info_text').text('Aucun entrepôt par défaut défini.');
         }
-      }).fail(function(){
-        setStatus('#cfg_status', 'Configuration non chargée', true);
-      });
+      }
     }).fail(function(){
-      setStatus('#cfg_status', 'Erreur de chargement des entrepôts', true);
+      setStatus('#general_status', 'Erreur de chargement de la configuration', true);
     });
 
-    $('#cfg_save').on('click', function(){
-      const wid = parseInt($sel.val()||'0', 10) || null;
-      if (!wid) {
-        setStatus('#cfg_status', 'Veuillez sélectionner un entrepôt', true);
-        return;
-      }
-      setStatus('#cfg_status', 'Enregistrement...', false);
-      saveConfig({ default_warehouse: wid })
+    // Sauvegarder tous les paramètres généraux
+    $('#general_save').on('click', function(){
+      const lang = $('#cfg_language').val();
+      const currId = parseInt($('#cfg_default_currency').val()||'0', 10) || null;
+      const whId = parseInt($warehouseSel.val()||'0', 10) || null;
+
+      setStatus('#general_status', 'Enregistrement...', false);
+
+      const payload = { language: lang };
+      if(currId) payload.default_currency = currId;
+      if(whId) payload.default_warehouse = whId;
+
+      saveConfig(payload)
         .done(function(resp){
-          setStatus('#cfg_status', resp.message || 'Enregistré avec succès', false);
+          setStatus('#general_status', resp.message || 'Tous les paramètres ont été enregistrés avec succès', false);
+
+          // Mettre à jour les affichages des valeurs actuelles
           loadConfig().done(function(cfg){
             const config = cfg && (cfg[0] || cfg);
-            if(config && config.default_warehouse){
-              const whId = String(config.default_warehouse);
-              const $opt = $sel.find('option[value="'+whId+'"]');
-              const label = $opt.length ? $opt.text() : ('#'+whId);
-              $('#cfg_info').removeClass('d-none');
-              $('#cfg_info_text').text('Entrepôt actuel: '+label);
+            if(config){
+              // Langue
+              const langMap = {
+                'fr': '🇫🇷 Français',
+                'en': '🇬🇧 English',
+                'ar': '🇩🇿 العربية (Arabe)'
+              };
+              $('#current_language_text').text(langMap[config.language || 'fr'] || config.language);
+
+              // Devise
+              if(config.default_currency){
+                const $selectedOption = $('#cfg_default_currency option:selected');
+                const currencyLabel = $selectedOption.text() || 'Devise #' + config.default_currency;
+                $('#current_currency_text').text(currencyLabel);
+              } else {
+                $('#current_currency_text').text('Aucune devise par défaut définie');
+              }
+
+              // Entrepôt
+              if(config.default_warehouse){
+                const whId = String(config.default_warehouse);
+                const $opt = $warehouseSel.find('option[value="'+whId+'"]');
+                const label = $opt.length ? $opt.text() : ('#'+whId);
+                $('#cfg_info').removeClass('d-none');
+                $('#cfg_info_text').text('Entrepôt actuel: '+label);
+              }
             }
           });
+
+          // Proposer de recharger la page si la langue a changé
+          if(lang){
+            setTimeout(function(){
+              if(confirm('Les paramètres ont été enregistrés. Voulez-vous recharger la page pour appliquer les changements ?')){
+                window.location.reload();
+              }
+            }, 500);
+          }
         })
         .fail(function(xhr){
-          const msg = (xhr && xhr.responseJSON && (xhr.responseJSON.error || xhr.responseJSON.detail)) || "Erreur";
-          setStatus('#cfg_status', msg, true);
+          const msg = (xhr && xhr.responseJSON && (xhr.responseJSON.error || xhr.responseJSON.detail)) || "Erreur lors de l'enregistrement";
+          setStatus('#general_status', msg, true);
         });
     });
 

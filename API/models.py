@@ -53,6 +53,16 @@ class Currency(models.Model):
     
     @classmethod
     def get_default(cls):
+        """Retourne la devise par défaut configurée dans les paramètres système.
+        Fallback: utilise is_default=True si SystemConfig n'a pas de devise configurée."""
+        try:
+            from .models import SystemConfig
+            config = SystemConfig.get_solo()
+            if config and config.default_currency:
+                return config.default_currency
+        except Exception:
+            pass
+        # Fallback vers l'ancien système
         return cls.objects.filter(is_default=True).first()
 
 class ExchangeRate(models.Model):
@@ -686,6 +696,15 @@ class SystemConfig(models.Model):
                                           related_name='as_default_for')
     default_currency = models.ForeignKey('Currency', on_delete=models.SET_NULL, null=True, blank=True,
                                          related_name='as_default_currency_for')
+
+    # Paramètres généraux
+    LANGUAGE_CHOICES = [
+        ('fr', 'Français'),
+        ('en', 'English'),
+        ('ar', 'العربية'),
+    ]
+    language = models.CharField(max_length=5, choices=LANGUAGE_CHOICES, default='fr',
+                               help_text="Langue de l'interface")
 
     # Paramètres de caisse
     auto_print_ticket = models.BooleanField(default=False,

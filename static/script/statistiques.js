@@ -97,10 +97,22 @@
 
   window.refreshStatistics = refreshStatistics;
 
-  document.addEventListener('DOMContentLoaded', function(){
+  function initIfNeeded(){
     // Auto-initialize only on stats page (detect a chart element)
     if(document.getElementById('ventesChart')){
+      dbg('Initializing statistics...');
       refreshStatistics();
+    }
+  }
+
+  // Initial load
+  document.addEventListener('DOMContentLoaded', initIfNeeded);
+
+  // Dynamic fragment load (SPA navigation)
+  document.addEventListener('fragment:loaded', function(e){
+    if(e.detail && e.detail.name === 'statistiques'){
+      dbg('Fragment loaded: statistiques');
+      initIfNeeded();
     }
   });
 })();
