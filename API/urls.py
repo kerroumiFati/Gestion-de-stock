@@ -2,8 +2,36 @@
 from django.urls import re_path
 from django.urls import include, path
 from rest_framework import routers
+from django.http import JsonResponse
 from . import views
 from .views_import import ImportPreviewView, ImportExecuteView, ImportTemplateView
+
+# Test views
+def test_import(request):
+    return JsonResponse({'status': 'OK', 'message': 'Import URLs are working'})
+
+def test_template_simple(request):
+    """Test template generation without pandas"""
+    from django.http import HttpResponse
+    content = "reference,designation,prixU\nPROD-001,Test Product,99.99"
+    response = HttpResponse(content, content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="test.csv"'
+    return response
+
+def test_template_pandas(request):
+    """Test template generation WITH pandas"""
+    try:
+        import pandas as pd
+        import io
+        df = pd.DataFrame([{'reference': 'PROD-001', 'designation': 'Test', 'prixU': '99.99'}])
+        output = io.StringIO()
+        df.to_csv(output, index=False)
+        output.seek(0)
+        response = HttpResponse(output.getvalue(), content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="test_pandas.csv"'
+        return response
+    except Exception as e:
+        return JsonResponse({'error': str(e), 'type': str(type(e))}, status=500)
 
 router = routers.DefaultRouter()
 router.register(r'categories', views.CategorieViewSet)
@@ -35,7 +63,10 @@ urlpatterns = [
     path('reports/sales/', views.export_sales_report, name='export-sales-report'),
     path('reports/inventory/', views.export_inventory_report, name='export-inventory-report'),
 
-    # Import de données
+    # Import de données - DOIT ÊTRE AVANT le router
+    path('import/test/', test_import, name='import-test'),
+    path('import/test-simple/', test_template_simple, name='test-simple'),
+    path('import/test-pandas/', test_template_pandas, name='test-pandas'),
     path('import/preview/', ImportPreviewView.as_view(), name='import-preview'),
     path('import/execute/', ImportExecuteView.as_view(), name='import-execute'),
     path('import/template/', ImportTemplateView.as_view(), name='import-template'),

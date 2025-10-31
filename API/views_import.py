@@ -1,7 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
@@ -281,7 +281,7 @@ class ImportTemplateView(APIView):
     """
     Télécharger un template d'import
     """
-    permission_classes = []
+    permission_classes = [AllowAny]
 
     def get(self, request):
         import_type = request.GET.get('type', 'products')
