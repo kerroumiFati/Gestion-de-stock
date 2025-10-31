@@ -3,6 +3,7 @@ from django.urls import re_path
 from django.urls import include, path
 from rest_framework import routers
 from . import views
+from .views_import import ImportPreviewView, ImportExecuteView, ImportTemplateView
 
 router = routers.DefaultRouter()
 router.register(r'categories', views.CategorieViewSet)
@@ -33,6 +34,11 @@ urlpatterns = [
     path('reports/stock-valuation/', views.export_stock_valuation, name='export-stock-valuation'),
     path('reports/sales/', views.export_sales_report, name='export-sales-report'),
     path('reports/inventory/', views.export_inventory_report, name='export-inventory-report'),
+
+    # Import de données
+    path('import/preview/', ImportPreviewView.as_view(), name='import-preview'),
+    path('import/execute/', ImportExecuteView.as_view(), name='import-execute'),
+    path('import/template/', ImportTemplateView.as_view(), name='import-template'),
 
     path('', include(router.urls)),
     path('categories_raw/', views.categories_raw),

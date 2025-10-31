@@ -1109,7 +1109,11 @@ class CountViewSet(APIView):
                 statut='completed',
                 date_vente__date=aujourd_hui
             ).count()
-            
+
+            # Récupérer la devise par défaut
+            default_currency = Currency.get_default()
+            currency_symbol = default_currency.symbol if default_currency else ''
+
             content = {
                 'produits_count': Produit_count,
                 'clients_count': Client_count,
@@ -1121,7 +1125,8 @@ class CountViewSet(APIView):
                 'ca_mois': float(ca_mois),
                 'produits_stock_bas': produits_stock_bas,
                 'produits_stock_critique': produits_stock_critique,
-                'produits_rupture': produits_rupture
+                'produits_rupture': produits_rupture,
+                'currency_symbol': currency_symbol
             }
             return Response(content)
         except Exception as e:
@@ -1251,14 +1256,19 @@ class StatisticsChartsViewSet(APIView):
                     'count': row.get('count') or 0,
                     'total': float(row.get('total') or 0)
                 })
-            
+
+            # Récupérer la devise par défaut
+            default_currency = Currency.get_default()
+            currency_symbol = default_currency.symbol if default_currency else ''
+
             return Response({
                 'ventes_par_mois': ventes_par_mois,
                 'top_produits': list(top_produits),
                 'ventes_par_categorie': ventes_par_categorie,
                 'mouvements_stock': mouvements_stock,
                 'stock_status': stock_status,
-                'ventes_paiement': ventes_paiement
+                'ventes_paiement': ventes_paiement,
+                'currency_symbol': currency_symbol
             })
         except Exception as e:
             logger.exception('StatisticsChartsViewSet failed: %s', e)

@@ -543,6 +543,7 @@
       const tr = $('<tr>');
       tr.append('<td><code>'+p.produit_reference+'</code> - '+p.produit_designation+'</td>');
       tr.append('<td><strong>'+p.type_prix_libelle+'</strong> ('+p.type_prix_code+')</td>');
+      // Utiliser le currency_symbol du produit, ou fallback vers €
       tr.append('<td class="text-right"><strong>'+p.prix+'</strong> '+(p.currency_symbol || '€')+'</td>');
       tr.append('<td class="text-center">'+p.quantite_min+'</td>');
       let validite = 'Permanent';

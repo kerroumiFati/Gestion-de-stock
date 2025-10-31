@@ -4,6 +4,7 @@
   const API_CHARTS = '/API/statistics/charts/';
 
   let charts = {};
+  let currencySymbol = ''; // Symbole de devise par défaut
 
   function setText(id, value){ var el = document.getElementById(id); if(el) el.textContent = value; }
   function nowStr(){ var d = new Date(); return d.toLocaleString(); }
@@ -20,11 +21,14 @@
       .then(function(res){ if(!res.ok) throw new Error('HTTP '+res.status); return res.json(); })
       .then(function(j){
         dbg('counts', j);
+        // Récupérer le symbole de devise depuis l'API
+        if(j.currency_symbol) currencySymbol = j.currency_symbol;
+
         setText('nbr-produits', j.produits_count ?? '-');
         setText('nbr-clients', j.clients_count ?? '-');
         setText('nbr-fournisseurs', j.fournisseurs_count ?? '-');
         setText('nbr-ventes', j.ventes_count ?? '-');
-        setText('ca-total', (j.ca_total ?? 0).toLocaleString());
+        setText('ca-total', (j.ca_total ?? 0).toLocaleString() + ' ' + currencySymbol);
         setText('stock-alerte', (j.produits_stock_critique ?? 0) + (j.produits_rupture ?? 0));
       });
   }
@@ -36,6 +40,9 @@
       .then(function(res){ if(!res.ok) throw new Error('HTTP '+res.status); return res.json(); })
       .then(function(j){
         dbg('charts', j);
+        // Récupérer le symbole de devise depuis l'API
+        if(j.currency_symbol) currencySymbol = j.currency_symbol;
+
         // ventes par mois
         var labels = (j.ventes_par_mois||[]).map(x=>x.mois);
         var ventes = (j.ventes_par_mois||[]).map(x=>x.ventes);
@@ -44,9 +51,30 @@
           labels: labels,
           datasets: [
             { label: 'Ventes', data: ventes, borderColor: '#2563eb', backgroundColor:'rgba(37,99,235,.15)', fill:true, tension:.3 },
-            { label: 'CA', data: ca, yAxisID:'y1', borderColor: '#10b981', backgroundColor:'rgba(16,185,129,.15)', fill:true, tension:.3 }
+            { label: 'CA (' + currencySymbol + ')', data: ca, yAxisID:'y1', borderColor: '#10b981', backgroundColor:'rgba(16,185,129,.15)', fill:true, tension:.3 }
           ]
-        }, { responsive:true, scales:{ y:{ beginAtZero:true }, y1:{ beginAtZero:true, position:'right' } } });
+        }, {
+          responsive:true,
+          scales:{ y:{ beginAtZero:true }, y1:{ beginAtZero:true, position:'right' } },
+          plugins: {
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  var label = context.dataset.label || '';
+                  if (label) label += ': ';
+                  if (context.parsed.y !== null) {
+                    if (context.dataset.yAxisID === 'y1') {
+                      label += context.parsed.y.toLocaleString() + ' ' + currencySymbol;
+                    } else {
+                      label += context.parsed.y;
+                    }
+                  }
+                  return label;
+                }
+              }
+            }
+          }
+        });
 
         // stock status
         var ss = j.stock_status || {}; var sLabels=['normal','alerte','critique','rupture'];
@@ -97,10 +125,22 @@
 
   window.refreshStatistics = refreshStatistics;
 
-  document.addEventListener('DOMContentLoaded', function(){
+  function initIfNeeded(){
     // Auto-initialize only on stats page (detect a chart element)
     if(document.getElementById('ventesChart')){
+      dbg('Initializing statistics...');
       refreshStatistics();
+    }
+  }
+
+  // Initial load
+  document.addEventListener('DOMContentLoaded', initIfNeeded);
+
+  // Dynamic fragment load (SPA navigation)
+  document.addEventListener('fragment:loaded', function(e){
+    if(e.detail && e.detail.name === 'statistiques'){
+      dbg('Fragment loaded: statistiques');
+      initIfNeeded();
     }
   });
 })();

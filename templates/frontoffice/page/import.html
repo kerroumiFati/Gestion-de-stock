@@ -1,0 +1,425 @@
+<head>
+    <meta charset="UTF-8">
+    <style>
+        .import-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .import-header {
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .import-card {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.08);
+            border: 2px solid #e5e7eb;
+        }
+
+        .upload-zone {
+            border: 3px dashed #cbd5e1;
+            border-radius: 12px;
+            padding: 50px 20px;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            background: #f9fafb;
+        }
+
+        .upload-zone:hover, .upload-zone.dragover {
+            border-color: #2563eb;
+            background: #eff6ff;
+            transform: scale(1.01);
+        }
+
+        .upload-zone i {
+            font-size: 64px;
+            color: #94a3b8;
+            margin-bottom: 20px;
+        }
+
+        .upload-zone.dragover i {
+            color: #2563eb;
+            animation: bounce 0.5s ease;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .preview-table {
+            margin-top: 20px;
+            overflow-x: auto;
+        }
+
+        .preview-table table {
+            width: 100%;
+            font-size: 14px;
+        }
+
+        .preview-table th {
+            background: #f1f5f9;
+            color: #334155;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-success {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .status-error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .status-warning {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .template-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 24px;
+            background: white;
+            border: 2px solid #2563eb;
+            color: #2563eb;
+            border-radius: 10px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .template-btn:hover {
+            background: #2563eb;
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(37, 99, 235, 0.3);
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e5e7eb;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #2563eb, #3b82f6);
+            transition: width 0.3s ease;
+            border-radius: 10px;
+        }
+
+        .import-results {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .result-card {
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .result-card.success {
+            background: #dcfce7;
+            border: 2px solid #22c55e;
+        }
+
+        .result-card.error {
+            background: #fee2e2;
+            border: 2px solid #ef4444;
+        }
+
+        .result-card.warning {
+            background: #fef3c7;
+            border: 2px solid #f59e0b;
+        }
+
+        .result-card h3 {
+            font-size: 32px;
+            font-weight: bold;
+            margin: 10px 0 5px 0;
+        }
+
+        .result-card p {
+            margin: 0;
+            color: #6b7280;
+            font-size: 14px;
+        }
+
+        #errorsList {
+            max-height: 300px;
+            overflow-y: auto;
+            background: #fef2f2;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #ef4444;
+        }
+
+        .error-item {
+            padding: 8px 0;
+            border-bottom: 1px solid #fecaca;
+            font-size: 14px;
+            color: #7f1d1d;
+        }
+
+        .error-item:last-child {
+            border-bottom: none;
+        }
+
+        .tab-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .tab-btn {
+            padding: 12px 24px;
+            border: 2px solid #e5e7eb;
+            background: white;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .tab-btn.active {
+            background: #2563eb;
+            color: white;
+            border-color: #2563eb;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+    </style>
+</head>
+
+<div class="import-container" style="margin-top: 2%;">
+    <!-- En-tête -->
+    <div class="import-header">
+        <h1 class="mb-3">
+            <i class="fas fa-file-import mr-3"></i>Import de Données
+        </h1>
+        <p class="mb-0" style="opacity: 0.9;">
+            Importez vos produits et catégories en masse depuis des fichiers Excel ou CSV
+        </p>
+    </div>
+
+    <!-- Onglets -->
+    <div class="tab-buttons">
+        <button class="tab-btn active" onclick="switchTab('products')">
+            <i class="fas fa-box mr-2"></i>Produits
+        </button>
+        <button class="tab-btn" onclick="switchTab('categories')">
+            <i class="fas fa-tags mr-2"></i>Catégories
+        </button>
+    </div>
+
+    <!-- Contenu Produits -->
+    <div id="products-tab" class="tab-content active">
+        <div class="import-card">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h3 class="mb-0">
+                    <i class="fas fa-box text-primary mr-2"></i>Importer des Produits
+                </h3>
+                <div>
+                    <button class="template-btn" onclick="downloadTemplate('products', 'excel')">
+                        <i class="fas fa-file-excel"></i>
+                        Template Excel
+                    </button>
+                    <button class="template-btn ml-2" onclick="downloadTemplate('products', 'csv')">
+                        <i class="fas fa-file-csv"></i>
+                        Template CSV
+                    </button>
+                </div>
+            </div>
+
+            <!-- Zone d'upload -->
+            <div class="upload-zone" id="uploadZoneProducts" onclick="document.getElementById('fileInputProducts').click()">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <h4>Glissez votre fichier ici ou cliquez pour parcourir</h4>
+                <p class="text-muted mb-0">Formats acceptés: .xlsx, .xls, .csv (max 10 MB)</p>
+                <input type="file" id="fileInputProducts" class="file-input" accept=".xlsx,.xls,.csv" onchange="handleFileSelect(this, 'products')">
+            </div>
+
+            <!-- Informations fichier -->
+            <div id="fileInfoProducts" style="display: none; margin-top: 20px;">
+                <div class="alert alert-info">
+                    <i class="fas fa-file mr-2"></i>
+                    <strong id="fileNameProducts"></strong> -
+                    <span id="fileSizeProducts"></span>
+                </div>
+            </div>
+
+            <!-- Prévisualisation -->
+            <div id="previewProducts" style="display: none;">
+                <h5 class="mt-4 mb-3">
+                    <i class="fas fa-eye mr-2"></i>Prévisualisation (<span id="previewCountProducts">0</span> lignes)
+                </h5>
+                <div class="preview-table" id="previewTableProducts"></div>
+
+                <div class="text-right mt-3">
+                    <button class="btn btn-secondary mr-2" onclick="cancelImport('products')">
+                        <i class="fas fa-times mr-2"></i>Annuler
+                    </button>
+                    <button class="btn btn-success" onclick="confirmImport('products')">
+                        <i class="fas fa-check mr-2"></i>Confirmer l'import
+                    </button>
+                </div>
+            </div>
+
+            <!-- Progression -->
+            <div id="progressProducts" style="display: none;">
+                <h5 class="mt-4">Import en cours...</h5>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFillProducts" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- Résultats -->
+            <div id="resultsProducts" style="display: none;">
+                <h5 class="mt-4 mb-3">
+                    <i class="fas fa-check-circle text-success mr-2"></i>Import terminé
+                </h5>
+                <div class="import-results" id="resultsStatsProducts"></div>
+                <div id="errorsListProducts" style="display: none; margin-top: 20px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Contenu Catégories -->
+    <div id="categories-tab" class="tab-content">
+        <div class="import-card">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h3 class="mb-0">
+                    <i class="fas fa-tags text-primary mr-2"></i>Importer des Catégories
+                </h3>
+                <div>
+                    <button class="template-btn" onclick="downloadTemplate('categories', 'excel')">
+                        <i class="fas fa-file-excel"></i>
+                        Template Excel
+                    </button>
+                    <button class="template-btn ml-2" onclick="downloadTemplate('categories', 'csv')">
+                        <i class="fas fa-file-csv"></i>
+                        Template CSV
+                    </button>
+                </div>
+            </div>
+
+            <!-- Zone d'upload -->
+            <div class="upload-zone" id="uploadZoneCategories" onclick="document.getElementById('fileInputCategories').click()">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <h4>Glissez votre fichier ici ou cliquez pour parcourir</h4>
+                <p class="text-muted mb-0">Formats acceptés: .xlsx, .xls, .csv (max 10 MB)</p>
+                <input type="file" id="fileInputCategories" class="file-input" accept=".xlsx,.xls,.csv" onchange="handleFileSelect(this, 'categories')">
+            </div>
+
+            <!-- Informations fichier -->
+            <div id="fileInfoCategories" style="display: none; margin-top: 20px;">
+                <div class="alert alert-info">
+                    <i class="fas fa-file mr-2"></i>
+                    <strong id="fileNameCategories"></strong> -
+                    <span id="fileSizeCategories"></span>
+                </div>
+            </div>
+
+            <!-- Prévisualisation -->
+            <div id="previewCategories" style="display: none;">
+                <h5 class="mt-4 mb-3">
+                    <i class="fas fa-eye mr-2"></i>Prévisualisation (<span id="previewCountCategories">0</span> lignes)
+                </h5>
+                <div class="preview-table" id="previewTableCategories"></div>
+
+                <div class="text-right mt-3">
+                    <button class="btn btn-secondary mr-2" onclick="cancelImport('categories')">
+                        <i class="fas fa-times mr-2"></i>Annuler
+                    </button>
+                    <button class="btn btn-success" onclick="confirmImport('categories')">
+                        <i class="fas fa-check mr-2"></i>Confirmer l'import
+                    </button>
+                </div>
+            </div>
+
+            <!-- Progression -->
+            <div id="progressCategories" style="display: none;">
+                <h5 class="mt-4">Import en cours...</h5>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFillCategories" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- Résultats -->
+            <div id="resultsCategories" style="display: none;">
+                <h5 class="mt-4 mb-3">
+                    <i class="fas fa-check-circle text-success mr-2"></i>Import terminé
+                </h5>
+                <div class="import-results" id="resultsStatsCategories"></div>
+                <div id="errorsListCategories" style="display: none; margin-top: 20px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Instructions -->
+    <div class="import-card">
+        <h4 class="mb-3">
+            <i class="fas fa-info-circle text-info mr-2"></i>Instructions
+        </h4>
+        <div class="row">
+            <div class="col-md-6">
+                <h6 class="font-weight-bold mb-2">Pour les Produits:</h6>
+                <ul class="text-muted">
+                    <li>Colonnes requises: <code>reference</code>, <code>designation</code>, <code>prixU</code></li>
+                    <li>Colonnes optionnelles: <code>code_barre</code>, <code>description</code>, <code>categorie</code>, <code>fournisseur</code>, <code>quantite</code>, <code>stock_min</code>, <code>stock_max</code>, <code>unite_mesure</code></li>
+                    <li>La catégorie et le fournisseur doivent exister dans le système</li>
+                    <li>Le prix doit être un nombre positif</li>
+                </ul>
+            </div>
+            <div class="col-md-6">
+                <h6 class="font-weight-bold mb-2">Pour les Catégories:</h6>
+                <ul class="text-muted">
+                    <li>Colonne requise: <code>nom</code></li>
+                    <li>Colonnes optionnelles: <code>parent</code>, <code>description</code>, <code>couleur</code>, <code>icone</code></li>
+                    <li>La catégorie parente doit exister si spécifiée</li>
+                    <li>La couleur doit être au format hexadécimal (ex: #FF5733)</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% load static %}
+<script src="{% static 'script/import.js' %}"></script>

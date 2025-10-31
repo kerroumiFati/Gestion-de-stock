@@ -6,6 +6,9 @@
   const API_CURRENCIES = '/API/currencies/';
   const API_EXCHANGE_RATES = '/API/exchange-rates/';
   const API_WAREHOUSES = '/API/entrepots/';
+
+  // Variable globale pour stocker le symbole de devise par défaut
+  let DEFAULT_CURRENCY_SYMBOL = '€'; // Valeur par défaut si non configurée
   function asListSafe(data){
     if (Array.isArray(data)) return data;
     if (data && Array.isArray(data.results)) return data.results;
@@ -83,6 +86,22 @@
       const def = list.find(c => c.is_default);
       if(def){ $('#vente_currency').val(def.id); }
     }
+  }
+
+  function loadSystemConfig(){
+    return $.ajax({ url: '/API/system-config/', method: 'GET', dataType: 'json' })
+      .done(function(cfg){
+        dbg('loadSystemConfig success', cfg);
+        // Mettre à jour le symbole de devise par défaut
+        if(cfg && cfg.default_currency_details && cfg.default_currency_details.symbol){
+          DEFAULT_CURRENCY_SYMBOL = cfg.default_currency_details.symbol;
+          dbg('Devise par défaut:', cfg.default_currency_details.code, DEFAULT_CURRENCY_SYMBOL);
+        }
+        return cfg;
+      })
+      .fail(function(xhr){
+        dbg('loadSystemConfig fail', xhr.status, xhr.responseText || xhr.statusText);
+      });
   }
 
   function loadWarehouses(){
@@ -283,9 +302,9 @@
     const remisePct = parseFloat(($('#vente_remise').val()||'0')) || 0;
     const remiseMontant = total * (remisePct/100);
     const totalTTC = total - remiseMontant;
-    $('#vente_total_ht').text(total.toFixed(2)+' €');
-    $('#vente_remise_montant').text(remiseMontant.toFixed(2)+' €');
-    $('#vente_total_ttc').text(totalTTC.toFixed(2)+' €');
+    $('#vente_total_ht').text(total.toFixed(2)+' '+DEFAULT_CURRENCY_SYMBOL);
+    $('#vente_remise_montant').text(remiseMontant.toFixed(2)+' '+DEFAULT_CURRENCY_SYMBOL);
+    $('#vente_total_ttc').text(totalTTC.toFixed(2)+' '+DEFAULT_CURRENCY_SYMBOL);
   }
 
   function addCurrentProductLine(){
@@ -373,8 +392,9 @@
         $('#vente_status').text('Vente '+statusText+' (#'+num+')')
           .removeClass('text-danger').addClass('text-success');
         clearSale();
-        // refresh list and switch to list tab
+        // refresh list and stats, then switch to list tab
         loadSalesList();
+        loadStats();
         $('a#liste-ventes-tab').tab('show');
       })
       .fail(function(xhr){
@@ -430,32 +450,80 @@
 
   function renderSalesList(rows){
     const $tbody = $('#liste_ventes_body'); if(!$tbody.length) return;
+    const $table = $('#tbl_liste_ventes');
+
+    // Destroy DataTable if it exists
+    if($.fn.dataTable && $.fn.dataTable.isDataTable($table)){
+      $table.DataTable().clear().destroy();
+    }
+
     $tbody.empty();
     const list = asList(rows);
-    if(!list.length){ $tbody.append('<tr><td colspan="7" class="text-center text-muted">Aucune vente</td></tr>'); return; }
-    list.forEach(function(v){
-      const tr = $('<tr>').css('cursor', 'pointer').addClass('sale-row');
-      tr.attr('data-sale-id', v.id);
-      tr.append('<td>'+(v.numero || v.id)+'</td>');
-      tr.append('<td>'+(v.date_vente || '').toString().replace('T',' ').slice(0,16)+'</td>');
-      tr.append('<td>'+(v.client_nom || '')+' '+(v.client_prenom || '')+'</td>');
-      tr.append('<td>'+ (v.statut || '') +'</td>');
-      tr.append('<td>'+ (v.type_paiement || '') +'</td>');
-      tr.append('<td>'+ (typeof v.total_ttc!=="undefined" ? v.total_ttc : '') +'</td>');
-      var actions = '';
-      if((v.statut||'') === 'draft'){
-        actions += '<button class="btn btn-sm btn-success finalize-sale" data-id="'+v.id+'"><i class="fa fa-check"></i> Finaliser</button> ';
+    if(!list.length){ $tbody.append('<tr><td colspan="7" class="text-center text-muted">Aucune vente</td></tr>'); }
+    else {
+      list.forEach(function(v){
+        const tr = $('<tr>').css('cursor', 'pointer').addClass('sale-row');
+        tr.attr('data-sale-id', v.id);
+        tr.append('<td>'+(v.numero || v.id)+'</td>');
+        tr.append('<td>'+(v.date_vente || '').toString().replace('T',' ').slice(0,16)+'</td>');
+        tr.append('<td>'+(v.client_nom || '')+' '+(v.client_prenom || '')+'</td>');
+        tr.append('<td>'+ (v.statut || '') +'</td>');
+        tr.append('<td>'+ (v.type_paiement || '') +'</td>');
+        tr.append('<td>'+ (typeof v.total_ttc!=="undefined" ? v.total_ttc : '') +'</td>');
+        var actions = '';
+        if((v.statut||'') === 'draft'){
+          actions += '<button class="btn btn-sm btn-success finalize-sale" data-id="'+v.id+'"><i class="fa fa-check"></i> Finaliser</button> ';
+        }
+        actions += '<button class="btn btn-sm btn-info view-sale-details" data-id="'+v.id+'"><i class="fa fa-eye"></i> Détails</button>';
+        tr.append('<td>'+ (actions || '') +'</td>');
+        $tbody.append(tr);
+      });
+    }
+
+    // Reinitialize DataTable
+    if($.fn.DataTable){
+      try {
+        $table.DataTable({
+          language: {
+            url: '//cdn.datatables.net/plug-ins/1.11.5/i18n/fr-FR.json'
+          },
+          order: [[1, 'desc']], // Sort by date (column 1) descending
+          pageLength: 25
+        });
+      } catch(e) {
+        dbg('DataTable init failed:', e);
       }
-      actions += '<button class="btn btn-sm btn-info view-sale-details" data-id="'+v.id+'"><i class="fa fa-eye"></i> Détails</button>';
-      tr.append('<td>'+ (actions || '') +'</td>');
-      $tbody.append(tr);
-    });
+    }
   }
 
   function loadSalesList(){
     $.ajax({ url:'/API/ventes/?page_size=100', method:'GET', dataType:'json' })
       .done(function(data){ SALES_LIST = asList(data); applySalesFilterAndRender(); })
       .fail(function(xhr){ dbg('loadSalesList fail', xhr.status, xhr.responseText || xhr.statusText); });
+  }
+
+  function loadStats(){
+    $.ajax({ url:'/API/ventes/stats/', method:'GET', dataType:'json' })
+      .done(function(data){
+        dbg('loadStats success', data);
+        // Nombre de ventes
+        $('#stat_ventes_today').text(data.ventes_aujourd_hui || 0);
+        $('#stat_ventes_week').text(data.ventes_semaine || 0);
+        $('#stat_ventes_month').text(data.ventes_mois || 0);
+        $('#stat_ventes_total').text(data.total_ventes || 0);
+
+        // Chiffre d'affaires
+        const formatMoney = function(val){ return (val || 0).toFixed(2) + ' ' + DEFAULT_CURRENCY_SYMBOL; };
+        $('#stat_ca_today').text(formatMoney(data.ca_aujourd_hui));
+        $('#stat_ca_week').text(formatMoney(data.ca_semaine));
+        $('#stat_ca_month').text(formatMoney(data.ca_mois));
+        $('#stat_ca_total').text(formatMoney(data.ca_total));
+      })
+      .fail(function(xhr){
+        dbg('loadStats fail', xhr.status, xhr.responseText || xhr.statusText);
+        // Afficher des 0 en cas d'erreur
+        $('.card-body h4[id^="stat_"]').text('N/A');
+      });
   }
 
   function loadSaleDetails(saleId){
@@ -566,15 +634,18 @@
       return; // not on vente page
     }
     LINES = []; // reset
-    loadClients();
-    loadCurrencies();
-    loadWarehouses();
-    bindProduitFilters();
-    renderLines();
-    loadSalesList();
 
-    // apply filter change
-    $(document).off('change', '#ventes_filter').on('change', '#ventes_filter', function(){ applySalesFilterAndRender(); });
+    // Charger la configuration système en premier pour obtenir la devise
+    loadSystemConfig().always(function(){
+      // Une fois la devise chargée (ou en cas d'erreur), charger le reste
+      loadClients();
+      loadCurrencies();
+      loadWarehouses();
+      bindProduitFilters();
+      renderLines();
+      loadSalesList();
+      loadStats(); // Load initial stats
+    });
 
     // apply filter change
     $(document).off('change', '#ventes_filter').on('change', '#ventes_filter', function(){ applySalesFilterAndRender(); });
@@ -587,7 +658,7 @@
       if(!confirm('Finaliser cette vente ?')) return;
       var $btn = $(this); $btn.prop('disabled', true).addClass('disabled');
       $.ajax({ url:'/API/ventes/'+id+'/complete/', method:'POST', headers:{ 'X-CSRFToken': getCSRFToken() } })
-        .done(function(){ loadSalesList(); })
+        .done(function(){ loadSalesList(); loadStats(); })
         .fail(function(xhr){ alert('Erreur finalisation: '+ (xhr.responseText || xhr.statusText)); })
         .always(function(){ $btn.prop('disabled', false).removeClass('disabled'); });
     });
@@ -614,6 +685,9 @@
 
     // reload list when switching to the list tab
     $(document).off('shown.bs.tab', 'a#liste-ventes-tab').on('shown.bs.tab', 'a#liste-ventes-tab', function(){ loadSalesList(); });
+
+    // reload stats when switching to stats tab
+    $(document).off('shown.bs.tab', 'a#stats-ventes-tab').on('shown.bs.tab', 'a#stats-ventes-tab', function(){ loadStats(); });
 
     // bind add line
     $(document).off('click', '#vente_add_line').on('click', '#vente_add_line', function(e){ e.preventDefault(); addCurrentProductLine(); });

@@ -272,19 +272,20 @@
             const total = quantite * prixU;
             totalArticles += quantite;
 
+            const currSymbol = currencyData ? currencyData.symbol : '€';
             $tbody.append(`
                 <tr>
                     <td>
                         <strong>${item.produit.designation}</strong><br>
                         <small class="text-muted">${item.produit.reference}</small>
                     </td>
-                    <td class="text-right">${prixU.toFixed(2)} €</td>
+                    <td class="text-right">${prixU.toFixed(2)} ${currSymbol}</td>
                     <td class="text-center">
                         <input type="number" class="form-control form-control-sm qte-input text-center"
                                data-index="${index}" value="${quantite}"
                                min="1" max="${item.produit.quantite}" style="width: 70px;">
                     </td>
-                    <td class="text-right"><strong>${total.toFixed(2)} €</strong></td>
+                    <td class="text-right"><strong>${total.toFixed(2)} ${currSymbol}</strong></td>
                     <td class="text-center">
                         <button class="btn btn-sm btn-danger remove-item" data-index="${index}">
                             <i class="fa fa-trash"></i>
