@@ -1,3 +1,4 @@
+{% load i18n %}
 <head>
     <meta charset="UTF-8">
     <style>
@@ -232,20 +233,20 @@
     <!-- En-tête -->
     <div class="import-header">
         <h1 class="mb-3">
-            <i class="fas fa-file-import mr-3"></i>Import de Données
+            <i class="fas fa-file-import mr-3"></i>{% trans "Import de Données" %}
         </h1>
         <p class="mb-0" style="opacity: 0.9;">
-            Importez vos produits et catégories en masse depuis des fichiers Excel ou CSV
+            {% trans "Importez vos produits et catégories en masse depuis des fichiers Excel ou CSV" %}
         </p>
     </div>
 
     <!-- Onglets -->
     <div class="tab-buttons">
         <button class="tab-btn active" onclick="switchTab('products')">
-            <i class="fas fa-box mr-2"></i>Produits
+            <i class="fas fa-box mr-2"></i>{% trans "Produits" %}
         </button>
         <button class="tab-btn" onclick="switchTab('categories')">
-            <i class="fas fa-tags mr-2"></i>Catégories
+            <i class="fas fa-tags mr-2"></i>{% trans "Catégories" %}
         </button>
     </div>
 
@@ -254,16 +255,16 @@
         <div class="import-card">
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h3 class="mb-0">
-                    <i class="fas fa-box text-primary mr-2"></i>Importer des Produits
+                    <i class="fas fa-box text-primary mr-2"></i>{% trans "Importer des Produits" %}
                 </h3>
                 <div>
                     <button class="template-btn" onclick="downloadTemplate('products', 'excel')">
                         <i class="fas fa-file-excel"></i>
-                        Template Excel
+                        {% trans "Template Excel" %}
                     </button>
                     <button class="template-btn ml-2" onclick="downloadTemplate('products', 'csv')">
                         <i class="fas fa-file-csv"></i>
-                        Template CSV
+                        {% trans "Template CSV" %}
                     </button>
                 </div>
             </div>
@@ -271,8 +272,8 @@
             <!-- Zone d'upload -->
             <div class="upload-zone" id="uploadZoneProducts" onclick="document.getElementById('fileInputProducts').click()">
                 <i class="fas fa-cloud-upload-alt"></i>
-                <h4>Glissez votre fichier ici ou cliquez pour parcourir</h4>
-                <p class="text-muted mb-0">Formats acceptés: .xlsx, .xls, .csv (max 10 MB)</p>
+                <h4>{% trans "Glissez votre fichier ici ou cliquez pour parcourir" %}</h4>
+                <p class="text-muted mb-0">{% trans "Formats acceptés" %}: .xlsx, .xls, .csv ({% trans "max" %} 10 MB)</p>
                 <input type="file" id="fileInputProducts" class="file-input" accept=".xlsx,.xls,.csv" onchange="handleFileSelect(this, 'products')">
             </div>
 
@@ -288,23 +289,23 @@
             <!-- Prévisualisation -->
             <div id="previewProducts" style="display: none;">
                 <h5 class="mt-4 mb-3">
-                    <i class="fas fa-eye mr-2"></i>Prévisualisation (<span id="previewCountProducts">0</span> lignes)
+                    <i class="fas fa-eye mr-2"></i>{% trans "Prévisualisation" %} (<span id="previewCountProducts">0</span> {% trans "lignes" %})
                 </h5>
                 <div class="preview-table" id="previewTableProducts"></div>
 
                 <div class="text-right mt-3">
                     <button class="btn btn-secondary mr-2" onclick="cancelImport('products')">
-                        <i class="fas fa-times mr-2"></i>Annuler
+                        <i class="fas fa-times mr-2"></i>{% trans "Annuler" %}
                     </button>
                     <button class="btn btn-success" onclick="confirmImport('products')">
-                        <i class="fas fa-check mr-2"></i>Confirmer l'import
+                        <i class="fas fa-check mr-2"></i>{% trans "Confirmer l'import" %}
                     </button>
                 </div>
             </div>
 
             <!-- Progression -->
             <div id="progressProducts" style="display: none;">
-                <h5 class="mt-4">Import en cours...</h5>
+                <h5 class="mt-4">{% trans "Import en cours..." %}</h5>
                 <div class="progress-bar">
                     <div class="progress-fill" id="progressFillProducts" style="width: 0%"></div>
                 </div>
@@ -313,7 +314,7 @@
             <!-- Résultats -->
             <div id="resultsProducts" style="display: none;">
                 <h5 class="mt-4 mb-3">
-                    <i class="fas fa-check-circle text-success mr-2"></i>Import terminé
+                    <i class="fas fa-check-circle text-success mr-2"></i>{% trans "Import terminé" %}
                 </h5>
                 <div class="import-results" id="resultsStatsProducts"></div>
                 <div id="errorsListProducts" style="display: none; margin-top: 20px;"></div>
@@ -326,16 +327,16 @@
         <div class="import-card">
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h3 class="mb-0">
-                    <i class="fas fa-tags text-primary mr-2"></i>Importer des Catégories
+                    <i class="fas fa-tags text-primary mr-2"></i>{% trans "Importer des Catégories" %}
                 </h3>
                 <div>
                     <button class="template-btn" onclick="downloadTemplate('categories', 'excel')">
                         <i class="fas fa-file-excel"></i>
-                        Template Excel
+                        {% trans "Template Excel" %}
                     </button>
                     <button class="template-btn ml-2" onclick="downloadTemplate('categories', 'csv')">
                         <i class="fas fa-file-csv"></i>
-                        Template CSV
+                        {% trans "Template CSV" %}
                     </button>
                 </div>
             </div>
@@ -343,8 +344,8 @@
             <!-- Zone d'upload -->
             <div class="upload-zone" id="uploadZoneCategories" onclick="document.getElementById('fileInputCategories').click()">
                 <i class="fas fa-cloud-upload-alt"></i>
-                <h4>Glissez votre fichier ici ou cliquez pour parcourir</h4>
-                <p class="text-muted mb-0">Formats acceptés: .xlsx, .xls, .csv (max 10 MB)</p>
+                <h4>{% trans "Glissez votre fichier ici ou cliquez pour parcourir" %}</h4>
+                <p class="text-muted mb-0">{% trans "Formats acceptés" %}: .xlsx, .xls, .csv ({% trans "max" %} 10 MB)</p>
                 <input type="file" id="fileInputCategories" class="file-input" accept=".xlsx,.xls,.csv" onchange="handleFileSelect(this, 'categories')">
             </div>
 
@@ -360,23 +361,23 @@
             <!-- Prévisualisation -->
             <div id="previewCategories" style="display: none;">
                 <h5 class="mt-4 mb-3">
-                    <i class="fas fa-eye mr-2"></i>Prévisualisation (<span id="previewCountCategories">0</span> lignes)
+                    <i class="fas fa-eye mr-2"></i>{% trans "Prévisualisation" %} (<span id="previewCountCategories">0</span> {% trans "lignes" %})
                 </h5>
                 <div class="preview-table" id="previewTableCategories"></div>
 
                 <div class="text-right mt-3">
                     <button class="btn btn-secondary mr-2" onclick="cancelImport('categories')">
-                        <i class="fas fa-times mr-2"></i>Annuler
+                        <i class="fas fa-times mr-2"></i>{% trans "Annuler" %}
                     </button>
                     <button class="btn btn-success" onclick="confirmImport('categories')">
-                        <i class="fas fa-check mr-2"></i>Confirmer l'import
+                        <i class="fas fa-check mr-2"></i>{% trans "Confirmer l'import" %}
                     </button>
                 </div>
             </div>
 
             <!-- Progression -->
             <div id="progressCategories" style="display: none;">
-                <h5 class="mt-4">Import en cours...</h5>
+                <h5 class="mt-4">{% trans "Import en cours..." %}</h5>
                 <div class="progress-bar">
                     <div class="progress-fill" id="progressFillCategories" style="width: 0%"></div>
                 </div>
@@ -385,7 +386,7 @@
             <!-- Résultats -->
             <div id="resultsCategories" style="display: none;">
                 <h5 class="mt-4 mb-3">
-                    <i class="fas fa-check-circle text-success mr-2"></i>Import terminé
+                    <i class="fas fa-check-circle text-success mr-2"></i>{% trans "Import terminé" %}
                 </h5>
                 <div class="import-results" id="resultsStatsCategories"></div>
                 <div id="errorsListCategories" style="display: none; margin-top: 20px;"></div>
@@ -396,25 +397,25 @@
     <!-- Instructions -->
     <div class="import-card">
         <h4 class="mb-3">
-            <i class="fas fa-info-circle text-info mr-2"></i>Instructions
+            <i class="fas fa-info-circle text-info mr-2"></i>{% trans "Instructions" %}
         </h4>
         <div class="row">
             <div class="col-md-6">
-                <h6 class="font-weight-bold mb-2">Pour les Produits:</h6>
+                <h6 class="font-weight-bold mb-2">{% trans "Pour les Produits:" %}</h6>
                 <ul class="text-muted">
-                    <li>Colonnes requises: <code>reference</code>, <code>designation</code>, <code>prixU</code></li>
-                    <li>Colonnes optionnelles: <code>code_barre</code>, <code>description</code>, <code>categorie</code>, <code>fournisseur</code>, <code>quantite</code>, <code>stock_min</code>, <code>stock_max</code>, <code>unite_mesure</code></li>
-                    <li>La catégorie et le fournisseur doivent exister dans le système</li>
-                    <li>Le prix doit être un nombre positif</li>
+                    <li>{% trans "Colonnes requises" %}: <code>reference</code>, <code>designation</code>, <code>prixU</code></li>
+                    <li>{% trans "Colonnes optionnelles" %}: <code>code_barre</code>, <code>description</code>, <code>categorie</code>, <code>fournisseur</code>, <code>quantite</code>, <code>stock_min</code>, <code>stock_max</code>, <code>unite_mesure</code></li>
+                    <li>{% trans "La catégorie et le fournisseur doivent exister dans le système" %}</li>
+                    <li>{% trans "Le prix doit être un nombre positif" %}</li>
                 </ul>
             </div>
             <div class="col-md-6">
-                <h6 class="font-weight-bold mb-2">Pour les Catégories:</h6>
+                <h6 class="font-weight-bold mb-2">{% trans "Pour les Catégories:" %}</h6>
                 <ul class="text-muted">
-                    <li>Colonne requise: <code>nom</code></li>
-                    <li>Colonnes optionnelles: <code>parent</code>, <code>description</code>, <code>couleur</code>, <code>icone</code></li>
-                    <li>La catégorie parente doit exister si spécifiée</li>
-                    <li>La couleur doit être au format hexadécimal (ex: #FF5733)</li>
+                    <li>{% trans "Colonnes requises" %}: <code>nom</code></li>
+                    <li>{% trans "Colonnes optionnelles" %}: <code>parent</code>, <code>description</code>, <code>couleur</code>, <code>icone</code></li>
+                    <li>{% trans "La catégorie parente doit exister si spécifiée" %}</li>
+                    <li>{% trans "La couleur doit être au format hexadécimal" %} (ex: #FF5733)</li>
                 </ul>
             </div>
         </div>

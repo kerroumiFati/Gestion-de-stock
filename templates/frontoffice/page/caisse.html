@@ -1,4 +1,5 @@
 {% load static %}
+{% load i18n %}
 
 <div id="caissePage" class="container-fluid">
   <div class="row">
@@ -7,7 +8,7 @@
       <div class="card bg-white shadow-sm">
         <div class="card-header bg-dark text-white">
           <h5 class="mb-0">
-            <i class="fa fa-cash-register"></i> Point de Vente
+            <i class="fa fa-cash-register"></i> {% trans "Point de Vente" %}
           </h5>
         </div>
         <div class="card-body">
@@ -15,14 +16,14 @@
           <div class="row mb-3">
             <div class="col-12">
               <label class="font-weight-bold">
-                <i class="fa fa-barcode"></i> Scanner Code-Barres
+                <i class="fa fa-barcode"></i> {% trans "Scanner Code-Barres" %}
               </label>
               <div class="input-group">
                 <input id="caisse_search" type="text" class="form-control"
-                       placeholder="Scanner code-barres ou référence..." autofocus>
+                       placeholder="{% trans 'Scanner code-barres ou référence...' %}" autofocus>
                 <div class="input-group-append">
                   <button id="caisse_add_btn" class="btn btn-primary" type="button">
-                    <i class="fa fa-plus"></i> Ajouter
+                    <i class="fa fa-plus"></i> {% trans "Ajouter" %}
                   </button>
                 </div>
               </div>
@@ -32,13 +33,13 @@
           <!-- Sélection manuelle de produit -->
           <div class="row mb-3">
             <div class="col-sm-8 mb-2">
-              <label class="font-weight-bold">Sélection manuelle</label>
+              <label class="font-weight-bold">{% trans "Sélection manuelle" %}</label>
               <select id="caisse_produit" class="form-control">
-                <option value="">Choisir un produit...</option>
+                <option value="">{% trans "Sélectionner un produit" %}...</option>
               </select>
             </div>
             <div class="col-sm-2 mb-2">
-              <label class="font-weight-bold">Qté</label>
+              <label class="font-weight-bold">{% trans "Qté" %}</label>
               <input id="caisse_qte" type="number" class="form-control text-center" min="1" value="1">
             </div>
             <div class="col-sm-2 mb-2">
@@ -53,16 +54,16 @@
 
           <!-- Liste des articles du panier -->
           <h6 class="mb-2">
-            <i class="fa fa-shopping-cart"></i> Panier (<span id="caisse_nb_articles">0</span> article(s))
+            <i class="fa fa-shopping-cart"></i> {% trans "Panier" %} (<span id="caisse_nb_articles">0</span> {% trans "article(s)" %})
           </h6>
           <div class="table-responsive" style="max-height: 400px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 5px;">
             <table class="table table-sm table-hover mb-0">
               <thead class="thead-light sticky-top">
                 <tr>
-                  <th>Produit</th>
-                  <th class="text-right">Prix U.</th>
-                  <th class="text-center">Qté</th>
-                  <th class="text-right">Total</th>
+                  <th>{% trans "Produit" %}</th>
+                  <th class="text-right">{% trans "Prix U" %}.</th>
+                  <th class="text-center">{% trans "Qté" %}</th>
+                  <th class="text-right">{% trans "Total" %}</th>
                   <th class="text-center" style="width:60px;"></th>
                 </tr>
               </thead>
@@ -70,7 +71,7 @@
                 <tr id="caisse_empty_row">
                   <td colspan="5" class="text-center text-muted py-4">
                     <i class="fa fa-shopping-basket fa-2x mb-2"></i><br>
-                    Panier vide
+                    {% trans "Panier vide" %}
                   </td>
                 </tr>
               </tbody>
@@ -85,32 +86,32 @@
       <div class="card bg-white shadow-sm">
         <div class="card-header bg-dark text-white">
           <h5 class="mb-0">
-            <i class="fa fa-receipt"></i> Informations de Vente
+            <i class="fa fa-receipt"></i> {% trans "Informations de Vente" %}
           </h5>
         </div>
         <div class="card-body">
           <!-- Client, Entrepôt et Paiement sur une ligne -->
           <div class="row mb-3">
             <div class="col-md-4">
-              <label class="small font-weight-bold">Client <span class="text-danger">*</span></label>
+              <label class="small font-weight-bold">{% trans "Client" %} <span class="text-danger">*</span></label>
               <select id="caisse_client" class="form-control">
-                <option value="">Choisir...</option>
+                <option value="">{% trans "Sélectionner un produit" %}...</option>
               </select>
             </div>
             <div class="col-md-4">
-              <label class="small font-weight-bold">Entrepôt <span class="text-danger">*</span></label>
+              <label class="small font-weight-bold">{% trans "Entrepôt" %} <span class="text-danger">*</span></label>
               <select id="caisse_warehouse" class="form-control">
-                <option value="">Choisir...</option>
+                <option value="">{% trans "Sélectionner un entrepôt" %}...</option>
               </select>
             </div>
             <div class="col-md-4">
-              <label class="small font-weight-bold">Paiement <span class="text-danger">*</span></label>
+              <label class="small font-weight-bold">{% trans "Paiement" %} <span class="text-danger">*</span></label>
               <select id="caisse_paiement" class="form-control">
-                <option value="cash">Espèces</option>
-                <option value="card">Carte</option>
-                <option value="check">Chèque</option>
-                <option value="transfer">Virement</option>
-                <option value="credit">Crédit</option>
+                <option value="cash">{% trans "Espèces" %}</option>
+                <option value="card">{% trans "Carte" %}</option>
+                <option value="check">{% trans "Chèque" %}</option>
+                <option value="transfer">{% trans "Virement" %}</option>
+                <option value="credit">{% trans "Crédit" %}</option>
               </select>
             </div>
           </div>
@@ -120,7 +121,7 @@
           <!-- Totaux -->
           <div class="bg-light p-3 rounded mb-3">
             <div class="row mb-2">
-              <div class="col-6">Sous-total HT:</div>
+              <div class="col-6">{% trans "Sous-total HT" %}:</div>
               <div class="col-6 text-right">
                 <strong><span id="caisse_subtotal">0.00</span> <span id="caisse_currency_symbol">€</span></strong>
               </div>
@@ -128,7 +129,7 @@
 
             <div class="row mb-2">
               <div class="col-4">
-                <label class="mb-0">Remise (%):</label>
+                <label class="mb-0">{% trans "Remise (%)" %}:</label>
               </div>
               <div class="col-8">
                 <input id="caisse_remise" type="number" class="form-control text-right"
@@ -140,7 +141,7 @@
 
             <div class="row">
               <div class="col-6">
-                <h5 class="mb-0">TOTAL TTC:</h5>
+                <h5 class="mb-0">{% trans "Total TTC" %}:</h5>
               </div>
               <div class="col-6 text-right">
                 <h4 class="mb-0 text-success">
@@ -154,12 +155,12 @@
           <div class="row">
             <div class="col-6">
               <button id="caisse_clear" class="btn btn-outline-secondary btn-block">
-                <i class="fa fa-times"></i> Vider
+                <i class="fa fa-times"></i> {% trans "Vider" %}
               </button>
             </div>
             <div class="col-6">
               <button id="caisse_validate" class="btn btn-success btn-block btn-lg">
-                <i class="fa fa-check"></i> Valider
+                <i class="fa fa-check"></i> {% trans "Valider" %}
               </button>
             </div>
           </div>
@@ -257,7 +258,7 @@
         <!-- Contenu du ticket généré ici -->
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-dismiss="modal">Fermer</button>
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">{% trans "Fermer" %}</button>
         <button type="button" class="btn btn-primary" onclick="window.print()">
           <i class="fa fa-print"></i> Imprimer
         </button>

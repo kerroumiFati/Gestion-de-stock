@@ -24,6 +24,7 @@ def dashboard(request):
     return render(request, 'frontoffice/master_page.html')
 
 
+@login_required
 def page(request, name: str):
     # Serve partial pages used by the sidebar navigation
     # Protect the admin page for staff only

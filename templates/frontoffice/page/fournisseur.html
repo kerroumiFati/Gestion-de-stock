@@ -1,4 +1,5 @@
 {% load static %}
+{% load i18n %}
 <script src="{% static 'script/fournisseur.js' %}" type="text/javascript"></script>
 
 <style>
@@ -196,14 +197,14 @@
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title">
-                        <i class="fa fa-exclamation-circle"></i> Erreur
+                        <i class="fa fa-exclamation-circle"></i> {% trans "Erreur" %}
                     </h5>
                     <button type="button" class="close" data-dismiss="modal">
                         <span>&times;</span>
                     </button>
                 </div>
                 <div class="modal-body">
-                    <p>Impossible de supprimer ce fournisseur</p>
+                    <p>{% trans "Impossible de supprimer ce fournisseur" %}</p>
                 </div>
             </div>
         </div>
@@ -212,14 +213,14 @@
     <!-- Titre de page -->
     <h1 class="page-title">
         <i class="fa fa-truck"></i>
-        Gestion des Fournisseurs
+        {% trans "Gestion des Fournisseurs" %}
     </h1>
 
     <!-- Section Formulaire -->
     <div class="modern-section">
         <div class="section-header">
             <i class="fa fa-user-tie"></i>
-            Ajouter / Modifier un Fournisseur
+            {% trans "Ajouter / Modifier un Fournisseur" %}
         </div>
 
         <form> {% csrf_token %}
@@ -228,14 +229,14 @@
             <div class="row">
                 <div class="col-md-6 mb-3">
                     <label class="modern-label" for="libelle">
-                        <i class="fa fa-building"></i> Libellé / Nom
+                        <i class="fa fa-building"></i> {% trans "Libellé / Nom" %}
                     </label>
                     <input class="form-control modern-input" type="text" id="libelle" required>
                 </div>
 
                 <div class="col-md-6 mb-3">
                     <label class="modern-label" for="email">
-                        <i class="fa fa-envelope"></i> Email
+                        <i class="fa fa-envelope"></i> {% trans "Email" %}
                     </label>
                     <input class="form-control modern-input" type="email" id="email" required>
                 </div>
@@ -244,14 +245,14 @@
             <div class="row">
                 <div class="col-md-6 mb-3">
                     <label class="modern-label" for="tel">
-                        <i class="fa fa-phone"></i> Téléphone
+                        <i class="fa fa-phone"></i> {% trans "Téléphone" %}
                     </label>
                     <input class="form-control modern-input" type="text" id="tel" required>
                 </div>
 
                 <div class="col-md-6 mb-3">
                     <label class="modern-label" for="addresse">
-                        <i class="fa fa-map-marker-alt"></i> Adresse
+                        <i class="fa fa-map-marker-alt"></i> {% trans "Adresse" %}
                     </label>
                     <input class="form-control modern-input" type="text" id="addresse" required>
                 </div>
@@ -260,10 +261,10 @@
             <div class="row">
                 <div class="col">
                     <button type="button" class="modern-btn modern-btn-primary" id="btn">
-                        <i class="fa fa-plus"></i> Ajouter
+                        <i class="fa fa-plus"></i> {% trans "Ajouter" %}
                     </button>
                     <button type="button" class="modern-btn modern-btn-secondary ml-2" onclick="resetFormFournisseur()">
-                        <i class="fa fa-undo"></i> Réinitialiser
+                        <i class="fa fa-undo"></i> {% trans "Réinitialiser" %}
                     </button>
                 </div>
             </div>
@@ -274,24 +275,24 @@
     <div class="modern-section">
         <div class="section-header">
             <i class="fa fa-list"></i>
-            Liste des Fournisseurs
+            {% trans "Liste des Fournisseurs" %}
         </div>
 
         <div class="table-responsive">
             <table id="tfourni" class="table modern-table" data-no-datatable="true">
                 <thead>
                     <tr>
-                        <th>ID</th>
-                        <th>Libellé</th>
-                        <th>Email</th>
-                        <th>Téléphone</th>
-                        <th>Adresse</th>
-                        <th>Actions</th>
+                        <th>{% trans "ID" %}</th>
+                        <th>{% trans "Libellé" %}</th>
+                        <th>{% trans "Email" %}</th>
+                        <th>{% trans "Téléphone" %}</th>
+                        <th>{% trans "Adresse" %}</th>
+                        <th>{% trans "Actions" %}</th>
                     </tr>
                 </thead>
                 <tbody id="table-content">
                     <tr>
-                        <td colspan="6" class="text-center text-muted">Chargement...</td>
+                        <td colspan="6" class="text-center text-muted">{% trans "Chargement..." %}</td>
                     </tr>
                 </tbody>
             </table>
@@ -306,6 +307,6 @@ function resetFormFournisseur(){
     document.getElementById('email').value = '';
     document.getElementById('tel').value = '';
     document.getElementById('addresse').value = '';
-    document.getElementById('btn').innerHTML = '<i class="fa fa-plus"></i> Ajouter';
+    document.getElementById('btn').innerHTML = '<i class="fa fa-plus"></i> {% trans "Ajouter" %}';
 }
 </script>

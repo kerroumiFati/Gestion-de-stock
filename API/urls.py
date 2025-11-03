@@ -2,13 +2,38 @@
 from django.urls import re_path
 from django.urls import include, path
 from rest_framework import routers
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from . import views
-from .views_import import ImportPreviewView, ImportExecuteView, ImportTemplateView
+
+# Try to import with error handling
+try:
+    from .views_import import ImportPreviewView, ImportExecuteView, ImportTemplateView
+    IMPORT_VIEWS_LOADED = True
+    IMPORT_ERROR = None
+except Exception as e:
+    IMPORT_VIEWS_LOADED = False
+    IMPORT_ERROR = str(e)
+    # Create dummy views
+    from rest_framework.views import APIView
+    from rest_framework.response import Response
+    class ImportPreviewView(APIView):
+        def post(self, request):
+            return Response({'error': 'Import views failed to load', 'details': IMPORT_ERROR}, status=500)
+    class ImportExecuteView(APIView):
+        def post(self, request):
+            return Response({'error': 'Import views failed to load', 'details': IMPORT_ERROR}, status=500)
+    class ImportTemplateView(APIView):
+        def get(self, request):
+            return Response({'error': 'Import views failed to load', 'details': IMPORT_ERROR}, status=500)
 
 # Test views
 def test_import(request):
-    return JsonResponse({'status': 'OK', 'message': 'Import URLs are working'})
+    return JsonResponse({
+        'status': 'OK',
+        'message': 'Import URLs are working',
+        'views_loaded': IMPORT_VIEWS_LOADED,
+        'import_error': IMPORT_ERROR
+    })
 
 def test_template_simple(request):
     """Test template generation without pandas"""

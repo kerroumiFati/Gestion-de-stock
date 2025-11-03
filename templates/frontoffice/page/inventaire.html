@@ -1,4 +1,5 @@
 {% load static %}
+{% load i18n %}
 <script src="{% static 'script/inventaire.js' %}" type="text/javascript"></script>
 
 <style>
@@ -187,13 +188,13 @@
                                 <tr>
                                     <th>ID</th>
                                     <th>Numéro</th>
-                                    <th>Date</th>
-                                    <th>Statut</th>
+                                    <th>{% trans "Date" %}</th>
+                                    <th>{% trans "Statut" %}</th>
                                     <th>Progression</th>
                                     <th>Créé par</th>
                                     <th>Validé par</th>
                                     <th>Note</th>
-                                    <th>Actions</th>
+                                    <th>{% trans "Actions" %}</th>
                                 </tr>
                             </thead>
                             <tbody id="inv_sessions_table"></tbody>
@@ -308,13 +309,13 @@
                     <table class="table table-hover" id="tinventaire">
                         <thead class="table-light">
                             <tr>
-                                <th>Produit</th>
-                                <th>Catégorie</th>
+                                <th>{% trans "Produit" %}</th>
+                                <th>{% trans "Catégorie" %}</th>
                                 <th>Stock Théorique</th>
                                 <th>Quantité Comptée</th>
                                 <th>Écart</th>
-                                <th>Statut</th>
-                                <th>Actions</th>
+                                <th>{% trans "Statut" %}</th>
+                                <th>{% trans "Actions" %}</th>
                             </tr>
                         </thead>
                         <tbody id="inv_table"></tbody>
@@ -415,9 +416,9 @@
                     <table class="table table-hover">
                         <thead class="table-light">
                             <tr>
-                                <th>Produit</th>
-                                <th>Référence</th>
-                                <th>Catégorie</th>
+                                <th>{% trans "Produit" %}</th>
+                                <th>{% trans "Référence" %}</th>
+                                <th>{% trans "Catégorie" %}</th>
                                 <th class="text-center">Stock Théorique</th>
                                 <th class="text-center">Quantité Comptée</th>
                                 <th class="text-center">Écart</th>

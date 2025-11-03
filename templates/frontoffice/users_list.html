@@ -1,13 +1,19 @@
 {% load static %}
+{% load i18n %}
+{% get_current_language as LANGUAGE_CODE %}
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="{{ LANGUAGE_CODE|default:'fr' }}" dir="{% if LANGUAGE_CODE == 'ar' %}rtl{% else %}ltr{% endif %}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Gestion des Utilisateurs - UltraThink</title>
+  <title>{% trans "Gestion des Utilisateurs" %} - Market</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
   <link rel="stylesheet" href="{% static 'style/modern-pages.css' %}">
+  <!-- RTL CSS for Arabic -->
+  {% if LANGUAGE_CODE == 'ar' %}
+  <link rel="stylesheet" href="{% static 'style/rtl.css' %}">
+  {% endif %}
   <style>
     body {
       background: #f7fafc;
@@ -137,32 +143,32 @@
   <!-- Sidebar -->
   <div class="admin-sidebar">
     <div class="admin-sidebar-header">
-      <h4><i class="fa fa-shield-alt"></i> Administration</h4>
-      <small>Gestion des accès</small>
+      <h4><i class="fa fa-shield-alt"></i> {% trans "ADMINISTRATION" %}</h4>
+      <small>{% trans "Gestion des accès" %}</small>
     </div>
     <ul class="sidebar-menu">
       <li class="sidebar-menu-item">
         <a href="/users-admin/" class="sidebar-menu-link active">
           <i class="fa fa-users"></i>
-          <span>Utilisateurs</span>
+          <span>{% trans "Utilisateurs" %}</span>
         </a>
       </li>
       <li class="sidebar-menu-item">
         <a href="/roles-admin/" class="sidebar-menu-link">
           <i class="fa fa-user-tag"></i>
-          <span>Rôles</span>
+          <span>{% trans "Rôles" %}</span>
         </a>
       </li>
       <li class="sidebar-menu-item">
         <a href="/audit-logs/" class="sidebar-menu-link">
           <i class="fa fa-history"></i>
-          <span>Journal d'audit</span>
+          <span>{% trans "Journaux d'audit" %}</span>
         </a>
       </li>
       <li class="sidebar-menu-item" style="margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px;">
         <a href="/admindash/" class="sidebar-menu-link">
           <i class="fa fa-arrow-left"></i>
-          <span>Retour au dashboard</span>
+          <span>{% trans "Retour au dashboard" %}</span>
         </a>
       </li>
     </ul>
@@ -173,7 +179,7 @@
     <div class="page-header">
       <h1 class="page-title">
         <i class="fa fa-users"></i>
-        Gestion des Utilisateurs
+        {% trans "Gestion des Utilisateurs" %}
       </h1>
     </div>
 
@@ -183,21 +189,21 @@
         <div class="stat-card">
           <i class="fa fa-users fa-2x"></i>
           <h3>{{ users|length }}</h3>
-          <p>Utilisateurs Total</p>
+          <p>{% trans "Utilisateurs Total" %}</p>
         </div>
       </div>
       <div class="col-md-4">
         <div class="stat-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
           <i class="fa fa-user-check fa-2x"></i>
           <h3>{{ users|length }}</h3>
-          <p>Comptes Actifs</p>
+          <p>{% trans "Comptes Actifs" %}</p>
         </div>
       </div>
       <div class="col-md-4">
         <div class="stat-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
           <i class="fa fa-user-shield fa-2x"></i>
           <h3>{{ users|length }}</h3>
-          <p>Administrateurs</p>
+          <p>{% trans "Administrateurs" %}</p>
         </div>
       </div>
     </div>
@@ -207,11 +213,11 @@
       <div class="mb-3 d-flex justify-content-between align-items-center">
         <div>
           <a href="/users-admin/new/" class="modern-btn modern-btn-primary">
-            <i class="fa fa-plus"></i> Nouvel utilisateur
+            <i class="fa fa-plus"></i> {% trans "Nouvel Utilisateur" %}
           </a>
         </div>
         <div>
-          <input type="text" id="search_users" class="form-control modern-input" style="width: 300px;" placeholder="Rechercher un utilisateur...">
+          <input type="text" id="search_users" class="form-control modern-input" style="width: 300px;" placeholder="{% trans 'Rechercher un utilisateur...' %}">
         </div>
       </div>
 
@@ -219,12 +225,12 @@
         <table class="table modern-table" id="users_table">
           <thead>
             <tr>
-              <th>Username</th>
-              <th>Nom complet</th>
-              <th>Email</th>
-              <th>Rôles</th>
-              <th>Statut</th>
-              <th>Actions</th>
+              <th>{% trans "Nom d'utilisateur" %}</th>
+              <th>{% trans "Nom complet" %}</th>
+              <th>{% trans "Email" %}</th>
+              <th>{% trans "Rôles" %}</th>
+              <th>{% trans "Statut" %}</th>
+              <th>{% trans "Actions" %}</th>
             </tr>
           </thead>
           <tbody>

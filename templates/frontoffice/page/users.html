@@ -1,4 +1,5 @@
 {% load static %}
+{% load i18n %}
 <link rel="stylesheet" href="{% static 'style/modern-pages.css' %}">
 <script src="{% static 'script/admin_users_fragment.js' %}" type="text/javascript"></script>
 
@@ -77,10 +78,10 @@
                     <tr>
                         <th>Username</th>
                         <th>Nom complet</th>
-                        <th>Email</th>
+                        <th>{% trans "Email" %}</th>
                         <th>Rôles</th>
-                        <th>Statut</th>
-                        <th>Actions</th>
+                        <th>{% trans "Statut" %}</th>
+                        <th>{% trans "Actions" %}</th>
                     </tr>
                 </thead>
                 <tbody id="users_table_body">
@@ -118,7 +119,7 @@
                         <th>Nom du rôle</th>
                         <th>Nombre de permissions</th>
                         <th>Nombre d'utilisateurs</th>
-                        <th>Actions</th>
+                        <th>{% trans "Actions" %}</th>
                     </tr>
                 </thead>
                 <tbody id="roles_table_body">
@@ -186,7 +187,7 @@
                 </select>
             </div>
             <div class="col-md-3">
-                <label class="modern-label">Date</label>
+                <label class="modern-label">{% trans "Date" %}</label>
                 <input type="date" id="audit_filter_date" class="form-control modern-input">
             </div>
             <div class="col-md-3 d-flex align-items-end">

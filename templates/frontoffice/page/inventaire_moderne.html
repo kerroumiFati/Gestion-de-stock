@@ -1,4 +1,5 @@
 {% load static %}
+{% load i18n %}
 
 <!-- Styles spécifiques pour l'inventaire moderne -->
 <style>
@@ -344,7 +345,7 @@
                     </select>
                 </div>
                 <div class="col-md-2">
-                    <label>Quantité</label>
+                    <label>{% trans "Quantité" %}</label>
                     <input type="number" id="movement_quantity" class="form-control count-input"
                            placeholder="0" min="0">
                 </div>
@@ -388,14 +389,14 @@
                 <table class="table table-hover">
                     <thead>
                         <tr>
-                            <th>Produit</th>
-                            <th>Catégorie</th>
-                            <th>Entrepôt</th>
+                            <th>{% trans "Produit" %}</th>
+                            <th>{% trans "Catégorie" %}</th>
+                            <th>{% trans "Entrepôt" %}</th>
                             <th>Stock</th>
                             <th>Seuil</th>
-                            <th>Statut</th>
+                            <th>{% trans "Statut" %}</th>
                             <th>Code-barres</th>
-                            <th>Actions</th>
+                            <th>{% trans "Actions" %}</th>
                         </tr>
                     </thead>
                     <tbody id="products_table_body">

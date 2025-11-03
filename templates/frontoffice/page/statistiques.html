@@ -1,3 +1,4 @@
+{% load i18n %}
 <head>
     <meta charset="UTF-8">
     <style>
@@ -48,13 +49,13 @@
         <div class="col-12">
             <div class="d-flex justify-content-between align-items-center">
                 <h1 class="text-dark font-weight-bold mb-0">
-                    <i class="fas fa-chart-bar mr-3"></i>Tableau de Bord - Statistiques
+                    <i class="fas fa-chart-bar mr-3"></i>{% trans "Tableau de Bord - Statistiques" %}
                 </h1>
                 <div>
                     <button class="btn btn-outline-primary btn-sm mr-2" onclick="refreshStatistics()" type="button">
-                        <i class="fas fa-sync-alt"></i> Actualiser
+                        <i class="fas fa-sync-alt"></i> {% trans "Actualiser" %}
                     </button>
-                    <small class="text-muted" id="last-update">Dernière mise à jour: -</small>
+                    <small class="text-muted" id="last-update">{% trans "Dernière mise à jour" %}: -</small>
                 </div>
             </div>
             <hr class="bg-primary" style="height: 3px;">
@@ -68,7 +69,7 @@
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
                         <h3 id="nbr-produits" class="mb-0">-</h3>
-                        <p class="mb-0">Produits</p>
+                        <p class="mb-0">{% trans "Produits" %}</p>
                     </div>
                     <i class="fas fa-box fa-2x opacity-75"></i>
                 </div>
@@ -79,7 +80,7 @@
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
                         <h3 id="nbr-clients" class="mb-0">-</h3>
-                        <p class="mb-0">Clients</p>
+                        <p class="mb-0">{% trans "Clients" %}</p>
                     </div>
                     <i class="fas fa-users fa-2x opacity-75"></i>
                 </div>
@@ -90,7 +91,7 @@
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
                         <h3 id="nbr-fournisseurs" class="mb-0">-</h3>
-                        <p class="mb-0">Fournisseurs</p>
+                        <p class="mb-0">{% trans "Fournisseurs" %}</p>
                     </div>
                     <i class="fas fa-truck fa-2x opacity-75"></i>
                 </div>
@@ -101,7 +102,7 @@
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
                         <h3 id="nbr-ventes" class="mb-0">-</h3>
-                        <p class="mb-0">Ventes</p>
+                        <p class="mb-0">{% trans "Ventes" %}</p>
                     </div>
                     <i class="fas fa-shopping-cart fa-2x opacity-75"></i>
                 </div>
@@ -112,7 +113,7 @@
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
                         <h3 id="ca-total" class="mb-0">-</h3>
-                        <p class="mb-0">CA Total</p>
+                        <p class="mb-0">{% trans "CA Total" %}</p>
                     </div>
                     <i class="fas fa-coins fa-2x opacity-75"></i>
                 </div>
@@ -123,7 +124,7 @@
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
                         <h3 id="stock-alerte" class="mb-0">-</h3>
-                        <p class="mb-0">Stock Alerte</p>
+                        <p class="mb-0">{% trans "Stock Alerte" %}</p>
                     </div>
                     <i class="fas fa-exclamation-triangle fa-2x opacity-75"></i>
                 </div>
@@ -136,15 +137,15 @@
         <!-- Ventes par mois -->
         <div class="col-lg-8 col-md-12">
             <div class="chart-container">
-                <h4 class="chart-title">Évolution des Ventes et du Chiffre d'Affaires</h4>
+                <h4 class="chart-title">{% trans "Évolution des Ventes et du Chiffre d'Affaires" %}</h4>
                 <canvas id="ventesChart" height="120"></canvas>
             </div>
         </div>
-        
+
         <!-- Statut des stocks -->
         <div class="col-lg-4 col-md-6">
             <div class="chart-container">
-                <h4 class="chart-title">Statut des Stocks</h4>
+                <h4 class="chart-title">{% trans "Statut des Stocks" %}</h4>
                 <canvas id="stockChart" height="200"></canvas>
             </div>
         </div>
@@ -154,15 +155,15 @@
         <!-- Top produits -->
         <div class="col-lg-6 col-md-12">
             <div class="chart-container">
-                <h4 class="chart-title">Top 5 Produits les Plus Vendus</h4>
+                <h4 class="chart-title">{% trans "Top 5 Produits les Plus Vendus" %}</h4>
                 <canvas id="topProduitsChart" height="150"></canvas>
             </div>
         </div>
-        
+
         <!-- Ventes par catégorie -->
         <div class="col-lg-6 col-md-12">
             <div class="chart-container">
-                <h4 class="chart-title">Ventes par Catégorie</h4>
+                <h4 class="chart-title">{% trans "Ventes par Catégorie" %}</h4>
                 <canvas id="categoriesChart" height="150"></canvas>
             </div>
         </div>
@@ -172,20 +173,41 @@
         <!-- Mouvements de stock -->
         <div class="col-lg-8 col-md-12">
             <div class="chart-container">
-                <h4 class="chart-title">Mouvements de Stock (30 derniers jours)</h4>
+                <h4 class="chart-title">{% trans "Mouvements de Stock (30 derniers jours)" %}</h4>
                 <canvas id="mouvementsChart" height="120"></canvas>
             </div>
         </div>
-        
+
         <!-- Types de paiement -->
         <div class="col-lg-4 col-md-6">
             <div class="chart-container">
-                <h4 class="chart-title">Répartition des Paiements</h4>
+                <h4 class="chart-title">{% trans "Répartition des Paiements" %}</h4>
                 <canvas id="paiementsChart" height="200"></canvas>
             </div>
         </div>
     </div>
 </div>
 {% load static %}
+{% load i18n %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
 <script src="{% static 'script/statistiques.js' %}"  type="text/javascript"></script>
+<script>
+// Auto-charger les statistiques quand la page est affichée
+(function(){
+  function tryLoadStats(){
+    if(typeof window.refreshStatistics === 'function'){
+      console.log('[Stats] Auto-loading statistics...');
+      window.refreshStatistics();
+    } else {
+      console.log('[Stats] refreshStatistics not ready, retrying...');
+      setTimeout(tryLoadStats, 100);
+    }
+  }
+  // Attendre que Chart.js soit chargé
+  if(typeof Chart !== 'undefined'){
+    tryLoadStats();
+  } else {
+    setTimeout(tryLoadStats, 200);
+  }
+})();
+</script>

@@ -1,0 +1,1203 @@
+# Arabic translations for Market application.
+# Copyright (C) 2025
+msgid ""
+msgstr ""
+"Project-Id-Version: 1.0\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: ar\n"
+
+# Sidebar Menu
+msgid "Commercial"
+msgstr "التجاري"
+
+msgid "Achats"
+msgstr "المشتريات"
+
+msgid "Ventes"
+msgstr "المبيعات"
+
+msgid "Caisse"
+msgstr "الصندوق"
+
+msgid "Factures"
+msgstr "الفواتير"
+
+msgid "Gestion des données"
+msgstr "إدارة البيانات"
+
+msgid "Produits"
+msgstr "المنتجات"
+
+msgid "Clients"
+msgstr "العملاء"
+
+msgid "Fournisseurs"
+msgstr "الموردون"
+
+msgid "Import de données"
+msgstr "استيراد البيانات"
+
+msgid "Catégories"
+msgstr "الفئات"
+
+msgid "Entrepôts"
+msgstr "المستودعات"
+
+msgid "Gestion de stock"
+msgstr "إدارة المخزون"
+
+msgid "Inventaire"
+msgstr "الجرد"
+
+msgid "Mouvements"
+msgstr "الحركات"
+
+msgid "Rapports & Analyses"
+msgstr "التقارير والتحليلات"
+
+msgid "Statistiques"
+msgstr "الإحصائيات"
+
+msgid "Rapports"
+msgstr "التقارير"
+
+msgid "Journaux d'audit"
+msgstr "سجلات المراجعة"
+
+msgid "Paramètres"
+msgstr "الإعدادات"
+
+msgid "ADMINISTRATION"
+msgstr "الإدارة"
+
+msgid "Tableau de bord Admin"
+msgstr "لوحة تحكم المسؤول"
+
+msgid "Utilisateurs"
+msgstr "المستخدمون"
+
+msgid "Déconnexion"
+msgstr "تسجيل الخروج"
+
+msgid "Market"
+msgstr "السوق"
+
+# Page content translations
+msgid "Actions"
+msgstr "الإجراءات"
+
+msgid "Ajouter"
+msgstr "إضافة"
+
+msgid "Modifier"
+msgstr "تعديل"
+
+msgid "Supprimer"
+msgstr "حذف"
+
+msgid "Fermer"
+msgstr "إغلاق"
+
+msgid "Confirmer"
+msgstr "تأكيد"
+
+msgid "Annuler"
+msgstr "إلغاء"
+
+msgid "Enregistrer"
+msgstr "حفظ"
+
+msgid "Rechercher"
+msgstr "بحث"
+
+msgid "Filtrer"
+msgstr "تصفية"
+
+msgid "Rafraîchir"
+msgstr "تحديث"
+
+msgid "Imprimer"
+msgstr "طباعة"
+
+msgid "Exporter"
+msgstr "تصدير"
+
+# Form fields
+msgid "Nom"
+msgstr "الاسم"
+
+msgid "Prénom"
+msgstr "الاسم الأول"
+
+msgid "Email"
+msgstr "البريد الإلكتروني"
+
+msgid "Téléphone"
+msgstr "الهاتف"
+
+msgid "Adresse"
+msgstr "العنوان"
+
+msgid "Référence"
+msgstr "المرجع"
+
+msgid "Désignation"
+msgstr "التسمية"
+
+msgid "Description"
+msgstr "الوصف"
+
+msgid "Prix"
+msgstr "السعر"
+
+msgid "Prix U"
+msgstr "سعر الوحدة"
+
+msgid "Prix unitaire"
+msgstr "سعر الوحدة"
+
+msgid "Prix d'achat unitaire"
+msgstr "سعر الشراء للوحدة"
+
+msgid "Quantité"
+msgstr "الكمية"
+
+msgid "Qté"
+msgstr "الكمية"
+
+msgid "Qté Min"
+msgstr "الحد الأدنى"
+
+msgid "Quantité actuelle"
+msgstr "الكمية الحالية"
+
+msgid "Nouvelle quantité"
+msgstr "الكمية الجديدة"
+
+msgid "Quantité produit"
+msgstr "كمية المنتج"
+
+msgid "quantite"
+msgstr "الكمية"
+
+msgid "Date"
+msgstr "التاريخ"
+
+msgid "Date d'Achat"
+msgstr "تاريخ الشراء"
+
+msgid "Catégorie"
+msgstr "الفئة"
+
+msgid "Client"
+msgstr "العميل"
+
+msgid "Fournisseur"
+msgstr "المورد"
+
+msgid "Entrepôt"
+msgstr "المستودع"
+
+msgid "Entrepôt par défaut"
+msgstr "المستودع الافتراضي"
+
+msgid "Paiement"
+msgstr "الدفع"
+
+msgid "Type de paiement"
+msgstr "نوع الدفع"
+
+msgid "Espèces"
+msgstr "نقداً"
+
+msgid "Carte"
+msgstr "بطاقة"
+
+msgid "Carte bancaire"
+msgstr "بطاقة مصرفية"
+
+msgid "Chèque"
+msgstr "شيك"
+
+msgid "Virement"
+msgstr "تحويل مصرفي"
+
+msgid "Crédit"
+msgstr "ائتمان"
+
+msgid "Code"
+msgstr "الرمز"
+
+msgid "Code-barres"
+msgstr "الباركود"
+
+msgid "Numéro"
+msgstr "الرقم"
+
+msgid "Statut"
+msgstr "الحالة"
+
+msgid "Total"
+msgstr "المجموع"
+
+msgid "Total TTC"
+msgstr "المجموع الإجمالي"
+
+msgid "Total ligne"
+msgstr "مجموع السطر"
+
+msgid "Total des ventes"
+msgstr "إجمالي المبيعات"
+
+msgid "CA Total"
+msgstr "إجمالي رقم الأعمال"
+
+msgid "Observations"
+msgstr "ملاحظات"
+
+msgid "Commentaires"
+msgstr "تعليقات"
+
+msgid "Commentaires sur la vente..."
+msgstr "تعليقات على البيع..."
+
+msgid "Valeur"
+msgstr "القيمة"
+
+msgid "Devise"
+msgstr "العملة"
+
+msgid "Symbole"
+msgstr "الرمز"
+
+msgid "Taux"
+msgstr "السعر"
+
+msgid "Défaut"
+msgstr "افتراضي"
+
+msgid "Validité"
+msgstr "الصلاحية"
+
+msgid "Erreur"
+msgstr "خطأ"
+
+# Caisse page
+msgid "Point de Vente"
+msgstr "نقطة البيع"
+
+msgid "Scanner Code-Barres"
+msgstr "مسح الباركود"
+
+msgid "Scanner code-barres ou référence..."
+msgstr "مسح الباركود أو المرجع..."
+
+msgid "Scanner ou saisir..."
+msgstr "مسح أو إدخال..."
+
+msgid "Scannez / tapez..."
+msgstr "مسح / كتابة..."
+
+msgid "Sélection manuelle"
+msgstr "اختيار يدوي"
+
+msgid "Select produit"
+msgstr "اختر المنتج"
+
+msgid "Sélectionner un produit"
+msgstr "اختر منتجاً"
+
+msgid "Sélectionner une catégorie"
+msgstr "اختر فئة"
+
+msgid "Sélectionner un fournisseur"
+msgstr "اختر مورداً"
+
+msgid "Sélectionner un entrepôt"
+msgstr "اختر مستودعاً"
+
+msgid "Sélectionner un type"
+msgstr "اختر نوعاً"
+
+msgid "Panier"
+msgstr "السلة"
+
+msgid "Panier vide"
+msgstr "السلة فارغة"
+
+msgid "article(s)"
+msgstr "منتج/منتجات"
+
+msgid "Informations de Vente"
+msgstr "معلومات البيع"
+
+msgid "Sous-total HT"
+msgstr "المجموع الفرعي"
+
+msgid "Remise"
+msgstr "خصم"
+
+msgid "Remise (%)"
+msgstr "خصم (%)"
+
+# Status
+msgid "Brouillons"
+msgstr "مسودات"
+
+msgid "Finalisées"
+msgstr "مكتملة"
+
+msgid "Toutes"
+msgstr "الكل"
+
+msgid "Tous les produits"
+msgstr "جميع المنتجات"
+
+msgid "Tous les entrepôts"
+msgstr "جميع المستودعات"
+
+# Gestion pages
+msgid "Gestion des Achats"
+msgstr "إدارة المشتريات"
+
+msgid "Gestion des Ventes"
+msgstr "إدارة المبيعات"
+
+msgid "Gestion des Produits"
+msgstr "إدارة المنتجات"
+
+msgid "Gestion des Clients"
+msgstr "إدارة العملاء"
+
+msgid "Gestion des Fournisseurs"
+msgstr "إدارة الموردين"
+
+msgid "Gestion des Catégories"
+msgstr "إدارة الفئات"
+
+# Filters
+msgid "Filtrer par produit"
+msgstr "تصفية حسب المنتج"
+
+msgid "Filtrer par référence..."
+msgstr "تصفية حسب المرجع..."
+
+msgid "Filtrer par statut"
+msgstr "تصفية حسب الحالة"
+
+msgid "Tapez pour filtrer..."
+msgstr "اكتب للتصفية..."
+
+# Messages
+msgid "Impossible de supprimer ce Achat"
+msgstr "لا يمكن حذف هذا الشراء"
+
+msgid "Impossible de supprimer ce client"
+msgstr "لا يمكن حذف هذا العميل"
+
+msgid "Impossible de supprimer ce fournisseur"
+msgstr "لا يمكن حذف هذا المورد"
+
+msgid "Impossible de supprimer cette catégorie"
+msgstr "لا يمكن حذف هذه الفئة"
+
+msgid "Auto-généré"
+msgstr "إنشاء تلقائي"
+
+msgid "Facultatif"
+msgstr "اختياري"
+
+msgid "Laissez vide pour une catégorie principale"
+msgstr "اترك فارغاً للفئة الرئيسية"
+
+# Statistics page
+msgid "Tableau de Bord - Statistiques"
+msgstr "لوحة التحكم - الإحصائيات"
+
+msgid "Évolution des Ventes et du Chiffre d'Affaires"
+msgstr "تطور المبيعات ورقم الأعمال"
+
+msgid "Statut des Stocks"
+msgstr "حالة المخزون"
+
+msgid "Stock Alerte"
+msgstr "تنبيه المخزون"
+
+msgid "Répartition des Paiements"
+msgstr "توزيع المدفوعات"
+
+msgid "Ventes par Catégorie"
+msgstr "المبيعات حسب الفئة"
+
+msgid "Stock par entrepôt"
+msgstr "المخزون حسب المستودع"
+
+msgid "Stocks par entrepôt"
+msgstr "المخزون حسب المستودع"
+
+msgid "Ventes aujourd'hui"
+msgstr "مبيعات اليوم"
+
+msgid "Ventes ce mois"
+msgstr "مبيعات هذا الشهر"
+
+msgid "Ventes cette semaine"
+msgstr "مبيعات هذا الأسبوع"
+
+# Parameters
+msgid "Nom de l'entreprise"
+msgstr "اسم الشركة"
+
+msgid "Message de pied de page"
+msgstr "رسالة التذييل"
+
+msgid "Message affiché en bas du ticket"
+msgstr "رسالة معروضة في أسفل التذكرة"
+
+msgid "Mot de passe actuel"
+msgstr "كلمة المرور الحالية"
+
+msgid "Nouveau mot de passe"
+msgstr "كلمة المرور الجديدة"
+
+msgid "Ex: Ma Boutique SARL"
+msgstr "مثال: متجري ش.ذ.م.م"
+
+msgid "Ex: Électronique"
+msgstr "مثال: إلكترونيات"
+
+msgid "Ex: Prix Détaillant"
+msgstr "مثال: سعر التجزئة"
+
+msgid "Ex: DETAIL"
+msgstr "مثال: تفصيل"
+
+msgid "Merci de votre visite !&#10;Au plaisir de vous revoir."
+msgstr "شكراً لزيارتكم !&#10;نسعد برؤيتكم مرة أخرى."
+
+# Price types
+msgid "Type de Prix"
+msgstr "نوع السعر"
+
+msgid "Libellé"
+msgstr "التسمية"
+
+msgid "Nb Prix"
+msgstr "عدد الأسعار"
+
+msgid "Ordre"
+msgstr "الترتيب"
+
+msgid "Ordre d'affichage"
+msgstr "ترتيب العرض"
+
+msgid "Description de la catégorie"
+msgstr "وصف الفئة"
+
+msgid "Vers"
+msgstr "إلى"
+
+msgid "De"
+msgstr "من"
+
+msgid "Vider"
+msgstr "إفراغ"
+
+msgid "Valider"
+msgstr "تأكيد"
+
+msgid "Choisir"
+msgstr "اختر"
+
+
+msgid "Nouvelle Vente"
+msgstr "بيع جديد"
+
+
+msgid "Nouvelle Vente"
+msgstr "بيع جديد"
+
+msgid "Liste des Ventes"
+msgstr "قائمة المبيعات"
+
+msgid "Choisir un client..."
+msgstr "اختر عميلاً..."
+
+msgid "optionnel"
+msgstr "اختياري"
+
+msgid "Ajouter des produits"
+msgstr "إضافة منتجات"
+
+msgid "Choisir un produit..."
+msgstr "اختر منتجاً..."
+
+msgid "Ajouter à la vente"
+msgstr "إضافة إلى البيع"
+
+msgid "Total HT"
+msgstr "المجموع بدون ضريبة"
+
+msgid "Enregistrer (Brouillon)"
+msgstr "حفظ (مسودة)"
+
+msgid "Finaliser la vente"
+msgstr "إتمام البيع"
+
+msgid "Détails de la vente"
+msgstr "تفاصيل البيع"
+
+msgid "Chargement des détails..."
+msgstr "تحميل التفاصيل..."
+
+msgid "Statistiques des Ventes"
+msgstr "إحصائيات المبيعات"
+
+msgid "CA"
+msgstr "رقم الأعمال"
+
+msgid "aujourd'hui"
+msgstr "اليوم"
+
+msgid "cette semaine"
+msgstr "هذا الأسبوع"
+
+msgid "ce mois"
+msgstr "هذا الشهر"
+
+msgid "total"
+msgstr "الإجمالي"
+
+
+msgid "Import de Données"
+msgstr "استيراد البيانات"
+
+msgid "Importez vos produits et catégories en masse depuis des fichiers Excel ou CSV"
+msgstr "استيراد المنتجات والفئات بكميات كبيرة من ملفات Excel أو CSV"
+
+msgid "Importer des Produits"
+msgstr "استيراد المنتجات"
+
+msgid "Importer des Catégories"
+msgstr "استيراد الفئات"
+
+msgid "Template Excel"
+msgstr "نموذج Excel"
+
+msgid "Template CSV"
+msgstr "نموذج CSV"
+
+msgid "Glissez votre fichier ici ou cliquez pour parcourir"
+msgstr "اسحب ملفك هنا أو انقر للتصفح"
+
+msgid "Formats acceptés"
+msgstr "الصيغ المقبولة"
+
+msgid "max"
+msgstr "الحد الأقصى"
+
+msgid "Prévisualisation"
+msgstr "معاينة"
+
+msgid "lignes"
+msgstr "سطر/أسطر"
+
+msgid "Confirmer l'import"
+msgstr "تأكيد الاستيراد"
+
+msgid "Import en cours..."
+msgstr "جاري الاستيراد..."
+
+msgid "Import terminé"
+msgstr "اكتمل الاستيراد"
+
+msgid "Instructions"
+msgstr "التعليمات"
+
+msgid "Pour les Produits:"
+msgstr "للمنتجات:"
+
+msgid "Pour les Catégories:"
+msgstr "للفئات:"
+
+msgid "Colonnes requises"
+msgstr "الأعمدة المطلوبة"
+
+msgid "Colonnes optionnelles"
+msgstr "الأعمدة الاختيارية"
+
+msgid "La catégorie et le fournisseur doivent exister dans le système"
+msgstr "يجب أن تكون الفئة والمورد موجودين في النظام"
+
+msgid "Le prix doit être un nombre positif"
+msgstr "يجب أن يكون السعر رقماً موجباً"
+
+msgid "La catégorie parente doit exister si spécifiée"
+msgstr "يجب أن تكون الفئة الأم موجودة إذا تم تحديدها"
+
+msgid "La couleur doit être au format hexadécimal"
+msgstr "يجب أن يكون اللون بصيغة hexadécimal"
+
+
+msgid "Gestion des Utilisateurs"
+msgstr "إدارة المستخدمين"
+
+msgid "Nouvel Utilisateur"
+msgstr "مستخدم جديد"
+
+msgid "Liste des Utilisateurs"
+msgstr "قائمة المستخدمين"
+
+msgid "Rôles et Permissions"
+msgstr "الأدوار والصلاحيات"
+
+msgid "Nom d'utilisateur"
+msgstr "اسم المستخدم"
+
+msgid "Mot de passe"
+msgstr "كلمة المرور"
+
+msgid "Confirmer le mot de passe"
+msgstr "تأكيد كلمة المرور"
+
+msgid "Actif"
+msgstr "نشط"
+
+msgid "Membre du staff"
+msgstr "عضو الموظفين"
+
+msgid "Superutilisateur"
+msgstr "مستخدم خارق"
+
+msgid "Rôle"
+msgstr "الدور"
+
+msgid "Permissions"
+msgstr "الصلاحيات"
+
+msgid "Dernière connexion"
+msgstr "آخر اتصال"
+
+msgid "Réinitialiser le mot de passe"
+msgstr "إعادة تعيين كلمة المرور"
+
+msgid "Êtes-vous sûr de vouloir supprimer cet utilisateur ?"
+msgstr "هل أنت متأكد من حذف هذا المستخدم؟"
+
+msgid "Gestion des Rôles"
+msgstr "إدارة الأدوار"
+
+msgid "Modifier les permissions"
+msgstr "تعديل الصلاحيات"
+
+
+msgid "Gestion des accès"
+msgstr "إدارة الوصول"
+
+msgid "Retour au dashboard"
+msgstr "العودة إلى لوحة التحكم"
+
+msgid "Journal d'audit"
+msgstr "سجل المراجعة"
+
+msgid "Username"
+msgstr "اسم المستخدم"
+
+msgid "Utilisateurs Total"
+msgstr "إجمالي المستخدمين"
+
+msgid "Comptes Actifs"
+msgstr "الحسابات النشطة"
+
+msgid "Administrateurs"
+msgstr "المسؤولون"
+
+msgid "Rechercher un utilisateur..."
+msgstr "البحث عن مستخدم..."
+
+msgid "Nom complet"
+msgstr "الاسم الكامل"
+
+
+msgid "Gestion des Rôles"
+msgstr "إدارة الأدوار"
+
+msgid "Gestion des Rôles & Permissions"
+msgstr "إدارة الأدوار والصلاحيات"
+
+msgid "Rôles & Permissions"
+msgstr "الأدوار والصلاحيات"
+
+msgid "Nouveau Rôle"
+msgstr "دور جديد"
+
+msgid "Liste des Rôles"
+msgstr "قائمة الأدوار"
+
+msgid "Nom du rôle"
+msgstr "اسم الدور"
+
+msgid "Nombre d'utilisateurs"
+msgstr "عدد المستخدمين"
+
+msgid "Sélectionner les permissions"
+msgstr "اختيار الصلاحيات"
+
+msgid "Toutes les permissions"
+msgstr "جميع الصلاحيات"
+
+msgid "Aucune permission"
+msgstr "لا صلاحيات"
+
+msgid "Journaux d'audit"
+msgstr "سجلات المراجعة"
+
+msgid "Journal d'Audit"
+msgstr "سجل المراجعة"
+
+msgid "Activité récente"
+msgstr "النشاط الأخير"
+
+msgid "Utilisateur"
+msgstr "المستخدم"
+
+msgid "Action"
+msgstr "الإجراء"
+
+msgid "Cible"
+msgstr "الهدف"
+
+msgid "Horodatage"
+msgstr "الطابع الزمني"
+
+msgid "Détails"
+msgstr "التفاصيل"
+
+msgid "Toutes les actions"
+msgstr "جميع الإجراءات"
+
+msgid "Créé"
+msgstr "تم الإنشاء"
+
+msgid "Modifié"
+msgstr "تم التعديل"
+
+msgid "Supprimé"
+msgstr "تم الحذف"
+
+msgid "Filtrer par action"
+msgstr "تصفية حسب الإجراء"
+
+msgid "Filtrer par utilisateur"
+msgstr "تصفية حسب المستخدم"
+
+
+msgid "Exports de Rapports"
+msgstr "تصدير التقارير"
+
+msgid "Rapport de Valorisation du Stock"
+msgstr "تقرير تقييم المخزون"
+
+msgid "Rapport des Ventes"
+msgstr "تقرير المبيعات"
+
+msgid "Rapport d'Inventaire"
+msgstr "تقرير الجرد"
+
+msgid "Exporter en Excel"
+msgstr "تصدير إلى Excel"
+
+msgid "Exporter en PDF"
+msgstr "تصدير إلى PDF"
+
+msgid "Format"
+msgstr "الصيغة"
+
+msgid "Période"
+msgstr "الفترة"
+
+msgid "Du"
+msgstr "من"
+
+msgid "Au"
+msgstr "إلى"
+
+msgid "Générer le rapport"
+msgstr "إنشاء التقرير"
+
+msgid "Télécharger"
+msgstr "تحميل"
+
+msgid "Valorisation du Stock"
+msgstr "تقييم المخزون"
+
+
+msgid "Sessions d'Inventaire"
+msgstr "جلسات الجرد"
+
+msgid "Nouvelle session"
+msgstr "جلسة جديدة"
+
+msgid "Session en cours"
+msgstr "جلسة جارية"
+
+msgid "Sessions terminées"
+msgstr "جلسات مكتملة"
+
+msgid "Démarrer l'inventaire"
+msgstr "بدء الجرد"
+
+msgid "Terminer l'inventaire"
+msgstr "إنهاء الجرد"
+
+msgid "Journal des mouvements"
+msgstr "سجل الحركات"
+
+msgid "Mouvements de Stock"
+msgstr "حركات المخزون"
+
+msgid "Type de mouvement"
+msgstr "نوع الحركة"
+
+msgid "Entrée"
+msgstr "إدخال"
+
+msgid "Sortie"
+msgstr "إخراج"
+
+msgid "Ajustement"
+msgstr "تعديل"
+
+msgid "Source"
+msgstr "المصدر"
+
+msgid "Destination"
+msgstr "الوجهة"
+
+msgid "Motif"
+msgstr "السبب"
+
+msgid "Vente"
+msgstr "بيع"
+
+msgid "Achat"
+msgstr "شراء"
+
+msgid "Transfert"
+msgstr "تحويل"
+
+msgid "Correction"
+msgstr "تصحيح"
+
+msgid "Perte"
+msgstr "خسارة"
+
+
+msgid "Gestion des Produits"
+msgstr "إدارة المنتجات"
+
+msgid "Nouveau Produit"
+msgstr "منتج جديد"
+
+msgid "Liste des Produits"
+msgstr "قائمة المنتجات"
+
+msgid "Stock actuel"
+msgstr "المخزون الحالي"
+
+msgid "Seuil minimum"
+msgstr "الحد الأدنى"
+
+msgid "Seuil d'alerte"
+msgstr "حد التنبيه"
+
+msgid "Seuil critique"
+msgstr "الحد الحرج"
+
+msgid "En stock"
+msgstr "في المخزون"
+
+msgid "Rupture de stock"
+msgstr "نفاذ المخزون"
+
+msgid "Stock faible"
+msgstr "مخزون منخفض"
+
+msgid "Unité de mesure"
+msgstr "وحدة القياس"
+
+msgid "Prix de vente"
+msgstr "سعر البيع"
+
+msgid "Prix d'achat"
+msgstr "سعر الشراء"
+
+msgid "Marque"
+msgstr "العلامة التجارية"
+
+msgid "Nouveau Client"
+msgstr "عميل جديد"
+
+msgid "Nouveau Fournisseur"
+msgstr "مورد جديد"
+
+msgid "Nouvelle Catégorie"
+msgstr "فئة جديدة"
+
+msgid "Nouvel Achat"
+msgstr "شراء جديد"
+
+msgid "Liste des Achats"
+msgstr "قائمة المشتريات"
+
+msgid "Gestion des Catégories"
+msgstr "إدارة الفئات"
+
+msgid "Couleur"
+msgstr "اللون"
+
+msgid "Icône"
+msgstr "الأيقونة"
+
+msgid "Parent"
+msgstr "الأصل"
+
+msgid "Sous-catégories"
+msgstr "الفئات الفرعية"
+
+
+msgid "Gestion des Clients"
+msgstr "إدارة العملاء"
+
+msgid "Ajouter / Modifier un Client"
+msgstr "إضافة / تعديل عميل"
+
+msgid "Liste des Clients"
+msgstr "قائمة العملاء"
+
+msgid "Réinitialiser"
+msgstr "إعادة تعيين"
+
+msgid "Chargement..."
+msgstr "جاري التحميل..."
+
+msgid "ID"
+msgstr "المعرف"
+
+# Catégories page - detailed translations
+msgid "Ajouter / Modifier une Catégorie"
+msgstr "إضافة / تعديل فئة"
+
+msgid "Nom de la catégorie"
+msgstr "اسم الفئة"
+
+msgid "Catégorie parent"
+msgstr "الفئة الأم"
+
+msgid "Couleur d'affichage"
+msgstr "لون العرض"
+
+msgid "Icône (Font Awesome)"
+msgstr "الأيقونة (Font Awesome)"
+
+msgid "Catégorie active"
+msgstr "فئة نشطة"
+
+msgid "Liste des Catégories"
+msgstr "قائمة الفئات"
+
+msgid "Aucune (catégorie racine)"
+msgstr "لا شيء (فئة جذر)"
+
+msgid "Cube"
+msgstr "مكعب"
+
+msgid "Ordinateur"
+msgstr "حاسوب"
+
+msgid "Mobile"
+msgstr "هاتف محمول"
+
+msgid "Vêtement"
+msgstr "ملابس"
+
+msgid "Livre"
+msgstr "كتاب"
+
+msgid "Automobile"
+msgstr "سيارة"
+
+msgid "Maison"
+msgstr "منزل"
+
+msgid "Cuisine"
+msgstr "مطبخ"
+
+msgid "Jeux"
+msgstr "ألعاب"
+
+msgid "Santé"
+msgstr "صحة"
+
+msgid "Sport"
+msgstr "رياضة"
+
+msgid "Art"
+msgstr "فن"
+
+# Produits page
+msgid "Ajouter / Modifier un Produit"
+msgstr "إضافة / تعديل منتج"
+
+msgid "Quantité en stock"
+msgstr "الكمية في المخزون"
+
+msgid "Risk Management"
+msgstr "إدارة المخاطر"
+
+msgid "Check"
+msgstr "فحص"
+
+msgid "Refresh"
+msgstr "تحديث"
+
+msgid "Ajouter le produit"
+msgstr "إضافة المنتج"
+
+msgid "Types de Prix"
+msgstr "أنواع الأسعار"
+
+msgid "Prix par Produit"
+msgstr "السعر حسب المنتج"
+
+msgid "Afficher les prix"
+msgstr "عرض الأسعار"
+
+msgid "Prix de base (prixU)"
+msgstr "السعر الأساسي"
+
+msgid "Sélectionnez un type de prix pour afficher les prix correspondants dans le tableau ci-dessous"
+msgstr "اختر نوع السعر لعرض الأسعار المقابلة في الجدول أدناه"
+
+msgid "Types de prix"
+msgstr "أنواع الأسعار"
+
+msgid "Définissez les différents types de prix (Détaillant, Grossiste, Promotionnel, etc.)"
+msgstr "حدد أنواع الأسعار المختلفة (تجزئة، جملة، عروض ترويجية، إلخ.)"
+
+msgid "Prix multiples"
+msgstr "أسعار متعددة"
+
+msgid "Définissez plusieurs prix pour un même produit selon le type de client ou la quantité"
+msgstr "حدد عدة أسعار لنفس المنتج حسب نوع العميل أو الكمية"
+
+msgid "Date début (optionnel)"
+msgstr "تاريخ البدء (اختياري)"
+
+msgid "Date fin (optionnel)"
+msgstr "تاريخ الانتهاء (اختياري)"
+
+# Fournisseurs page
+msgid "Ajouter / Modifier un Fournisseur"
+msgstr "إضافة / تعديل مورد"
+
+msgid "Libellé / Nom"
+msgstr "التسمية / الاسم"
+
+msgid "Liste des Fournisseurs"
+msgstr "قائمة الموردين"
+
+# Entrepôts page
+msgid "Gestion des Entrepôts"
+msgstr "إدارة المستودعات"
+
+msgid "Ajouter / Modifier un Entrepôt"
+msgstr "إضافة / تعديل مستودع"
+
+msgid "Nom de l'entrepôt"
+msgstr "اسم المستودع"
+
+msgid "Ex: Magasin Central"
+msgstr "مثال: المتجر المركزي"
+
+msgid "Ex: MAG01"
+msgstr "مثال: MAG01"
+
+msgid "Inactif"
+msgstr "غير نشط"
+
+msgid "Liste des Entrepôts"
+msgstr "قائمة المستودعات"
+
+msgid "Afficher les entrepôts inactifs"
+msgstr "عرض المستودعات غير النشطة"
+
+msgid "Stocks liés"
+msgstr "المخزون المرتبط"
+
+# Achats page
+msgid "Date d'expiration (optionnelle)"
+msgstr "تاريخ انتهاء الصلاحية (اختياري)"
+
+msgid "Total (auto)"
+msgstr "المجموع (تلقائي)"
+
+msgid "Référence"
+msgstr "المرجع"
+
+# Factures page
+msgid "Gestion des factures"
+msgstr "إدارة الفواتير"
+
+msgid "Bon de livraison"
+msgstr "إيصال التسليم"
+
+msgid "Depuis BL validé..."
+msgstr "من إيصال تسليم مصادق عليه..."
+
+msgid "TVA %"
+msgstr "ضريبة القيمة المضافة %"
+
+msgid "N° facture (optionnel)"
+msgstr "رقم الفاتورة (اختياري)"
+
+msgid "auto"
+msgstr "تلقائي"
+
+msgid "Créer depuis BL"
+msgstr "إنشاء من إيصال التسليم"
+
+msgid "Total TVA"
+msgstr "إجمالي ضريبة القيمة المضافة"
+
+msgid "Nb Factures"
+msgstr "عدد الفواتير"
+
+msgid "TTC"
+msgstr "شامل الضريبة"
+
+msgid "Choisir..."
+msgstr "اختر..."
+
+# Statistiques page
+msgid "Actualiser"
+msgstr "تحديث"
+
+msgid "Dernière mise à jour"
+msgstr "آخر تحديث"
+
+msgid "Top 5 Produits les Plus Vendus"
+msgstr "أفضل 5 منتجات مبيعاً"
+
+msgid "Mouvements de Stock (30 derniers jours)"
+msgstr "حركات المخزون (آخر 30 يوماً)"
+
+# Autres traductions manquantes
+msgid "Le produit a été marqué comme inactif car il est référencé dans des transactions (achats, ventes, mouvements)."
+msgstr "تم وضع علامة غير نشط على المنتج لأنه مُشار إليه في المعاملات (مشتريات، مبيعات، حركات)."
+
+msgid "Il n'apparaîtra plus dans la liste des produits actifs."
+msgstr "لن يظهر بعد الآن في قائمة المنتجات النشطة."
+

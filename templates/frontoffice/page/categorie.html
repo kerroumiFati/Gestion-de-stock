@@ -1,4 +1,5 @@
 {% load static %}
+{% load i18n %}
 <script src="{% static 'script/categorie.js' %}" type="text/javascript"></script>
 
 <style>
@@ -257,14 +258,14 @@
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title">
-                        <i class="fa fa-exclamation-circle"></i> Erreur
+                        <i class="fa fa-exclamation-circle"></i> {% trans "Erreur" %}
                     </h5>
                     <button type="button" class="close" data-dismiss="modal">
                         <span>&times;</span>
                     </button>
                 </div>
                 <div class="modal-body">
-                    <p>Impossible de supprimer cette catégorie</p>
+                    <p>{% trans "Impossible de supprimer cette catégorie" %}</p>
                 </div>
             </div>
         </div>
@@ -273,14 +274,14 @@
     <!-- Titre de page -->
     <h1 class="page-title">
         <i class="fa fa-tags"></i>
-        Gestion des Catégories
+        {% trans "Gestion des Catégories" %}
     </h1>
 
     <!-- Section Formulaire -->
     <div class="modern-section">
         <div class="section-header">
             <i class="fa fa-folder-plus"></i>
-            Ajouter / Modifier une Catégorie
+            {% trans "Ajouter / Modifier une Catégorie" %}
         </div>
 
         <form> {% csrf_token %}
@@ -289,33 +290,33 @@
             <div class="row">
                 <div class="col-md-6 mb-3">
                     <label class="modern-label" for="nom">
-                        <i class="fa fa-tag"></i> Nom de la catégorie *
+                        <i class="fa fa-tag"></i> {% trans "Nom de la catégorie" %} *
                     </label>
-                    <input class="form-control modern-input" type="text" id="nom" placeholder="Ex: Électronique" required>
+                    <input class="form-control modern-input" type="text" id="nom" placeholder="{% trans 'Ex: Électronique' %}" required>
                 </div>
 
                 <div class="col-md-6 mb-3">
                     <label class="modern-label" for="description">
-                        <i class="fa fa-align-left"></i> Description
+                        <i class="fa fa-align-left"></i> {% trans "Description" %}
                     </label>
-                    <input class="form-control modern-input" type="text" id="description" placeholder="Description de la catégorie">
+                    <input class="form-control modern-input" type="text" id="description" placeholder="{% trans 'Description de la catégorie' %}">
                 </div>
             </div>
 
             <div class="row">
                 <div class="col-md-4 mb-3">
                     <label class="modern-label" for="parent">
-                        <i class="fa fa-sitemap"></i> Catégorie parent
+                        <i class="fa fa-sitemap"></i> {% trans "Catégorie parent" %}
                     </label>
                     <select class="form-control modern-select" id="parent">
-                        <option value="">Aucune (catégorie racine)</option>
+                        <option value="">{% trans "Aucune (catégorie racine)" %}</option>
                     </select>
-                    <small class="text-muted">Laissez vide pour une catégorie principale</small>
+                    <small class="text-muted">{% trans "Laissez vide pour une catégorie principale" %}</small>
                 </div>
 
                 <div class="col-md-4 mb-3">
                     <label class="modern-label" for="couleur">
-                        <i class="fa fa-palette"></i> Couleur d'affichage
+                        <i class="fa fa-palette"></i> {% trans "Couleur d'affichage" %}
                     </label>
                     <div class="input-group">
                         <input type="color" class="form-control modern-input" id="couleur" value="#3b82f6" style="height: 45px;">
@@ -329,21 +330,21 @@
 
                 <div class="col-md-4 mb-3">
                     <label class="modern-label" for="icone">
-                        <i class="fa fa-icons"></i> Icône (Font Awesome)
+                        <i class="fa fa-icons"></i> {% trans "Icône (Font Awesome)" %}
                     </label>
                     <select class="form-control modern-select" id="icone">
-                        <option value="fa-cube">fa-cube (Cube)</option>
-                        <option value="fa-laptop">fa-laptop (Ordinateur)</option>
-                        <option value="fa-mobile-alt">fa-mobile-alt (Mobile)</option>
-                        <option value="fa-tshirt">fa-tshirt (Vêtement)</option>
-                        <option value="fa-book">fa-book (Livre)</option>
-                        <option value="fa-car">fa-car (Automobile)</option>
-                        <option value="fa-home">fa-home (Maison)</option>
-                        <option value="fa-utensils">fa-utensils (Cuisine)</option>
-                        <option value="fa-gamepad">fa-gamepad (Jeux)</option>
-                        <option value="fa-medkit">fa-medkit (Santé)</option>
-                        <option value="fa-dumbbell">fa-dumbbell (Sport)</option>
-                        <option value="fa-palette">fa-palette (Art)</option>
+                        <option value="fa-cube">fa-cube ({% trans "Cube" %})</option>
+                        <option value="fa-laptop">fa-laptop ({% trans "Ordinateur" %})</option>
+                        <option value="fa-mobile-alt">fa-mobile-alt ({% trans "Mobile" %})</option>
+                        <option value="fa-tshirt">fa-tshirt ({% trans "Vêtement" %})</option>
+                        <option value="fa-book">fa-book ({% trans "Livre" %})</option>
+                        <option value="fa-car">fa-car ({% trans "Automobile" %})</option>
+                        <option value="fa-home">fa-home ({% trans "Maison" %})</option>
+                        <option value="fa-utensils">fa-utensils ({% trans "Cuisine" %})</option>
+                        <option value="fa-gamepad">fa-gamepad ({% trans "Jeux" %})</option>
+                        <option value="fa-medkit">fa-medkit ({% trans "Santé" %})</option>
+                        <option value="fa-dumbbell">fa-dumbbell ({% trans "Sport" %})</option>
+                        <option value="fa-palette">fa-palette ({% trans "Art" %})</option>
                     </select>
                 </div>
             </div>
@@ -353,7 +354,7 @@
                     <div class="modern-checkbox-container" style="width: fit-content;">
                         <input type="checkbox" id="is_active" checked>
                         <label for="is_active">
-                            <i class="fa fa-toggle-on"></i> Catégorie active
+                            <i class="fa fa-toggle-on"></i> {% trans "Catégorie active" %}
                         </label>
                     </div>
                 </div>
@@ -362,10 +363,10 @@
             <div class="row">
                 <div class="col">
                     <button type="button" class="modern-btn modern-btn-primary" id="btn">
-                        <i class="fa fa-plus"></i> Ajouter
+                        <i class="fa fa-plus"></i> {% trans "Ajouter" %}
                     </button>
                     <button type="button" class="modern-btn modern-btn-secondary ml-2" id="btnCancel" style="display: none;">
-                        <i class="fa fa-times"></i> Annuler
+                        <i class="fa fa-times"></i> {% trans "Annuler" %}
                     </button>
                 </div>
             </div>
@@ -376,7 +377,7 @@
     <div class="modern-section">
         <div class="section-header">
             <i class="fa fa-list"></i>
-            Liste des Catégories
+            {% trans "Liste des Catégories" %}
         </div>
 
         <div class="table-responsive">
@@ -384,16 +385,16 @@
                 <thead>
                     <tr>
                         <th>#</th>
-                        <th>Catégorie</th>
-                        <th>Description</th>
-                        <th>Produits</th>
-                        <th>Statut</th>
-                        <th>Actions</th>
+                        <th>{% trans "Catégorie" %}</th>
+                        <th>{% trans "Description" %}</th>
+                        <th>{% trans "Produits" %}</th>
+                        <th>{% trans "Statut" %}</th>
+                        <th>{% trans "Actions" %}</th>
                     </tr>
                 </thead>
                 <tbody id="table-content">
                     <tr>
-                        <td colspan="6" class="text-center text-muted">Chargement...</td>
+                        <td colspan="6" class="text-center text-muted">{% trans "Chargement..." %}</td>
                     </tr>
                 </tbody>
             </table>

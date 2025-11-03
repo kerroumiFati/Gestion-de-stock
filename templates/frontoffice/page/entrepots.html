@@ -1,4 +1,5 @@
 {% load static %}
+{% load i18n %}
 <script src="{% static 'script/entrepots.js' %}" type="text/javascript"></script>
 
 <style>
@@ -277,14 +278,14 @@
   <!-- Titre de page -->
   <h1 class="page-title">
     <i class="fa fa-warehouse"></i>
-    Gestion des Entrepôts
+    {% trans "Gestion des Entrepôts" %}
   </h1>
 
   <!-- Section Formulaire -->
   <div class="modern-section">
     <div class="section-header">
       <i class="fa fa-plus-circle"></i>
-      Ajouter / Modifier un Entrepôt
+      {% trans "Ajouter / Modifier un Entrepôt" %}
     </div>
 
     <div id="wh_alerts" class="mb-3"></div>
@@ -295,31 +296,31 @@
       <div class="row">
         <div class="col-md-4 mb-3">
           <label class="modern-label">
-            <i class="fa fa-building"></i> Nom de l'entrepôt *
+            <i class="fa fa-building"></i> {% trans "Nom de l'entrepôt" %} *
           </label>
-          <input id="wh_name" type="text" class="form-control modern-input" placeholder="Ex: Magasin Central" required />
+          <input id="wh_name" type="text" class="form-control modern-input" placeholder="{% trans 'Ex: Magasin Central' %}" required />
         </div>
 
         <div class="col-md-3 mb-3">
           <label class="modern-label">
-            <i class="fa fa-barcode"></i> Code *
+            <i class="fa fa-barcode"></i> {% trans "Code" %} *
           </label>
-          <input id="wh_code" type="text" class="form-control modern-input" placeholder="Ex: MAG01" required />
+          <input id="wh_code" type="text" class="form-control modern-input" placeholder="{% trans 'Ex: MAG01' %}" required />
         </div>
 
         <div class="col-md-3 mb-3">
           <label class="modern-label">
-            <i class="fa fa-toggle-on"></i> Statut
+            <i class="fa fa-toggle-on"></i> {% trans "Statut" %}
           </label>
           <select id="wh_active" class="form-control modern-select">
-            <option value="true">Actif</option>
-            <option value="false">Inactif</option>
+            <option value="true">{% trans "Actif" %}</option>
+            <option value="false">{% trans "Inactif" %}</option>
           </select>
         </div>
 
         <div class="col-md-2 mb-3 d-flex align-items-end">
           <button id="wh_save" type="button" class="modern-btn modern-btn-primary w-100">
-            <i class="fa fa-save"></i> Enregistrer
+            <i class="fa fa-save"></i> {% trans "Enregistrer" %}
           </button>
         </div>
       </div>
@@ -327,7 +328,7 @@
       <div class="row">
         <div class="col-md-12">
           <button id="wh_reset" type="button" class="modern-btn modern-btn-secondary">
-            <i class="fa fa-undo"></i> Réinitialiser
+            <i class="fa fa-undo"></i> {% trans "Réinitialiser" %}
           </button>
         </div>
       </div>
@@ -338,13 +339,13 @@
   <div class="modern-section">
     <div class="section-header">
       <i class="fa fa-list"></i>
-      Liste des Entrepôts
+      {% trans "Liste des Entrepôts" %}
     </div>
 
     <div class="mb-3">
       <div class="modern-checkbox-container" style="width: fit-content;">
         <input class="form-check-input" type="checkbox" id="wh_show_inactive">
-        <label for="wh_show_inactive">Afficher les entrepôts inactifs</label>
+        <label for="wh_show_inactive">{% trans "Afficher les entrepôts inactifs" %}</label>
       </div>
     </div>
 
@@ -352,17 +353,17 @@
       <table id="twh" class="table modern-table" data-no-datatable="true">
         <thead>
           <tr>
-            <th>ID</th>
-            <th>Code</th>
-            <th>Nom</th>
-            <th>Statut</th>
-            <th>Stocks liés</th>
-            <th>Actions</th>
+            <th>{% trans "ID" %}</th>
+            <th>{% trans "Code" %}</th>
+            <th>{% trans "Nom" %}</th>
+            <th>{% trans "Statut" %}</th>
+            <th>{% trans "Stocks liés" %}</th>
+            <th>{% trans "Actions" %}</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td colspan="6" class="text-center text-muted">Chargement...</td>
+            <td colspan="6" class="text-center text-muted">{% trans "Chargement..." %}</td>
           </tr>
         </tbody>
       </table>

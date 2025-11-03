@@ -24,6 +24,88 @@
 	media="all">
 
 <link rel="stylesheet" href="{% static 'style/main.css' %}">
+<link rel="stylesheet" href="{% static 'style/sidebar-improvements.css' %}">
+
+<style>
+/* Force sidebar dropdown styles */
+.sidebar-dropdown > a.dropdown-toggle {
+  display: flex !important;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: #e5e7eb;
+  text-decoration: none;
+  transition: background .2s ease;
+  cursor: pointer;
+  position: relative;
+}
+
+.sidebar-dropdown > a.dropdown-toggle i.arrow {
+  margin-left: auto;
+  font-size: 10px;
+  transition: transform .25s ease;
+}
+
+.sidebar-dropdown.active > a.dropdown-toggle i.arrow {
+  transform: rotate(-180deg);
+}
+
+.sidebar-dropdown > a.dropdown-toggle:hover {
+  background: rgba(59,130,246,.15);
+  color: #fff;
+}
+
+.sidebar-submenu {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height .3s ease;
+  background: rgba(0,0,0,.15);
+  border-radius: 8px;
+  margin-top: 4px;
+}
+
+.sidebar-dropdown.active .sidebar-submenu {
+  max-height: 500px !important;
+  padding: 6px 0 !important;
+}
+
+.sidebar-submenu li {
+  margin: 0;
+}
+
+.sidebar-submenu li a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px 8px 40px;
+  color: #9ca3af;
+  text-decoration: none;
+  font-size: 13px;
+  transition: all .2s ease;
+  border-radius: 6px;
+  margin: 0 6px;
+}
+
+.sidebar-submenu li a:hover {
+  background: rgba(59,130,246,.15);
+  color: #e5e7eb;
+  padding-left: 44px;
+}
+
+.sidebar-submenu li a i {
+  width: 16px;
+  text-align: center;
+  font-size: 12px;
+}
+
+.sidebar-submenu li a:hover i {
+  color: #3b82f6;
+}
+</style>
 
 <script src="{% static 'js/jquery-3.3.1.min.js' %}"></script>
 <script src="{% static 'vendor/bootstrap-4.1/popper.min.js' %}"></script>
@@ -54,58 +136,73 @@
 							alt="User picture">
 					</div>
 					<div class="user-info">
-						<span class="user-name"> <strong>NOM </strong>
-						</span> <span class="user-role">ROLE</span> 
+						<span class="user-name"><strong>NOM</strong></span>
+						<span class="user-role">ROLE</span>
 					</div>
 				</div>
-				<!-- sidebar-header  -->
 
-				<!-- sidebar-search  -->
 				<div class="sidebar-menu">
 					<ul>
-						<li class="header-menu"><span>Gestion</span></li>
-						<li>
-							<a href="{%  url 'produits' %}">
-								<i class="zmdi zmdi-hc-1x zmdi-group-work"></i>Produits
+						<li class="header-menu"><span>CATALOGUE</span></li>
+						<li class="sidebar-dropdown">
+							<a href="#" class="dropdown-toggle">
+								<i class="fas fa-box"></i>
+								<span>Produits</span>
+								<i class="fas fa-chevron-down arrow"></i>
 							</a>
+							<ul class="sidebar-submenu">
+								<li>
+									<a href="{%  url 'produits' %}">
+										<i class="fas fa-list"></i>Liste des produits
+									</a>
+								</li>
+								<li>
+									<a href="./adminDashboard.html" onclick="show('categorie')">
+										<i class="fas fa-tags"></i>Catégories
+									</a>
+								</li>
+								<li>
+									<a href="./adminDashboard.html" onclick="show('marque')">
+										<i class="fas fa-copyright"></i>Marques
+									</a>
+								</li>
+							</ul>
 						</li>
 
-						<li>
-							<a href="./adminDashboard.html" onclick="show('categorie')">
-								<i class="zmdi zmdi-hc-1x zmdi-group-work"></i>Categorie
+						<li class="header-menu"><span>INFRASTRUCTURE</span></li>
+						<li class="sidebar-dropdown">
+							<a href="#" class="dropdown-toggle">
+								<i class="fas fa-building"></i>
+								<span>Locaux</span>
+								<i class="fas fa-chevron-down arrow"></i>
 							</a>
+							<ul class="sidebar-submenu">
+								<li>
+									<a href="./adminDashboard.html" onclick="show('salle')">
+										<i class="fas fa-door-open"></i>Salles
+									</a>
+								</li>
+								<li>
+									<a href="./adminDashboard.html" onclick="show('machine')">
+										<i class="fas fa-cogs"></i>Machines
+									</a>
+								</li>
+							</ul>
 						</li>
 
-						<li>
-							<a href="./adminDashboard.html.html" onclick="show('salle')">
-								<i class="zmdi zmdi-hc-1x zmdi-group-work"></i>Salle
-							</a>
-						</li>
-
-
-						<li>
-							<a href="./adminDashboard.html" onclick="show('marque')">
-								<i class="zmdi zmdi-hc-1x zmdi-group-work"></i>Marques
-							</a>
-						</li>
-						<li>
-							<a href="./adminDashboard.html" onclick="show('machine')">
-								<i class="zmdi zmdi-hc-1x zmdi-group-work"></i>Machines
-							</a>
-						</li>
-
+						<li class="header-menu"><span>RAPPORTS</span></li>
 						<li>
 							<a href="./adminDashboard.html" onclick="show('statistiques')">
-								<i class="zmdi zmdi-hc-1x zmdi-group-work"></i>Statistiques
+								<i class="fas fa-chart-line"></i>Statistiques
 							</a>
 						</li>
 					</ul>
 				</div>
-				<!-- sidebar-menu  -->
 			</div>
-			<!-- sidebar-content  -->
 			<div class="sidebar-footer">
-				<a href="/logout/" class="logout-link"> <i class="fa fa-power-off"></i> <span>Déconnexion</span>
+				<a href="/logout/" class="logout-link">
+					<i class="fa fa-power-off"></i>
+					<span>Déconnexion</span>
 				</a>
 			</div>
 		</nav>
@@ -147,5 +244,40 @@
 	</script>
 	<script src="{% static 'script/index.js' %}"></script>
 	<script src="{% static 'script/statistiques.js' %}"></script>
+	<script src="{% static 'script/sidebar-dropdown.js' %}"></script>
 	<script src="{% static 'js/main.js' %}"></script>
+
+	<script>
+	// Force initialization of sidebar dropdowns
+	jQuery(document).ready(function($) {
+		console.log('[Sidebar] jQuery ready - initializing dropdowns');
+
+		// Click handler for dropdown toggles
+		$('.sidebar-dropdown > .dropdown-toggle').on('click', function(e) {
+			e.preventDefault();
+			e.stopPropagation();
+
+			console.log('[Sidebar] Dropdown clicked');
+
+			var $parent = $(this).parent('.sidebar-dropdown');
+			var isActive = $parent.hasClass('active');
+
+			// Close all other dropdowns
+			$('.sidebar-dropdown.active').removeClass('active');
+
+			// Toggle current dropdown
+			if (!isActive) {
+				$parent.addClass('active');
+				console.log('[Sidebar] Opened dropdown');
+			} else {
+				console.log('[Sidebar] Closed dropdown');
+			}
+
+			return false;
+		});
+
+		console.log('[Sidebar] Found ' + $('.sidebar-dropdown').length + ' dropdowns');
+		console.log('[Sidebar] Initialization complete');
+	});
+	</script>
 </html>

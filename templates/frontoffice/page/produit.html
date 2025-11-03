@@ -1,4 +1,5 @@
 {% load static %}
+{% load i18n %}
 <script src="{% static 'script/produit.js' %}" type="text/javascript"></script>
 
 <style>
@@ -237,7 +238,7 @@ input[type="number"].form-control-product::-webkit-outer-spin-button {
             <div class="modal-content" style="border-radius: 10px; border: none;">
                 <div class="modal-header" style="background: #f7fafc; border-bottom: 1px solid #e2e8f0;">
                     <h5 class="modal-title" id="exampleModalLabel" style="color: #2d3748; font-weight: 600;">
-                        <i class="fas fa-exclamation-triangle"></i> Erreur
+                        <i class="fas fa-exclamation-triangle"></i> {% trans "Erreur" %}
                     </h5>
                     <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                         <span aria-hidden="true">&times;</span>
@@ -246,10 +247,10 @@ input[type="number"].form-control-product::-webkit-outer-spin-button {
                 <div class="modal-body" style="padding: 20px;">
                     <p style="margin: 0; color: #4a5568;">
                         <i class="fas fa-info-circle"></i>
-                        Le produit a été marqué comme inactif car il est référencé dans des transactions (achats, ventes, mouvements).
+                        {% trans "Le produit a été marqué comme inactif car il est référencé dans des transactions (achats, ventes, mouvements)." %}
                     </p>
                     <p style="margin: 10px 0 0 0; color: #718096; font-size: 0.9rem;">
-                        Il n'apparaîtra plus dans la liste des produits actifs.
+                        {% trans "Il n'apparaîtra plus dans la liste des produits actifs." %}
                     </p>
                 </div>
             </div>
@@ -258,13 +259,13 @@ input[type="number"].form-control-product::-webkit-outer-spin-button {
 
     <div class="products-container">
         <h1 class="products-title">
-            <i class="fas fa-boxes"></i> Gestion des Produits
+            <i class="fas fa-boxes"></i> {% trans "Gestion des Produits" %}
         </h1>
 
         <!-- SECTION 1 : Formulaire de produit -->
         <div class="form-section">
             <h5 class="form-section-header">
-                <i class="fas fa-edit"></i> Ajouter / Modifier un Produit
+                <i class="fas fa-edit"></i> {% trans "Ajouter / Modifier un Produit" %}
             </h5>
 
             <form id="product-form"> {% csrf_token %}
@@ -273,20 +274,20 @@ input[type="number"].form-control-product::-webkit-outer-spin-button {
                 <div class="row">
                     <div class="col-md-4 mb-3">
                         <label for="reference" class="form-label-product">
-                            <i class="fas fa-barcode"></i> Référence
+                            <i class="fas fa-barcode"></i> {% trans "Référence" %}
                         </label>
                         <input type="text" id="id" hidden>
                         <input class="form-control form-control-product" type="text" id="reference" required>
                     </div>
                     <div class="col-md-4 mb-3">
                         <label for="code_barre" class="form-label-product">
-                            <i class="fas fa-qrcode"></i> Code-barres
+                            <i class="fas fa-qrcode"></i> {% trans "Code-barres" %}
                         </label>
                         <input class="form-control form-control-product" type="text" id="code_barre" required>
                     </div>
                     <div class="col-md-4 mb-3">
                         <label for="designation" class="form-label-product">
-                            <i class="fas fa-tag"></i> Désignation
+                            <i class="fas fa-tag"></i> {% trans "Désignation" %}
                         </label>
                         <input class="form-control form-control-product" type="text" id="designation" required>
                     </div>
@@ -296,15 +297,15 @@ input[type="number"].form-control-product::-webkit-outer-spin-button {
                 <div class="row">
                     <div class="col-md-6 mb-3">
                         <label for="categorie" class="form-label-product">
-                            <i class="fas fa-folder"></i> Catégorie
+                            <i class="fas fa-folder"></i> {% trans "Catégorie" %}
                         </label>
                         <select class="form-control form-control-product" id="categorie" required>
-                            <option value="">Sélectionner une catégorie</option>
+                            <option value="">{% trans "Sélectionner une catégorie" %}</option>
                         </select>
                     </div>
                     <div class="col-md-6 mb-3">
                         <label for="prixU" class="form-label-product">
-                            <i class="fas fa-dollar-sign"></i> Prix Unitaire
+                            <i class="fas fa-dollar-sign"></i> {% trans "Prix Unitaire" %}
                         </label>
                         <input class="form-control form-control-product" type="number" id="prixU" step="0.01" min="0" placeholder="0.00">
                     </div>
@@ -314,29 +315,29 @@ input[type="number"].form-control-product::-webkit-outer-spin-button {
                 <div class="row">
                     <div class="col-md-4 mb-3">
                         <label for="fournisseur" class="form-label-product">
-                            <i class="fas fa-truck"></i> Fournisseur
+                            <i class="fas fa-truck"></i> {% trans "Fournisseur" %}
                         </label>
                         <select class="form-control form-control-product" id="fournisseur" required>
-                            <option value="">Sélectionner un fournisseur</option>
+                            <option value="">{% trans "Sélectionner un fournisseur" %}</option>
                         </select>
                     </div>
                     <div class="col-md-4 mb-3">
                         <label for="quantite" class="form-label-product">
-                            <i class="fas fa-cubes"></i> Quantité en stock
+                            <i class="fas fa-cubes"></i> {% trans "Quantité en stock" %}
                         </label>
                         <input class="form-control form-control-product" type="number" id="quantite" min="0" step="1" required placeholder="0">
                     </div>
                     <div class="col-md-4 mb-3">
                         <label for="risk" class="form-label-product">
-                            <i class="fas fa-exclamation-triangle"></i> Risk Management
+                            <i class="fas fa-exclamation-triangle"></i> {% trans "Risk Management" %}
                         </label>
                         <input class="form-control form-control-product" type="number" id="risk">
                         <div class="d-flex gap-2 mt-2">
                             <button type="button" class="btn btn-product btn-product-secondary flex-fill" id="btnrisk">
-                                <i class="fas fa-check"></i> Check
+                                <i class="fas fa-check"></i> {% trans "Check" %}
                             </button>
                             <button type="button" class="btn btn-product btn-product-secondary flex-fill" id="btnref">
-                                <i class="fas fa-sync"></i> Refresh
+                                <i class="fas fa-sync"></i> {% trans "Refresh" %}
                             </button>
                         </div>
                     </div>
@@ -345,7 +346,7 @@ input[type="number"].form-control-product::-webkit-outer-spin-button {
                 <!-- Bouton d'action -->
                 <div class="action-buttons-group">
                     <button type="button" class="btn btn-product btn-product-primary" id="btn">
-                        <i class="fas fa-plus"></i> Ajouter le produit
+                        <i class="fas fa-plus"></i> {% trans "Ajouter le produit" %}
                     </button>
                 </div>
             </form>
@@ -357,17 +358,17 @@ input[type="number"].form-control-product::-webkit-outer-spin-button {
             <ul class="nav nav-tabs mb-3" id="productTabs" role="tablist">
                 <li class="nav-item">
                     <a class="nav-link active" id="liste-produits-tab" data-toggle="tab" href="#liste-produits" role="tab">
-                        <i class="fa fa-list"></i> Liste des Produits
+                        <i class="fa fa-list"></i> {% trans "Liste des Produits" %}
                     </a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link" id="types-prix-tab" data-toggle="tab" href="#types-prix" role="tab">
-                        <i class="fa fa-list-ul"></i> Types de Prix
+                        <i class="fa fa-list-ul"></i> {% trans "Types de Prix" %}
                     </a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link" id="prix-produits-tab" data-toggle="tab" href="#prix-produits" role="tab">
-                        <i class="fa fa-dollar-sign"></i> Prix par Produit
+                        <i class="fa fa-dollar-sign"></i> {% trans "Prix par Produit" %}
                     </a>
                 </li>
             </ul>
@@ -379,15 +380,15 @@ input[type="number"].form-control-product::-webkit-outer-spin-button {
                     <div class="row mb-3">
                         <div class="col-md-4">
                             <label class="form-label-product">
-                                <i class="fa fa-tag"></i> Afficher les prix :
+                                <i class="fa fa-tag"></i> {% trans "Afficher les prix" %} :
                             </label>
                             <select id="display_price_type" class="form-control form-control-product">
-                                <option value="">Prix de base (prixU)</option>
+                                <option value="">{% trans "Prix de base (prixU)" %}</option>
                             </select>
                         </div>
                         <div class="col-md-8">
                             <div class="alert alert-info mb-0" style="padding: 10px;">
-                                <i class="fa fa-info-circle"></i> <small>Sélectionnez un type de prix pour afficher les prix correspondants dans le tableau ci-dessous</small>
+                                <i class="fa fa-info-circle"></i> <small>{% trans "Sélectionnez un type de prix pour afficher les prix correspondants dans le tableau ci-dessous" %}</small>
                             </div>
                         </div>
                     </div>
@@ -396,14 +397,14 @@ input[type="number"].form-control-product::-webkit-outer-spin-button {
                         <table id="tproduit" class="table table-product table-hover">
                             <thead>
                                 <tr>
-                                    <th scope="col">ID</th>
-                                    <th scope="col">Référence</th>
-                                    <th scope="col">Code-barres</th>
-                                    <th scope="col">Désignation</th>
-                                    <th scope="col">Catégorie</th>
-                                    <th scope="col">Prix U</th>
-                                    <th scope="col">Fournisseur</th>
-                                    <th scope="col" class="text-center">Actions</th>
+                                    <th scope="col">{% trans "ID" %}</th>
+                                    <th scope="col">{% trans "Référence" %}</th>
+                                    <th scope="col">{% trans "Code-barres" %}</th>
+                                    <th scope="col">{% trans "Désignation" %}</th>
+                                    <th scope="col">{% trans "Catégorie" %}</th>
+                                    <th scope="col">{% trans "Prix U" %}</th>
+                                    <th scope="col">{% trans "Fournisseur" %}</th>
+                                    <th scope="col" class="text-center">{% trans "Actions" %}</th>
                                 </tr>
                             </thead>
                             <tbody id="table-content">
@@ -415,26 +416,26 @@ input[type="number"].form-control-product::-webkit-outer-spin-button {
                 <!-- Onglet 2 : Types de Prix -->
                 <div class="tab-pane fade" id="types-prix" role="tabpanel">
                     <div class="alert alert-info">
-                        <i class="fa fa-info-circle"></i> <strong>Types de prix :</strong> Définissez les différents types de prix (Détaillant, Grossiste, Promotionnel, etc.)
+                        <i class="fa fa-info-circle"></i> <strong>{% trans "Types de prix" %} :</strong> {% trans "Définissez les différents types de prix (Détaillant, Grossiste, Promotionnel, etc.)" %}
                     </div>
 
                     <!-- Formulaire d'ajout de type de prix -->
                     <div class="row mb-3">
                         <div class="col-md-3">
-                            <label class="form-label-product">Code *</label>
-                            <input type="text" id="type_prix_code" class="form-control form-control-product" placeholder="Ex: DETAIL">
+                            <label class="form-label-product">{% trans "Code" %} *</label>
+                            <input type="text" id="type_prix_code" class="form-control form-control-product" placeholder="{% trans 'Ex: DETAIL' %}">
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label-product">Libellé *</label>
-                            <input type="text" id="type_prix_libelle" class="form-control form-control-product" placeholder="Ex: Prix Détaillant">
+                            <label class="form-label-product">{% trans "Libellé" %} *</label>
+                            <input type="text" id="type_prix_libelle" class="form-control form-control-product" placeholder="{% trans 'Ex: Prix Détaillant' %}">
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label-product">Ordre d'affichage</label>
+                            <label class="form-label-product">{% trans "Ordre d'affichage" %}</label>
                             <input type="number" id="type_prix_ordre" class="form-control form-control-product" min="0" value="0">
                         </div>
                         <div class="col-md-2 d-flex align-items-end">
                             <button type="button" id="btn_add_type_prix" class="btn btn-product-primary w-100">
-                                <i class="fa fa-plus"></i> Ajouter
+                                <i class="fa fa-plus"></i> {% trans "Ajouter" %}
                             </button>
                         </div>
                     </div>
@@ -444,13 +445,13 @@ input[type="number"].form-control-product::-webkit-outer-spin-button {
                         <table class="table table-product table-hover">
                             <thead>
                                 <tr>
-                                    <th>Code</th>
-                                    <th>Libellé</th>
-                                    <th>Ordre</th>
-                                    <th>Défaut</th>
-                                    <th>Statut</th>
-                                    <th>Nb Prix</th>
-                                    <th>Actions</th>
+                                    <th>{% trans "Code" %}</th>
+                                    <th>{% trans "Libellé" %}</th>
+                                    <th>{% trans "Ordre" %}</th>
+                                    <th>{% trans "Défaut" %}</th>
+                                    <th>{% trans "Statut" %}</th>
+                                    <th>{% trans "Nb Prix" %}</th>
+                                    <th>{% trans "Actions" %}</th>
                                 </tr>
                             </thead>
                             <tbody id="types_prix_body"></tbody>
@@ -461,34 +462,34 @@ input[type="number"].form-control-product::-webkit-outer-spin-button {
                 <!-- Onglet Prix Produits -->
                 <div class="tab-pane fade" id="prix-produits" role="tabpanel">
                     <div class="alert alert-info">
-                        <i class="fa fa-info-circle"></i> <strong>Prix multiples :</strong> Définissez plusieurs prix pour un même produit selon le type de client ou la quantité
+                        <i class="fa fa-info-circle"></i> <strong>{% trans "Prix multiples" %} :</strong> {% trans "Définissez plusieurs prix pour un même produit selon le type de client ou la quantité" %}
                     </div>
 
                     <!-- Formulaire d'ajout de prix produit -->
                     <div class="row mb-3">
                         <div class="col-md-3">
-                            <label class="form-label-product">Produit *</label>
+                            <label class="form-label-product">{% trans "Produit" %} *</label>
                             <select id="prix_prod_produit" class="form-control form-control-product">
-                                <option value="">Sélectionner un produit</option>
+                                <option value="">{% trans "Sélectionner un produit" %}</option>
                             </select>
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label-product">Type de Prix *</label>
+                            <label class="form-label-product">{% trans "Type de Prix" %} *</label>
                             <select id="prix_prod_type" class="form-control form-control-product">
-                                <option value="">Sélectionner un type</option>
+                                <option value="">{% trans "Sélectionner un type" %}</option>
                             </select>
                         </div>
                         <div class="col-md-2">
-                            <label class="form-label-product">Prix *</label>
+                            <label class="form-label-product">{% trans "Prix" %} *</label>
                             <input type="number" id="prix_prod_prix" class="form-control form-control-product" min="0" step="0.01" placeholder="0.00">
                         </div>
                         <div class="col-md-2">
-                            <label class="form-label-product">Qté Min</label>
+                            <label class="form-label-product">{% trans "Qté Min" %}</label>
                             <input type="number" id="prix_prod_qte_min" class="form-control form-control-product" min="1" value="1">
                         </div>
                         <div class="col-md-2 d-flex align-items-end">
                             <button type="button" id="btn_add_prix_prod" class="btn btn-product-primary w-100">
-                                <i class="fa fa-plus"></i> Ajouter
+                                <i class="fa fa-plus"></i> {% trans "Ajouter" %}
                             </button>
                         </div>
                     </div>
@@ -496,11 +497,11 @@ input[type="number"].form-control-product::-webkit-outer-spin-button {
                     <!-- Dates de validité (pour promotions) -->
                     <div class="row mb-3">
                         <div class="col-md-3">
-                            <label class="form-label-product">Date début (optionnel)</label>
+                            <label class="form-label-product">{% trans "Date début (optionnel)" %}</label>
                             <input type="date" id="prix_prod_date_debut" class="form-control form-control-product">
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label-product">Date fin (optionnel)</label>
+                            <label class="form-label-product">{% trans "Date fin (optionnel)" %}</label>
                             <input type="date" id="prix_prod_date_fin" class="form-control form-control-product">
                         </div>
                     </div>
@@ -508,9 +509,9 @@ input[type="number"].form-control-product::-webkit-outer-spin-button {
                     <!-- Filtre par produit -->
                     <div class="row mb-3">
                         <div class="col-md-4">
-                            <label class="form-label-product">Filtrer par produit</label>
+                            <label class="form-label-product">{% trans "Filtrer par produit" %}</label>
                             <select id="prix_prod_filter" class="form-control form-control-product">
-                                <option value="">Tous les produits</option>
+                                <option value="">{% trans "Tous les produits" %}</option>
                             </select>
                         </div>
                     </div>
@@ -520,13 +521,13 @@ input[type="number"].form-control-product::-webkit-outer-spin-button {
                         <table class="table table-product table-hover">
                             <thead>
                                 <tr>
-                                    <th>Produit</th>
-                                    <th>Type de Prix</th>
-                                    <th>Prix</th>
-                                    <th>Qté Min</th>
-                                    <th>Validité</th>
-                                    <th>Statut</th>
-                                    <th>Actions</th>
+                                    <th>{% trans "Produit" %}</th>
+                                    <th>{% trans "Type de Prix" %}</th>
+                                    <th>{% trans "Prix" %}</th>
+                                    <th>{% trans "Qté Min" %}</th>
+                                    <th>{% trans "Validité" %}</th>
+                                    <th>{% trans "Statut" %}</th>
+                                    <th>{% trans "Actions" %}</th>
                                 </tr>
                             </thead>
                             <tbody id="prix_produits_body"></tbody>

@@ -1,9 +1,11 @@
 <!DOCTYPE html>
-<html lang="FR">
+{% load i18n %}
+{% load static %}
+{% get_current_language as LANGUAGE_CODE %}
+<html lang="{{ LANGUAGE_CODE|default:'fr' }}" dir="{% if LANGUAGE_CODE == 'ar' %}rtl{% else %}ltr{% endif %}">
 <head>
     <meta charset="UTF-8">
-    <title>Caisse - Market</title>
-    {% load static %}
+    <title>{% trans "Caisse" %} - {% trans "Market" %}</title>
 
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
@@ -24,6 +26,85 @@
     <link rel="stylesheet" href="{% static 'style/main.css' %}">
     <!-- Responsive CSS -->
     <link rel="stylesheet" href="{% static 'style/responsive.css' %}">
+    <!-- RTL CSS for Arabic -->
+    {% if LANGUAGE_CODE == 'ar' %}
+    <link rel="stylesheet" href="{% static 'style/rtl.css' %}">
+    {% endif %}
+
+    <style>
+        /* Sidebar Dropdown Styles */
+        .sidebar-dropdown > a.dropdown-toggle {
+            display: flex !important;
+            align-items: center;
+            gap: 12px;
+            position: relative;
+        }
+
+        .sidebar-dropdown > a.dropdown-toggle i.arrow {
+            margin-left: auto;
+            font-size: 10px;
+            transition: transform .25s ease;
+        }
+
+        .sidebar-dropdown.active > a.dropdown-toggle i.arrow {
+            transform: rotate(-180deg);
+        }
+
+        .sidebar-submenu {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height .3s ease;
+            background: rgba(0,0,0,.15);
+            border-radius: 8px;
+            margin-top: 4px;
+        }
+
+        .sidebar-dropdown.active .sidebar-submenu {
+            max-height: 500px !important;
+            padding: 6px 0 !important;
+        }
+
+        .sidebar-submenu li {
+            margin: 0;
+        }
+
+        .sidebar-submenu li a {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 12px 8px 40px;
+            color: #9ca3af;
+            text-decoration: none;
+            font-size: 13px;
+            transition: all .2s ease;
+            border-radius: 6px;
+            margin: 0 6px;
+        }
+
+        .sidebar-submenu li a:hover {
+            background: rgba(59,130,246,.15);
+            color: #e5e7eb;
+            padding-left: 44px;
+        }
+
+        .sidebar-submenu li a.active {
+            background: rgba(59,130,246,.25);
+            color: #fff;
+        }
+
+        .sidebar-submenu li a i {
+            width: 16px;
+            text-align: center;
+            font-size: 12px;
+        }
+
+        .sidebar-submenu li a:hover i {
+            color: #3b82f6;
+        }
+    </style>
 
     <!-- jQuery -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -44,7 +125,7 @@
     <nav id="sidebar" class="sidebar-wrapper">
         <div class="sidebar-content">
             <div class="sidebar-brand">
-                <a href="/admindash/" class="h2 pt-2">Market</a>
+                <a href="/admindash/" class="h2 pt-2">{% trans "Market" %}</a>
                 <div id="close-sidebar">
                     <i class="fas fa-times"></i>
                 </div>
@@ -61,58 +142,101 @@
 
             <div class="sidebar-menu">
                 <ul>
-                    <li class="header-menu"><span>Gestion de Stock</span></li>
-                    <li><a href="/admindash/#produit" class="sidebar-item">
-                        <i class="fas fa-box"></i><span>Produits</span>
-                    </a></li>
-                    <li><a href="/admindash/#client" class="sidebar-item">
-                        <i class="fas fa-users"></i><span>Clients</span>
-                    </a></li>
-                    <li><a href="/admindash/#fournisseur" class="sidebar-item">
-                        <i class="fas fa-truck"></i><span>Fournisseurs</span>
-                    </a></li>
-                    <li><a href="/admindash/#achat" class="sidebar-item">
-                        <i class="fas fa-shopping-bag"></i><span>Achats</span>
-                    </a></li>
-                    <li><a href="/admindash/#vente" class="sidebar-item">
-                        <i class="fas fa-shopping-cart"></i><span>Ventes</span>
-                    </a></li>
-                    <li><a href="/caisse/" class="sidebar-item active">
-                        <i class="fas fa-cash-register"></i><span>Caisse</span>
-                    </a></li>
-                    <li><a href="/admindash/#categorie" class="sidebar-item">
-                        <i class="fas fa-tags"></i><span>Catégories</span>
+                    <li class="sidebar-dropdown">
+                        <a href="#" class="dropdown-toggle sidebar-item">
+                            <i class="fas fa-handshake"></i><span>{% trans "Commercial" %}</span>
+                            <i class="fas fa-chevron-down arrow"></i>
+                        </a>
+                        <ul class="sidebar-submenu">
+                            <li><a href="/admindash/#achat">
+                                <i class="fas fa-shopping-bag"></i>{% trans "Achats" %}
+                            </a></li>
+                            <li><a href="/admindash/#vente">
+                                <i class="fas fa-shopping-cart"></i>{% trans "Ventes" %}
+                            </a></li>
+                            <li><a href="/caisse/" class="active">
+                                <i class="fas fa-cash-register"></i>{% trans "Caisse" %}
+                            </a></li>
+                            <li><a href="/admindash/#facture">
+                                <i class="fas fa-file-invoice"></i>{% trans "Factures" %}
+                            </a></li>
+                        </ul>
+                    </li>
+
+                    <li class="sidebar-dropdown">
+                        <a href="#" class="dropdown-toggle sidebar-item">
+                            <i class="fas fa-database"></i><span>{% trans "Gestion des données" %}</span>
+                            <i class="fas fa-chevron-down arrow"></i>
+                        </a>
+                        <ul class="sidebar-submenu">
+                            <li><a href="/admindash/#produit">
+                                <i class="fas fa-box"></i>{% trans "Produits" %}
+                            </a></li>
+                            <li><a href="/admindash/#client">
+                                <i class="fas fa-users"></i>{% trans "Clients" %}
+                            </a></li>
+                            <li><a href="/admindash/#fournisseur">
+                                <i class="fas fa-truck"></i>{% trans "Fournisseurs" %}
+                            </a></li>
+                            <li><a href="/admindash/#categorie">
+                                <i class="fas fa-tags"></i>{% trans "Catégories" %}
+                            </a></li>
+                            <li><a href="/admindash/#entrepots">
+                                <i class="fas fa-warehouse"></i>{% trans "Entrepôts" %}
+                            </a></li>
+                        </ul>
+                    </li>
+
+                    <li class="sidebar-dropdown">
+                        <a href="#" class="dropdown-toggle sidebar-item">
+                            <i class="fas fa-boxes"></i><span>{% trans "Gestion de stock" %}</span>
+                            <i class="fas fa-chevron-down arrow"></i>
+                        </a>
+                        <ul class="sidebar-submenu">
+                            <li><a href="/admindash/#inventaire">
+                                <i class="fas fa-clipboard-check"></i>{% trans "Inventaire" %}
+                            </a></li>
+                            <li><a href="/admindash/#mouvements">
+                                <i class="fas fa-exchange-alt"></i>{% trans "Mouvements" %}
+                            </a></li>
+                        </ul>
+                    </li>
+
+                    <li class="sidebar-dropdown">
+                        <a href="#" class="dropdown-toggle sidebar-item">
+                            <i class="fas fa-chart-line"></i><span>{% trans "Rapports & Analyses" %}</span>
+                            <i class="fas fa-chevron-down arrow"></i>
+                        </a>
+                        <ul class="sidebar-submenu">
+                            <li><a href="/admindash/#statistiques">
+                                <i class="fas fa-chart-bar"></i>{% trans "Statistiques" %}
+                            </a></li>
+                            <li><a href="/admindash/#rapports">
+                                <i class="fas fa-file-export"></i>{% trans "Rapports" %}
+                            </a></li>
+                            {% if user.is_staff %}
+                            <li><a href="/audit-logs/">
+                                <i class="fas fa-clipboard-list"></i>{% trans "Journaux d'audit" %}
+                            </a></li>
+                            {% endif %}
+                        </ul>
+                    </li>
+
+                    <li><a href="/admindash/#import" class="sidebar-item">
+                        <i class="fas fa-file-import"></i><span>{% trans "Import de données" %}</span>
                     </a></li>
 
-                    <li class="header-menu"><span>Reporting & Gestion</span></li>
-                    <li><a href="/admindash/#statistiques" class="sidebar-item">
-                        <i class="fas fa-chart-bar"></i><span>Statistiques</span>
-                    </a></li>
-                    <li><a href="/admindash/#facture" class="sidebar-item">
-                        <i class="fas fa-file-invoice"></i><span>Factures</span>
-                    </a></li>
-                    <li><a href="/admindash/#inventaire" class="sidebar-item">
-                        <i class="fas fa-clipboard-check"></i><span>Inventaires</span>
-                    </a></li>
-                    <li><a href="/admindash/#mouvements" class="sidebar-item">
-                        <i class="fas fa-exchange-alt"></i><span>Mouvements</span>
-                    </a></li>
-                    <li><a href="/admindash/#entrepots" class="sidebar-item">
-                        <i class="fas fa-warehouse"></i><span>Entrepôts</span>
-                    </a></li>
                     <li><a href="/admindash/#parametres" class="sidebar-item">
-                        <i class="fas fa-cogs"></i><span>Paramètres</span>
+                        <i class="fas fa-cogs"></i><span>{% trans "Paramètres" %}</span>
                     </a></li>
+
                     {% if user.is_staff %}
-                    <li class="header-menu"><span>Administration</span></li>
+                    <li class="header-menu"><span>{% trans "ADMINISTRATION" %}</span></li>
                     <li><a href="/admindash/#admin" class="sidebar-item">
-                        <i class="fas fa-tools"></i><span>Tableau de bord Admin</span>
+                        <i class="fas fa-tools"></i><span>{% trans "Tableau de bord Admin" %}</span>
                     </a></li>
                     <li><a href="/users-admin/" class="sidebar-item">
-                        <i class="fas fa-user-shield"></i><span>Administration des utilisateurs</span>
-                    </a></li>
-                    <li><a href="/audit-logs/" class="sidebar-item">
-                        <i class="fas fa-clipboard-list"></i><span>Journaux d'audit</span>
+                        <i class="fas fa-user-shield"></i><span>{% trans "Utilisateurs" %}</span>
                     </a></li>
                     {% endif %}
                 </ul>
@@ -120,7 +244,8 @@
         </div>
         <div class="sidebar-footer">
             <a href="/logout/" class="logout-link">
-                <i class="fa fa-power-off"></i> <span>Déconnexion</span>
+                <i class="fa fa-power-off"></i>
+                <span>{% trans "Déconnexion" %}</span>
             </a>
         </div>
     </nav>
@@ -132,5 +257,50 @@
 
 <script src="{% static 'js/main.js' %}"></script>
 <script src="{% static 'js/sidebar-enhancements.js' %}"></script>
+
+<script>
+// Sidebar Dropdown Management for Caisse page
+jQuery(document).ready(function($) {
+    console.log('[Caisse Sidebar Dropdown] Initializing...');
+
+    // Handle dropdown toggle clicks
+    $('.sidebar-dropdown > .dropdown-toggle').on('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        console.log('[Caisse Sidebar Dropdown] Dropdown clicked');
+
+        var $parent = $(this).parent('.sidebar-dropdown');
+        var isActive = $parent.hasClass('active');
+
+        // Close all other dropdowns (accordion behavior)
+        $('.sidebar-dropdown.active').removeClass('active');
+
+        // Toggle current dropdown
+        if (!isActive) {
+            $parent.addClass('active');
+            console.log('[Caisse Sidebar Dropdown] Opened dropdown');
+        } else {
+            console.log('[Caisse Sidebar Dropdown] Closed dropdown');
+        }
+
+        return false;
+    });
+
+    // Prevent submenu links from closing the dropdown
+    $('.sidebar-submenu a').on('click', function(e) {
+        e.stopPropagation();
+    });
+
+    // Auto-open the Commercial dropdown since we're on Caisse page
+    setTimeout(function() {
+        $('.sidebar-dropdown:first').addClass('active');
+        console.log('[Caisse Sidebar Dropdown] Auto-opened Commercial dropdown');
+    }, 100);
+
+    console.log('[Caisse Sidebar Dropdown] Found ' + $('.sidebar-dropdown').length + ' dropdowns');
+    console.log('[Caisse Sidebar Dropdown] Initialization complete');
+});
+</script>
 </body>
 </html>

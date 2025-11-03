@@ -1,0 +1,80 @@
+/* RTL (Right-to-Left) styles for Arabic language */
+
+body[dir="rtl"] {
+    direction: rtl;
+    text-align: right;
+}
+
+/* Sidebar */
+body[dir="rtl"] #sidebar.sidebar-wrapper {
+    left: auto;
+    right: 0;
+}
+
+body[dir="rtl"] .page-content {
+    margin-left: 0;
+    margin-right: 260px;
+}
+
+body[dir="rtl"] .sidebar-menu ul li a {
+    text-align: right;
+}
+
+body[dir="rtl"] .sidebar-submenu li a {
+    padding-right: 40px;
+    padding-left: 12px;
+}
+
+body[dir="rtl"] .sidebar-submenu li a:hover {
+    padding-right: 44px;
+    padding-left: 12px;
+}
+
+body[dir="rtl"] .sidebar-dropdown > a.dropdown-toggle i.arrow {
+    margin-left: 0;
+    margin-right: auto;
+}
+
+/* Tables */
+body[dir="rtl"] table {
+    text-align: right;
+}
+
+/* Forms */
+body[dir="rtl"] .form-group label,
+body[dir="rtl"] .form-label-modern {
+    text-align: right;
+}
+
+/* Buttons and icons */
+body[dir="rtl"] .btn i:first-child {
+    margin-right: 0;
+    margin-left: 8px;
+}
+
+body[dir="rtl"] .btn i:last-child {
+    margin-left: 0;
+    margin-right: 8px;
+}
+
+/* Cards */
+body[dir="rtl"] .card {
+    text-align: right;
+}
+
+/* Flex items */
+body[dir="rtl"] .d-flex {
+    flex-direction: row-reverse;
+}
+
+/* Responsive - Mobile */
+@media (max-width: 992px){
+    body[dir="rtl"] #sidebar {
+        right: -260px;
+        left: auto;
+    }
+
+    body[dir="rtl"] .page-wrapper.toggled #sidebar {
+        right: 0;
+    }
+}

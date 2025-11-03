@@ -1,0 +1,1037 @@
+# English translations for Market application.
+# Copyright (C) 2025
+msgid ""
+msgstr ""
+"Project-Id-Version: 1.0\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: en\n"
+
+# Sidebar Menu
+msgid "Commercial"
+msgstr "Sales & Purchases"
+
+msgid "Achats"
+msgstr "Purchases"
+
+msgid "Ventes"
+msgstr "Sales"
+
+msgid "Caisse"
+msgstr "Cash Register"
+
+msgid "Factures"
+msgstr "Invoices"
+
+msgid "Gestion des données"
+msgstr "Data Management"
+
+msgid "Produits"
+msgstr "Products"
+
+msgid "Clients"
+msgstr "Customers"
+
+msgid "Fournisseurs"
+msgstr "Suppliers"
+
+msgid "Import de données"
+msgstr "Data Import"
+
+msgid "Catégories"
+msgstr "Categories"
+
+msgid "Entrepôts"
+msgstr "Warehouses"
+
+msgid "Gestion de stock"
+msgstr "Stock Management"
+
+msgid "Inventaire"
+msgstr "Inventory"
+
+msgid "Mouvements"
+msgstr "Movements"
+
+msgid "Rapports & Analyses"
+msgstr "Reports & Analytics"
+
+msgid "Statistiques"
+msgstr "Statistics"
+
+msgid "Rapports"
+msgstr "Reports"
+
+msgid "Journaux d'audit"
+msgstr "Audit Logs"
+
+msgid "Paramètres"
+msgstr "Settings"
+
+msgid "ADMINISTRATION"
+msgstr "ADMINISTRATION"
+
+msgid "Tableau de bord Admin"
+msgstr "Admin Dashboard"
+
+msgid "Utilisateurs"
+msgstr "Users"
+
+msgid "Déconnexion"
+msgstr "Logout"
+
+msgid "Market"
+msgstr "Market"
+
+# Page content translations
+msgid "Actions"
+msgstr "Actions"
+
+msgid "Ajouter"
+msgstr "Add"
+
+msgid "Modifier"
+msgstr "Edit"
+
+msgid "Supprimer"
+msgstr "Delete"
+
+msgid "Fermer"
+msgstr "Close"
+
+msgid "Confirmer"
+msgstr "Confirm"
+
+msgid "Annuler"
+msgstr "Cancel"
+
+msgid "Enregistrer"
+msgstr "Save"
+
+msgid "Rechercher"
+msgstr "Search"
+
+msgid "Filtrer"
+msgstr "Filter"
+
+msgid "Rafraîchir"
+msgstr "Refresh"
+
+msgid "Imprimer"
+msgstr "Print"
+
+msgid "Exporter"
+msgstr "Export"
+
+# Form fields
+msgid "Nom"
+msgstr "Name"
+
+msgid "Prénom"
+msgstr "First Name"
+
+msgid "Email"
+msgstr "Email"
+
+msgid "Téléphone"
+msgstr "Phone"
+
+msgid "Adresse"
+msgstr "Address"
+
+msgid "Référence"
+msgstr "Reference"
+
+msgid "Désignation"
+msgstr "Designation"
+
+msgid "Description"
+msgstr "Description"
+
+msgid "Prix"
+msgstr "Price"
+
+msgid "Prix U"
+msgstr "Unit Price"
+
+msgid "Prix unitaire"
+msgstr "Unit Price"
+
+msgid "Prix d'achat unitaire"
+msgstr "Purchase Unit Price"
+
+msgid "Quantité"
+msgstr "Quantity"
+
+msgid "Qté"
+msgstr "Qty"
+
+msgid "Qté Min"
+msgstr "Min Qty"
+
+msgid "Quantité actuelle"
+msgstr "Current Quantity"
+
+msgid "Nouvelle quantité"
+msgstr "New Quantity"
+
+msgid "Quantité produit"
+msgstr "Product Quantity"
+
+msgid "quantite"
+msgstr "quantity"
+
+msgid "Date"
+msgstr "Date"
+
+msgid "Date d'Achat"
+msgstr "Purchase Date"
+
+msgid "Catégorie"
+msgstr "Category"
+
+msgid "Client"
+msgstr "Customer"
+
+msgid "Fournisseur"
+msgstr "Supplier"
+
+msgid "Entrepôt"
+msgstr "Warehouse"
+
+msgid "Entrepôt par défaut"
+msgstr "Default Warehouse"
+
+msgid "Paiement"
+msgstr "Payment"
+
+msgid "Type de paiement"
+msgstr "Payment Type"
+
+msgid "Espèces"
+msgstr "Cash"
+
+msgid "Carte"
+msgstr "Card"
+
+msgid "Carte bancaire"
+msgstr "Bank Card"
+
+msgid "Chèque"
+msgstr "Check"
+
+msgid "Virement"
+msgstr "Bank Transfer"
+
+msgid "Crédit"
+msgstr "Credit"
+
+msgid "Code"
+msgstr "Code"
+
+msgid "Code-barres"
+msgstr "Barcode"
+
+msgid "Numéro"
+msgstr "Number"
+
+msgid "Statut"
+msgstr "Status"
+
+msgid "Total"
+msgstr "Total"
+
+msgid "Total TTC"
+msgstr "Total Incl. Tax"
+
+msgid "Total ligne"
+msgstr "Line Total"
+
+msgid "Total des ventes"
+msgstr "Total Sales"
+
+msgid "CA Total"
+msgstr "Total Revenue"
+
+msgid "Observations"
+msgstr "Observations"
+
+msgid "Commentaires"
+msgstr "Comments"
+
+msgid "Commentaires sur la vente..."
+msgstr "Comments on sale..."
+
+msgid "Valeur"
+msgstr "Value"
+
+msgid "Devise"
+msgstr "Currency"
+
+msgid "Symbole"
+msgstr "Symbol"
+
+msgid "Taux"
+msgstr "Rate"
+
+msgid "Défaut"
+msgstr "Default"
+
+msgid "Validité"
+msgstr "Validity"
+
+msgid "Erreur"
+msgstr "Error"
+
+# Caisse page
+msgid "Point de Vente"
+msgstr "Point of Sale"
+
+msgid "Scanner Code-Barres"
+msgstr "Scan Barcode"
+
+msgid "Scanner code-barres ou référence..."
+msgstr "Scan barcode or reference..."
+
+msgid "Scanner ou saisir..."
+msgstr "Scan or enter..."
+
+msgid "Scannez / tapez..."
+msgstr "Scan / type..."
+
+msgid "Sélection manuelle"
+msgstr "Manual Selection"
+
+msgid "Select produit"
+msgstr "Select product"
+
+msgid "Sélectionner un produit"
+msgstr "Select a product"
+
+msgid "Sélectionner une catégorie"
+msgstr "Select a category"
+
+msgid "Sélectionner un fournisseur"
+msgstr "Select a supplier"
+
+msgid "Sélectionner un entrepôt"
+msgstr "Select a warehouse"
+
+msgid "Sélectionner un type"
+msgstr "Select a type"
+
+msgid "Panier"
+msgstr "Cart"
+
+msgid "Panier vide"
+msgstr "Empty cart"
+
+msgid "article(s)"
+msgstr "item(s)"
+
+msgid "Informations de Vente"
+msgstr "Sale Information"
+
+msgid "Sous-total HT"
+msgstr "Subtotal Excl. Tax"
+
+msgid "Remise"
+msgstr "Discount"
+
+msgid "Remise (%)"
+msgstr "Discount (%)"
+
+# Status
+msgid "Brouillons"
+msgstr "Drafts"
+
+msgid "Finalisées"
+msgstr "Completed"
+
+msgid "Toutes"
+msgstr "All"
+
+msgid "Tous les produits"
+msgstr "All products"
+
+msgid "Tous les entrepôts"
+msgstr "All warehouses"
+
+# Gestion pages
+msgid "Gestion des Achats"
+msgstr "Purchase Management"
+
+msgid "Gestion des Ventes"
+msgstr "Sales Management"
+
+msgid "Gestion des Produits"
+msgstr "Product Management"
+
+msgid "Gestion des Clients"
+msgstr "Customer Management"
+
+msgid "Gestion des Fournisseurs"
+msgstr "Supplier Management"
+
+msgid "Gestion des Catégories"
+msgstr "Category Management"
+
+# Filters
+msgid "Filtrer par produit"
+msgstr "Filter by product"
+
+msgid "Filtrer par référence..."
+msgstr "Filter by reference..."
+
+msgid "Filtrer par statut"
+msgstr "Filter by status"
+
+msgid "Tapez pour filtrer..."
+msgstr "Type to filter..."
+
+# Messages
+msgid "Impossible de supprimer ce Achat"
+msgstr "Cannot delete this purchase"
+
+msgid "Impossible de supprimer ce client"
+msgstr "Cannot delete this customer"
+
+msgid "Impossible de supprimer ce fournisseur"
+msgstr "Cannot delete this supplier"
+
+msgid "Impossible de supprimer cette catégorie"
+msgstr "Cannot delete this category"
+
+msgid "Auto-généré"
+msgstr "Auto-generated"
+
+msgid "Facultatif"
+msgstr "Optional"
+
+msgid "Laissez vide pour une catégorie principale"
+msgstr "Leave empty for main category"
+
+# Statistics page
+msgid "Tableau de Bord - Statistiques"
+msgstr "Dashboard - Statistics"
+
+msgid "Évolution des Ventes et du Chiffre d'Affaires"
+msgstr "Sales and Revenue Evolution"
+
+msgid "Statut des Stocks"
+msgstr "Stock Status"
+
+msgid "Stock Alerte"
+msgstr "Stock Alert"
+
+msgid "Répartition des Paiements"
+msgstr "Payment Distribution"
+
+msgid "Ventes par Catégorie"
+msgstr "Sales by Category"
+
+msgid "Stock par entrepôt"
+msgstr "Stock by warehouse"
+
+msgid "Stocks par entrepôt"
+msgstr "Stocks by warehouse"
+
+msgid "Ventes aujourd'hui"
+msgstr "Today's sales"
+
+msgid "Ventes ce mois"
+msgstr "This month's sales"
+
+msgid "Ventes cette semaine"
+msgstr "This week's sales"
+
+# Parameters
+msgid "Nom de l'entreprise"
+msgstr "Company Name"
+
+msgid "Message de pied de page"
+msgstr "Footer Message"
+
+msgid "Message affiché en bas du ticket"
+msgstr "Message displayed at ticket bottom"
+
+msgid "Mot de passe actuel"
+msgstr "Current Password"
+
+msgid "Nouveau mot de passe"
+msgstr "New Password"
+
+msgid "Ex: Ma Boutique SARL"
+msgstr "Ex: My Store LLC"
+
+msgid "Ex: Électronique"
+msgstr "Ex: Electronics"
+
+msgid "Ex: Prix Détaillant"
+msgstr "Ex: Retail Price"
+
+msgid "Ex: DETAIL"
+msgstr "Ex: RETAIL"
+
+msgid "Merci de votre visite !&#10;Au plaisir de vous revoir."
+msgstr "Thank you for your visit!&#10;Hope to see you again."
+
+# Price types
+msgid "Type de Prix"
+msgstr "Price Type"
+
+msgid "Libellé"
+msgstr "Label"
+
+msgid "Nb Prix"
+msgstr "Nb Prices"
+
+msgid "Ordre"
+msgstr "Order"
+
+msgid "Ordre d'affichage"
+msgstr "Display Order"
+
+msgid "Description de la catégorie"
+msgstr "Category Description"
+
+msgid "Vers"
+msgstr "To"
+
+msgid "De"
+msgstr "From"
+
+msgid "Vider"
+msgstr "Clear"
+
+msgid "Valider"
+msgstr "Validate"
+
+msgid "Choisir"
+msgstr "Choose"
+
+
+msgid "Nouvelle Vente"
+msgstr "New Sale"
+
+
+msgid "Nouvelle Vente"
+msgstr "New Sale"
+
+msgid "Liste des Ventes"
+msgstr "Sales List"
+
+msgid "Choisir un client..."
+msgstr "Choose a customer..."
+
+msgid "optionnel"
+msgstr "optional"
+
+msgid "Ajouter des produits"
+msgstr "Add products"
+
+msgid "Choisir un produit..."
+msgstr "Choose a product..."
+
+msgid "Ajouter à la vente"
+msgstr "Add to sale"
+
+msgid "Total HT"
+msgstr "Total Excl. Tax"
+
+msgid "Enregistrer (Brouillon)"
+msgstr "Save (Draft)"
+
+msgid "Finaliser la vente"
+msgstr "Finalize sale"
+
+msgid "Détails de la vente"
+msgstr "Sale details"
+
+msgid "Chargement des détails..."
+msgstr "Loading details..."
+
+msgid "Statistiques des Ventes"
+msgstr "Sales Statistics"
+
+msgid "CA"
+msgstr "Revenue"
+
+msgid "aujourd'hui"
+msgstr "today"
+
+msgid "cette semaine"
+msgstr "this week"
+
+msgid "ce mois"
+msgstr "this month"
+
+msgid "total"
+msgstr "total"
+
+
+msgid "Choisir un client..."
+msgstr "Choose a customer..."
+
+msgid "optionnel"
+msgstr "optional"
+
+msgid "Ajouter des produits"
+msgstr "Add products"
+
+msgid "Choisir un produit..."
+msgstr "Choose a product..."
+
+msgid "Ajouter à la vente"
+msgstr "Add to sale"
+
+msgid "Total HT"
+msgstr "Total Excl. Tax"
+
+msgid "Enregistrer (Brouillon)"
+msgstr "Save (Draft)"
+
+msgid "Finaliser la vente"
+msgstr "Finalize sale"
+
+msgid "Détails de la vente"
+msgstr "Sale details"
+
+msgid "Chargement des détails..."
+msgstr "Loading details..."
+
+msgid "Statistiques des Ventes"
+msgstr "Sales Statistics"
+
+msgid "CA"
+msgstr "Revenue"
+
+msgid "aujourd'hui"
+msgstr "today"
+
+msgid "cette semaine"
+msgstr "this week"
+
+msgid "ce mois"
+msgstr "this month"
+
+msgid "total"
+msgstr "total"
+
+
+msgid "Import de Données"
+msgstr "Data Import"
+
+msgid "Importez vos produits et catégories en masse depuis des fichiers Excel ou CSV"
+msgstr "Bulk import your products and categories from Excel or CSV files"
+
+msgid "Importer des Produits"
+msgstr "Import Products"
+
+msgid "Importer des Catégories"
+msgstr "Import Categories"
+
+msgid "Template Excel"
+msgstr "Excel Template"
+
+msgid "Template CSV"
+msgstr "CSV Template"
+
+msgid "Glissez votre fichier ici ou cliquez pour parcourir"
+msgstr "Drag your file here or click to browse"
+
+msgid "Formats acceptés"
+msgstr "Accepted formats"
+
+msgid "max"
+msgstr "max"
+
+msgid "Prévisualisation"
+msgstr "Preview"
+
+msgid "lignes"
+msgstr "lines"
+
+msgid "Confirmer l'import"
+msgstr "Confirm import"
+
+msgid "Import en cours..."
+msgstr "Import in progress..."
+
+msgid "Import terminé"
+msgstr "Import completed"
+
+msgid "Instructions"
+msgstr "Instructions"
+
+msgid "Pour les Produits:"
+msgstr "For Products:"
+
+msgid "Pour les Catégories:"
+msgstr "For Categories:"
+
+msgid "Colonnes requises"
+msgstr "Required columns"
+
+msgid "Colonnes optionnelles"
+msgstr "Optional columns"
+
+msgid "La catégorie et le fournisseur doivent exister dans le système"
+msgstr "Category and supplier must exist in the system"
+
+msgid "Le prix doit être un nombre positif"
+msgstr "Price must be a positive number"
+
+msgid "La catégorie parente doit exister si spécifiée"
+msgstr "Parent category must exist if specified"
+
+msgid "La couleur doit être au format hexadécimal"
+msgstr "Color must be in hexadecimal format"
+
+
+msgid "Gestion des Utilisateurs"
+msgstr "User Management"
+
+msgid "Nouvel Utilisateur"
+msgstr "New User"
+
+msgid "Liste des Utilisateurs"
+msgstr "User List"
+
+msgid "Rôles et Permissions"
+msgstr "Roles and Permissions"
+
+msgid "Nom d'utilisateur"
+msgstr "Username"
+
+msgid "Mot de passe"
+msgstr "Password"
+
+msgid "Confirmer le mot de passe"
+msgstr "Confirm Password"
+
+msgid "Actif"
+msgstr "Active"
+
+msgid "Membre du staff"
+msgstr "Staff Member"
+
+msgid "Superutilisateur"
+msgstr "Superuser"
+
+msgid "Rôle"
+msgstr "Role"
+
+msgid "Permissions"
+msgstr "Permissions"
+
+msgid "Dernière connexion"
+msgstr "Last Login"
+
+msgid "Réinitialiser le mot de passe"
+msgstr "Reset Password"
+
+msgid "Êtes-vous sûr de vouloir supprimer cet utilisateur ?"
+msgstr "Are you sure you want to delete this user?"
+
+msgid "Gestion des Rôles"
+msgstr "Role Management"
+
+msgid "Modifier les permissions"
+msgstr "Edit Permissions"
+
+
+msgid "Gestion des accès"
+msgstr "Access Management"
+
+msgid "Retour au dashboard"
+msgstr "Back to dashboard"
+
+msgid "Journal d'audit"
+msgstr "Audit Log"
+
+msgid "Username"
+msgstr "Username"
+
+msgid "Utilisateurs Total"
+msgstr "Total Users"
+
+msgid "Comptes Actifs"
+msgstr "Active Accounts"
+
+msgid "Administrateurs"
+msgstr "Administrators"
+
+msgid "Rechercher un utilisateur..."
+msgstr "Search for a user..."
+
+msgid "Nom complet"
+msgstr "Full Name"
+
+
+msgid "Gestion des Rôles"
+msgstr "Role Management"
+
+msgid "Gestion des Rôles & Permissions"
+msgstr "Roles & Permissions Management"
+
+msgid "Rôles & Permissions"
+msgstr "Roles & Permissions"
+
+msgid "Nouveau Rôle"
+msgstr "New Role"
+
+msgid "Liste des Rôles"
+msgstr "Role List"
+
+msgid "Nom du rôle"
+msgstr "Role Name"
+
+msgid "Nombre d'utilisateurs"
+msgstr "Number of Users"
+
+msgid "Sélectionner les permissions"
+msgstr "Select Permissions"
+
+msgid "Toutes les permissions"
+msgstr "All Permissions"
+
+msgid "Aucune permission"
+msgstr "No Permissions"
+
+msgid "Journaux d'audit"
+msgstr "Audit Logs"
+
+msgid "Journal d'Audit"
+msgstr "Audit Log"
+
+msgid "Activité récente"
+msgstr "Recent Activity"
+
+msgid "Utilisateur"
+msgstr "User"
+
+msgid "Action"
+msgstr "Action"
+
+msgid "Cible"
+msgstr "Target"
+
+msgid "Horodatage"
+msgstr "Timestamp"
+
+msgid "Détails"
+msgstr "Details"
+
+msgid "Toutes les actions"
+msgstr "All Actions"
+
+msgid "Créé"
+msgstr "Created"
+
+msgid "Modifié"
+msgstr "Modified"
+
+msgid "Supprimé"
+msgstr "Deleted"
+
+msgid "Filtrer par action"
+msgstr "Filter by Action"
+
+msgid "Filtrer par utilisateur"
+msgstr "Filter by User"
+
+
+msgid "Exports de Rapports"
+msgstr "Report Exports"
+
+msgid "Rapport de Valorisation du Stock"
+msgstr "Stock Valuation Report"
+
+msgid "Rapport des Ventes"
+msgstr "Sales Report"
+
+msgid "Rapport d'Inventaire"
+msgstr "Inventory Report"
+
+msgid "Exporter en Excel"
+msgstr "Export to Excel"
+
+msgid "Exporter en PDF"
+msgstr "Export to PDF"
+
+msgid "Format"
+msgstr "Format"
+
+msgid "Période"
+msgstr "Period"
+
+msgid "Du"
+msgstr "From"
+
+msgid "Au"
+msgstr "To"
+
+msgid "Générer le rapport"
+msgstr "Generate Report"
+
+msgid "Télécharger"
+msgstr "Download"
+
+msgid "Valorisation du Stock"
+msgstr "Stock Valuation"
+
+
+msgid "Sessions d'Inventaire"
+msgstr "Inventory Sessions"
+
+msgid "Nouvelle session"
+msgstr "New Session"
+
+msgid "Session en cours"
+msgstr "Ongoing Session"
+
+msgid "Sessions terminées"
+msgstr "Completed Sessions"
+
+msgid "Démarrer l'inventaire"
+msgstr "Start Inventory"
+
+msgid "Terminer l'inventaire"
+msgstr "Complete Inventory"
+
+msgid "Journal des mouvements"
+msgstr "Movement Log"
+
+msgid "Mouvements de Stock"
+msgstr "Stock Movements"
+
+msgid "Type de mouvement"
+msgstr "Movement Type"
+
+msgid "Entrée"
+msgstr "Inbound"
+
+msgid "Sortie"
+msgstr "Outbound"
+
+msgid "Ajustement"
+msgstr "Adjustment"
+
+msgid "Source"
+msgstr "Source"
+
+msgid "Destination"
+msgstr "Destination"
+
+msgid "Motif"
+msgstr "Reason"
+
+msgid "Vente"
+msgstr "Sale"
+
+msgid "Achat"
+msgstr "Purchase"
+
+msgid "Transfert"
+msgstr "Transfer"
+
+msgid "Correction"
+msgstr "Correction"
+
+msgid "Perte"
+msgstr "Loss"
+
+
+msgid "Gestion des Produits"
+msgstr "Product Management"
+
+msgid "Nouveau Produit"
+msgstr "New Product"
+
+msgid "Liste des Produits"
+msgstr "Product List"
+
+msgid "Stock actuel"
+msgstr "Current Stock"
+
+msgid "Seuil minimum"
+msgstr "Minimum Threshold"
+
+msgid "Seuil d'alerte"
+msgstr "Alert Threshold"
+
+msgid "Seuil critique"
+msgstr "Critical Threshold"
+
+msgid "En stock"
+msgstr "In Stock"
+
+msgid "Rupture de stock"
+msgstr "Out of Stock"
+
+msgid "Stock faible"
+msgstr "Low Stock"
+
+msgid "Unité de mesure"
+msgstr "Unit of Measure"
+
+msgid "Prix de vente"
+msgstr "Selling Price"
+
+msgid "Prix d'achat"
+msgstr "Purchase Price"
+
+msgid "Marque"
+msgstr "Brand"
+
+msgid "Nouveau Client"
+msgstr "New Customer"
+
+msgid "Nouveau Fournisseur"
+msgstr "New Supplier"
+
+msgid "Nouvelle Catégorie"
+msgstr "New Category"
+
+msgid "Nouvel Achat"
+msgstr "New Purchase"
+
+msgid "Liste des Achats"
+msgstr "Purchase List"
+
+msgid "Gestion des Catégories"
+msgstr "Category Management"
+
+msgid "Couleur"
+msgstr "Color"
+
+msgid "Icône"
+msgstr "Icon"
+
+msgid "Parent"
+msgstr "Parent"
+
+msgid "Sous-catégories"
+msgstr "Subcategories"
+
+
+msgid "Gestion des Clients"
+msgstr "Customer Management"
+
+msgid "Ajouter / Modifier un Client"
+msgstr "Add / Edit Customer"
+
+msgid "Liste des Clients"
+msgstr "Customer List"
+
+msgid "Réinitialiser"
+msgstr "Reset"
+
+msgid "Chargement..."
+msgstr "Loading..."
+
+msgid "ID"
+msgstr "ID"
+

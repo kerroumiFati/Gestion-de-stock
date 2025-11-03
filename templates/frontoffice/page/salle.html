@@ -1,3 +1,4 @@
+{% load i18n %}
 <script src="script/salle.js" type="text/javascript"></script>
 
 <div class="container-fluid">
@@ -37,7 +38,7 @@
             
             <div class="row">
                 <div class="col">
-                    <button type="button" class="btn btn-outline-success mt-3 mb-3" id="btn">Ajouter</button>
+                    <button type="button" class="btn btn-outline-success mt-3 mb-3" id="btn">{% trans "Ajouter" %}</button>
                 </div>
             </div>
             <div class="row table-responsive m-auto rounded">
@@ -47,8 +48,8 @@
                             <th scope="col">Id</th>
                             <th scope="col">Num</th>
                             <th scope="col">Libelle</th>
-                            <th scope="col">Supprimer</th>
-                            <th scope="col">Modifier</th>
+                            <th scope="col">{% trans "Supprimer" %}</th>
+                            <th scope="col">{% trans "Modifier" %}</th>
                         </tr>
                     </thead>
                     <tbody id="table-content">
