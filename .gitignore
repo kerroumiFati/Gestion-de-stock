@@ -38,5 +38,12 @@ Thumbs.db
 # Node modules (if any)
 node_modules/
 
+# Electron
+dist/
+*.exe
+*.dmg
+*.AppImage
+build/
+
 # Temporary files
 tmp_rovodev_*

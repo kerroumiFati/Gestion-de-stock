@@ -1,10 +1,67 @@
 {
   "name": "gestion-stock",
   "version": "1.0.0",
+  "description": "Application desktop de gestion de stock avec Django et Electron",
+  "main": "main.js",
   "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux",
     "vercel-build": "pip install -r requirements.txt && python manage.py migrate --noinput && python manage.py collectstatic --noinput"
   },
   "dependencies": {
     "bruzethegreat-gsap-master-mcp-server": "^2.2.0"
+  },
+  "devDependencies": {
+    "electron": "^39.0.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.gestionstock.app",
+    "productName": "Gestion de Stock",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "manage.py",
+      "Gestion_stock/**/*",
+      "Stock/**/*",
+      "db.sqlite3",
+      "static/**/*",
+      "media/**/*",
+      "locale/**/*",
+      "templates/**/*",
+      "requirements.txt"
+    ],
+    "extraResources": [
+      {
+        "from": ".",
+        "to": "app",
+        "filter": ["**/*", "!node_modules", "!dist", "!*.md"]
+      }
+    ],
+    "win": {
+      "target": ["nsis"],
+      "icon": "icon.ico"
+    },
+    "mac": {
+      "target": ["dmg"],
+      "icon": "icon.icns"
+    },
+    "linux": {
+      "target": ["AppImage"],
+      "icon": "icon.png",
+      "category": "Office"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
   }
 }
