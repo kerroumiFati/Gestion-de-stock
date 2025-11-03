@@ -281,70 +281,104 @@ class ImportTemplateView(APIView):
     """
     Télécharger un template d'import
     """
-    permission_classes = [AllowAny]
+    permission_classes = []  # Pas de permissions requises
+    authentication_classes = []  # Pas d'authentification requise
 
     def get(self, request):
-        import_type = request.GET.get('type', 'products')
-        format_type = request.GET.get('format', 'excel')
+        try:
+            import_type = request.GET.get('type', 'products')
+            format_type = request.GET.get('format', 'excel')
 
-        if import_type == 'products':
-            columns = ['reference', 'code_barre', 'designation', 'description', 'prixU',
-                      'categorie', 'fournisseur', 'quantite', 'stock_min', 'stock_max', 'unite_mesure']
-            filename = 'template_produits'
+            if import_type == 'products':
+                columns = ['reference', 'code_barre', 'designation', 'description', 'prixU',
+                          'categorie', 'fournisseur', 'quantite', 'stock_min', 'stock_max', 'unite_mesure']
+                filename = 'template_produits'
 
-            # Données d'exemple
-            example_data = [{
-                'reference': 'PROD-001',
-                'code_barre': '1234567890123',
-                'designation': 'Exemple Produit 1',
-                'description': 'Description du produit',
-                'prixU': '99.99',
-                'categorie': 'Électronique',
-                'fournisseur': 'Fournisseur A',
-                'quantite': '100',
-                'stock_min': '10',
-                'stock_max': '500',
-                'unite_mesure': 'unité'
-            }]
+                # Données d'exemple
+                example_data = [{
+                    'reference': 'PROD-001',
+                    'code_barre': '1234567890123',
+                    'designation': 'Exemple Produit 1',
+                    'description': 'Description du produit',
+                    'prixU': '99.99',
+                    'categorie': 'Électronique',
+                    'fournisseur': 'Fournisseur A',
+                    'quantite': '100',
+                    'stock_min': '10',
+                    'stock_max': '500',
+                    'unite_mesure': 'unité'
+                }]
 
-        elif import_type == 'categories':
-            columns = ['nom', 'parent', 'description', 'couleur', 'icone']
-            filename = 'template_categories'
+            elif import_type == 'categories':
+                columns = ['nom', 'parent', 'description', 'couleur', 'icone']
+                filename = 'template_categories'
 
-            # Données d'exemple
-            example_data = [{
-                'nom': 'Électronique',
-                'parent': '',
-                'description': 'Produits électroniques',
-                'couleur': '#3B82F6',
-                'icone': 'fas fa-laptop'
-            }]
+                # Données d'exemple
+                example_data = [{
+                    'nom': 'Électronique',
+                    'parent': '',
+                    'description': 'Produits électroniques',
+                    'couleur': '#3B82F6',
+                    'icone': 'fas fa-laptop'
+                }]
 
-        else:
-            return JsonResponse({'error': 'Type non supporté'}, status=400)
+            else:
+                return JsonResponse({'error': 'Type non supporté'}, status=400)
 
-        # Créer le DataFrame
-        df = pd.DataFrame(example_data, columns=columns)
+            # Créer le DataFrame
+            df = pd.DataFrame(example_data, columns=columns)
 
-        if format_type == 'excel':
-            # Générer un fichier Excel
-            output = io.BytesIO()
-            with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                df.to_excel(writer, index=False, sheet_name='Données')
-            output.seek(0)
+            if format_type == 'excel':
+                # Générer un fichier Excel
+                output = io.BytesIO()
 
-            response = HttpResponse(
-                output.read(),
-                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-            )
-            response['Content-Disposition'] = f'attachment; filename="{filename}.xlsx"'
+                # Essayer plusieurs moteurs Excel dans l'ordre de préférence
+                excel_engines = ['openpyxl', 'xlsxwriter']
+                engine_used = None
 
-        else:  # CSV
-            output = io.StringIO()
-            df.to_csv(output, index=False, encoding='utf-8')
-            output.seek(0)
+                for engine in excel_engines:
+                    try:
+                        with pd.ExcelWriter(output, engine=engine) as writer:
+                            df.to_excel(writer, index=False, sheet_name='Données')
+                        engine_used = engine
+                        break
+                    except ImportError:
+                        continue
+                    except Exception as e:
+                        if engine == excel_engines[-1]:  # Last engine
+                            raise e
+                        continue
 
-            response = HttpResponse(output.getvalue(), content_type='text/csv')
-            response['Content-Disposition'] = f'attachment; filename="{filename}.csv"'
+                if engine_used is None:
+                    # Si aucun moteur n'est disponible, retourner un CSV à la place
+                    return self._generate_csv_response(df, filename)
 
+                output.seek(0)
+
+                response = HttpResponse(
+                    output.read(),
+                    content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                )
+                response['Content-Disposition'] = f'attachment; filename="{filename}.xlsx"'
+
+            else:  # CSV
+                response = self._generate_csv_response(df, filename)
+
+            return response
+
+        except Exception as e:
+            # En cas d'erreur, retourner un message JSON
+            return JsonResponse({
+                'error': 'Erreur lors de la génération du template',
+                'details': str(e)
+            }, status=500)
+
+    def _generate_csv_response(self, df, filename):
+        """Génère une réponse HTTP avec un fichier CSV"""
+        output = io.StringIO()
+        df.to_csv(output, index=False, encoding='utf-8-sig')  # utf-8-sig pour Excel Windows
+        output.seek(0)
+
+        response = HttpResponse(output.getvalue(), content_type='text/csv; charset=utf-8-sig')
+        response['Content-Disposition'] = f'attachment; filename="{filename}.csv"'
         return response

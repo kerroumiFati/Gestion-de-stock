@@ -58,6 +58,72 @@ def test_template_pandas(request):
     except Exception as e:
         return JsonResponse({'error': str(e), 'type': str(type(e))}, status=500)
 
+def download_template_view(request):
+    """Vue fonction simple pour télécharger un template"""
+    try:
+        import pandas as pd
+        import io
+
+        import_type = request.GET.get('type', 'products')
+        format_type = request.GET.get('format', 'csv')
+
+        if import_type == 'products':
+            columns = ['reference', 'code_barre', 'designation', 'description', 'prixU',
+                      'categorie', 'fournisseur', 'quantite', 'stock_min', 'stock_max', 'unite_mesure']
+            filename = 'template_produits'
+            example_data = [{
+                'reference': 'PROD-001',
+                'code_barre': '1234567890123',
+                'designation': 'Exemple Produit 1',
+                'description': 'Description du produit',
+                'prixU': '99.99',
+                'categorie': 'Électronique',
+                'fournisseur': 'Fournisseur A',
+                'quantite': '100',
+                'stock_min': '10',
+                'stock_max': '500',
+                'unite_mesure': 'unité'
+            }]
+        else:  # categories
+            columns = ['nom', 'parent', 'description', 'couleur', 'icone']
+            filename = 'template_categories'
+            example_data = [{
+                'nom': 'Électronique',
+                'parent': '',
+                'description': 'Produits électroniques',
+                'couleur': '#3B82F6',
+                'icone': 'fas fa-laptop'
+            }]
+
+        df = pd.DataFrame(example_data, columns=columns)
+
+        if format_type == 'excel':
+            output = io.BytesIO()
+            try:
+                with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                    df.to_excel(writer, index=False, sheet_name='Données')
+                output.seek(0)
+                response = HttpResponse(
+                    output.read(),
+                    content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                )
+                response['Content-Disposition'] = f'attachment; filename="{filename}.xlsx"'
+            except:
+                # Fallback to CSV
+                format_type = 'csv'
+
+        if format_type == 'csv':
+            output = io.StringIO()
+            df.to_csv(output, index=False, encoding='utf-8-sig')
+            output.seek(0)
+            response = HttpResponse(output.getvalue(), content_type='text/csv; charset=utf-8-sig')
+            response['Content-Disposition'] = f'attachment; filename="{filename}.csv"'
+
+        return response
+
+    except Exception as e:
+        return JsonResponse({'error': str(e), 'details': str(type(e))}, status=500)
+
 router = routers.DefaultRouter()
 router.register(r'categories', views.CategorieViewSet)
 router.register(r'clients', views.ClientViewSet)
@@ -94,7 +160,7 @@ urlpatterns = [
     path('import/test-pandas/', test_template_pandas, name='test-pandas'),
     path('import/preview/', ImportPreviewView.as_view(), name='import-preview'),
     path('import/execute/', ImportExecuteView.as_view(), name='import-execute'),
-    path('import/template/', ImportTemplateView.as_view(), name='import-template'),
+    path('import/template/', download_template_view, name='import-template'),  # Vue fonction au lieu de classe
 
     path('', include(router.urls)),
     path('categories_raw/', views.categories_raw),
