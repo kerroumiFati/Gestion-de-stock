@@ -148,6 +148,12 @@ router.register(r'user-profiles', views.UserProfileViewSet)
 router.register(r'roles', views.GroupViewSet)
 router.register(r'permissions', views.PermissionViewSet)
 router.register(r'audit-logs', views.AuditLogViewSet)
+
+# Module de distribution
+router.register(r'livreurs', views.LivreurViewSet)
+router.register(r'tournees', views.TourneeViewSet)
+router.register(r'arrets-livraison', views.ArretLivraisonViewSet)
+
 # Wire up our API using automatic URL routing.
 # Additionally, we include login URLs for the browsable API.
 urlpatterns = [

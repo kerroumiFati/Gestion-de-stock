@@ -949,12 +949,266 @@ class LigneVente(models.Model):
     def get_total_in_sale_currency(self):
         """Obtenir le total de la ligne dans la devise de la vente"""
         sale_currency = self.vente.get_sale_currency()
-        
+
         if self.currency and self.currency != sale_currency:
             converted_price = ExchangeRate.convert_amount(
                 self.prixU_snapshot, self.currency, sale_currency, self.vente.date_vente.date()
             )
             if converted_price is not None:
                 return converted_price * self.quantite
-        
+
         return self.prixU_snapshot * self.quantite
+
+
+# ==========================================
+# MODULE DE DISTRIBUTION
+# ==========================================
+
+class Livreur(models.Model):
+    """
+    Livreur/Chauffeur pour la distribution
+    """
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='livreurs',
+        null=True,
+        blank=True,
+        help_text="Entreprise à laquelle appartient le livreur"
+    )
+
+    nom = models.CharField("Nom", max_length=100)
+    prenom = models.CharField("Prénom", max_length=100)
+    telephone = models.CharField("Téléphone", max_length=20)
+    email = models.EmailField("Email", max_length=100, blank=True)
+    adresse = models.TextField("Adresse", blank=True)
+
+    # Informations du véhicule
+    vehicule_type = models.CharField("Type de véhicule", max_length=100, blank=True,
+                                    help_text="Ex: Camion, Camionnette, Moto")
+    vehicule_marque = models.CharField("Marque du véhicule", max_length=100, blank=True)
+    immatriculation = models.CharField("Immatriculation", max_length=20, blank=True)
+    capacite_charge = models.DecimalField("Capacité de charge (kg)", max_digits=10, decimal_places=2,
+                                         null=True, blank=True)
+
+    # Permis et documents
+    numero_permis = models.CharField("Numéro de permis", max_length=50, blank=True)
+    date_expiration_permis = models.DateField("Date d'expiration du permis", null=True, blank=True)
+
+    # Statut
+    is_active = models.BooleanField("Actif", default=True)
+    is_disponible = models.BooleanField("Disponible", default=True,
+                                       help_text="Indique si le livreur est disponible pour une tournée")
+
+    # Dates
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['nom', 'prenom']
+        verbose_name = "Livreur"
+        verbose_name_plural = "Livreurs"
+        unique_together = [['company', 'telephone']]
+
+    def __str__(self):
+        return f"{self.nom} {self.prenom} - {self.vehicule_type or 'Livreur'}"
+
+    def get_full_name(self):
+        return f"{self.nom} {self.prenom}"
+
+
+class Tournee(models.Model):
+    """
+    Tournée de livraison planifiée ou en cours
+    """
+    STATUT_CHOICES = (
+        ('planifiee', 'Planifiée'),
+        ('en_cours', 'En cours'),
+        ('terminee', 'Terminée'),
+        ('annulee', 'Annulée'),
+    )
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='tournees',
+        null=True,
+        blank=True,
+        help_text="Entreprise à laquelle appartient la tournée"
+    )
+
+    numero = models.CharField("Numéro de tournée", max_length=50, unique=True,
+                             help_text="Généré automatiquement (ex: TOUR-20250107-001)")
+    date = models.DateField("Date de la tournée")
+
+    # Livreur assigné
+    livreur = models.ForeignKey(
+        Livreur,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='tournees',
+        help_text="Livreur assigné à cette tournée"
+    )
+
+    # Entrepôt de départ
+    warehouse = models.ForeignKey(
+        'Warehouse',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='tournees',
+        help_text="Entrepôt de départ de la tournée"
+    )
+
+    # Horaires
+    heure_depart_prevue = models.TimeField("Heure de départ prévue")
+    heure_depart_reelle = models.TimeField("Heure de départ réelle", null=True, blank=True)
+    heure_retour_prevue = models.TimeField("Heure de retour prévue", null=True, blank=True)
+    heure_retour_reelle = models.TimeField("Heure de retour réelle", null=True, blank=True)
+
+    # Statut
+    statut = models.CharField("Statut", max_length=20, choices=STATUT_CHOICES, default='planifiee')
+
+    # Informations complémentaires
+    distance_km = models.DecimalField("Distance totale (km)", max_digits=10, decimal_places=2,
+                                     null=True, blank=True)
+    commentaire = models.TextField("Commentaire", blank=True)
+
+    # Dates
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-date', '-created_at']
+        verbose_name = "Tournée"
+        verbose_name_plural = "Tournées"
+        unique_together = [['company', 'numero']]
+
+    def __str__(self):
+        return f"{self.numero} - {self.date} ({self.get_statut_display()})"
+
+    def get_nombre_arrets(self):
+        """Retourne le nombre d'arrêts dans la tournée"""
+        return self.arrets.count()
+
+    def get_arrets_livres(self):
+        """Retourne le nombre d'arrêts livrés avec succès"""
+        return self.arrets.filter(statut='livre').count()
+
+    def get_taux_reussite(self):
+        """Calcule le taux de réussite de la tournée"""
+        total = self.get_nombre_arrets()
+        if total == 0:
+            return 0
+        livres = self.get_arrets_livres()
+        return round((livres / total) * 100, 2)
+
+
+class ArretLivraison(models.Model):
+    """
+    Arrêt de livraison dans une tournée
+    """
+    STATUT_CHOICES = (
+        ('en_attente', 'En attente'),
+        ('en_cours', 'En cours'),
+        ('livre', 'Livré'),
+        ('echec', 'Échec'),
+        ('reporte', 'Reporté'),
+    )
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='arrets_livraison',
+        null=True,
+        blank=True,
+        help_text="Entreprise à laquelle appartient l'arrêt"
+    )
+
+    # Tournée
+    tournee = models.ForeignKey(
+        Tournee,
+        on_delete=models.CASCADE,
+        related_name='arrets',
+        help_text="Tournée à laquelle appartient cet arrêt"
+    )
+
+    # Documents de livraison
+    bon_livraison = models.ForeignKey(
+        BonLivraison,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='arrets_tournee',
+        help_text="Bon de livraison associé"
+    )
+
+    vente = models.ForeignKey(
+        Vente,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='arrets_tournee',
+        help_text="Vente associée"
+    )
+
+    # Client
+    client = models.ForeignKey(
+        Client,
+        on_delete=models.CASCADE,
+        related_name='arrets_livraison',
+        help_text="Client destinataire"
+    )
+
+    # Ordre et planification
+    ordre = models.PositiveIntegerField("Ordre dans la tournée",
+                                       help_text="Ordre de passage (1, 2, 3...)")
+    heure_prevue = models.TimeField("Heure prévue")
+    heure_arrivee = models.TimeField("Heure d'arrivée", null=True, blank=True)
+    heure_depart = models.TimeField("Heure de départ", null=True, blank=True)
+
+    # Adresse de livraison
+    adresse_livraison = models.TextField("Adresse de livraison",
+                                        help_text="Adresse complète de livraison")
+
+    # Statut et résultat
+    statut = models.CharField("Statut", max_length=20, choices=STATUT_CHOICES, default='en_attente')
+
+    # Signature et confirmation
+    signature_client = models.TextField("Signature client (base64)", blank=True,
+                                       help_text="Signature électronique du client")
+    nom_recepteur = models.CharField("Nom du récepteur", max_length=200, blank=True,
+                                    help_text="Nom de la personne qui a réceptionné")
+
+    # Commentaires et problèmes
+    commentaire = models.TextField("Commentaire", blank=True)
+    raison_echec = models.TextField("Raison de l'échec", blank=True,
+                                   help_text="Si statut = échec, raison de l'échec")
+
+    # Photo de preuve (optionnel)
+    photo_livraison = models.TextField("Photo de livraison (base64)", blank=True,
+                                      help_text="Photo de preuve de livraison")
+
+    # Dates
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['tournee', 'ordre']
+        verbose_name = "Arrêt de livraison"
+        verbose_name_plural = "Arrêts de livraison"
+        unique_together = [['tournee', 'ordre']]
+
+    def __str__(self):
+        return f"Arrêt #{self.ordre} - {self.client.nom} ({self.get_statut_display()})"
+
+    def get_duree_arret(self):
+        """Calcule la durée de l'arrêt en minutes"""
+        if self.heure_arrivee and self.heure_depart:
+            from datetime import datetime, timedelta
+            arrivee = datetime.combine(datetime.today(), self.heure_arrivee)
+            depart = datetime.combine(datetime.today(), self.heure_depart)
+            duree = (depart - arrivee).total_seconds() / 60
+            return round(duree, 2)
+        return None

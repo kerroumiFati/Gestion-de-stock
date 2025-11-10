@@ -50,4 +50,12 @@ urlpatterns = [
     re_path(r'^admindash/ventes$', TemplateView.as_view(template_name='frontoffice/page/vente.html')),
     re_path(r'^admindash/categories$', TemplateView.as_view(template_name='frontoffice/page/categorie.html')),
 
+    # Module de Distribution
+    re_path(r'^admindash/livreurs$', TemplateView.as_view(template_name='frontoffice/page/livreurs.html')),
+    re_path(r'^admindash/tournees$', TemplateView.as_view(template_name='frontoffice/page/tournees.html')),
+    re_path(r'^admindash/distribution$', TemplateView.as_view(template_name='frontoffice/page/distribution_dashboard.html')),
+
+    # Application mobile pour livreurs (pas de login requis pour les livreurs)
+    re_path(r'^livreur/app$', TemplateView.as_view(template_name='frontoffice/page/livreur_mobile.html')),
+
 ]

@@ -1,20 +1,8 @@
-# Specify Python version
-[variables]
-PYTHON_VERSION = "3.11"
-
 [phases.setup]
-nixPkgs = ["python311", "python311Packages.pip"]
+nixPkgs = ["python310", "nodejs_18"]
 
 [phases.install]
-cmds = [
-  "pip install --upgrade pip",
-  "pip install -r requirements.txt"
-]
-
-[phases.build]
-cmds = [
-  "python manage.py collectstatic --noinput"
-]
+cmds = ["pip install -r requirements.txt"]
 
 [start]
-cmd = "python manage.py migrate --noinput && python manage.py shell -c \"from django.contrib.auth.models import User; User.objects.filter(username='admin').exists() or User.objects.create_superuser('admin', 'admin@example.com', 'admin123')\" && gunicorn Gestion_stock.wsgi --bind 0.0.0.0:$PORT"
+cmd = "python manage.py migrate && gunicorn Gestion_stock.wsgi --bind 0.0.0.0:$PORT"

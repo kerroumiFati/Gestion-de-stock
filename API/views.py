@@ -2306,3 +2306,235 @@ class WelcomeView(APIView):
         return Response({
             'message': 'Welcome to the Gestion de Stock API!'
         })
+
+
+# ==========================================
+# VIEWSETS MODULE DE DISTRIBUTION
+# ==========================================
+
+class LivreurViewSet(TenantFilterMixin, viewsets.ModelViewSet):
+    """
+    ViewSet pour gérer les livreurs
+    Filtré automatiquement par entreprise
+    """
+    queryset = Livreur.objects.all().order_by('nom', 'prenom')
+    serializer_class = LivreurSerializer
+    permission_classes = [IsAuthenticated]
+
+    @action(detail=False, methods=['get'])
+    def disponibles(self, request):
+        """Retourne les livreurs disponibles"""
+        livreurs = self.get_queryset().filter(is_active=True, is_disponible=True)
+        serializer = self.get_serializer(livreurs, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def marquer_disponible(self, request, pk=None):
+        """Marque un livreur comme disponible"""
+        livreur = self.get_object()
+        livreur.is_disponible = True
+        livreur.save()
+        return Response({'status': 'Livreur marqué comme disponible'})
+
+    @action(detail=True, methods=['post'])
+    def marquer_indisponible(self, request, pk=None):
+        """Marque un livreur comme indisponible"""
+        livreur = self.get_object()
+        livreur.is_disponible = False
+        livreur.save()
+        return Response({'status': 'Livreur marqué comme indisponible'})
+
+    @action(detail=True, methods=['get'])
+    def historique(self, request, pk=None):
+        """Retourne l'historique des tournées du livreur"""
+        livreur = self.get_object()
+        tournees = livreur.tournees.all().order_by('-date')[:20]
+        serializer = TourneeListSerializer(tournees, many=True)
+        return Response(serializer.data)
+
+
+class TourneeViewSet(TenantFilterMixin, viewsets.ModelViewSet):
+    """
+    ViewSet pour gérer les tournées de livraison
+    Filtré automatiquement par entreprise
+    """
+    queryset = Tournee.objects.all().order_by('-date', '-created_at')
+    permission_classes = [IsAuthenticated]
+
+    def get_serializer_class(self):
+        """Utiliser TourneeListSerializer pour la liste, TourneeSerializer pour le détail"""
+        if self.action == 'list':
+            return TourneeListSerializer
+        return TourneeSerializer
+
+    @action(detail=False, methods=['get'])
+    def today(self, request):
+        """Retourne les tournées du jour"""
+        from django.utils import timezone
+        today = timezone.now().date()
+        tournees = self.get_queryset().filter(date=today)
+        serializer = TourneeListSerializer(tournees, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'])
+    def en_cours(self, request):
+        """Retourne les tournées en cours"""
+        tournees = self.get_queryset().filter(statut='en_cours')
+        serializer = TourneeListSerializer(tournees, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def demarrer(self, request, pk=None):
+        """Démarre une tournée"""
+        from django.utils import timezone
+        tournee = self.get_object()
+
+        if tournee.statut != 'planifiee':
+            return Response(
+                {'error': 'Seules les tournées planifiées peuvent être démarrées'},
+                status=400
+            )
+
+        tournee.statut = 'en_cours'
+        tournee.heure_depart_reelle = timezone.now().time()
+        tournee.save()
+
+        # Marquer le livreur comme indisponible
+        if tournee.livreur:
+            tournee.livreur.is_disponible = False
+            tournee.livreur.save()
+
+        return Response({'status': 'Tournée démarrée'})
+
+    @action(detail=True, methods=['post'])
+    def terminer(self, request, pk=None):
+        """Termine une tournée"""
+        from django.utils import timezone
+        tournee = self.get_object()
+
+        if tournee.statut != 'en_cours':
+            return Response(
+                {'error': 'Seules les tournées en cours peuvent être terminées'},
+                status=400
+            )
+
+        tournee.statut = 'terminee'
+        tournee.heure_retour_reelle = timezone.now().time()
+        tournee.save()
+
+        # Marquer le livreur comme disponible
+        if tournee.livreur:
+            tournee.livreur.is_disponible = True
+            tournee.livreur.save()
+
+        return Response({
+            'status': 'Tournée terminée',
+            'taux_reussite': tournee.get_taux_reussite()
+        })
+
+    @action(detail=True, methods=['post'])
+    def annuler(self, request, pk=None):
+        """Annule une tournée"""
+        tournee = self.get_object()
+
+        if tournee.statut == 'terminee':
+            return Response(
+                {'error': 'Une tournée terminée ne peut pas être annulée'},
+                status=400
+            )
+
+        tournee.statut = 'annulee'
+        tournee.save()
+
+        # Marquer le livreur comme disponible
+        if tournee.livreur:
+            tournee.livreur.is_disponible = True
+            tournee.livreur.save()
+
+        return Response({'status': 'Tournée annulée'})
+
+    @action(detail=True, methods=['get'])
+    def feuille_route(self, request, pk=None):
+        """Retourne la feuille de route imprimable"""
+        tournee = self.get_object()
+        serializer = TourneeSerializer(tournee)
+        return Response(serializer.data)
+
+
+class ArretLivraisonViewSet(TenantFilterMixin, viewsets.ModelViewSet):
+    """
+    ViewSet pour gérer les arrêts de livraison
+    Filtré automatiquement par entreprise
+    """
+    queryset = ArretLivraison.objects.all().order_by('tournee', 'ordre')
+    serializer_class = ArretLivraisonSerializer
+    permission_classes = [IsAuthenticated]
+
+    @action(detail=True, methods=['post'])
+    def marquer_livre(self, request, pk=None):
+        """Marque un arrêt comme livré"""
+        from django.utils import timezone
+        arret = self.get_object()
+
+        arret.statut = 'livre'
+        if not arret.heure_arrivee:
+            arret.heure_arrivee = timezone.now().time()
+        if not arret.heure_depart:
+            arret.heure_depart = timezone.now().time()
+
+        # Récupérer les données de la requête
+        arret.nom_recepteur = request.data.get('nom_recepteur', '')
+        arret.signature_client = request.data.get('signature_client', '')
+        arret.commentaire = request.data.get('commentaire', '')
+        arret.photo_livraison = request.data.get('photo_livraison', '')
+
+        arret.save()
+
+        # Mettre à jour le bon de livraison si présent
+        if arret.bon_livraison:
+            arret.bon_livraison.statut = 'livre'
+            arret.bon_livraison.date_livraison = timezone.now().date()
+            arret.bon_livraison.save()
+
+        return Response({'status': 'Arrêt marqué comme livré'})
+
+    @action(detail=True, methods=['post'])
+    def marquer_echec(self, request, pk=None):
+        """Marque un arrêt comme échoué"""
+        from django.utils import timezone
+        arret = self.get_object()
+
+        arret.statut = 'echec'
+        if not arret.heure_arrivee:
+            arret.heure_arrivee = timezone.now().time()
+        if not arret.heure_depart:
+            arret.heure_depart = timezone.now().time()
+
+        arret.raison_echec = request.data.get('raison_echec', '')
+        arret.commentaire = request.data.get('commentaire', '')
+
+        arret.save()
+
+        return Response({'status': 'Arrêt marqué comme échoué'})
+
+    @action(detail=True, methods=['post'])
+    def reporter(self, request, pk=None):
+        """Reporte un arrêt à une autre tournée"""
+        arret = self.get_object()
+
+        arret.statut = 'reporte'
+        arret.commentaire = request.data.get('commentaire', 'Reporté')
+        arret.save()
+
+        return Response({'status': 'Arrêt reporté'})
+
+    @action(detail=False, methods=['get'])
+    def par_tournee(self, request):
+        """Retourne les arrêts d'une tournée spécifique"""
+        tournee_id = request.query_params.get('tournee_id')
+        if not tournee_id:
+            return Response({'error': 'tournee_id requis'}, status=400)
+
+        arrets = self.get_queryset().filter(tournee_id=tournee_id).order_by('ordre')
+        serializer = self.get_serializer(arrets, many=True)
+        return Response(serializer.data)

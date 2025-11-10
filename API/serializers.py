@@ -651,7 +651,168 @@ class VenteCreateSerializer(serializers.ModelSerializer):
                 if 'designation' not in ligne_data:
                     ligne_data['designation'] = produit.designation
                 LigneVente.objects.create(vente=instance, **ligne_data)
-        
+
         instance.recompute_totals()
         instance.save()
         return instance
+
+
+# ==========================================
+# SERIALIZERS MODULE DE DISTRIBUTION
+# ==========================================
+
+class LivreurSerializer(serializers.ModelSerializer):
+    """Serializer pour le modèle Livreur"""
+    full_name = serializers.SerializerMethodField()
+    nombre_tournees = serializers.SerializerMethodField()
+    tournees_en_cours = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Livreur
+        fields = [
+            'id', 'nom', 'prenom', 'full_name', 'telephone', 'email', 'adresse',
+            'vehicule_type', 'vehicule_marque', 'immatriculation', 'capacite_charge',
+            'numero_permis', 'date_expiration_permis',
+            'is_active', 'is_disponible',
+            'nombre_tournees', 'tournees_en_cours',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+
+    def get_full_name(self, obj):
+        return obj.get_full_name()
+
+    def get_nombre_tournees(self, obj):
+        """Retourne le nombre total de tournées effectuées"""
+        return obj.tournees.filter(statut__in=['terminee', 'en_cours']).count()
+
+    def get_tournees_en_cours(self, obj):
+        """Retourne le nombre de tournées en cours"""
+        return obj.tournees.filter(statut='en_cours').count()
+
+
+class ArretLivraisonSerializer(serializers.ModelSerializer):
+    """Serializer pour le modèle ArretLivraison"""
+    client_nom = serializers.CharField(source='client.nom', read_only=True)
+    client_telephone = serializers.CharField(source='client.telephone', read_only=True)
+    statut_display = serializers.CharField(source='get_statut_display', read_only=True)
+    duree_arret = serializers.SerializerMethodField()
+    bon_livraison_numero = serializers.CharField(source='bon_livraison.numero', read_only=True, allow_null=True)
+    vente_numero = serializers.CharField(source='vente.numero', read_only=True, allow_null=True)
+
+    class Meta:
+        model = ArretLivraison
+        fields = [
+            'id', 'tournee', 'bon_livraison', 'bon_livraison_numero',
+            'vente', 'vente_numero', 'client', 'client_nom', 'client_telephone',
+            'ordre', 'heure_prevue', 'heure_arrivee', 'heure_depart',
+            'adresse_livraison', 'statut', 'statut_display',
+            'signature_client', 'nom_recepteur',
+            'commentaire', 'raison_echec', 'photo_livraison',
+            'duree_arret', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+
+    def get_duree_arret(self, obj):
+        return obj.get_duree_arret()
+
+
+class TourneeSerializer(serializers.ModelSerializer):
+    """Serializer pour le modèle Tournee"""
+    livreur_nom = serializers.SerializerMethodField()
+    warehouse_nom = serializers.CharField(source='warehouse.nom', read_only=True, allow_null=True)
+    statut_display = serializers.CharField(source='get_statut_display', read_only=True)
+    nombre_arrets = serializers.SerializerMethodField()
+    arrets_livres = serializers.SerializerMethodField()
+    taux_reussite = serializers.SerializerMethodField()
+    arrets = ArretLivraisonSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Tournee
+        fields = [
+            'id', 'numero', 'date', 'livreur', 'livreur_nom',
+            'warehouse', 'warehouse_nom',
+            'heure_depart_prevue', 'heure_depart_reelle',
+            'heure_retour_prevue', 'heure_retour_reelle',
+            'statut', 'statut_display', 'distance_km', 'commentaire',
+            'nombre_arrets', 'arrets_livres', 'taux_reussite',
+            'arrets', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['numero', 'created_at', 'updated_at']
+
+    def get_livreur_nom(self, obj):
+        if obj.livreur:
+            return obj.livreur.get_full_name()
+        return None
+
+    def get_nombre_arrets(self, obj):
+        return obj.get_nombre_arrets()
+
+    def get_arrets_livres(self, obj):
+        return obj.get_arrets_livres()
+
+    def get_taux_reussite(self, obj):
+        return obj.get_taux_reussite()
+
+    def create(self, validated_data):
+        """Générer automatiquement le numéro de tournée"""
+        from datetime import datetime
+
+        # Générer le numéro automatiquement
+        date = validated_data.get('date', datetime.now().date())
+        date_str = date.strftime('%Y%m%d')
+
+        # Trouver le dernier numéro de tournée du jour
+        from API.models import Tournee
+        last_tournee = Tournee.objects.filter(
+            numero__startswith=f'TOUR-{date_str}'
+        ).order_by('-numero').first()
+
+        if last_tournee:
+            # Extraire le compteur et incrémenter
+            last_counter = int(last_tournee.numero.split('-')[-1])
+            counter = last_counter + 1
+        else:
+            counter = 1
+
+        # Générer le numéro
+        numero = f'TOUR-{date_str}-{counter:03d}'
+        validated_data['numero'] = numero
+
+        return super().create(validated_data)
+
+
+class TourneeListSerializer(serializers.ModelSerializer):
+    """Serializer simplifié pour la liste des tournées (sans les arrêts)"""
+    livreur_nom = serializers.SerializerMethodField()
+    warehouse_nom = serializers.CharField(source='warehouse.nom', read_only=True, allow_null=True)
+    statut_display = serializers.CharField(source='get_statut_display', read_only=True)
+    nombre_arrets = serializers.SerializerMethodField()
+    arrets_livres = serializers.SerializerMethodField()
+    taux_reussite = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Tournee
+        fields = [
+            'id', 'numero', 'date', 'livreur', 'livreur_nom',
+            'warehouse', 'warehouse_nom',
+            'heure_depart_prevue', 'heure_depart_reelle',
+            'heure_retour_prevue', 'heure_retour_reelle',
+            'statut', 'statut_display', 'distance_km',
+            'nombre_arrets', 'arrets_livres', 'taux_reussite',
+            'created_at'
+        ]
+
+    def get_livreur_nom(self, obj):
+        if obj.livreur:
+            return obj.livreur.get_full_name()
+        return None
+
+    def get_nombre_arrets(self, obj):
+        return obj.get_nombre_arrets()
+
+    def get_arrets_livres(self, obj):
+        return obj.get_arrets_livres()
+
+    def get_taux_reussite(self, obj):
+        return obj.get_taux_reussite()
