@@ -44,3 +44,28 @@ class UserLanguageMiddleware(MiddlewareMixin):
         translation.activate(language_to_activate)
         request.LANGUAGE_CODE = language_to_activate
         logger.info(f"UserLanguageMiddleware: Activated language: {language_to_activate}")
+
+
+class TenantMiddleware(MiddlewareMixin):
+    """
+    Middleware pour gérer l'isolation des données par entreprise (multi-tenancy).
+    Ce middleware doit s'exécuter après AuthenticationMiddleware.
+    Il ajoute l'entreprise de l'utilisateur connecté dans request.company.
+    """
+
+    def process_request(self, request):
+        # Initialiser request.company à None par défaut
+        request.company = None
+
+        if request.user.is_authenticated:
+            try:
+                # Récupérer le profil utilisateur et son entreprise
+                if hasattr(request.user, 'profile'):
+                    request.company = request.user.profile.company
+                    logger.info(f"TenantMiddleware: User {request.user.username} belongs to company {request.company.code}")
+                else:
+                    logger.warning(f"TenantMiddleware: User {request.user.username} has no profile/company assigned")
+            except Exception as e:
+                logger.error(f"TenantMiddleware error: {e}", exc_info=True)
+
+        return None

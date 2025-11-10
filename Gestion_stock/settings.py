@@ -81,6 +81,7 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'Gestion_stock.middleware.UserLanguageMiddleware',  # Custom language middleware
+    'Gestion_stock.middleware.TenantMiddleware',  # Multi-tenancy middleware
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]

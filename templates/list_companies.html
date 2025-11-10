@@ -1,0 +1,300 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Liste des Sessions/Clients</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            color: #333;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+            padding: 8px 16px;
+            font-size: 12px;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        .stats {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .stats h2 {
+            color: #667eea;
+            font-size: 36px;
+        }
+
+        .company-card {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            overflow: hidden;
+            transition: transform 0.3s;
+        }
+
+        .company-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .company-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .company-name {
+            font-size: 22px;
+            font-weight: bold;
+        }
+
+        .company-code {
+            background: rgba(255,255,255,0.2);
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+        }
+
+        .company-body {
+            padding: 20px;
+        }
+
+        .company-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .info-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .info-item strong {
+            color: #667eea;
+        }
+
+        .users-section {
+            border-top: 2px solid #f0f0f0;
+            padding-top: 15px;
+        }
+
+        .users-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .user-item {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .user-badge {
+            background: #667eea;
+            color: white;
+            padding: 3px 10px;
+            border-radius: 15px;
+            font-size: 11px;
+        }
+
+        .messages {
+            margin-bottom: 20px;
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            background: white;
+        }
+
+        .alert-success {
+            border-left: 4px solid #28a745;
+            color: #155724;
+        }
+
+        .alert-error {
+            border-left: 4px solid #dc3545;
+            color: #721c24;
+        }
+
+        .empty-state {
+            background: white;
+            padding: 60px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+
+        .empty-state h2 {
+            color: #999;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏢 Gestion des Sessions/Clients</h1>
+            <a href="{% url 'create_company' %}" class="btn btn-primary">+ Créer une Nouvelle Session</a>
+        </div>
+
+        {% if messages %}
+        <div class="messages">
+            {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}">
+                {{ message }}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="stats">
+            <h2>{{ total_companies }}</h2>
+            <p>Session(s) active(s)</p>
+        </div>
+
+        {% if companies_data %}
+            {% for item in companies_data %}
+            <div class="company-card">
+                <div class="company-header">
+                    <div class="company-name">{{ item.company.name }}</div>
+                    <div class="company-code">{{ item.company.code }}</div>
+                </div>
+
+                <div class="company-body">
+                    <div class="company-info">
+                        <div class="info-item">
+                            <strong>📅 Créé le:</strong>
+                            <span>{{ item.company.created_at|date:"d/m/Y à H:i" }}</span>
+                        </div>
+                        <div class="info-item">
+                            <strong>📧 Email:</strong>
+                            <span>{{ item.company.email|default:"Non renseigné" }}</span>
+                        </div>
+                        <div class="info-item">
+                            <strong>📞 Téléphone:</strong>
+                            <span>{{ item.company.telephone|default:"Non renseigné" }}</span>
+                        </div>
+                        <div class="info-item">
+                            <strong>📍 Adresse:</strong>
+                            <span>{{ item.company.adresse|default:"Non renseignée" }}</span>
+                        </div>
+                    </div>
+
+                    <div class="users-section">
+                        <div class="users-title">👥 Utilisateurs ({{ item.users_count }})</div>
+                        {% for profile in item.users %}
+                        <div class="user-item">
+                            <div>
+                                <strong>{{ profile.user.username }}</strong>
+                                {% if profile.user.email %}
+                                <span style="color: #999; font-size: 13px;"> - {{ profile.user.email }}</span>
+                                {% endif %}
+                                <div style="color: #999; font-size: 12px; margin-top: 3px;">
+                                    Créé le: {{ profile.created_at|date:"d/m/Y à H:i" }}
+                                </div>
+                            </div>
+                            <span class="user-badge">{{ profile.role }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    {% if item.company.code != 'DEFAULT' %}
+                    <div style="margin-top: 15px; text-align: right;">
+                        <a href="{% url 'delete_company' item.company.id %}"
+                           class="btn btn-danger"
+                           onclick="return confirm('Êtes-vous sûr de vouloir supprimer {{ item.company.name }} ? Toutes les données seront supprimées !')">
+                            🗑️ Supprimer
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+        <div class="empty-state">
+            <h2>Aucune session créée</h2>
+            <p>Cliquez sur le bouton ci-dessus pour créer votre première session/client</p>
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>

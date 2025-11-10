@@ -3,6 +3,59 @@ from django.contrib.auth import get_user_model
 
 User = get_user_model()
 
+#####################
+#     Company       #
+#####################
+class Company(models.Model):
+    """Entreprise/Organisation - pour isoler les données par tenant"""
+    name = models.CharField("Nom de l'entreprise", max_length=200, unique=True)
+    code = models.CharField("Code entreprise", max_length=20, unique=True,
+                           help_text="Code unique de l'entreprise")
+    email = models.EmailField("Email", max_length=100, blank=True)
+    telephone = models.CharField("Téléphone", max_length=50, blank=True)
+    adresse = models.TextField("Adresse", blank=True)
+
+    # Paramètres fiscaux
+    tax_id = models.CharField("Numéro fiscal", max_length=50, blank=True,
+                             help_text="Numéro d'identification fiscale (ICE, SIREN, etc.)")
+
+    is_active = models.BooleanField("Entreprise active", default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+        verbose_name = "Entreprise"
+        verbose_name_plural = "Entreprises"
+
+    def __str__(self):
+        return f"{self.code} - {self.name}"
+
+
+class UserProfile(models.Model):
+    """Profil utilisateur lié à une entreprise"""
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='users',
+                               help_text="Entreprise à laquelle l'utilisateur appartient")
+
+    # Rôles dans l'entreprise (optionnel, peut être géré par les groupes Django)
+    ROLES = (
+        ('admin', 'Administrateur'),
+        ('manager', 'Gestionnaire'),
+        ('employee', 'Employé'),
+    )
+    role = models.CharField(max_length=20, choices=ROLES, default='employee')
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Profil utilisateur"
+        verbose_name_plural = "Profils utilisateurs"
+
+    def __str__(self):
+        return f"{self.user.username} - {self.company.name} ({self.role})"
+
+
 class AuditLog(models.Model):
     actor = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='audit_actions')
     action = models.CharField(max_length=100)
@@ -156,6 +209,9 @@ class Fournisseur(models.Model):
 #    Fournisseurs  #
 #####################
 class Fournisseur(models.Model):
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='fournisseurs',
+                               null=True, blank=True,
+                               help_text="Entreprise propriétaire de ce fournisseur")
     libelle = models.CharField(max_length=50)
     telephone = models.CharField("Téléphone", max_length=20)
     email = models.EmailField("E-Mail", blank=True)
@@ -172,9 +228,12 @@ class Fournisseur(models.Model):
 #   Catégories      #
 #####################
 class Categorie(models.Model):
-    nom = models.CharField(max_length=100, unique=True)
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='categories',
+                               null=True, blank=True,
+                               help_text="Entreprise propriétaire de cette catégorie")
+    nom = models.CharField(max_length=100)
     description = models.TextField(blank=True, help_text="Description de la catégorie")
-    parent = models.ForeignKey('self', null=True, blank=True, on_delete=models.CASCADE, 
+    parent = models.ForeignKey('self', null=True, blank=True, on_delete=models.CASCADE,
                               related_name='sous_categories', help_text="Catégorie parent pour hiérarchie")
     couleur = models.CharField(max_length=7, default='#007bff', help_text="Couleur d'affichage (hex)")
     icone = models.CharField(max_length=50, default='fa-cube', help_text="Icône Font Awesome")
@@ -185,6 +244,7 @@ class Categorie(models.Model):
         ordering = ['nom']
         verbose_name = "Catégorie"
         verbose_name_plural = "Catégories"
+        unique_together = ['company', 'nom']
     
     def __str__(self):
         if self.parent:
@@ -260,9 +320,12 @@ class Produit(models.Model):
         ('m2', 'Mètre carré'),
         ('m3', 'Mètre cube'),
     )
-    
-    reference = models.CharField(unique=True, max_length=50)
-    code_barre = models.CharField("Code-barres", max_length=64, unique=True)
+
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='produits',
+                               null=True, blank=True,
+                               help_text="Entreprise propriétaire de ce produit")
+    reference = models.CharField(max_length=50)
+    code_barre = models.CharField("Code-barres", max_length=64)
     designation = models.CharField(max_length=100)
     description = models.TextField(blank=True, help_text="Description détaillée du produit")
     
@@ -297,6 +360,10 @@ class Produit(models.Model):
         ordering = ['reference']
         verbose_name = "Produit"
         verbose_name_plural = "Produits"
+        unique_together = [
+            ['company', 'reference'],
+            ['company', 'code_barre']
+        ]
     
     def __str__(self):
         currency_symbol = self.currency.symbol if self.currency else Currency.get_default().symbol if Currency.get_default() else '€'
@@ -431,6 +498,9 @@ class PrixProduit(models.Model):
 
 
 class Client(models.Model):
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='clients',
+                               null=True, blank=True,
+                               help_text="Entreprise propriétaire de ce client")
     nom = models.CharField(max_length=50)
     prenom = models.CharField(max_length=50)
     email = models.EmailField(max_length=50)
@@ -441,6 +511,9 @@ class Client(models.Model):
         return '{} {}'.format(self.nom, self.prenom)
 
 class Achat(models.Model):
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='achats',
+                               null=True, blank=True,
+                               help_text="Entreprise propriétaire de cet achat")
     date_Achat = models.DateField(default=timezone.now)
     date_expiration = models.DateField("Date d'expiration", null=True, blank=True)
     quantite = models.IntegerField()
@@ -465,7 +538,10 @@ class BonLivraison(models.Model):
         ('validated', 'Validé'),
         ('canceled', 'Annulé'),
     )
-    numero = models.CharField(max_length=50, unique=True)
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='bons_livraison',
+                               null=True, blank=True,
+                               help_text="Entreprise propriétaire de ce bon de livraison")
+    numero = models.CharField(max_length=50)
     date_creation = models.DateField(default=timezone.now)
     client = models.ForeignKey(Client, on_delete=models.PROTECT, related_name='bons')
     statut = models.CharField(max_length=10, choices=STATUTS, default='draft')
@@ -473,6 +549,7 @@ class BonLivraison(models.Model):
 
     class Meta:
         ordering = ['-date_creation', 'numero']
+        unique_together = ['company', 'numero']
 
     def __str__(self):
         return f"BL {self.numero} - {self.client} ({self.statut})"
@@ -496,7 +573,10 @@ class Facture(models.Model):
         ('paid', 'Payée'),
         ('canceled', 'Annulée'),
     )
-    numero = models.CharField(max_length=50, unique=True)
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='factures',
+                               null=True, blank=True,
+                               help_text="Entreprise propriétaire de cette facture")
+    numero = models.CharField(max_length=50)
     date_emission = models.DateField(default=timezone.now)
     client = models.ForeignKey(Client, on_delete=models.PROTECT, related_name='factures')
     bon_livraison = models.ForeignKey(BonLivraison, on_delete=models.SET_NULL, null=True, blank=True, related_name='factures')
@@ -508,6 +588,7 @@ class Facture(models.Model):
 
     class Meta:
         ordering = ['-date_emission', 'numero']
+        unique_together = ['company', 'numero']
 
     def __str__(self):
         return f"FA {self.numero} - {self.client} ({self.statut})"
@@ -536,14 +617,21 @@ class LigneFacture(models.Model):
 # Inventaire et mouvements #
 ############################
 class Warehouse(models.Model):
-    name = models.CharField(max_length=100, unique=True)
-    code = models.CharField(max_length=20, unique=True)
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='warehouses',
+                               null=True, blank=True,
+                               help_text="Entreprise propriétaire de cet entrepôt")
+    name = models.CharField(max_length=100)
+    code = models.CharField(max_length=20)
     is_active = models.BooleanField(default=True)
 
     class Meta:
         ordering = ['name']
         verbose_name = 'Entrepôt'
         verbose_name_plural = 'Entrepôts'
+        unique_together = [
+            ['company', 'code'],
+            ['company', 'name']
+        ]
 
     def __str__(self):
         return f"{self.code} - {self.name}"
@@ -598,7 +686,10 @@ class InventorySession(models.Model):
         ('validated', 'Validé'),
         ('canceled', 'Annulé'),
     )
-    numero = models.CharField(max_length=50, unique=True)
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='inventory_sessions',
+                               null=True, blank=True,
+                               help_text="Entreprise propriétaire de cette session d'inventaire")
+    numero = models.CharField(max_length=50)
     date = models.DateField(default=timezone.now)
     statut = models.CharField(max_length=15, choices=STATUTS, default='draft')
     note = models.TextField(blank=True)
@@ -615,6 +706,7 @@ class InventorySession(models.Model):
 
     class Meta:
         ordering = ['-date', 'numero']
+        unique_together = ['company', 'numero']
 
     def __str__(self):
         return f"INV {self.numero} ({self.statut}) - {self.completion_percentage}%"
@@ -762,8 +854,11 @@ class Vente(models.Model):
         ('transfer', 'Virement'),
         ('credit', 'Crédit'),
     )
-    
-    numero = models.CharField(max_length=50, unique=True)
+
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='ventes',
+                               null=True, blank=True,
+                               help_text="Entreprise propriétaire de cette vente")
+    numero = models.CharField(max_length=50)
     date_vente = models.DateTimeField(default=timezone.now)
     client = models.ForeignKey(Client, on_delete=models.PROTECT, related_name='ventes')
     type_paiement = models.CharField(max_length=10, choices=TYPES_PAIEMENT, default='cash')
@@ -789,6 +884,7 @@ class Vente(models.Model):
 
     class Meta:
         ordering = ['-date_vente', 'numero']
+        unique_together = ['company', 'numero']
 
     def __str__(self):
         currency_symbol = self.currency.symbol if self.currency else Currency.get_default().symbol if Currency.get_default() else '€'

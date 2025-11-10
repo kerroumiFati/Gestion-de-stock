@@ -20,11 +20,17 @@ from django.urls import path, include
 from django.views.generic import TemplateView
 from frontoffice.create_admin import create_first_admin
 from frontoffice.check_admin import check_existing_admins
+from frontoffice.views_company import create_company_view, list_companies_view, delete_company_view
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('API/', include('API.urls')),
     path('', include('frontoffice.urls')),
+
+    # Gestion des Companies/Sessions
+    path('companies/', list_companies_view, name='list_companies'),
+    path('companies/create/', create_company_view, name='create_company'),
+    path('companies/delete/<int:company_id>/', delete_company_view, name='delete_company'),
 
     # Temporary endpoints for admin management
     path('create-first-admin/', create_first_admin, name='create_first_admin'),

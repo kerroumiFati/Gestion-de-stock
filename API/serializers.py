@@ -3,6 +3,40 @@ from .models import *
 from decimal import Decimal
 from django.contrib.auth.models import User
 
+# Serializers pour Multi-Tenancy
+class CompanySerializer(serializers.ModelSerializer):
+    """Serializer pour les entreprises/organisations"""
+    users_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Company
+        fields = ['id', 'name', 'code', 'email', 'telephone', 'adresse',
+                 'tax_id', 'is_active', 'users_count', 'created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at']
+
+    def get_users_count(self, obj):
+        """Nombre d'utilisateurs dans cette entreprise"""
+        return obj.users.count()
+
+
+class UserProfileSerializer(serializers.ModelSerializer):
+    """Serializer pour les profils utilisateurs"""
+    username = serializers.CharField(source='user.username', read_only=True)
+    email = serializers.CharField(source='user.email', read_only=True)
+    full_name = serializers.SerializerMethodField()
+    company_name = serializers.CharField(source='company.name', read_only=True)
+
+    class Meta:
+        model = UserProfile
+        fields = ['id', 'user', 'username', 'email', 'full_name',
+                 'company', 'company_name', 'role', 'created_at']
+        read_only_fields = ['created_at']
+
+    def get_full_name(self, obj):
+        """Nom complet de l'utilisateur"""
+        return f"{obj.user.first_name} {obj.user.last_name}".strip() or obj.user.username
+
+
 # Serializers pour les Catégories
 class CategorieSerializer(serializers.ModelSerializer):
     parent_nom = serializers.CharField(source='parent.nom', read_only=True)

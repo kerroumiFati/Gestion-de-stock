@@ -16,6 +16,7 @@ from .serializers import StockMoveSerializer, InventorySessionSerializer, Invent
 from .models import *
 from django.shortcuts import get_object_or_404
 from .audit import log_event
+from .mixins import TenantFilterMixin, WarehouseRelatedTenantMixin
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -23,10 +24,17 @@ logger = logging.getLogger(__name__)
 # Simple raw endpoint to fetch categories directly from DB for diagnostics
 from rest_framework.decorators import api_view, permission_classes
 @api_view(['GET'])
-@permission_classes([permissions.AllowAny])
+@permission_classes([permissions.IsAuthenticated])
 def categories_raw(request):
+    """Retourne les catégories de l'entreprise de l'utilisateur connecté"""
     try:
-        categories = Categorie.objects.all()
+        # Filtrer par company de l'utilisateur
+        if hasattr(request, 'company') and request.company is not None:
+            categories = Categorie.objects.filter(company=request.company)
+        else:
+            # Si l'utilisateur n'a pas de company, retourner une liste vide
+            categories = Categorie.objects.none()
+
         rows = []
         for cat in categories:
             rows.append({
@@ -45,11 +53,11 @@ def categories_raw(request):
         return Response({'error': str(e)}, status=500)
 
 # API pour les Catégories
-class CategorieViewSet(viewsets.ModelViewSet):
+class CategorieViewSet(TenantFilterMixin, viewsets.ModelViewSet):
     queryset = Categorie.objects.all().order_by('nom')
     serializer_class = CategorieSerializer
     pagination_class = None  # Désactiver la pagination pour simplifier le front
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def list(self, request, *args, **kwargs):
         try:
@@ -82,16 +90,19 @@ class CategorieViewSet(viewsets.ModelViewSet):
     
     @action(detail=False)
     def tree(self, request):
-        """Retourne la hiérarchie complète des catégories sous forme d'arbre"""
-        # Récupérer seulement les catégories racines (sans parent)
-        root_categories = Categorie.objects.filter(parent=None, is_active=True).order_by('nom')
+        """Retourne la hiérarchie complète des catégories sous forme d'arbre (filtrée par entreprise)"""
+        # Utiliser get_queryset() pour avoir le filtrage automatique par entreprise
+        base_qs = self.get_queryset()
+        root_categories = base_qs.filter(parent=None, is_active=True).order_by('nom')
         serializer = CategorieTreeSerializer(root_categories, many=True)
         return Response(serializer.data)
     
     @action(detail=False)
     def roots(self, request):
-        """Retourne uniquement les catégories racines (sans parent)"""
-        root_categories = Categorie.objects.filter(parent=None, is_active=True).order_by('nom')
+        """Retourne uniquement les catégories racines (sans parent, filtrées par entreprise)"""
+        # Utiliser get_queryset() pour avoir le filtrage automatique par entreprise
+        base_qs = self.get_queryset()
+        root_categories = base_qs.filter(parent=None, is_active=True).order_by('nom')
         serializer = self.get_serializer(root_categories, many=True)
         return Response(serializer.data)
     
@@ -129,30 +140,33 @@ class CategorieViewSet(viewsets.ModelViewSet):
     
     @action(detail=False)
     def stats(self, request):
-        """Statistiques des catégories"""
+        """Statistiques des catégories (filtrées par entreprise)"""
+        # Utiliser get_queryset() pour avoir le filtrage automatique par entreprise
+        base_qs = self.get_queryset()
         stats = {
-            'total_categories': Categorie.objects.filter(is_active=True).count(),
-            'categories_racines': Categorie.objects.filter(parent=None, is_active=True).count(),
-            'categories_avec_produits': Categorie.objects.filter(
+            'total_categories': base_qs.filter(is_active=True).count(),
+            'categories_racines': base_qs.filter(parent=None, is_active=True).count(),
+            'categories_avec_produits': base_qs.filter(
                 produits__is_active=True, is_active=True
             ).distinct().count(),
         }
         return Response(stats)
 
-class ClientViewSet(viewsets.ModelViewSet):
+class ClientViewSet(TenantFilterMixin, viewsets.ModelViewSet):
     queryset = Client.objects.all().order_by('nom')
     serializer_class = ClientSerializer
+    permission_classes = [IsAuthenticated]
 
-class FournisseurViewSet(viewsets.ModelViewSet):
+class FournisseurViewSet(TenantFilterMixin, viewsets.ModelViewSet):
     queryset = Fournisseur.objects.all().order_by('libelle')
     serializer_class = FournisseurSerializer
+    permission_classes = [IsAuthenticated]
     pagination_class = None
-    permission_classes = [permissions.AllowAny]
 
-class ProduitViewSet(viewsets.ModelViewSet):
+class ProduitViewSet(TenantFilterMixin, viewsets.ModelViewSet):
     queryset = Produit.objects.filter(is_active=True).order_by('reference')
     serializer_class = ProduitSerializer
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [IsAuthenticated]
     filterset_fields = {
         'quantite': ['gte', 'lte'],
         'code_barre': ['exact', 'icontains'],
@@ -286,9 +300,10 @@ class ProduitViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-class AchatViewSet(viewsets.ModelViewSet):
+class AchatViewSet(TenantFilterMixin, viewsets.ModelViewSet):
     queryset = Achat.objects.all().order_by('date_Achat')
     serializer_class = AchatSerializer
+    permission_classes = [IsAuthenticated]
 
     def perform_create(self, serializer):
         obj = serializer.save()
@@ -338,9 +353,10 @@ class AchatViewSet(viewsets.ModelViewSet):
         except Exception:
             pass
 
-class BonLivraisonViewSet(viewsets.ModelViewSet):
+class BonLivraisonViewSet(TenantFilterMixin, viewsets.ModelViewSet):
     queryset = BonLivraison.objects.all().order_by('-date_creation')
     serializer_class = BonLivraisonSerializer
+    permission_classes = [IsAuthenticated]
 
     def perform_create(self, serializer):
         obj = serializer.save()
@@ -391,9 +407,10 @@ class BonLivraisonViewSet(viewsets.ModelViewSet):
             pass
         return Response({'detail': 'Bon validé'}, status=200)
 
-class FactureViewSet(viewsets.ModelViewSet):
+class FactureViewSet(TenantFilterMixin, viewsets.ModelViewSet):
     queryset = Facture.objects.all().order_by('-date_emission')
     serializer_class = FactureSerializer
+    permission_classes = [IsAuthenticated]
 
     def perform_create(self, serializer):
         obj = serializer.save()
@@ -566,9 +583,10 @@ class StockMoveFilter(FilterSet):
         model = StockMove
         fields = ['produit', 'source', 'warehouse']
 
-class StockMoveViewSet(viewsets.ModelViewSet):
+class StockMoveViewSet(WarehouseRelatedTenantMixin, viewsets.ModelViewSet):
     queryset = StockMove.objects.all().select_related('produit','warehouse')
     serializer_class = StockMoveSerializer
+    permission_classes = [IsAuthenticated]
 
     filter_backends = [DjangoFilterBackend]
     filterset_class = StockMoveFilter
@@ -833,8 +851,9 @@ class StockMoveViewSet(viewsets.ModelViewSet):
             'fournisseur': f.libelle
         }, status=201)
 
-class InventorySessionViewSet(viewsets.ModelViewSet):
+class InventorySessionViewSet(TenantFilterMixin, viewsets.ModelViewSet):
     queryset = InventorySession.objects.all().order_by('-date')
+    permission_classes = [IsAuthenticated]
     serializer_class = InventorySessionSerializer
 
     def perform_create(self, serializer):
@@ -1050,6 +1069,18 @@ from rest_framework.permissions import IsAuthenticated, IsAdminUser
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all().order_by('username')
     serializer_class = UserSerializer
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+class CompanyViewSet(viewsets.ModelViewSet):
+    """ViewSet pour gérer les entreprises/organisations"""
+    queryset = Company.objects.all().order_by('name')
+    serializer_class = CompanySerializer
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+class UserProfileViewSet(viewsets.ModelViewSet):
+    """ViewSet pour gérer les profils utilisateurs"""
+    queryset = UserProfile.objects.all().select_related('user', 'company')
+    serializer_class = UserProfileSerializer
     permission_classes = [IsAuthenticated, IsAdminUser]
 
 class GroupViewSet(viewsets.ModelViewSet):
@@ -1333,7 +1364,8 @@ class LoginViewSet(APIView):
             return Response({'status': 'error', 'message': 'Invalid credentials'}, status=401)
 
 # API pour les Ventes
-class VenteViewSet(viewsets.ModelViewSet):
+class VenteViewSet(TenantFilterMixin, viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated]
     queryset = Vente.objects.all().order_by('-date_vente')
     
     def perform_create(self, serializer):
@@ -1500,27 +1532,30 @@ class VenteViewSet(viewsets.ModelViewSet):
     
     @action(detail=False)
     def stats(self, request):
-        """Statistiques des ventes"""
+        """Statistiques des ventes (filtrées par entreprise)"""
         from django.db.models import Sum, Count
         from django.utils import timezone
         from datetime import timedelta
-        
+
         now = timezone.now()
         today = now.date()
         week_ago = today - timedelta(days=7)
         month_ago = today - timedelta(days=30)
-        
+
+        # Utiliser get_queryset() pour avoir le filtrage automatique par entreprise
+        base_qs = self.get_queryset()
+
         stats = {
-            'total_ventes': Vente.objects.filter(statut='completed').count(),
-            'ventes_aujourd_hui': Vente.objects.filter(statut='completed', date_vente__date=today).count(),
-            'ventes_semaine': Vente.objects.filter(statut='completed', date_vente__date__gte=week_ago).count(),
-            'ventes_mois': Vente.objects.filter(statut='completed', date_vente__date__gte=month_ago).count(),
-            'ca_total': Vente.objects.filter(statut='completed').aggregate(total=Sum('total_ttc'))['total'] or 0,
-            'ca_aujourd_hui': Vente.objects.filter(statut='completed', date_vente__date=today).aggregate(total=Sum('total_ttc'))['total'] or 0,
-            'ca_semaine': Vente.objects.filter(statut='completed', date_vente__date__gte=week_ago).aggregate(total=Sum('total_ttc'))['total'] or 0,
-            'ca_mois': Vente.objects.filter(statut='completed', date_vente__date__gte=month_ago).aggregate(total=Sum('total_ttc'))['total'] or 0,
+            'total_ventes': base_qs.filter(statut='completed').count(),
+            'ventes_aujourd_hui': base_qs.filter(statut='completed', date_vente__date=today).count(),
+            'ventes_semaine': base_qs.filter(statut='completed', date_vente__date__gte=week_ago).count(),
+            'ventes_mois': base_qs.filter(statut='completed', date_vente__date__gte=month_ago).count(),
+            'ca_total': base_qs.filter(statut='completed').aggregate(total=Sum('total_ttc'))['total'] or 0,
+            'ca_aujourd_hui': base_qs.filter(statut='completed', date_vente__date=today).aggregate(total=Sum('total_ttc'))['total'] or 0,
+            'ca_semaine': base_qs.filter(statut='completed', date_vente__date__gte=week_ago).aggregate(total=Sum('total_ttc'))['total'] or 0,
+            'ca_mois': base_qs.filter(statut='completed', date_vente__date__gte=month_ago).aggregate(total=Sum('total_ttc'))['total'] or 0,
         }
-        
+
         return Response(stats)
 
     @action(detail=True, methods=['get'])
@@ -1703,10 +1738,10 @@ class VenteViewSet(viewsets.ModelViewSet):
 
         return HttpResponse(html, content_type='text/html; charset=utf-8')
 
-class WarehouseViewSet(viewsets.ModelViewSet):
+class WarehouseViewSet(TenantFilterMixin, viewsets.ModelViewSet):
     queryset = Warehouse.objects.all().order_by('name')
     serializer_class = WarehouseSerializer
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def perform_create(self, serializer):
         obj = serializer.save()
@@ -1737,9 +1772,10 @@ class WarehouseViewSet(viewsets.ModelViewSet):
             raise ValidationError({'detail': "Impossible de supprimer: l'entrepôt est utilisé par des stocks. Mettez-le inactif à la place."})
         return super().perform_destroy(instance)
 
-class ProductStockViewSet(viewsets.ModelViewSet):
+class ProductStockViewSet(WarehouseRelatedTenantMixin, viewsets.ModelViewSet):
     queryset = ProductStock.objects.select_related('produit','warehouse').all()
     serializer_class = ProductStockSerializer
+    permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['produit', 'warehouse']
     pagination_class = None
