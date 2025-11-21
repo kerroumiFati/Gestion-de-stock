@@ -1,0 +1,50 @@
+# Railway ignore file - exclude unnecessary files from upload
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# Database files
+db.sqlite3
+db.sqlite3-journal
+
+# Static files (will be collected during build)
+staticfiles_build/
+static/
+
+# Node modules
+node_modules/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Environment files
+.env
+.env.local
+
+# Git
+.git/
+
+# Screenshots and docs (reduce upload size)
+ScreenShots/
+docs/
+
+# Temporary files
+tmp_rovodev_*

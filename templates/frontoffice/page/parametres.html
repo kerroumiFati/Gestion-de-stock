@@ -1,0 +1,902 @@
+{% load i18n %}
+<style>
+/* Design sobre et professionnel pour les Paramètres */
+.settings-container {
+    padding: 20px 0;
+}
+
+.settings-title {
+    font-size: 1.8rem;
+    font-weight: 600;
+    color: #2d3748;
+    margin-bottom: 25px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid #e2e8f0;
+}
+
+/* Onglets personnalisés */
+.settings-tabs {
+    border-bottom: 2px solid #e2e8f0;
+    margin-bottom: 30px;
+}
+
+.settings-tab {
+    border: none;
+    background: none;
+    color: #718096;
+    padding: 15px 25px;
+    margin-right: 5px;
+    font-weight: 500;
+    border-bottom: 3px solid transparent;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.settings-tab:hover {
+    color: #2d3748;
+    background: #f7fafc;
+    border-bottom-color: #cbd5e0;
+}
+
+.settings-tab.active {
+    color: #2d3748;
+    border-bottom-color: #2d3748;
+    font-weight: 600;
+}
+
+.settings-tab i {
+    font-size: 1.1rem;
+}
+
+/* Cartes de contenu */
+.settings-section {
+    display: none;
+}
+
+.settings-section.active {
+    display: block;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.section-card {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 30px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.section-header {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #2d3748;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.section-header i {
+    color: #4a5568;
+}
+
+/* Formulaires */
+.form-label-modern {
+    font-weight: 500;
+    color: #4a5568;
+    margin-bottom: 8px;
+    font-size: 0.9rem;
+}
+
+.form-control-modern {
+    border: 1px solid #cbd5e0;
+    border-radius: 6px;
+    padding: 10px 15px;
+    transition: all 0.2s ease;
+}
+
+.form-control-modern:focus {
+    border-color: #4a5568;
+    box-shadow: 0 0 0 3px rgba(74, 85, 104, 0.1);
+    outline: none;
+}
+
+/* Boutons */
+.btn-modern {
+    border-radius: 6px;
+    padding: 10px 25px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.btn-modern-primary {
+    background: #2d3748;
+    color: white;
+    border: none;
+}
+
+.btn-modern-primary:hover {
+    background: #1a202c;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(45, 55, 72, 0.2);
+    color: white;
+}
+
+.btn-modern-secondary {
+    background: #e2e8f0;
+    color: #2d3748;
+    border: none;
+}
+
+.btn-modern-secondary:hover {
+    background: #cbd5e0;
+    color: #2d3748;
+}
+
+.btn-modern-success {
+    background: #48bb78;
+    color: white;
+    border: none;
+}
+
+.btn-modern-success:hover {
+    background: #38a169;
+    color: white;
+}
+
+/* Info box */
+.info-alert {
+    background: #f7fafc;
+    border-left: 4px solid #4a5568;
+    border-radius: 6px;
+    padding: 15px;
+    margin-bottom: 20px;
+    color: #4a5568;
+}
+
+/* Checkbox */
+.checkbox-card {
+    background: #f7fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 15px;
+    margin-bottom: 15px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.checkbox-card:hover {
+    background: #edf2f7;
+    border-color: #cbd5e0;
+}
+
+.checkbox-card input[type="checkbox"] {
+    margin-right: 10px;
+    cursor: pointer;
+}
+
+.checkbox-card label {
+    margin: 0;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+/* Tables */
+.table-modern {
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.table-modern thead th {
+    background: #f7fafc;
+    border: none;
+    padding: 12px 15px;
+    font-weight: 600;
+    color: #4a5568;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.table-modern tbody td {
+    padding: 12px 15px;
+    border-bottom: 1px solid #e2e8f0;
+    vertical-align: middle;
+}
+
+.table-modern tbody tr:hover {
+    background: #f7fafc;
+}
+
+/* Section divider */
+.divider {
+    height: 1px;
+    background: #e2e8f0;
+    margin: 25px 0;
+}
+
+/* Convertisseur */
+.converter-section {
+    background: #f7fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.converter-result-box {
+    background: white;
+    border: 2px solid #2d3748;
+    border-radius: 8px;
+    padding: 15px;
+    text-align: center;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #2d3748;
+}
+</style>
+
+<div class="container-fluid settings-container">
+    <h1 class="settings-title">
+        <i class="fas fa-cog"></i> Paramètres
+    </h1>
+
+    <!-- Menu à onglets -->
+    <ul class="nav settings-tabs" role="tablist">
+        <li class="nav-item">
+            <button class="settings-tab active" data-tab="general">
+                <i class="fas fa-sliders-h"></i> Général
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="settings-tab" data-tab="caisse">
+                <i class="fas fa-cash-register"></i> Caisse
+            </button>
+        </li>
+        {% if user.is_staff %}
+        <li class="nav-item">
+            <button class="settings-tab" data-tab="currencies">
+                <i class="fas fa-coins"></i> Devises & Taux
+            </button>
+        </li>
+        {% endif %}
+        <li class="nav-item">
+            <button class="settings-tab" data-tab="password">
+                <i class="fas fa-key"></i> Mot de passe
+            </button>
+        </li>
+    </ul>
+
+    <!-- Sections de contenu -->
+    <div class="tab-content">
+        <!-- Section Général -->
+        <div id="section-general" class="settings-section active">
+            <div class="section-card">
+                <h5 class="section-header">
+                    <i class="fas fa-cog"></i> Configuration Générale du Système
+                </h5>
+
+                <div class="info-alert mb-4">
+                    <i class="fas fa-info-circle"></i> <strong>Paramètres par défaut :</strong>
+                    Ces paramètres seront appliqués par défaut dans toute l'application
+                </div>
+
+                <!-- Langue -->
+                <div class="row">
+                    <div class="col-md-6 mb-4">
+                        <div style="background: #f7fafc; border-radius: 8px; padding: 20px; border: 1px solid #e2e8f0;">
+                            <h6 class="mb-2" style="font-weight: 600; color: #4a5568;">
+                                <i class="fas fa-language"></i> Langue de l'interface
+                            </h6>
+                            <div id="current_language_display" class="mb-3 p-2" style="background: white; border-radius: 4px; border: 1px solid #cbd5e0; font-size: 0.9rem;">
+                                <strong>Actuel :</strong> <span id="current_language_text" style="color: #2d3748;">-</span>
+                            </div>
+                            <select id="cfg_language" class="form-control form-control-modern">
+                                <option value="fr">🇫🇷 Français</option>
+                                <option value="en">🇬🇧 English</option>
+                                <option value="ar">🇩🇿 العربية (Arabe)</option>
+                            </select>
+                            <small class="form-text text-muted mt-2">
+                                Langue d'affichage de l'application
+                            </small>
+                        </div>
+                    </div>
+
+                    <!-- Devise -->
+                    <div class="col-md-6 mb-4">
+                        <div style="background: #f7fafc; border-radius: 8px; padding: 20px; border: 1px solid #e2e8f0;">
+                            <h6 class="mb-2" style="font-weight: 600; color: #4a5568;">
+                                <i class="fas fa-coins"></i> Devise par défaut
+                            </h6>
+                            <div id="current_currency_display" class="mb-3 p-2" style="background: white; border-radius: 4px; border: 1px solid #cbd5e0; font-size: 0.9rem;">
+                                <strong>Actuel :</strong> <span id="current_currency_text" style="color: #2d3748;">-</span>
+                            </div>
+                            <select id="cfg_default_currency" class="form-control form-control-modern">
+                                <option value="">Sélectionner une devise...</option>
+                            </select>
+                            <small class="form-text text-muted mt-2">
+                                Devise utilisée par défaut dans les transactions
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="divider"></div>
+
+                <!-- Entrepôt -->
+                <h6 class="mb-3" style="font-weight: 600; color: #4a5568;">
+                    <i class="fas fa-warehouse"></i> Entrepôt par défaut
+                </h6>
+
+                <div id="cfg_info" class="info-alert d-none mb-3">
+                    <strong><i class="fas fa-info-circle"></i> Information:</strong>
+                    <span id="cfg_info_text"></span>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-12 mb-3">
+                        <select id="cfg_default_warehouse" class="form-control form-control-modern">
+                            <option value="">Sélectionner un entrepôt...</option>
+                        </select>
+                        <small class="form-text text-muted">
+                            Cet entrepôt sera utilisé par défaut pour les nouvelles opérations de stock
+                        </small>
+                    </div>
+                </div>
+
+                <div class="mt-4">
+                    <button id="general_save" class="btn btn-modern btn-modern-primary">
+                        <i class="fas fa-save"></i> Enregistrer tous les paramètres
+                    </button>
+                    <span id="general_status" class="ml-3"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section Entrepôt (supprimée - maintenant dans Général) -->
+        <div id="section-warehouse" class="settings-section" style="display:none;">
+            <div class="section-card">
+                <h5 class="section-header">
+                    <i class="fas fa-warehouse"></i> Configuration de l'Entrepôt par Défaut
+                </h5>
+
+                <div id="cfg_info" class="info-alert d-none">
+                    <strong><i class="fas fa-info-circle"></i> Information:</strong>
+                    <span id="cfg_info_text"></span>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label-modern">Entrepôt par défaut</label>
+                    <select id="cfg_default_warehouse" class="form-control form-control-modern">
+                        <option value="">Sélectionner un entrepôt...</option>
+                    </select>
+                    <small class="form-text text-muted">
+                        Cet entrepôt sera utilisé par défaut pour les nouvelles opérations
+                    </small>
+                </div>
+
+                <div class="mt-4">
+                    <button id="cfg_save" class="btn btn-modern btn-modern-primary">
+                        <i class="fas fa-save"></i> Enregistrer
+                    </button>
+                    <span id="cfg_status" class="ml-3"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section Caisse -->
+        <div id="section-caisse" class="settings-section">
+            <div class="section-card">
+                <h5 class="section-header">
+                    <i class="fas fa-cash-register"></i> Configuration de la Caisse
+                </h5>
+
+                <div class="checkbox-card">
+                    <input type="checkbox" id="cfg_auto_print_ticket">
+                    <label for="cfg_auto_print_ticket">
+                        Générer automatiquement le ticket de caisse après chaque vente
+                    </label>
+                </div>
+                <small class="form-text text-muted mb-4">
+                    Si activé, un ticket sera automatiquement affiché après chaque transaction
+                </small>
+
+                <div class="divider"></div>
+
+                <h6 class="mb-3" style="font-weight: 600; color: #4a5568;">
+                    <i class="fas fa-building"></i> Informations de l'entreprise
+                </h6>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label-modern">Nom de l'entreprise</label>
+                        <input type="text" id="cfg_ticket_company_name" class="form-control form-control-modern" placeholder="Ex: Ma Boutique SARL">
+                    </div>
+
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label-modern">{% trans "Téléphone" %}</label>
+                        <input type="text" id="cfg_ticket_company_phone" class="form-control form-control-modern" placeholder="+33 1 23 45 67 89">
+                    </div>
+
+                    <div class="col-md-12 mb-3">
+                        <label class="form-label-modern">{% trans "Adresse" %}</label>
+                        <textarea id="cfg_ticket_company_address" class="form-control form-control-modern" rows="2" placeholder="123 Rue Example, 75001 Paris"></textarea>
+                    </div>
+
+                    <div class="col-md-12 mb-3">
+                        <label class="form-label-modern">Message de pied de page</label>
+                        <textarea id="cfg_ticket_footer_message" class="form-control form-control-modern" rows="3" placeholder="Merci de votre visite !&#10;Au plaisir de vous revoir."></textarea>
+                        <small class="form-text text-muted">Message affiché en bas du ticket</small>
+                    </div>
+                </div>
+
+                <div class="mt-4">
+                    <button id="caisse_save" class="btn btn-modern btn-modern-primary">
+                        <i class="fas fa-save"></i> Enregistrer
+                    </button>
+                    <span id="caisse_status" class="ml-3"></span>
+                </div>
+            </div>
+        </div>
+
+        {% if user.is_staff %}
+        <!-- Section Devises & Taux -->
+        <div id="section-currencies" class="settings-section">
+            <div class="section-card">
+                <h5 class="section-header">
+                    <i class="fas fa-coins"></i> Gestion des Devises et Taux de Change
+                </h5>
+
+                <div class="row">
+                    <!-- Devises -->
+                    <div class="col-lg-6 mb-4">
+                        <h6 class="mb-3" style="font-weight: 600; color: #4a5568;">
+                            <i class="fas fa-money-bill-wave"></i> Devises
+                        </h6>
+
+                        <div class="row mb-3 g-2">
+                            <div class="col-3">
+                                <input id="currency_code" type="text" class="form-control form-control-sm form-control-modern" placeholder="EUR" maxlength="3" style="text-transform: uppercase;">
+                            </div>
+                            <div class="col-5">
+                                <input id="currency_name" type="text" class="form-control form-control-sm form-control-modern" placeholder="Euro">
+                            </div>
+                            <div class="col-2">
+                                <input id="currency_symbol" type="text" class="form-control form-control-sm form-control-modern" placeholder="€" maxlength="5">
+                            </div>
+                            <div class="col-2">
+                                <button id="add_currency" class="btn btn-modern-success btn-sm w-100">
+                                    <i class="fa fa-plus"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-sm table-modern">
+                                <thead>
+                                    <tr>
+                                        <th>{% trans "Code" %}</th>
+                                        <th>{% trans "Nom" %}</th>
+                                        <th>Symbole</th>
+                                        <th>Défaut</th>
+                                        <th>{% trans "Actions" %}</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="currencies_body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Taux de Change -->
+                    <div class="col-lg-6 mb-4">
+                        <h6 class="mb-3" style="font-weight: 600; color: #4a5568;">
+                            <i class="fas fa-exchange-alt"></i> Taux de Change
+                        </h6>
+
+                        <div class="row mb-3 g-2">
+                            <div class="col-4">
+                                <select id="rate_from_currency" class="form-control form-control-sm form-control-modern">
+                                    <option value="">De...</option>
+                                </select>
+                            </div>
+                            <div class="col-4">
+                                <select id="rate_to_currency" class="form-control form-control-sm form-control-modern">
+                                    <option value="">Vers...</option>
+                                </select>
+                            </div>
+                            <div class="col-2">
+                                <input id="rate_value" type="number" class="form-control form-control-sm form-control-modern" placeholder="1.0" step="0.000001">
+                            </div>
+                            <div class="col-2">
+                                <button id="add_rate" class="btn btn-modern-success btn-sm w-100">
+                                    <i class="fa fa-plus"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Convertisseur -->
+                        <div class="converter-section">
+                            <h6 style="font-weight: 600; color: #4a5568; margin-bottom: 15px;">
+                                <i class="fas fa-calculator"></i> Convertisseur
+                            </h6>
+                            <div class="row g-2 mb-3">
+                                <div class="col-3">
+                                    <input id="convert_amount" type="number" class="form-control form-control-sm form-control-modern" placeholder="100" step="0.01">
+                                </div>
+                                <div class="col-4">
+                                    <select id="convert_from" class="form-control form-control-sm form-control-modern">
+                                        <option value="">De...</option>
+                                    </select>
+                                </div>
+                                <div class="col-4">
+                                    <select id="convert_to" class="form-control form-control-sm form-control-modern">
+                                        <option value="">Vers...</option>
+                                    </select>
+                                </div>
+                                <div class="col-1">
+                                    <button id="convert_btn" class="btn btn-modern-secondary btn-sm w-100">
+                                        <i class="fa fa-arrow-right"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="convert_result" class="converter-result-box" style="display:none;"></div>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-sm table-modern">
+                                <thead>
+                                    <tr>
+                                        <th>De</th>
+                                        <th>Vers</th>
+                                        <th>Taux</th>
+                                        <th>{% trans "Date" %}</th>
+                                        <th>{% trans "Actions" %}</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="rates_body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Section Mot de passe -->
+        <div id="section-password" class="settings-section">
+            <div class="section-card">
+                <h5 class="section-header">
+                    <i class="fas fa-key"></i> Changer mon Mot de Passe
+                </h5>
+
+                <div class="info-alert">
+                    <i class="fas fa-shield-alt"></i> <strong>Sécurité:</strong>
+                    Utilisez un mot de passe fort avec au moins 8 caractères
+                </div>
+
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label-modern">Mot de passe actuel</label>
+                        <input id="pwd_current" type="password" class="form-control form-control-modern" autocomplete="current-password">
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label-modern">Nouveau mot de passe</label>
+                        <input id="pwd_new" type="password" class="form-control form-control-modern" autocomplete="new-password">
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label-modern">{% trans "Confirmer" %}</label>
+                        <input id="pwd_confirm" type="password" class="form-control form-control-modern" autocomplete="new-password">
+                    </div>
+                </div>
+
+                <div class="mt-4">
+                    <button id="pwd_save" class="btn btn-modern btn-modern-primary">
+                        <i class="fas fa-save"></i> Mettre à jour
+                    </button>
+                    <span id="pwd_status" class="ml-3"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function(){
+  const API_CFG = '/API/system-config/';
+  const API_WAREHOUSES = '/API/entrepots/?page_size=1000';
+  const API_CHANGE_PWD = '/change-password/';
+  const $ = window.jQuery;
+
+  // Gestion des onglets
+  $('.settings-tab').on('click', function(){
+    const tabName = $(this).data('tab');
+
+    // Mettre à jour les onglets actifs
+    $('.settings-tab').removeClass('active');
+    $(this).addClass('active');
+
+    // Afficher la bonne section, cacher les autres
+    $('.settings-section').removeClass('active');
+    $('#section-' + tabName).addClass('active');
+  });
+
+  function getCookie(name){
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+  }
+
+  function asList(data){
+    if (Array.isArray(data)) return data;
+    if (data && Array.isArray(data.results)) return data.results;
+    if (data && data.results && typeof data.results === 'object') return Object.values(data.results);
+    return [];
+  }
+
+  function fillSelect($sel, list){
+    $sel.empty();
+    $sel.append($('<option>').val('').text('Sélectionner un entrepôt...'));
+    (Array.isArray(list) ? list : []).forEach(function(w){
+      $sel.append($('<option>').val(w.id).text((w.code||'') + ' - ' + (w.name||w.label||'')));
+    });
+  }
+
+  function loadWarehouses(){
+    return $.getJSON(API_WAREHOUSES).then(function(data){ return asList(data); });
+  }
+
+  function loadConfig(){
+    return $.getJSON(API_CFG);
+  }
+
+  function saveConfig(cfg){
+    const csrftoken = getCookie('csrftoken');
+    return $.ajax({
+      url: API_CFG,
+      method: 'PUT',
+      contentType: 'application/json',
+      headers: csrftoken ? {'X-CSRFToken': csrftoken} : {},
+      data: JSON.stringify(cfg)
+    });
+  }
+
+  function setStatus(sel, msg, isErr){
+    $(sel).html(isErr
+      ? `<i class="fas fa-exclamation-circle text-danger"></i> <span class="text-danger">${msg}</span>`
+      : `<i class="fas fa-check-circle text-success"></i> <span class="text-success">${msg}</span>`
+    );
+  }
+
+  function loadCurrencies(){
+    return $.getJSON('/API/currencies/?page_size=1000').then(function(data){
+      const list = Array.isArray(data) ? data : (data && Array.isArray(data.results)) ? data.results : [];
+      return list;
+    });
+  }
+
+  function fillCurrencySelect($sel, list){
+    $sel.empty();
+    $sel.append($('<option>').val('').text('Sélectionner une devise...'));
+    (Array.isArray(list) ? list : []).forEach(function(c){
+      $sel.append($('<option>').val(c.id).text(c.code + ' - ' + c.name + ' (' + c.symbol + ')'));
+    });
+  }
+
+  $(function(){
+    // Section Général - Charger tous les paramètres
+    const $warehouseSel = $('#cfg_default_warehouse');
+
+    // Charger les entrepôts
+    loadWarehouses().done(function(list){
+      fillSelect($warehouseSel, list);
+    }).fail(function(){
+      setStatus('#general_status', 'Erreur de chargement des entrepôts', true);
+    });
+
+    // Charger les devises
+    loadCurrencies().done(function(list){
+      fillCurrencySelect($('#cfg_default_currency'), list);
+    });
+
+    // Charger la configuration actuelle
+    loadConfig().done(function(cfg){
+      const config = cfg && (cfg[0] || cfg);
+      if(config){
+        // Langue - afficher la valeur actuelle
+        const langCode = config.language || 'fr';
+        $('#cfg_language').val(langCode);
+
+        const langMap = {
+          'fr': '🇫🇷 Français',
+          'en': '🇬🇧 English',
+          'ar': '🇩🇿 العربية (Arabe)'
+        };
+        $('#current_language_text').text(langMap[langCode] || langCode);
+
+        // Devise - afficher la valeur actuelle
+        if(config.default_currency){
+          $('#cfg_default_currency').val(String(config.default_currency));
+
+          // Attendre que les devises soient chargées pour afficher le nom
+          setTimeout(function(){
+            const $selectedOption = $('#cfg_default_currency option:selected');
+            const currencyLabel = $selectedOption.text() || 'Devise #' + config.default_currency;
+            $('#current_currency_text').text(currencyLabel);
+          }, 500);
+        } else {
+          $('#current_currency_text').text('Aucune devise par défaut définie');
+        }
+
+        // Entrepôt - afficher dans la section Information
+        if(config.default_warehouse){
+          $warehouseSel.val(String(config.default_warehouse));
+          const whId = String(config.default_warehouse);
+          const $opt = $warehouseSel.find('option[value="'+whId+'"]');
+          const label = $opt.length ? $opt.text() : ('#'+whId);
+          $('#cfg_info').removeClass('d-none');
+          $('#cfg_info_text').text('Entrepôt actuel: '+label);
+        } else {
+          $('#cfg_info').removeClass('d-none');
+          $('#cfg_info_text').text('Aucun entrepôt par défaut défini.');
+        }
+      }
+    }).fail(function(){
+      setStatus('#general_status', 'Erreur de chargement de la configuration', true);
+    });
+
+    // Sauvegarder tous les paramètres généraux
+    $('#general_save').on('click', function(){
+      const lang = $('#cfg_language').val();
+      const currId = parseInt($('#cfg_default_currency').val()||'0', 10) || null;
+      const whId = parseInt($warehouseSel.val()||'0', 10) || null;
+
+      setStatus('#general_status', 'Enregistrement...', false);
+
+      const payload = { language: lang };
+      if(currId) payload.default_currency = currId;
+      if(whId) payload.default_warehouse = whId;
+
+      saveConfig(payload)
+        .done(function(resp){
+          setStatus('#general_status', resp.message || 'Tous les paramètres ont été enregistrés avec succès', false);
+
+          // Mettre à jour les affichages des valeurs actuelles
+          loadConfig().done(function(cfg){
+            const config = cfg && (cfg[0] || cfg);
+            if(config){
+              // Langue
+              const langMap = {
+                'fr': '🇫🇷 Français',
+                'en': '🇬🇧 English',
+                'ar': '🇩🇿 العربية (Arabe)'
+              };
+              $('#current_language_text').text(langMap[config.language || 'fr'] || config.language);
+
+              // Devise
+              if(config.default_currency){
+                const $selectedOption = $('#cfg_default_currency option:selected');
+                const currencyLabel = $selectedOption.text() || 'Devise #' + config.default_currency;
+                $('#current_currency_text').text(currencyLabel);
+              } else {
+                $('#current_currency_text').text('Aucune devise par défaut définie');
+              }
+
+              // Entrepôt
+              if(config.default_warehouse){
+                const whId = String(config.default_warehouse);
+                const $opt = $warehouseSel.find('option[value="'+whId+'"]');
+                const label = $opt.length ? $opt.text() : ('#'+whId);
+                $('#cfg_info').removeClass('d-none');
+                $('#cfg_info_text').text('Entrepôt actuel: '+label);
+              }
+            }
+          });
+
+          // Proposer de recharger la page si la langue a changé
+          if(lang){
+            setTimeout(function(){
+              if(confirm('Les paramètres ont été enregistrés. Voulez-vous recharger la page pour appliquer les changements ?')){
+                window.location.reload();
+              }
+            }, 500);
+          }
+        })
+        .fail(function(xhr){
+          const msg = (xhr && xhr.responseJSON && (xhr.responseJSON.error || xhr.responseJSON.detail)) || "Erreur lors de l'enregistrement";
+          setStatus('#general_status', msg, true);
+        });
+    });
+
+    // Configuration de la caisse
+    loadConfig().done(function(cfg){
+      const config = cfg && (cfg[0] || cfg);
+      if(config){
+        $('#cfg_auto_print_ticket').prop('checked', config.auto_print_ticket || false);
+        $('#cfg_ticket_company_name').val(config.ticket_company_name || '');
+        $('#cfg_ticket_company_address').val(config.ticket_company_address || '');
+        $('#cfg_ticket_company_phone').val(config.ticket_company_phone || '');
+        $('#cfg_ticket_footer_message').val(config.ticket_footer_message || '');
+      }
+    });
+
+    $('#caisse_save').on('click', function(){
+      setStatus('#caisse_status', 'Enregistrement...', false);
+      const caisseConfig = {
+        auto_print_ticket: $('#cfg_auto_print_ticket').is(':checked'),
+        ticket_company_name: $('#cfg_ticket_company_name').val() || '',
+        ticket_company_address: $('#cfg_ticket_company_address').val() || '',
+        ticket_company_phone: $('#cfg_ticket_company_phone').val() || '',
+        ticket_footer_message: $('#cfg_ticket_footer_message').val() || ''
+      };
+      saveConfig(caisseConfig)
+        .done(function(resp){
+          setStatus('#caisse_status', resp.message || 'Configuration enregistrée', false);
+        })
+        .fail(function(xhr){
+          const msg = (xhr && xhr.responseJSON && (xhr.responseJSON.error || xhr.responseJSON.detail)) || "Erreur";
+          setStatus('#caisse_status', msg, true);
+        });
+    });
+
+    // Mot de passe
+    $('#pwd_save').on('click', function(){
+      const current = ($('#pwd_current').val()||'').trim();
+      const pw1 = ($('#pwd_new').val()||'').trim();
+      const pw2 = ($('#pwd_confirm').val()||'').trim();
+
+      if(!current || !pw1 || !pw2){
+        setStatus('#pwd_status','Veuillez remplir tous les champs', true);
+        return;
+      }
+      if(pw1 !== pw2){
+        setStatus('#pwd_status','La confirmation ne correspond pas', true);
+        return;
+      }
+      if(pw1.length < 8){
+        setStatus('#pwd_status','Le mot de passe doit contenir au moins 8 caractères', true);
+        return;
+      }
+
+      setStatus('#pwd_status','Mise à jour...', false);
+      const csrftoken = getCookie('csrftoken');
+      $.ajax({
+        url: API_CHANGE_PWD,
+        method: 'POST',
+        headers: csrftoken ? {'X-CSRFToken': csrftoken} : {},
+        data: {
+          current_password: current,
+          new_password: pw1
+        }
+      }).done(function(){
+        setStatus('#pwd_status','Mot de passe mis à jour avec succès', false);
+        $('#pwd_current,#pwd_new,#pwd_confirm').val('');
+      }).fail(function(xhr){
+        const msg = (xhr.responseJSON && (xhr.responseJSON.error||xhr.responseJSON.detail)) || xhr.statusText || 'Erreur';
+        setStatus('#pwd_status', msg, true);
+      });
+    });
+
+    // Initialiser les devises & taux (si admin)
+    try {
+      var evt = new CustomEvent('fragment:loaded', { detail: { name: 'vente' } });
+      document.dispatchEvent(evt);
+      setTimeout(function(){
+        var tab = document.getElementById('devises-tab');
+        if(tab){ tab.dispatchEvent(new Event('shown.bs.tab')); }
+      }, 100);
+    } catch(e) {
+      console.warn('init devises from paramètres failed', e);
+    }
+  });
+})();
+</script>

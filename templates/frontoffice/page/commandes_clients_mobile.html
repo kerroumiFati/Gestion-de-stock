@@ -1,0 +1,628 @@
+{% load i18n %}
+{% load static %}
+
+<div class="container-fluid">
+    <div class="card bg-white">
+        <div class="card-header card-color">
+            <div class="d-flex justify-content-between align-items-center">
+                <h4 class="mb-0 text-white">
+                    <i class="fa fa-mobile-alt"></i> {% trans "Commandes Clients Mobile" %}
+                </h4>
+                <div class="text-white-50 small">
+                    <i class="fa fa-sync"></i> {% trans "Synchronisées depuis l'application mobile" %}
+                </div>
+            </div>
+        </div>
+
+        <div class="card-body">
+            <!-- Statistiques Rapides -->
+            <div class="row mb-4" id="statsCards">
+                <div class="col-md-3">
+                    <div class="card bg-warning text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-0">{% trans "En Attente" %}</h6>
+                                    <h3 class="mb-0" id="stat-pending">0</h3>
+                                </div>
+                                <i class="fa fa-clock fa-2x opacity-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-info text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-0">{% trans "En Préparation" %}</h6>
+                                    <h3 class="mb-0" id="stat-preparing">0</h3>
+                                </div>
+                                <i class="fa fa-box-open fa-2x opacity-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-primary text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-0">{% trans "Prête" %}</h6>
+                                    <h3 class="mb-0" id="stat-ready">0</h3>
+                                </div>
+                                <i class="fa fa-check-circle fa-2x opacity-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-success text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-0">{% trans "Livrée" %}</h6>
+                                    <h3 class="mb-0" id="stat-delivered">0</h3>
+                                </div>
+                                <i class="fa fa-truck fa-2x opacity-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filtres -->
+            <div class="card mb-3">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <label><i class="fa fa-filter"></i> {% trans "Statut" %}:</label>
+                            <select id="filterStatut" class="form-control">
+                                <option value="">{% trans "Tous" %}</option>
+                                <option value="pending">{% trans "En attente" %}</option>
+                                <option value="confirmed">{% trans "Confirmée" %}</option>
+                                <option value="preparing">{% trans "En préparation" %}</option>
+                                <option value="ready">{% trans "Prête" %}</option>
+                                <option value="delivered">{% trans "Livrée" %}</option>
+                                <option value="cancelled">{% trans "Annulée" %}</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label><i class="fa fa-user"></i> {% trans "Livreur" %}:</label>
+                            <select id="filterLivreur" class="form-control">
+                                <option value="">{% trans "Tous" %}</option>
+                                <!-- Sera rempli dynamiquement -->
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label><i class="fa fa-calendar"></i> {% trans "Date début" %}:</label>
+                            <input type="date" id="filterDateDebut" class="form-control">
+                        </div>
+                        <div class="col-md-3">
+                            <label><i class="fa fa-calendar"></i> {% trans "Date fin" %}:</label>
+                            <input type="date" id="filterDateFin" class="form-control">
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <div class="input-group">
+                                <div class="input-group-prepend">
+                                    <span class="input-group-text"><i class="fa fa-search"></i></span>
+                                </div>
+                                <input type="text" id="searchCommande" class="form-control" placeholder="{% trans 'Rechercher par référence ou client...' %}">
+                            </div>
+                        </div>
+                        <div class="col-md-6 text-right">
+                            <button class="btn btn-primary" onclick="applyFilters()">
+                                <i class="fa fa-filter"></i> {% trans "Appliquer" %}
+                            </button>
+                            <button class="btn btn-secondary" onclick="resetFilters()">
+                                <i class="fa fa-undo"></i> {% trans "Réinitialiser" %}
+                            </button>
+                            <button class="btn btn-success" onclick="refreshCommandes()">
+                                <i class="fa fa-sync"></i> {% trans "Actualiser" %}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tableau des Commandes -->
+            <div class="card">
+                <div class="card-header bg-light">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0"><i class="fa fa-list"></i> {% trans "Liste des Commandes" %}</h6>
+                        <span class="badge badge-info" id="commandesCount">0 commande(s)</span>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0" id="commandesTable" data-no-datatable="true">
+                            <thead class="thead-light">
+                                <tr>
+                                    <th width="30"></th>
+                                    <th>{% trans "Référence" %}</th>
+                                    <th>{% trans "Client" %}</th>
+                                    <th>{% trans "Livreur" %}</th>
+                                    <th>{% trans "Date Commande" %}</th>
+                                    <th>{% trans "Livraison Souhaitée" %}</th>
+                                    <th class="text-right">{% trans "Montant TTC" %}</th>
+                                    <th>{% trans "Statut" %}</th>
+                                    <th class="text-center">{% trans "Actions" %}</th>
+                                </tr>
+                            </thead>
+                            <tbody id="commandesTableBody">
+                                <tr>
+                                    <td colspan="9" class="text-center py-4">
+                                        <i class="fa fa-spinner fa-spin fa-2x text-muted"></i>
+                                        <p class="text-muted mt-2">{% trans "Chargement des commandes..." %}</p>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Détails de la Commande -->
+<div class="modal fade" id="modalCommandeDetails" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="fa fa-file-invoice"></i> {% trans "Détails de la Commande" %}
+                </h5>
+                <button type="button" class="close text-white" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body" id="commandeDetailsContent">
+                <!-- Contenu chargé dynamiquement -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">
+                    <i class="fa fa-times"></i> {% trans "Fermer" %}
+                </button>
+                <button type="button" class="btn btn-primary" onclick="printCommande()">
+                    <i class="fa fa-print"></i> {% trans "Imprimer" %}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Changer le Statut -->
+<div class="modal fade" id="modalChangeStatus" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fa fa-exchange-alt"></i> {% trans "Changer le Statut" %}
+                </h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="commandeIdForStatus">
+                <div class="form-group">
+                    <label>{% trans "Nouveau Statut" %}:</label>
+                    <select id="newStatut" class="form-control">
+                        <option value="pending">{% trans "En attente" %}</option>
+                        <option value="confirmed">{% trans "Confirmée" %}</option>
+                        <option value="preparing">{% trans "En préparation" %}</option>
+                        <option value="ready">{% trans "Prête" %}</option>
+                        <option value="delivered">{% trans "Livrée" %}</option>
+                        <option value="cancelled">{% trans "Annulée" %}</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>{% trans "Notes (optionnel)" %}:</label>
+                    <textarea id="statusNotes" class="form-control" rows="3" placeholder="{% trans 'Ajouter une note...' %}"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">
+                    <i class="fa fa-times"></i> {% trans "Annuler" %}
+                </button>
+                <button type="button" class="btn btn-primary" onclick="confirmChangeStatus()">
+                    <i class="fa fa-check"></i> {% trans "Confirmer" %}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    'use strict';
+
+    let allCommandes = [];
+    let currentCommande = null;
+
+    // Charger les commandes au chargement de la page
+    document.addEventListener('fragment:loaded', function(e) {
+        if (e.detail.name === 'commandes_clients_mobile') {
+            loadCommandes();
+            loadLivreurs();
+        }
+    });
+
+    function loadCommandes() {
+        fetch('/API/distribution/commandes/')
+            .then(res => res.json())
+            .then(data => {
+                allCommandes = data;
+                updateStatistics();
+                renderCommandes(data);
+            })
+            .catch(err => {
+                console.error('Erreur chargement commandes:', err);
+                showError('Erreur lors du chargement des commandes');
+            });
+    }
+
+    function loadLivreurs() {
+        fetch('/API/distribution/livreurs/')
+            .then(res => res.json())
+            .then(data => {
+                const select = document.getElementById('filterLivreur');
+                select.innerHTML = '<option value="">Tous</option>' +
+                    data.map(l => `<option value="${l.id}">${l.nom} (${l.matricule})</option>`).join('');
+            })
+            .catch(err => console.error('Erreur chargement livreurs:', err));
+    }
+
+    function updateStatistics() {
+        const stats = {
+            pending: 0,
+            preparing: 0,
+            ready: 0,
+            delivered: 0
+        };
+
+        allCommandes.forEach(cmd => {
+            if (cmd.statut === 'pending') stats.pending++;
+            else if (cmd.statut === 'preparing') stats.preparing++;
+            else if (cmd.statut === 'ready') stats.ready++;
+            else if (cmd.statut === 'delivered') stats.delivered++;
+        });
+
+        document.getElementById('stat-pending').textContent = stats.pending;
+        document.getElementById('stat-preparing').textContent = stats.preparing;
+        document.getElementById('stat-ready').textContent = stats.ready;
+        document.getElementById('stat-delivered').textContent = stats.delivered;
+    }
+
+    function renderCommandes(commandes) {
+        const tbody = document.getElementById('commandesTableBody');
+        document.getElementById('commandesCount').textContent = commandes.length + ' commande(s)';
+
+        if (commandes.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="9" class="text-center py-4">
+                        <i class="fa fa-inbox fa-2x text-muted"></i>
+                        <p class="text-muted mt-2">Aucune commande trouvée</p>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        tbody.innerHTML = commandes.map(cmd => {
+            const statusBadge = getStatusBadge(cmd.statut);
+            const hasDetails = cmd.lignes && cmd.lignes.length > 0;
+
+            return `
+                <tr>
+                    <td class="text-center">
+                        ${hasDetails ? '<i class="fa fa-chevron-right toggle-icon" id="icon-' + cmd.id + '" style="cursor: pointer;" onclick="toggleDetails(' + cmd.id + ')"></i>' : ''}
+                    </td>
+                    <td><strong>${cmd.reference}</strong></td>
+                    <td>
+                        <div class="text-truncate" style="max-width: 150px;" title="${cmd.client_prenom || ''} ${cmd.client_nom || ''}">
+                            ${cmd.client_prenom || ''} ${cmd.client_nom || ''}
+                        </div>
+                    </td>
+                    <td>
+                        <div class="text-truncate" style="max-width: 120px;" title="${cmd.livreur_nom || '-'}">
+                            ${cmd.livreur_nom || '-'}
+                        </div>
+                    </td>
+                    <td>${formatDateTime(cmd.date_commande)}</td>
+                    <td>${cmd.date_livraison_souhaitee ? formatDate(cmd.date_livraison_souhaitee) : '-'}</td>
+                    <td class="text-right"><strong>${formatCurrency(cmd.montant_total_ttc)}</strong></td>
+                    <td>${statusBadge}</td>
+                    <td class="text-center">
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-info" onclick="viewCommandeDetails(${cmd.id})" title="Voir détails">
+                                <i class="fa fa-eye"></i>
+                            </button>
+                            <button class="btn btn-warning" onclick="openChangeStatusModal(${cmd.id})" title="Changer statut">
+                                <i class="fa fa-exchange-alt"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                ${hasDetails ? '<tr id="details-' + cmd.id + '" style="display: none;"><td colspan="9">' + renderCommandeDetailsRow(cmd) + '</td></tr>' : ''}
+            `;
+        }).join('');
+    }
+
+    function renderCommandeDetailsRow(cmd) {
+        return `
+            <div class="p-3 bg-light">
+                <h6><i class="fa fa-boxes"></i> Produits commandés (${cmd.lignes.length})</h6>
+                <table class="table table-sm table-bordered bg-white">
+                    <thead>
+                        <tr>
+                            <th>Produit</th>
+                            <th>Référence</th>
+                            <th class="text-right">Qté</th>
+                            <th class="text-right">Prix Unit. HT</th>
+                            <th class="text-right">Total HT</th>
+                            <th class="text-right">Total TTC</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${cmd.lignes.map(ligne => `
+                            <tr>
+                                <td>${ligne.produit_designation || '-'}</td>
+                                <td><code>${ligne.produit_reference || '-'}</code></td>
+                                <td class="text-right">${ligne.quantite}</td>
+                                <td class="text-right">${formatCurrency(ligne.prix_unitaire_ht)}</td>
+                                <td class="text-right">${formatCurrency(ligne.montant_ht)}</td>
+                                <td class="text-right"><strong>${formatCurrency(ligne.montant_ttc)}</strong></td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                    <tfoot class="bg-light">
+                        <tr>
+                            <th colspan="4" class="text-right">Total HT:</th>
+                            <th class="text-right">${formatCurrency(cmd.montant_total_ht)}</th>
+                            <th></th>
+                        </tr>
+                        <tr>
+                            <th colspan="4" class="text-right">Total TTC:</th>
+                            <th></th>
+                            <th class="text-right"><strong>${formatCurrency(cmd.montant_total_ttc)}</strong></th>
+                        </tr>
+                    </tfoot>
+                </table>
+                ${cmd.notes ? '<div class="mt-2"><strong>Notes:</strong> ' + cmd.notes + '</div>' : ''}
+            </div>
+        `;
+    }
+
+    function toggleDetails(id) {
+        const detailsRow = document.getElementById('details-' + id);
+        const icon = document.getElementById('icon-' + id);
+
+        if (detailsRow.style.display === 'none') {
+            detailsRow.style.display = 'table-row';
+            icon.classList.remove('fa-chevron-right');
+            icon.classList.add('fa-chevron-down');
+        } else {
+            detailsRow.style.display = 'none';
+            icon.classList.remove('fa-chevron-down');
+            icon.classList.add('fa-chevron-right');
+        }
+    }
+
+    function viewCommandeDetails(id) {
+        const commande = allCommandes.find(c => c.id === id);
+        if (!commande) return;
+
+        currentCommande = commande;
+        const content = document.getElementById('commandeDetailsContent');
+
+        content.innerHTML = `
+            <div class="row">
+                <div class="col-md-6">
+                    <h6 class="border-bottom pb-2"><i class="fa fa-info-circle"></i> Informations</h6>
+                    <table class="table table-sm">
+                        <tr><th width="40%">Référence:</th><td><strong>${commande.reference}</strong></td></tr>
+                        <tr><th>Client:</th><td>${commande.client_prenom || ''} ${commande.client_nom || ''}</td></tr>
+                        <tr><th>Livreur:</th><td>${commande.livreur_nom || '-'}</td></tr>
+                        <tr><th>Date commande:</th><td>${formatDateTime(commande.date_commande)}</td></tr>
+                        <tr><th>Livraison souhaitée:</th><td>${commande.date_livraison_souhaitee ? formatDate(commande.date_livraison_souhaitee) : '-'}</td></tr>
+                        <tr><th>Statut:</th><td>${getStatusBadge(commande.statut)}</td></tr>
+                    </table>
+                </div>
+                <div class="col-md-6">
+                    <h6 class="border-bottom pb-2"><i class="fa fa-euro-sign"></i> Montants</h6>
+                    <table class="table table-sm">
+                        <tr><th width="40%">Total HT:</th><td class="text-right">${formatCurrency(commande.montant_total_ht)}</td></tr>
+                        <tr><th>Total TTC:</th><td class="text-right"><h5 class="mb-0">${formatCurrency(commande.montant_total_ttc)}</h5></td></tr>
+                    </table>
+                    ${commande.notes ? '<div class="alert alert-info mt-3"><strong>Notes:</strong><br>' + commande.notes + '</div>' : ''}
+                </div>
+            </div>
+            <hr>
+            <h6><i class="fa fa-boxes"></i> Produits (${commande.lignes ? commande.lignes.length : 0})</h6>
+            ${commande.lignes ? renderCommandeDetailsRow(commande).replace('bg-light', '') : '<p class="text-muted">Aucun produit</p>'}
+        `;
+
+        $('#modalCommandeDetails').modal('show');
+    }
+
+    function openChangeStatusModal(id) {
+        const commande = allCommandes.find(c => c.id === id);
+        if (!commande) return;
+
+        document.getElementById('commandeIdForStatus').value = id;
+        document.getElementById('newStatut').value = commande.statut;
+        document.getElementById('statusNotes').value = '';
+
+        $('#modalChangeStatus').modal('show');
+    }
+
+    function confirmChangeStatus() {
+        const id = document.getElementById('commandeIdForStatus').value;
+        const newStatut = document.getElementById('newStatut').value;
+        const notes = document.getElementById('statusNotes').value;
+
+        fetch(`/API/distribution/commandes/${id}/changer_statut/`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({ statut: newStatut })
+        })
+        .then(res => res.json())
+        .then(data => {
+            $('#modalChangeStatus').modal('hide');
+            showSuccess('Statut modifié avec succès');
+            loadCommandes();
+        })
+        .catch(err => {
+            console.error('Erreur:', err);
+            showError('Erreur lors du changement de statut');
+        });
+    }
+
+    function applyFilters() {
+        const statut = document.getElementById('filterStatut').value;
+        const livreur = document.getElementById('filterLivreur').value;
+        const dateDebut = document.getElementById('filterDateDebut').value;
+        const dateFin = document.getElementById('filterDateFin').value;
+        const search = document.getElementById('searchCommande').value.toLowerCase();
+
+        let filtered = allCommandes;
+
+        if (statut) {
+            filtered = filtered.filter(c => c.statut === statut);
+        }
+        if (livreur) {
+            filtered = filtered.filter(c => c.livreur == livreur);
+        }
+        if (dateDebut) {
+            filtered = filtered.filter(c => c.date_commande >= dateDebut);
+        }
+        if (dateFin) {
+            filtered = filtered.filter(c => c.date_commande <= dateFin);
+        }
+        if (search) {
+            filtered = filtered.filter(c =>
+                c.reference.toLowerCase().includes(search) ||
+                (c.client_nom && c.client_nom.toLowerCase().includes(search)) ||
+                (c.client_prenom && c.client_prenom.toLowerCase().includes(search))
+            );
+        }
+
+        renderCommandes(filtered);
+    }
+
+    function resetFilters() {
+        document.getElementById('filterStatut').value = '';
+        document.getElementById('filterLivreur').value = '';
+        document.getElementById('filterDateDebut').value = '';
+        document.getElementById('filterDateFin').value = '';
+        document.getElementById('searchCommande').value = '';
+        renderCommandes(allCommandes);
+    }
+
+    function refreshCommandes() {
+        loadCommandes();
+    }
+
+    function printCommande() {
+        if (!currentCommande) return;
+        window.print();
+    }
+
+    // Fonctions utilitaires
+    function getStatusBadge(statut) {
+        const badges = {
+            'pending': '<span class="badge badge-warning"><i class="fa fa-clock"></i> En attente</span>',
+            'confirmed': '<span class="badge badge-info"><i class="fa fa-check"></i> Confirmée</span>',
+            'preparing': '<span class="badge badge-primary"><i class="fa fa-box-open"></i> En préparation</span>',
+            'ready': '<span class="badge badge-success"><i class="fa fa-check-circle"></i> Prête</span>',
+            'delivered': '<span class="badge badge-success"><i class="fa fa-truck"></i> Livrée</span>',
+            'cancelled': '<span class="badge badge-danger"><i class="fa fa-times"></i> Annulée</span>'
+        };
+        return badges[statut] || '<span class="badge badge-secondary">' + statut + '</span>';
+    }
+
+    function formatCurrency(amount) {
+        return new Intl.NumberFormat('fr-FR', {
+            style: 'currency',
+            currency: 'DZD',
+            minimumFractionDigits: 2
+        }).format(amount || 0);
+    }
+
+    function formatDate(dateStr) {
+        if (!dateStr) return '-';
+        const date = new Date(dateStr);
+        return date.toLocaleDateString('fr-FR');
+    }
+
+    function formatDateTime(dateStr) {
+        if (!dateStr) return '-';
+        const date = new Date(dateStr);
+        return date.toLocaleDateString('fr-FR') + ' ' + date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    function showSuccess(message) {
+        alert(message); // Remplacer par un toast notification si disponible
+    }
+
+    function showError(message) {
+        alert(message); // Remplacer par un toast notification si disponible
+    }
+
+    // Exposer les fonctions globalement
+    window.toggleDetails = toggleDetails;
+    window.viewCommandeDetails = viewCommandeDetails;
+    window.openChangeStatusModal = openChangeStatusModal;
+    window.confirmChangeStatus = confirmChangeStatus;
+    window.applyFilters = applyFilters;
+    window.resetFilters = resetFilters;
+    window.refreshCommandes = refreshCommandes;
+    window.printCommande = printCommande;
+
+})();
+</script>
+
+<style>
+.opacity-50 {
+    opacity: 0.5;
+}
+
+.toggle-icon {
+    transition: transform 0.3s ease;
+}
+
+#commandesTable tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+@media print {
+    .modal-header,
+    .modal-footer,
+    .btn-group {
+        display: none !important;
+    }
+}
+</style>

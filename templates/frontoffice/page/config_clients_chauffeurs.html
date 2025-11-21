@@ -1,0 +1,397 @@
+{% load static %}
+{% load i18n %}
+<script>
+// Load script only once
+if (!window.__config_clients_chauffeurs_script_loaded__) {
+    window.__config_clients_chauffeurs_script_loaded__ = true;
+    var script = document.createElement('script');
+    script.src = "{% static 'script/config_clients_chauffeurs.js' %}";
+    script.type = 'text/javascript';
+    document.head.appendChild(script);
+} else {
+    // Script already loaded, just re-initialize
+    if (typeof window.initConfigClientsChauffeursPage === 'function') {
+        window.initConfigClientsChauffeursPage();
+    }
+}
+</script>
+
+<style>
+/* Styles modernes pour la page de configuration clients-chauffeurs */
+.page-container { padding: 20px 0; }
+
+.page-title {
+    font-size: 1.8rem;
+    font-weight: 600;
+    color: #2d3748;
+    margin-bottom: 25px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.page-title i {
+    color: #3b82f6;
+    font-size: 2rem;
+}
+
+.modern-section {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 30px;
+    margin-bottom: 25px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.section-header {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.two-column-layout {
+    display: grid;
+    grid-template-columns: 350px 1fr;
+    gap: 25px;
+    margin-top: 20px;
+}
+
+.livreur-list {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+.livreur-item {
+    padding: 15px;
+    border-bottom: 1px solid #e5e7eb;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.livreur-item:hover {
+    background: #f3f4f6;
+}
+
+.livreur-item.active {
+    background: #3b82f6;
+    color: white;
+    font-weight: 600;
+}
+
+.livreur-item i {
+    font-size: 1.2rem;
+    color: #6b7280;
+}
+
+.livreur-item.active i {
+    color: white;
+}
+
+.livreur-info {
+    flex: 1;
+}
+
+.livreur-name {
+    font-weight: 500;
+    font-size: 0.95rem;
+}
+
+.livreur-matricule {
+    font-size: 0.8rem;
+    color: #6b7280;
+    margin-top: 2px;
+}
+
+.livreur-item.active .livreur-matricule {
+    color: #e5e7eb;
+}
+
+.clients-section {
+    background: white;
+}
+
+.clients-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.search-box {
+    position: relative;
+    flex: 1;
+    max-width: 400px;
+}
+
+.search-box input {
+    width: 100%;
+    padding: 10px 15px 10px 40px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 0.9rem;
+}
+
+.search-box i {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #9ca3af;
+}
+
+.clients-lists {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 25px;
+}
+
+.client-list-container {
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.list-title {
+    background: #f9fafb;
+    padding: 12px 15px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: #374151;
+    border-bottom: 2px solid #e5e7eb;
+}
+
+.client-list {
+    max-height: 450px;
+    overflow-y: auto;
+    background: white;
+}
+
+.client-item {
+    padding: 12px 15px;
+    border-bottom: 1px solid #f3f4f6;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: background 0.2s;
+}
+
+.client-item:hover {
+    background: #f9fafb;
+}
+
+.client-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+}
+
+.client-info i {
+    color: #6b7280;
+    font-size: 1rem;
+}
+
+.client-name {
+    font-weight: 500;
+    font-size: 0.9rem;
+    color: #1f2937;
+}
+
+.client-details {
+    font-size: 0.8rem;
+    color: #6b7280;
+    margin-top: 2px;
+}
+
+.client-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.btn-icon {
+    background: none;
+    border: none;
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 1rem;
+}
+
+.btn-add {
+    color: #10b981;
+    background: #ecfdf5;
+}
+
+.btn-add:hover {
+    background: #d1fae5;
+}
+
+.btn-remove {
+    color: #ef4444;
+    background: #fef2f2;
+}
+
+.btn-remove:hover {
+    background: #fee2e2;
+}
+
+.empty-state {
+    padding: 60px 20px;
+    text-align: center;
+    color: #9ca3af;
+}
+
+.empty-state i {
+    font-size: 3rem;
+    margin-bottom: 15px;
+    opacity: 0.5;
+}
+
+.empty-state p {
+    font-size: 0.95rem;
+}
+
+.badge-count {
+    background: #3b82f6;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-left: 8px;
+}
+
+.loading-spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #3b82f6;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-right: 10px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.alert {
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.alert-success {
+    background: #ecfdf5;
+    color: #065f46;
+    border: 1px solid #a7f3d0;
+}
+
+.alert-error {
+    background: #fef2f2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+    .two-column-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .clients-lists {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+
+<div class="page-container">
+    <div class="page-title">
+        <i class="fas fa-users-cog"></i>
+        <span>Configuration Clients / Chauffeurs</span>
+    </div>
+
+    <div class="modern-section">
+        <div class="section-header">
+            Assignation des clients aux chauffeurs de l'application mobile
+        </div>
+
+        <div id="alert-container"></div>
+
+        <div class="two-column-layout">
+            <!-- Liste des livreurs -->
+            <div class="livreur-list" id="livreurList">
+                <div class="empty-state">
+                    <i class="fas fa-truck"></i>
+                    <p>Chargement des chauffeurs...</p>
+                </div>
+            </div>
+
+            <!-- Gestion des clients -->
+            <div class="clients-section">
+                <div id="noLivreurSelected" class="empty-state">
+                    <i class="fas fa-hand-pointer"></i>
+                    <p>Sélectionnez un chauffeur pour gérer ses clients</p>
+                </div>
+
+                <div id="clientsManagement" style="display: none;">
+                    <div class="clients-header">
+                        <h3 id="selectedLivreurName" style="margin: 0; color: #374151; font-size: 1.1rem;"></h3>
+                        <div class="search-box">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="searchClient" placeholder="Rechercher un client...">
+                        </div>
+                    </div>
+
+                    <div class="clients-lists">
+                        <!-- Clients disponibles -->
+                        <div class="client-list-container">
+                            <div class="list-title">
+                                Clients disponibles
+                                <span class="badge-count" id="availableCount">0</span>
+                            </div>
+                            <div class="client-list" id="availableClientsList">
+                                <div class="empty-state">
+                                    <i class="fas fa-user-friends"></i>
+                                    <p>Aucun client disponible</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Clients assignés -->
+                        <div class="client-list-container">
+                            <div class="list-title">
+                                Clients assignés
+                                <span class="badge-count" id="assignedCount">0</span>
+                            </div>
+                            <div class="client-list" id="assignedClientsList">
+                                <div class="empty-state">
+                                    <i class="fas fa-user-check"></i>
+                                    <p>Aucun client assigné</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

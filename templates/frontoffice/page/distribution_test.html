@@ -1,0 +1,157 @@
+{% load static %}
+{% load i18n %}
+
+<style>
+.test-container {
+    padding: 20px;
+    font-family: monospace;
+}
+.test-section {
+    background: #f9fafb;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+.test-title {
+    font-weight: bold;
+    color: #1f2937;
+    margin-bottom: 10px;
+}
+.test-result {
+    margin: 5px 0;
+    padding: 5px;
+}
+.success { color: #10b981; }
+.error { color: #ef4444; }
+.info { color: #3b82f6; }
+</style>
+
+<div class="test-container">
+    <h2>🔍 Diagnostic Distribution Dashboard</h2>
+
+    <div class="test-section">
+        <div class="test-title">1. Vérification Chart.js</div>
+        <div id="test-chartjs" class="test-result">En cours...</div>
+    </div>
+
+    <div class="test-section">
+        <div class="test-title">2. Test Endpoints API</div>
+        <div id="test-livreurs" class="test-result">En cours...</div>
+        <div id="test-tournees" class="test-result">En cours...</div>
+        <div id="test-arrets" class="test-result">En cours...</div>
+    </div>
+
+    <div class="test-section">
+        <div class="test-title">3. Données Chargées</div>
+        <pre id="test-data" style="background: white; padding: 10px; border-radius: 4px;">Chargement...</pre>
+    </div>
+
+    <div class="test-section">
+        <div class="test-title">4. Console Logs</div>
+        <pre id="console-logs" style="background: white; padding: 10px; border-radius: 4px; max-height: 300px; overflow-y: auto;"></pre>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// Capture console logs
+const originalLog = console.log;
+const originalError = console.error;
+const logs = [];
+
+console.log = function(...args) {
+    logs.push(['LOG', ...args]);
+    updateConsoleLogs();
+    originalLog.apply(console, args);
+};
+
+console.error = function(...args) {
+    logs.push(['ERROR', ...args]);
+    updateConsoleLogs();
+    originalError.apply(console, args);
+};
+
+function updateConsoleLogs() {
+    const el = document.getElementById('console-logs');
+    if (el) {
+        el.textContent = logs.map(l => `[${l[0]}] ${l.slice(1).join(' ')}`).join('\n');
+        el.scrollTop = el.scrollHeight;
+    }
+}
+
+// Test 1: Chart.js
+if (typeof Chart !== 'undefined') {
+    document.getElementById('test-chartjs').innerHTML = '<span class="success">✓ Chart.js chargé (version ' + Chart.version + ')</span>';
+} else {
+    document.getElementById('test-chartjs').innerHTML = '<span class="error">✗ Chart.js NON chargé</span>';
+}
+
+// Test 2: API endpoints
+async function testEndpoints() {
+    const results = {
+        livreurs: null,
+        tournees: null,
+        arrets: null
+    };
+
+    try {
+        // Test livreurs
+        const livreursResp = await fetch('/API/distribution/livreurs/', { credentials: 'same-origin' });
+        results.livreurs = {
+            status: livreursResp.status,
+            data: livreursResp.ok ? await livreursResp.json() : null
+        };
+
+        document.getElementById('test-livreurs').innerHTML = livreursResp.ok
+            ? `<span class="success">✓ Livreurs: ${results.livreurs.data.length} items (Status ${livreursResp.status})</span>`
+            : `<span class="error">✗ Livreurs: Erreur ${livreursResp.status}</span>`;
+    } catch (e) {
+        document.getElementById('test-livreurs').innerHTML = `<span class="error">✗ Livreurs: ${e.message}</span>`;
+    }
+
+    try {
+        // Test tournées
+        const tourneesResp = await fetch('/API/distribution/tournees/', { credentials: 'same-origin' });
+        results.tournees = {
+            status: tourneesResp.status,
+            data: tourneesResp.ok ? await tourneesResp.json() : null
+        };
+
+        document.getElementById('test-tournees').innerHTML = tourneesResp.ok
+            ? `<span class="success">✓ Tournées: ${results.tournees.data.length} items (Status ${tourneesResp.status})</span>`
+            : `<span class="error">✗ Tournées: Erreur ${tourneesResp.status}</span>`;
+    } catch (e) {
+        document.getElementById('test-tournees').innerHTML = `<span class="error">✗ Tournées: ${e.message}</span>`;
+    }
+
+    try {
+        // Test arrêts
+        const arretsResp = await fetch('/API/distribution/arrets/', { credentials: 'same-origin' });
+        results.arrets = {
+            status: arretsResp.status,
+            data: arretsResp.ok ? await arretsResp.json() : null
+        };
+
+        document.getElementById('test-arrets').innerHTML = arretsResp.ok
+            ? `<span class="success">✓ Arrêts: ${results.arrets.data.length} items (Status ${arretsResp.status})</span>`
+            : `<span class="error">✗ Arrêts: Erreur ${arretsResp.status}</span>`;
+    } catch (e) {
+        document.getElementById('test-arrets').innerHTML = `<span class="error">✗ Arrêts: ${e.message}</span>`;
+    }
+
+    // Afficher un échantillon des données
+    const dataDisplay = {
+        livreurs: results.livreurs?.data?.[0] || 'Aucune donnée',
+        tournees: results.tournees?.data?.[0] || 'Aucune donnée',
+        arrets: results.arrets?.data?.[0] || 'Aucune donnée'
+    };
+
+    document.getElementById('test-data').textContent = JSON.stringify(dataDisplay, null, 2);
+
+    console.log('[TEST] All results:', results);
+}
+
+// Run tests
+setTimeout(testEndpoints, 500);
+</script>

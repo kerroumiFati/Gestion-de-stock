@@ -1,0 +1,87 @@
+{% load static %}
+{% load i18n %}
+<script src="{% static 'script/facture.js' %}" type="text/javascript"></script>
+<div class="container-fluid">
+  <div class="card bg-white">
+    <div class="card-header card-color">
+      <p class="h2 text-center text-uppercase font-weight-bold pt-2">{% trans "Gestion des factures" %}</p>
+    </div>
+    <div class="card-body container-fluid">
+      <div class="row">
+        <div class="col-sm-4 mb-2">
+          <label>{% trans "Client" %}</label>
+          <select id="fact_client" class="form-control"><option>{% trans "Choisir..." %}</option></select>
+        </div>
+        <div class="col-sm-4 mb-2">
+          <label>{% trans "Bon de livraison" %}</label>
+          <select id="fact_bl" class="form-control"><option>{% trans "Depuis BL validé..." %}</option></select>
+        </div>
+        <div class="col-sm-2 mb-2">
+          <label>{% trans "TVA %" %}</label>
+          <input id="fact_tva" type="number" class="form-control" value="20">
+        </div>
+        <div class="col-sm-2 mb-2">
+          <label>{% trans "N° facture (optionnel)" %}</label>
+          <input id="fact_num" type="text" class="form-control" placeholder="{% trans 'auto' %}">
+        </div>
+      </div>
+      <div class="row">
+        <div class="col">
+          <button id="btn_create_from_bl" class="btn btn-outline-success">{% trans "Créer depuis BL" %}</button>
+        </div>
+      </div>
+      <!-- Résumé financier -->
+      <div class="row mb-3">
+        <div class="col-md-3">
+          <div class="card bg-info text-white">
+            <div class="card-body text-center">
+              <h6>{% trans "Total HT" %}</h6>
+              <h4 id="total-ht-display">0.00 €</h4>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card bg-warning text-white">
+            <div class="card-body text-center">
+              <h6>{% trans "Total TVA" %}</h6>
+              <h4 id="total-tva-display">0.00 €</h4>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card bg-success text-white">
+            <div class="card-body text-center">
+              <h6>{% trans "Total TTC" %}</h6>
+              <h4 id="total-ttc-display">0.00 €</h4>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card bg-primary text-white">
+            <div class="card-body text-center">
+              <h6>{% trans "Nb Factures" %}</h6>
+              <h4 id="total-factures-count">0</h4>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="row table-responsive m-auto rounded mt-3">
+        <table id="tfacture" class="table table-hover w-100">
+          <thead>
+            <tr class="text-uppercase bg-light w-100">
+              <th>{% trans "Id" %}</th>
+              <th>{% trans "Numéro" %}</th>
+              <th>{% trans "Date" %}</th>
+              <th>{% trans "Client" %}</th>
+              <th>{% trans "Statut" %}</th>
+              <th>{% trans "TTC" %}</th>
+              <th>{% trans "Actions" %}</th>
+            </tr>
+          </thead>
+          <tbody id="fact_table"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>

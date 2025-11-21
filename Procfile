@@ -1,0 +1,1 @@
+web: gunicorn Gestion_stock.wsgi --bind 0.0.0.0:$PORT

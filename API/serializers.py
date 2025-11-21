@@ -1,0 +1,818 @@
+from rest_framework import serializers
+from .models import *
+from decimal import Decimal
+from django.contrib.auth.models import User
+
+# Serializers pour Multi-Tenancy
+class CompanySerializer(serializers.ModelSerializer):
+    """Serializer pour les entreprises/organisations"""
+    users_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Company
+        fields = ['id', 'name', 'code', 'email', 'telephone', 'adresse',
+                 'tax_id', 'is_active', 'users_count', 'created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at']
+
+    def get_users_count(self, obj):
+        """Nombre d'utilisateurs dans cette entreprise"""
+        return obj.users.count()
+
+
+class UserProfileSerializer(serializers.ModelSerializer):
+    """Serializer pour les profils utilisateurs"""
+    username = serializers.CharField(source='user.username', read_only=True)
+    email = serializers.CharField(source='user.email', read_only=True)
+    full_name = serializers.SerializerMethodField()
+    company_name = serializers.CharField(source='company.name', read_only=True)
+
+    class Meta:
+        model = UserProfile
+        fields = ['id', 'user', 'username', 'email', 'full_name',
+                 'company', 'company_name', 'role', 'created_at']
+        read_only_fields = ['created_at']
+
+    def get_full_name(self, obj):
+        """Nom complet de l'utilisateur"""
+        return f"{obj.user.first_name} {obj.user.last_name}".strip() or obj.user.username
+
+
+# Serializers pour les Catégories
+class CategorieSerializer(serializers.ModelSerializer):
+    parent_nom = serializers.CharField(source='parent.nom', read_only=True)
+    full_path = serializers.CharField(source='get_full_path', read_only=True)
+    products_count = serializers.IntegerField(source='get_products_count', read_only=True)
+    sous_categories_count = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Categorie
+        fields = ['id', 'nom', 'description', 'parent', 'parent_nom', 'full_path', 
+                 'couleur', 'icone', 'is_active', 'products_count', 'sous_categories_count', 'created_at']
+    
+    def get_sous_categories_count(self, obj):
+        return obj.sous_categories.filter(is_active=True).count()
+
+class CategorieTreeSerializer(serializers.ModelSerializer):
+    """Serializer pour affichage hiérarchique des catégories"""
+    sous_categories = serializers.SerializerMethodField()
+    products_count = serializers.CharField(source='get_products_count', read_only=True)
+    
+    class Meta:
+        model = Categorie
+        fields = ['id', 'nom', 'description', 'couleur', 'icone', 'is_active', 
+                 'products_count', 'sous_categories']
+    
+    def get_sous_categories(self, obj):
+        if obj.sous_categories.filter(is_active=True).exists():
+            return CategorieTreeSerializer(obj.sous_categories.filter(is_active=True), many=True).data
+        return []
+
+from django.contrib.auth.models import Group, Permission
+from .models import AuditLog
+
+class GroupSerializer(serializers.ModelSerializer):
+    permissions = serializers.PrimaryKeyRelatedField(queryset=Permission.objects.all(), many=True, required=False)
+
+    class Meta:
+        model = Group
+        fields = ['id', 'name', 'permissions']
+
+class PermissionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Permission
+        fields = ['id', 'codename', 'name', 'content_type']
+
+class AuditLogSerializer(serializers.ModelSerializer):
+    actor_username = serializers.CharField(source='actor.username', read_only=True)
+
+    class Meta:
+        model = AuditLog
+        fields = ['id', 'created_at', 'actor', 'actor_username', 'action', 'target_model', 'target_id', 'target_repr', 'metadata', 'ip_address', 'user_agent']
+        read_only_fields = fields
+
+class UserSerializer(serializers.ModelSerializer):
+    groups = serializers.PrimaryKeyRelatedField(queryset=Group.objects.all(), many=True, required=False)
+    group_names = serializers.SlugRelatedField(source='groups', slug_field='name', read_only=True, many=True)
+
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'password', 'email', 'first_name', 'last_name', 'is_active', 'is_staff', 'groups', 'group_names']
+        extra_kwargs = {
+            'password': {'write_only': True, 'required': False}
+        }
+
+    def create(self, validated_data):
+        groups = validated_data.pop('groups', [])
+        password = validated_data.pop('password', None)
+        user = User(**validated_data)
+        if password:
+            user.set_password(password)
+        else:
+            user.set_unusable_password()
+        user.save()
+        if groups:
+            user.groups.set(groups)
+        return user
+
+    def update(self, instance, validated_data):
+        groups = validated_data.pop('groups', None)
+        password = validated_data.pop('password', None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        if password:
+            instance.set_password(password)
+        instance.save()
+        if groups is not None:
+            instance.groups.set(groups)
+        return instance
+
+# Serializers pour les Devises et Taux de Change
+class CurrencySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Currency
+        fields = ['id', 'code', 'name', 'symbol', 'is_default', 'is_active']
+
+class ExchangeRateSerializer(serializers.ModelSerializer):
+    from_currency_code = serializers.CharField(source='from_currency.code', read_only=True)
+    to_currency_code = serializers.CharField(source='to_currency.code', read_only=True)
+    from_currency_symbol = serializers.CharField(source='from_currency.symbol', read_only=True)
+    to_currency_symbol = serializers.CharField(source='to_currency.symbol', read_only=True)
+
+    class Meta:
+        model = ExchangeRate
+        fields = ['id', 'from_currency', 'to_currency', 'from_currency_code', 'to_currency_code',
+                 'from_currency_symbol', 'to_currency_symbol', 'rate', 'date', 'is_active']
+
+# Serializers pour les Types de Prix et Prix Produits
+class TypePrixSerializer(serializers.ModelSerializer):
+    nombre_prix = serializers.SerializerMethodField()
+
+    class Meta:
+        model = TypePrix
+        fields = ['id', 'code', 'libelle', 'description', 'ordre', 'is_default', 'is_active',
+                 'created_at', 'nombre_prix']
+
+    def get_nombre_prix(self, obj):
+        return obj.prix.filter(is_active=True).count()
+
+class PrixProduitSerializer(serializers.ModelSerializer):
+    type_prix_libelle = serializers.CharField(source='type_prix.libelle', read_only=True)
+    type_prix_code = serializers.CharField(source='type_prix.code', read_only=True)
+    produit_reference = serializers.CharField(source='produit.reference', read_only=True)
+    produit_designation = serializers.CharField(source='produit.designation', read_only=True)
+    currency_code = serializers.CharField(source='currency.code', read_only=True)
+    currency_symbol = serializers.CharField(source='currency.symbol', read_only=True)
+    prix_formatted = serializers.SerializerMethodField()
+    is_valid = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PrixProduit
+        fields = ['id', 'produit', 'produit_reference', 'produit_designation',
+                 'type_prix', 'type_prix_libelle', 'type_prix_code',
+                 'prix', 'currency', 'currency_code', 'currency_symbol', 'prix_formatted',
+                 'quantite_min', 'date_debut', 'date_fin',
+                 'is_active', 'is_valid', 'created_at', 'updated_at']
+
+    def get_prix_formatted(self, obj):
+        currency = obj.get_effective_currency()
+        symbol = currency.symbol if currency else '€'
+        return f"{obj.prix} {symbol}"
+
+    def get_is_valid(self, obj):
+        return obj.is_valid_now()
+
+class FournisseurSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Fournisseur
+        fields = ('id','libelle', 'telephone','email','adresse')
+class ProduitSerializer(serializers.ModelSerializer):
+    stock_mouvements = serializers.SerializerMethodField()
+    currency_code = serializers.CharField(source='currency.code', read_only=True)
+    currency_symbol = serializers.CharField(source='currency.symbol', read_only=True)
+    prix_formatted = serializers.SerializerMethodField()
+    categorie_nom = serializers.CharField(source='categorie.nom', read_only=True)
+    categorie_path = serializers.CharField(source='categorie.get_full_path', read_only=True)
+    fournisseur_nom = serializers.CharField(source='fournisseur.libelle', read_only=True)
+    stock_status = serializers.SerializerMethodField()
+    stock_status_display = serializers.CharField(source='get_stock_status_display', read_only=True)
+    stock_class = serializers.CharField(source='get_stock_class', read_only=True)
+    prix_multiples = PrixProduitSerializer(many=True, read_only=True)
+    nombre_prix = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Produit
+        fields = (
+            'id', 'reference', 'code_barre', 'designation', 'description',
+            'categorie', 'categorie_nom', 'categorie_path',
+            'prixU', 'currency', 'currency_code', 'currency_symbol', 'prix_formatted',
+            'quantite', 'seuil_alerte', 'seuil_critique', 'unite_mesure',
+            'fournisseur', 'fournisseur_nom',
+            'stock_mouvements', 'stock_status', 'stock_status_display', 'stock_class',
+            'prix_multiples', 'nombre_prix',
+            'is_active', 'created_at', 'updated_at'
+        )
+    
+    def get_stock_mouvements(self, obj):
+        from django.db.models import Sum
+        agg = obj.mouvements.aggregate(total=Sum('delta'))
+        total = agg.get('total') or 0
+        return total
+    
+    def get_prix_formatted(self, obj):
+        currency = obj.currency or Currency.get_default()
+        symbol = currency.symbol if currency else '€'
+        return f"{obj.prixU} {symbol}"
+    
+    def get_stock_status(self, obj):
+        return obj.get_stock_status()
+
+    def get_nombre_prix(self, obj):
+        return obj.prix_multiples.filter(is_active=True).count()
+
+class ClientSerializer(serializers.ModelSerializer):
+    produits = ProduitSerializer(many=True,read_only=True)
+    class Meta:
+        model = Client
+        fields = ('id','nom', 'prenom','email','telephone','adresse','lat','lng','produits')
+
+class AchatSerializer(serializers.ModelSerializer):
+    fournisseur_nom = serializers.CharField(source='fournisseur.libelle', read_only=True)
+    fournisseur_prenom = serializers.CharField(source='fournisseur.telephone', read_only=True)
+    produit_reference = serializers.CharField(source='produit.reference', read_only=True)
+    produit_designation = serializers.CharField(source='produit.designation', read_only=True)
+    currency_symbol = serializers.CharField(source='produit.currency.symbol', read_only=True)
+    warehouse_name = serializers.CharField(source='warehouse.name', read_only=True)
+    total_achat = serializers.SerializerMethodField()
+    class Meta:
+        model = Achat
+        fields = (
+            'id','date_Achat','date_expiration','quantite','prix_achat','total_achat','currency_symbol',
+            'fournisseur','fournisseur_nom','fournisseur_prenom',
+            'produit','produit_reference','produit_designation',
+            'warehouse','warehouse_name'
+        )
+    def get_total_achat(self, obj):
+        try:
+            return obj.prix_achat * obj.quantite
+        except Exception:
+            return 0
+
+class LigneLivraisonSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LigneLivraison
+        fields = ('id', 'produit', 'quantite', 'prixU_snapshot')
+
+class BonLivraisonSerializer(serializers.ModelSerializer):
+    lignes = LigneLivraisonSerializer(many=True)
+
+    class Meta:
+        model = BonLivraison
+        fields = ('id', 'numero', 'date_creation', 'client', 'statut', 'observations', 'lignes')
+        extra_kwargs = {
+            'numero': {'required': False}  # Permet la génération automatique
+        }
+
+    def create(self, validated_data):
+        lignes_data = validated_data.pop('lignes', [])
+        numero = validated_data.get('numero')
+        if not numero:
+            base = 'BL-'
+            n = BonLivraison.objects.count() + 1
+            # ensure unique number
+            while True:
+                candidate = f"{base}{n:05d}"
+                if not BonLivraison.objects.filter(numero=candidate).exists():
+                    numero = candidate
+                    break
+                n += 1
+            validated_data['numero'] = numero
+        bon = BonLivraison.objects.create(**validated_data)
+        for ld in lignes_data:
+            LigneLivraison.objects.create(bon=bon, **ld)
+        return bon
+
+    def update(self, instance, validated_data):
+        lignes_data = validated_data.pop('lignes', None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        if lignes_data is not None:
+            instance.lignes.all().delete()
+            for ld in lignes_data:
+                LigneLivraison.objects.create(bon=instance, **ld)
+        return instance
+
+class LigneFactureSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LigneFacture
+        fields = ('id', 'produit', 'designation', 'quantite', 'prixU_snapshot')
+
+class FactureSerializer(serializers.ModelSerializer):
+    lignes = LigneFactureSerializer(many=True)
+
+    class Meta:
+        model = Facture
+        fields = (
+            'id', 'numero', 'date_emission', 'client', 'bon_livraison', 'statut',
+            'tva_rate', 'total_ht', 'total_tva', 'total_ttc', 'lignes'
+        )
+        read_only_fields = ('total_ht', 'total_tva', 'total_ttc')
+
+    def to_representation(self, instance):
+        """Convertir datetime en date pour éviter l'erreur de sérialisation"""
+        ret = super().to_representation(instance)
+        # Convertir date_emission de datetime à date si nécessaire
+        if 'date_emission' in ret and ret['date_emission']:
+            # Si c'est un datetime string avec heure, on extrait juste la date
+            if isinstance(ret['date_emission'], str) and 'T' in ret['date_emission']:
+                ret['date_emission'] = ret['date_emission'].split('T')[0]
+        return ret
+
+    def create(self, validated_data):
+        lignes_data = validated_data.pop('lignes', [])
+        facture = Facture.objects.create(**validated_data)
+        for ld in lignes_data:
+            # default designation from produit if missing
+            if not ld.get('designation'):
+                p = Produit.objects.get(pk=ld['produit'].id)
+                ld['designation'] = p.designation
+            LigneFacture.objects.create(facture=facture, **ld)
+        facture.recompute_totals()
+        facture.save(update_fields=['total_ht', 'total_tva', 'total_ttc'])
+        return facture
+
+    def update(self, instance, validated_data):
+        lignes_data = validated_data.pop('lignes', None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        if lignes_data is not None:
+            instance.lignes.all().delete()
+            for ld in lignes_data:
+                if not ld.get('designation'):
+                    p = Produit.objects.get(pk=ld['produit'].id)
+                    ld['designation'] = p.designation
+                LigneFacture.objects.create(facture=instance, **ld)
+        instance.recompute_totals()
+        instance.save(update_fields=['total_ht', 'total_tva', 'total_ttc'])
+        return instance
+
+class WarehouseSerializer(serializers.ModelSerializer):
+    stocks_count = serializers.SerializerMethodField()
+    stocks_total = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Warehouse
+        fields = ('id', 'name', 'code', 'is_active', 'stocks_count', 'stocks_total')
+
+    def get_stocks_count(self, obj):
+        try:
+            return obj.stocks.count()
+        except Exception:
+            return 0
+
+    def get_stocks_total(self, obj):
+        try:
+            from django.db.models import Sum
+            return obj.stocks.aggregate(total=Sum('quantity')).get('total') or 0
+        except Exception:
+            return 0
+
+class ProductStockSerializer(serializers.ModelSerializer):
+    produit_reference = serializers.CharField(source='produit.reference', read_only=True)
+    produit_designation = serializers.CharField(source='produit.designation', read_only=True)
+    warehouse_code = serializers.CharField(source='warehouse.code', read_only=True)
+    warehouse_name = serializers.CharField(source='warehouse.name', read_only=True)
+
+    class Meta:
+        model = ProductStock
+        fields = ('id', 'produit', 'produit_reference', 'produit_designation', 'warehouse', 'warehouse_code', 'warehouse_name', 'quantity')
+
+class StockMoveSerializer(serializers.ModelSerializer):
+    produit_reference = serializers.CharField(source='produit.reference', read_only=True)
+    produit_designation = serializers.CharField(source='produit.designation', read_only=True)
+    warehouse_code = serializers.CharField(source='warehouse.code', read_only=True)
+    warehouse_name = serializers.CharField(source='warehouse.name', read_only=True)
+    source_display = serializers.CharField(source='get_source_display', read_only=True)
+    class Meta:
+        model = StockMove
+        fields = ('id', 'produit', 'produit_reference', 'produit_designation', 'warehouse', 'warehouse_code', 'warehouse_name', 'delta', 'source', 'source_display', 'ref_id', 'date', 'note')
+
+class InventoryLineSerializer(serializers.ModelSerializer):
+    produit_reference = serializers.CharField(source='produit.reference', read_only=True)
+    produit_designation = serializers.CharField(source='produit.designation', read_only=True)
+    variance = serializers.SerializerMethodField()
+    is_completed = serializers.SerializerMethodField()
+    counted_by_username = serializers.SerializerMethodField()
+
+    class Meta:
+        model = InventoryLine
+        fields = ('id', 'produit', 'produit_reference', 'produit_designation',
+                 'counted_qty', 'snapshot_qty', 'variance', 'is_completed',
+                 'counted_by', 'counted_by_username', 'counted_at')
+
+    def get_variance(self, obj):
+        try:
+            return obj.get_variance() if hasattr(obj, 'get_variance') else None
+        except Exception:
+            return None
+
+    def get_is_completed(self, obj):
+        try:
+            return obj.is_completed() if hasattr(obj, 'is_completed') else False
+        except Exception:
+            return False
+
+    def get_counted_by_username(self, obj):
+        try:
+            return obj.counted_by.username if obj.counted_by else None
+        except Exception:
+            return None
+
+class InventorySessionSerializer(serializers.ModelSerializer):
+    lignes = InventoryLineSerializer(many=True, required=False)
+    created_by_username = serializers.SerializerMethodField()
+    validated_by_username = serializers.SerializerMethodField()
+    statut_display = serializers.CharField(source='get_statut_display', read_only=True, required=False)
+    can_be_validated = serializers.SerializerMethodField()
+    missing_products_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = InventorySession
+        fields = ('id', 'numero', 'date', 'statut', 'statut_display', 'note',
+                 'created_by', 'created_by_username', 'validated_by', 'validated_by_username',
+                 'total_products', 'completed_products', 'completion_percentage',
+                 'can_be_validated', 'missing_products_count', 'lignes')
+
+    def get_created_by_username(self, obj):
+        try:
+            return obj.created_by.username if obj.created_by else None
+        except Exception:
+            return None
+
+    def get_validated_by_username(self, obj):
+        try:
+            return obj.validated_by.username if obj.validated_by else None
+        except Exception:
+            return None
+
+    def get_missing_products_count(self, obj):
+        try:
+            return obj.get_missing_products().count() if hasattr(obj, 'get_missing_products') else 0
+        except Exception:
+            return 0
+
+    def get_can_be_validated(self, obj):
+        try:
+            return obj.can_be_validated() if hasattr(obj, 'can_be_validated') else False
+        except Exception:
+            return False
+
+    def create(self, validated_data):
+        lignes_data = validated_data.pop('lignes', [])
+        session = InventorySession.objects.create(**validated_data)
+        for ld in lignes_data:
+            InventoryLine.objects.create(session=session, **ld)
+        return session
+
+    def update(self, instance, validated_data):
+        lignes_data = validated_data.pop('lignes', None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        if lignes_data is not None:
+            instance.lignes.all().delete()
+            for ld in lignes_data:
+                InventoryLine.objects.create(session=instance, **ld)
+        return instance
+
+# Serializers pour les Ventes
+class LigneVenteSerializer(serializers.ModelSerializer):
+    produit_nom = serializers.CharField(source='produit.designation', read_only=True)
+    produit_reference = serializers.CharField(source='produit.reference', read_only=True)
+    produit_stock_actuel = serializers.IntegerField(source='produit.quantite', read_only=True)
+    currency_code = serializers.CharField(source='currency.code', read_only=True)
+    currency_symbol = serializers.CharField(source='currency.symbol', read_only=True)
+    total_ligne = serializers.SerializerMethodField()
+    total_ligne_vente_currency = serializers.SerializerMethodField()
+    prix_formatted = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = LigneVente
+        fields = ['id', 'produit', 'produit_nom', 'produit_reference', 'produit_stock_actuel', 
+                 'designation', 'quantite', 'prixU_snapshot', 'currency', 'currency_code', 
+                 'currency_symbol', 'prix_formatted', 'total_ligne', 'total_ligne_vente_currency']
+    
+    def get_total_ligne(self, obj):
+        return obj.quantite * obj.prixU_snapshot
+    
+    def get_total_ligne_vente_currency(self, obj):
+        return obj.get_total_in_sale_currency()
+    
+    def get_prix_formatted(self, obj):
+        currency = obj.currency or obj.vente.get_sale_currency()
+        symbol = currency.symbol if currency else '€'
+        return f"{obj.prixU_snapshot} {symbol}"
+
+class VenteSerializer(serializers.ModelSerializer):
+    lignes = LigneVenteSerializer(many=True, read_only=True)
+    client_nom = serializers.CharField(source='client.nom', read_only=True)
+    client_prenom = serializers.CharField(source='client.prenom', read_only=True)
+    statut_display = serializers.CharField(source='get_statut_display', read_only=True)
+    type_paiement_display = serializers.CharField(source='get_type_paiement_display', read_only=True)
+    currency_code = serializers.CharField(source='currency.code', read_only=True)
+    currency_symbol = serializers.CharField(source='currency.symbol', read_only=True)
+    warehouse_code = serializers.CharField(source='warehouse.code', read_only=True)
+    warehouse_name = serializers.CharField(source='warehouse.name', read_only=True)
+    nombre_articles = serializers.SerializerMethodField()
+    total_formatted = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Vente
+        fields = ['id', 'numero', 'date_vente', 'client', 'client_nom', 'client_prenom',
+                 'type_paiement', 'type_paiement_display', 'statut', 'statut_display',
+                 'warehouse', 'warehouse_code', 'warehouse_name',
+                 'currency', 'currency_code', 'currency_symbol', 'exchange_rate_snapshot',
+                 'total_ht', 'total_ttc', 'total_formatted', 'remise_percent', 'observations',
+                 'bon_livraison', 'facture', 'lignes', 'nombre_articles']
+        read_only_fields = ['total_ht', 'total_ttc']
+    
+    def get_nombre_articles(self, obj):
+        return obj.lignes.count()
+    
+    def get_total_formatted(self, obj):
+        currency = obj.get_sale_currency()
+        symbol = currency.symbol if currency else '€'
+        return f"{obj.total_ttc} {symbol}"
+
+class VenteCreateSerializer(serializers.ModelSerializer):
+    lignes = LigneVenteSerializer(many=True)
+
+    class Meta:
+        model = Vente
+        fields = ['numero', 'client', 'type_paiement', 'statut', 'warehouse', 'currency', 'remise_percent', 'observations', 'lignes']
+        extra_kwargs = {
+            'numero': {'required': False},
+            'statut': {'required': False}
+        }
+    
+    def create(self, validated_data):
+        from django.db import transaction
+        lignes_data = validated_data.pop('lignes')
+
+        # Générer un numéro automatique si pas fourni
+        if not validated_data.get('numero'):
+            base = 'VTE-'
+            n = Vente.objects.count() + 1
+            while True:
+                candidate = f"{base}{n:05d}"
+                if not Vente.objects.filter(numero=candidate).exists():
+                    validated_data['numero'] = candidate
+                    break
+                n += 1
+
+        # Exiger un entrepôt: utiliser par défaut si non fourni
+        from .models import SystemConfig, Warehouse, ProductStock
+        wh = validated_data.get('warehouse')
+        if not wh or (hasattr(wh, 'is_active') and not wh.is_active):
+            wh = SystemConfig.ensure_default_warehouse()
+            validated_data['warehouse'] = wh
+
+        # Définir la devise par défaut si pas spécifiée
+        if not validated_data.get('currency'):
+            validated_data['currency'] = Currency.get_default()
+
+        # Définir le statut par défaut à 'draft' si pas spécifié
+        if 'statut' not in validated_data:
+            validated_data['statut'] = 'draft'
+
+        # Pré-vérifier le stock disponible pour chaque ligne SEULEMENT si la vente est completed
+        if validated_data.get('statut') == 'completed':
+            insuffisants = []
+            for ld in lignes_data:
+                produit = ld['produit']
+                qty = int(ld.get('quantite') or 0)
+                if qty <= 0:
+                    continue
+                if produit.quantite < qty:
+                    insuffisants.append({'produit': produit.id, 'reference': produit.reference, 'stock': produit.quantite, 'demande': qty})
+            if insuffisants:
+                raise serializers.ValidationError({'detail': 'Stock insuffisant', 'lignes': insuffisants})
+
+        with transaction.atomic():
+            vente = Vente.objects.create(**validated_data)
+
+            for ligne_data in lignes_data:
+                produit = ligne_data['produit']
+                qty = int(ligne_data.get('quantite') or 0)
+
+                # Utiliser le prix de vente du produit si pas spécifié
+                if 'prixU_snapshot' not in ligne_data:
+                    ligne_data['prixU_snapshot'] = produit.prixU
+
+                # Utiliser le nom du produit si designation pas spécifiée
+                if 'designation' not in ligne_data:
+                    ligne_data['designation'] = produit.designation
+
+                # Définir la devise de la ligne (héritée du produit)
+                if 'currency' not in ligne_data:
+                    ligne_data['currency'] = produit.currency or vente.get_sale_currency()
+
+                LigneVente.objects.create(vente=vente, **ligne_data)
+
+                # Décrémenter le stock SEULEMENT si la vente est finalisée (completed)
+                if qty > 0 and vente.statut == 'completed':
+                    # décrément agrégé (back-compat)
+                    produit.quantite = produit.quantite - qty
+                    produit.save(update_fields=['quantite'])
+                    # décrément par entrepôt
+                    ps, _ = ProductStock.objects.get_or_create(produit=produit, warehouse=vente.warehouse, defaults={'quantity': 0})
+                    ps.quantity = max(0, (ps.quantity or 0) - qty)
+                    ps.save(update_fields=['quantity'])
+                    # mouvement de sortie rattaché à l'entrepôt
+                    StockMove.objects.create(produit=produit, warehouse=vente.warehouse, delta=-(qty), source='VENTE', ref_id=str(vente.id), note=f"Vente {vente.numero}")
+
+            vente.recompute_totals()
+            vente.save()
+            return vente
+    
+    def update(self, instance, validated_data):
+        lignes_data = validated_data.pop('lignes', None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        
+        if lignes_data is not None:
+            instance.lignes.all().delete()
+            for ligne_data in lignes_data:
+                produit = ligne_data['produit']
+                if 'prixU_snapshot' not in ligne_data:
+                    ligne_data['prixU_snapshot'] = produit.prixU
+                if 'designation' not in ligne_data:
+                    ligne_data['designation'] = produit.designation
+                LigneVente.objects.create(vente=instance, **ligne_data)
+
+        instance.recompute_totals()
+        instance.save()
+        return instance
+
+
+# ==========================================
+# SERIALIZERS MODULE DE DISTRIBUTION
+# ==========================================
+
+class LivreurSerializer(serializers.ModelSerializer):
+    """Serializer pour le modèle Livreur"""
+    full_name = serializers.SerializerMethodField()
+    nombre_tournees = serializers.SerializerMethodField()
+    tournees_en_cours = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Livreur
+        fields = [
+            'id', 'nom', 'prenom', 'full_name', 'telephone', 'email', 'adresse',
+            'vehicule_type', 'vehicule_marque', 'immatriculation', 'capacite_charge',
+            'numero_permis', 'date_expiration_permis',
+            'is_active', 'is_disponible',
+            'nombre_tournees', 'tournees_en_cours',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+
+    def get_full_name(self, obj):
+        return obj.get_full_name()
+
+    def get_nombre_tournees(self, obj):
+        """Retourne le nombre total de tournées effectuées"""
+        return obj.tournees.filter(statut__in=['terminee', 'en_cours']).count()
+
+    def get_tournees_en_cours(self, obj):
+        """Retourne le nombre de tournées en cours"""
+        return obj.tournees.filter(statut='en_cours').count()
+
+
+class ArretLivraisonSerializer(serializers.ModelSerializer):
+    """Serializer pour le modèle ArretLivraison"""
+    client_nom = serializers.CharField(source='client.nom', read_only=True)
+    client_telephone = serializers.CharField(source='client.telephone', read_only=True)
+    statut_display = serializers.CharField(source='get_statut_display', read_only=True)
+    duree_arret = serializers.SerializerMethodField()
+    bon_livraison_numero = serializers.CharField(source='bon_livraison.numero', read_only=True, allow_null=True)
+    vente_numero = serializers.CharField(source='vente.numero', read_only=True, allow_null=True)
+
+    class Meta:
+        model = ArretLivraison
+        fields = [
+            'id', 'tournee', 'bon_livraison', 'bon_livraison_numero',
+            'vente', 'vente_numero', 'client', 'client_nom', 'client_telephone',
+            'ordre', 'heure_prevue', 'heure_arrivee', 'heure_depart',
+            'adresse_livraison', 'statut', 'statut_display',
+            'signature_client', 'nom_recepteur',
+            'commentaire', 'raison_echec', 'photo_livraison',
+            'duree_arret', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+
+    def get_duree_arret(self, obj):
+        return obj.get_duree_arret()
+
+
+class TourneeSerializer(serializers.ModelSerializer):
+    """Serializer pour le modèle Tournee"""
+    livreur_nom = serializers.SerializerMethodField()
+    warehouse_nom = serializers.CharField(source='warehouse.nom', read_only=True, allow_null=True)
+    statut_display = serializers.CharField(source='get_statut_display', read_only=True)
+    nombre_arrets = serializers.SerializerMethodField()
+    arrets_livres = serializers.SerializerMethodField()
+    taux_reussite = serializers.SerializerMethodField()
+    arrets = ArretLivraisonSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Tournee
+        fields = [
+            'id', 'numero', 'date', 'livreur', 'livreur_nom',
+            'warehouse', 'warehouse_nom',
+            'heure_depart_prevue', 'heure_depart_reelle',
+            'heure_retour_prevue', 'heure_retour_reelle',
+            'statut', 'statut_display', 'distance_km', 'commentaire',
+            'nombre_arrets', 'arrets_livres', 'taux_reussite',
+            'arrets', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['numero', 'created_at', 'updated_at']
+
+    def get_livreur_nom(self, obj):
+        if obj.livreur:
+            return obj.livreur.get_full_name()
+        return None
+
+    def get_nombre_arrets(self, obj):
+        return obj.get_nombre_arrets()
+
+    def get_arrets_livres(self, obj):
+        return obj.get_arrets_livres()
+
+    def get_taux_reussite(self, obj):
+        return obj.get_taux_reussite()
+
+    def create(self, validated_data):
+        """Générer automatiquement le numéro de tournée"""
+        from datetime import datetime
+
+        # Générer le numéro automatiquement
+        date = validated_data.get('date', datetime.now().date())
+        date_str = date.strftime('%Y%m%d')
+
+        # Trouver le dernier numéro de tournée du jour
+        from API.models import Tournee
+        last_tournee = Tournee.objects.filter(
+            numero__startswith=f'TOUR-{date_str}'
+        ).order_by('-numero').first()
+
+        if last_tournee:
+            # Extraire le compteur et incrémenter
+            last_counter = int(last_tournee.numero.split('-')[-1])
+            counter = last_counter + 1
+        else:
+            counter = 1
+
+        # Générer le numéro
+        numero = f'TOUR-{date_str}-{counter:03d}'
+        validated_data['numero'] = numero
+
+        return super().create(validated_data)
+
+
+class TourneeListSerializer(serializers.ModelSerializer):
+    """Serializer simplifié pour la liste des tournées (sans les arrêts)"""
+    livreur_nom = serializers.SerializerMethodField()
+    warehouse_nom = serializers.CharField(source='warehouse.nom', read_only=True, allow_null=True)
+    statut_display = serializers.CharField(source='get_statut_display', read_only=True)
+    nombre_arrets = serializers.SerializerMethodField()
+    arrets_livres = serializers.SerializerMethodField()
+    taux_reussite = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Tournee
+        fields = [
+            'id', 'numero', 'date', 'livreur', 'livreur_nom',
+            'warehouse', 'warehouse_nom',
+            'heure_depart_prevue', 'heure_depart_reelle',
+            'heure_retour_prevue', 'heure_retour_reelle',
+            'statut', 'statut_display', 'distance_km',
+            'nombre_arrets', 'arrets_livres', 'taux_reussite',
+            'created_at'
+        ]
+
+    def get_livreur_nom(self, obj):
+        if obj.livreur:
+            return obj.livreur.get_full_name()
+        return None
+
+    def get_nombre_arrets(self, obj):
+        return obj.get_nombre_arrets()
+
+    def get_arrets_livres(self, obj):
+        return obj.get_arrets_livres()
+
+    def get_taux_reussite(self, obj):
+        return obj.get_taux_reussite()

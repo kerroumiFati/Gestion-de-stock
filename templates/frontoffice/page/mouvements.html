@@ -1,0 +1,259 @@
+{% load static %}
+{% load i18n %}
+<script src="{% static 'script/mouvements.js' %}" type="text/javascript"></script>
+<div class="container-fluid">
+  <div class="card bg-white">
+    <div class="card-header card-color">
+      <p class="h2 text-center text-uppercase font-weight-bold pt-2">Journal des mouvements</p>
+    </div>
+    <div class="card-body container-fluid">
+      <div class="row mb-2">
+        <div class="col-sm-3">
+          <label>{% trans "Produit" %}</label>
+          <select id="mv_prod" class="form-control"><option value="">Tous</option></select>
+        </div>
+        <div class="col-sm-2">
+          <label>Source</label>
+          <select id="mv_src" class="form-control">
+            <option value="">Toutes</option>
+            <option>BL</option><option>BC</option><option>ACHAT</option><option>INV</option><option>CORR</option><option>AUTRE</option><option>TRANS</option><option>PERTE</option><option>CASSE</option><option>EXP</option><option>SAMPLE</option><option>DON</option><option>CONS</option><option>VENTE</option><option>RETOUR</option>
+          </select>
+        </div>
+        <div class="col-sm-2">
+          <label>{% trans "Entrepôt" %}</label>
+          <select id="mv_wh" class="form-control"><option value="">Tous</option></select>
+        </div>
+        <div class="col-sm-3">
+          <label>Après</label>
+          <input id="mv_after" type="datetime-local" class="form-control">
+        </div>
+        <div class="col-sm-3">
+          <label>Avant</label>
+          <input id="mv_before" type="datetime-local" class="form-control">
+        </div>
+        <div class="col-sm-1 d-flex align-items-end">
+          <button id="mv_filter" class="btn btn-outline-primary">{% trans "Filtrer" %}</button>
+        </div>
+      </div>
+      
+      <!-- Boutons d'action et statistiques -->
+      <div class="row mb-3">
+        <div class="col-sm-6">
+          <button id="mv_refresh" class="btn btn-outline-primary btn-sm">
+            <i class="fas fa-sync-alt"></i> Rafraîchir
+          </button>
+          <button id="mv_reset" class="btn btn-outline-secondary btn-sm ml-2">
+            <i class="fas fa-undo"></i> Réinitialiser
+          </button>
+          <button id="mv_export" class="btn btn-outline-success btn-sm ml-2">
+            <i class="fas fa-download"></i> Exporter CSV
+          </button>
+        </div>
+        <div class="col-sm-6 text-right">
+          <small id="results-count" class="text-muted">Chargement...</small>
+        </div>
+      </div>
+      
+      <!-- Résumé des mouvements -->
+      <div class="row mb-3">
+        <div class="col-md-4">
+          <div class="card bg-success text-white">
+            <div class="card-body text-center">
+              <h5>Entrées</h5>
+              <h3 id="total-entrees">0</h3>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card bg-danger text-white">
+            <div class="card-body text-center">
+              <h5>Sorties</h5>
+              <h3 id="total-sorties">0</h3>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card bg-info text-white">
+            <div class="card-body text-center">
+              <h5>Solde</h5>
+              <h3 id="solde">0</h3>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Sections d'opérations -->
+      <ul class="nav nav-tabs mb-3" role="tablist">
+        <li class="nav-item">
+          <a class="nav-link active" id="tab-transfer" data-toggle="tab" href="#pane-transfer" role="tab">1- Transfert de stock</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" id="tab-loss" data-toggle="tab" href="#pane-loss" role="tab">2- Perte / Casse / Expiration</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" id="tab-outflow" data-toggle="tab" href="#pane-outflow" role="tab">3- Échantillon / Don / Consommation interne</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" id="tab-return" data-toggle="tab" href="#pane-return" role="tab">4- Retour fournisseur</a>
+        </li>
+      </ul>
+      <div class="tab-content mb-4">
+        <div class="tab-pane fade show active" id="pane-transfer" role="tabpanel" aria-labelledby="tab-transfer">
+          <div class="border rounded p-3">
+            <div class="form-row">
+              <div class="form-group col-md-4">
+                <label>{% trans "Produit" %}</label>
+                <select id="mv_transfer_produit" class="form-control"></select>
+              </div>
+              <div class="form-group col-md-2">
+                <label>{% trans "Quantité" %}</label>
+                <input id="mv_transfer_qty" type="number" min="0" step="1" class="form-control" />
+              </div>
+              <div class="form-group col-md-3">
+                <label>De (entrepôt)</label>
+                <select id="mv_transfer_from" class="form-control"></select>
+              </div>
+              <div class="form-group col-md-3">
+                <label>Vers (entrepôt)</label>
+                <select id="mv_transfer_to" class="form-control"></select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group col-md-12">
+                <label>Note</label>
+                <input id="mv_transfer_note" type="text" class="form-control" placeholder="Commentaire (optionnel)" />
+              </div>
+            </div>
+            <button id="mv_transfer_submit" class="btn btn-primary">Enregistrer le transfert</button>
+          </div>
+        </div>
+        <div class="tab-pane fade" id="pane-loss" role="tabpanel" aria-labelledby="tab-loss">
+          <div class="border rounded p-3">
+            <div class="form-row">
+              <div class="form-group col-md-4">
+                <label>{% trans "Produit" %}</label>
+                <select id="mv_loss_produit" class="form-control"></select>
+              </div>
+              <div class="form-group col-md-2">
+                <label>{% trans "Quantité" %}</label>
+                <input id="mv_loss_qty" type="number" min="0" step="1" class="form-control" />
+              </div>
+              <div class="form-group col-md-3">
+                <label>Type</label>
+                <select id="mv_loss_type" class="form-control">
+                  <option value="PERTE">Perte</option>
+                  <option value="CASSE">Casse</option>
+                  <option value="EXP">Expiration</option>
+                </select>
+              </div>
+              <div class="form-group col-md-3">
+                <label>{% trans "Entrepôt" %}</label>
+                <select id="mv_loss_warehouse" class="form-control"></select>
+              </div>
+              <div class="form-group col-md-12">
+                <label>Note</label>
+                <input id="mv_loss_note" type="text" class="form-control" placeholder="Commentaire (optionnel)" />
+              </div>
+            </div>
+            <button id="mv_loss_submit" class="btn btn-danger">Enregistrer la sortie</button>
+          </div>
+        </div>
+        <div class="tab-pane fade" id="pane-outflow" role="tabpanel" aria-labelledby="tab-outflow">
+          <div class="border rounded p-3">
+            <div class="form-row">
+              <div class="form-group col-md-4">
+                <label>{% trans "Produit" %}</label>
+                <select id="mv_outflow_produit" class="form-control"></select>
+              </div>
+              <div class="form-group col-md-2">
+                <label>{% trans "Quantité" %}</label>
+                <input id="mv_outflow_qty" type="number" min="0" step="1" class="form-control" />
+              </div>
+              <div class="form-group col-md-3">
+                <label>Type</label>
+                <select id="mv_outflow_type" class="form-control">
+                  <option value="SAMPLE">Échantillon</option>
+                  <option value="DON">Don</option>
+                  <option value="CONS">Consommation interne</option>
+                </select>
+              </div>
+              <div class="form-group col-md-3">
+                <label>{% trans "Entrepôt" %}</label>
+                <select id="mv_outflow_warehouse" class="form-control"></select>
+              </div>
+              <div class="form-group col-md-12">
+                <label>Note</label>
+                <input id="mv_outflow_note" type="text" class="form-control" placeholder="Commentaire (optionnel)" />
+              </div>
+            </div>
+            <button id="mv_outflow_submit" class="btn btn-warning">Enregistrer la sortie</button>
+          </div>
+        </div>
+
+        <!-- Nouvel onglet : Retour fournisseur -->
+        <div class="tab-pane fade" id="pane-return" role="tabpanel" aria-labelledby="tab-return">
+          <div class="border rounded p-3 bg-light">
+            <div class="alert alert-info mb-3">
+              <i class="fa fa-info-circle"></i> <strong>Retour fournisseur :</strong> Enregistrer un retour de produit défectueux ou non conforme vers le fournisseur. Le stock sera décrémenté de l'entrepôt.
+            </div>
+            <div class="form-row">
+              <div class="form-group col-md-4">
+                <label><i class="fa fa-box"></i> Produit *</label>
+                <select id="mv_return_produit" class="form-control"></select>
+              </div>
+              <div class="form-group col-md-2">
+                <label><i class="fa fa-sort-numeric-up"></i> Quantité *</label>
+                <input id="mv_return_qty" type="number" min="1" step="1" class="form-control" placeholder="Ex: 5" />
+              </div>
+              <div class="form-group col-md-3">
+                <label><i class="fa fa-user-tie"></i> Fournisseur *</label>
+                <select id="mv_return_fournisseur" class="form-control">
+                  <option value="">Sélectionner un fournisseur</option>
+                </select>
+              </div>
+              <div class="form-group col-md-3">
+                <label><i class="fa fa-warehouse"></i> Entrepôt *</label>
+                <select id="mv_return_warehouse" class="form-control"></select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group col-md-4">
+                <label><i class="fa fa-exclamation-triangle"></i> Motif du retour *</label>
+                <select id="mv_return_reason" class="form-control">
+                  <option value="">Sélectionner un motif</option>
+                  <option value="DEFECTUEUX">Produit défectueux</option>
+                  <option value="NON_CONFORME">Non conforme à la commande</option>
+                  <option value="PERIME">Produit périmé</option>
+                  <option value="ENDOMMAGE">Endommagé lors de la livraison</option>
+                  <option value="QUALITE">Problème de qualité</option>
+                  <option value="AUTRE">Autre</option>
+                </select>
+              </div>
+              <div class="form-group col-md-8">
+                <label><i class="fa fa-comment"></i> Note / Détails</label>
+                <textarea id="mv_return_note" class="form-control" rows="2" placeholder="Décrivez le problème ou ajoutez des informations complémentaires..."></textarea>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group col-md-6">
+                <label><i class="fa fa-calendar"></i> Date du retour</label>
+                <input id="mv_return_date" type="date" class="form-control" />
+              </div>
+            </div>
+            <button id="mv_return_submit" class="btn btn-danger btn-lg">
+              <i class="fa fa-undo"></i> Enregistrer le retour fournisseur
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="row table-responsive m-auto rounded">
+        <table id="tmouv" class="table table-hover w-100">
+          <thead><tr class="text-uppercase bg-light w-100">
+            <th>{% trans "Date" %}</th><th>{% trans "Produit" %}</th><th>{% trans "Entrepôt" %}</th><th>Delta</th><th>Source</th><th>Ref</th><th>Note</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>

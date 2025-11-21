@@ -1,0 +1,1183 @@
+{% load static %}
+{% load i18n %}
+<script src="{% static 'script/inventaire.js' %}" type="text/javascript"></script>
+
+<style>
+.session-card {
+    border: 2px solid #e0e7ff;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 15px;
+    transition: all 0.3s;
+    cursor: pointer;
+}
+
+.session-card:hover {
+    border-color: #667eea;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+    transform: translateY(-2px);
+}
+
+.session-card.active-session {
+    border-color: #667eea;
+    background: #f8f9ff;
+}
+
+.session-status-badge {
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.status-draft { background: #e0e7ff; color: #4c51bf; }
+.status-in_progress { background: #fef3c7; color: #92400e; }
+.status-validated { background: #d1fae5; color: #065f46; }
+.status-canceled { background: #fee2e2; color: #991b1b; }
+
+.progress-circle {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: conic-gradient(#667eea 0deg, #667eea calc(var(--progress) * 3.6deg), #e5e7eb calc(var(--progress) * 3.6deg));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 1.1rem;
+    position: relative;
+}
+
+.progress-circle::before {
+    content: '';
+    position: absolute;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: white;
+    z-index: 1;
+}
+
+.progress-circle span {
+    position: relative;
+    z-index: 2;
+}
+
+.view-section {
+    display: none;
+}
+
+.view-section.active {
+    display: block;
+}
+
+.product-search-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 20px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+}
+
+.filter-bar {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.product-grid-item {
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+    transition: all 0.2s;
+    cursor: pointer;
+}
+
+.product-grid-item:hover {
+    border-color: #667eea;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.15);
+}
+
+.product-grid-item.counted {
+    border-color: #10b981;
+    background: #f0fdf4;
+}
+
+.stock-badge {
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.badge-rupture { background: #fee2e2; color: #991b1b; }
+.badge-critique { background: #fed7aa; color: #9a3412; }
+.badge-alerte { background: #fef3c7; color: #92400e; }
+.badge-normal { background: #d1fae5; color: #065f46; }
+</style>
+
+<div class="container-fluid p-4">
+    <!-- Navigation des Vues -->
+    <div class="mb-4">
+        <div class="btn-group" role="group">
+            <button type="button" class="btn btn-primary active" id="btn_view_sessions" onclick="switchToView('sessions')">
+                <i class="fas fa-list me-2"></i>Mes Sessions
+            </button>
+            <button type="button" class="btn btn-outline-primary" id="btn_view_counting" onclick="switchToView('counting')" disabled>
+                <i class="fas fa-clipboard-check me-2"></i>Comptage
+            </button>
+            <button type="button" class="btn btn-outline-primary" id="btn_view_details" onclick="switchToView('details')" disabled>
+                <i class="fas fa-eye me-2"></i>Détails
+            </button>
+        </div>
+        <span class="ms-3 text-muted" id="current_session_indicator"></span>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- VUE 1: GESTION DES SESSIONS -->
+    <!-- ============================================ -->
+    <div id="view_sessions" class="view-section active">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0"><i class="fas fa-folder-open me-2"></i>Sessions d'Inventaire</h4>
+            </div>
+            <div class="card-body">
+                <!-- Créer Nouvelle Session -->
+                <div class="card mb-4" style="border-left: 4px solid #667eea;">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-plus-circle me-2"></i>Créer une Nouvelle Session</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <label>Numéro <span class="text-danger">*</span></label>
+                                <input id="inv_num" class="form-control" placeholder="INV-2025-XXXX" required>
+                            </div>
+                            <div class="col-md-3">
+                                <label>Date <span class="text-danger">*</span></label>
+                                <input id="inv_date" type="date" class="form-control" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label>Note</label>
+                                <input id="inv_note" class="form-control" placeholder="Ex: Inventaire mensuel...">
+                            </div>
+                            <div class="col-md-2 d-flex align-items-end">
+                                <button id="btn_create_session" class="btn btn-success w-100">
+                                    <i class="fas fa-plus me-2"></i>Créer
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Liste des Sessions -->
+                <h5 class="mb-3"><i class="fas fa-history me-2"></i>Mes Sessions</h5>
+
+                <div id="sessions_list">
+                    <!-- Les sessions seront chargées ici -->
+                </div>
+
+                <!-- Table Historique Détaillée -->
+                <div class="mt-4">
+                    <h6 class="text-muted mb-3">Historique Complet</h6>
+                    <div class="table-responsive">
+                        <table id="tsessions" class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Numéro</th>
+                                    <th>{% trans "Date" %}</th>
+                                    <th>{% trans "Statut" %}</th>
+                                    <th>Progression</th>
+                                    <th>Créé par</th>
+                                    <th>Validé par</th>
+                                    <th>Note</th>
+                                    <th>{% trans "Actions" %}</th>
+                                </tr>
+                            </thead>
+                            <tbody id="inv_sessions_table"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- VUE 2: COMPTAGE DANS LA SESSION -->
+    <!-- ============================================ -->
+    <div id="view_counting" class="view-section">
+
+        <!-- En-tête Session Active -->
+        <div class="card mb-4" style="border-left: 4px solid #667eea;">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h5 class="mb-1" id="active_session_title">Session: INV-2025-XXXX</h5>
+                        <small class="text-muted">
+                            <i class="fas fa-user me-1"></i><span id="active_session_user">Admin</span>
+                            <i class="fas fa-calendar ms-3 me-1"></i><span id="active_session_date">27/10/2025</span>
+                        </small>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <button class="btn btn-warning me-2" id="btn_save_progress">
+                            <i class="fas fa-save me-2"></i>Sauvegarder
+                        </button>
+                        <button class="btn btn-success" id="btn_validate_session">
+                            <i class="fas fa-check me-2"></i>Valider
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Barre de Progression -->
+                <div class="mt-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="text-muted">Progression du comptage</span>
+                        <span class="fw-bold"><span id="completed_count">0</span>/<span id="total_count">0</span> produits</span>
+                    </div>
+                    <div class="progress" style="height: 25px;">
+                        <div id="progress_bar" class="progress-bar bg-success progress-bar-striped"
+                             style="width: 0%;" role="progressbar">
+                            <span id="progress_text" class="fw-bold">0%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recherche et Filtres Modernes -->
+        <div class="product-search-card">
+            <div class="row">
+                <div class="col-md-5">
+                    <div class="input-group input-group-lg">
+                        <span class="input-group-text bg-white border-0">
+                            <i class="fas fa-search"></i>
+                        </span>
+                        <input type="text" id="search_product" class="form-control border-0"
+                               placeholder="Rechercher produit (nom, référence, code-barres)...">
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <select id="filter_category" class="form-select form-select-lg">
+                        <option value="">Toutes catégories</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <select id="filter_status" class="form-select form-select-lg">
+                        <option value="">Tous statuts</option>
+                        <option value="rupture">Rupture</option>
+                        <option value="critique">Critique</option>
+                        <option value="alerte">Alerte</option>
+                        <option value="normal">Normal</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-light btn-lg w-100" onclick="toggleViewMode()">
+                        <i class="fas fa-th me-2" id="view_mode_icon"></i>
+                        <span id="view_mode_text">Grille</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Liste/Grille de Produits -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-boxes me-2"></i>
+                    Produits à Compter (<span id="products_count">0</span>)
+                </h5>
+                <div>
+                    <span class="badge bg-success me-2">
+                        <i class="fas fa-check me-1"></i>Comptés: <span id="counted_products">0</span>
+                    </span>
+                    <span class="badge bg-secondary">
+                        <i class="fas fa-clock me-1"></i>Restants: <span id="remaining_products">0</span>
+                    </span>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- Vue Grille (par défaut) -->
+                <div id="products_grid_view" class="row">
+                    <!-- Produits en cartes -->
+                </div>
+
+                <!-- Vue Liste (alternative) -->
+                <div id="products_table_view" class="table-responsive" style="display: none;">
+                    <table class="table table-hover" id="tinventaire">
+                        <thead class="table-light">
+                            <tr>
+                                <th>{% trans "Produit" %}</th>
+                                <th>{% trans "Catégorie" %}</th>
+                                <th>Stock Théorique</th>
+                                <th>Quantité Comptée</th>
+                                <th>Écart</th>
+                                <th>{% trans "Statut" %}</th>
+                                <th>{% trans "Actions" %}</th>
+                            </tr>
+                        </thead>
+                        <tbody id="inv_table"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- VUE 3: DÉTAILS SESSION VALIDÉE -->
+    <!-- ============================================ -->
+    <div id="view_details" class="view-section">
+        <!-- En-tête Session -->
+        <div class="card mb-4" style="border-left: 4px solid #10b981;">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h4 class="mb-2" id="detail_session_numero">Session: INV-2025-XXXX</h4>
+                        <div class="text-muted">
+                            <i class="fas fa-calendar me-2"></i><span id="detail_session_date">27/10/2025</span>
+                            <i class="fas fa-user ms-4 me-2"></i>Créé par: <span id="detail_session_created_by">Admin</span>
+                            <i class="fas fa-user-check ms-4 me-2"></i>Validé par: <span id="detail_session_validated_by">Admin</span>
+                        </div>
+                        <div class="mt-2" id="detail_session_note_container" style="display: none;">
+                            <i class="fas fa-sticky-note me-2 text-muted"></i>
+                            <span id="detail_session_note" class="text-muted"></span>
+                        </div>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <span class="session-status-badge status-validated">
+                            <i class="fas fa-check-circle me-1"></i>Validée
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Statistiques de la Session -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card text-center" style="border-left: 4px solid #10b981;">
+                    <div class="card-body">
+                        <h2 class="mb-0 text-success" id="detail_completion">100%</h2>
+                        <small class="text-muted">Complétion</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center" style="border-left: 4px solid #667eea;">
+                    <div class="card-body">
+                        <h2 class="mb-0" id="detail_total_products">0</h2>
+                        <small class="text-muted">Produits Comptés</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center" style="border-left: 4px solid #f59e0b;">
+                    <div class="card-body">
+                        <h2 class="mb-0 text-warning" id="detail_ecarts_count">0</h2>
+                        <small class="text-muted">Écarts Détectés</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center" style="border-left: 4px solid #ef4444;">
+                    <div class="card-body">
+                        <h2 class="mb-0 text-danger" id="detail_ecarts_negatifs">0</h2>
+                        <small class="text-muted">Manquants</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Résumé des Écarts -->
+        <div class="card mb-4" id="detail_ecarts_summary" style="display: none;">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0"><i class="fas fa-exclamation-triangle me-2"></i>Résumé des Écarts Importants</h5>
+            </div>
+            <div class="card-body">
+                <div id="detail_ecarts_list"></div>
+            </div>
+        </div>
+
+        <!-- Détails des Produits Comptés -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-clipboard-list me-2"></i>
+                    Détails du Comptage
+                </h5>
+                <button class="btn btn-sm btn-outline-primary" onclick="exportSessionDetails()">
+                    <i class="fas fa-download me-1"></i>Exporter
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>{% trans "Produit" %}</th>
+                                <th>{% trans "Référence" %}</th>
+                                <th>{% trans "Catégorie" %}</th>
+                                <th class="text-center">Stock Théorique</th>
+                                <th class="text-center">Quantité Comptée</th>
+                                <th class="text-center">Écart</th>
+                                <th>Compté Par</th>
+                                <th>Date Comptage</th>
+                            </tr>
+                        </thead>
+                        <tbody id="detail_products_table">
+                            <!-- Lignes chargées dynamiquement -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Variables globales
+let currentView = 'sessions'; // 'sessions' ou 'counting'
+let activeSession = null;
+let sessionProducts = [];
+let displayMode = 'grid'; // 'grid' ou 'table'
+let allProducts = [];
+
+// Initialisation
+document.addEventListener('fragment:loaded', function(e) {
+    if (e && e.detail && e.detail.name === 'inventaire') {
+        console.log('[Inventaire] Initialisation...');
+        initInventaire();
+    }
+});
+
+if (document.readyState !== 'loading') {
+    initInventaire();
+} else {
+    document.addEventListener('DOMContentLoaded', initInventaire);
+}
+
+function initInventaire() {
+    // Définir la date par défaut
+    const today = new Date().toISOString().split('T')[0];
+    const dateInput = document.getElementById('inv_date');
+    if (dateInput) dateInput.value = today;
+
+    // Charger les données
+    loadSessions();
+    loadAllProducts();
+    loadCategories();
+
+    // Événements
+    setupEventListeners();
+}
+
+function setupEventListeners() {
+    // Bouton créer session
+    const btnCreate = document.getElementById('btn_create_session');
+    if (btnCreate) {
+        btnCreate.onclick = createSession;
+    }
+
+    // Bouton sauvegarder
+    const btnSave = document.getElementById('btn_save_progress');
+    if (btnSave) {
+        btnSave.onclick = saveProgress;
+    }
+
+    // Bouton valider
+    const btnValidate = document.getElementById('btn_validate_session');
+    if (btnValidate) {
+        btnValidate.onclick = validateSession;
+    }
+
+    // Recherche
+    const searchInput = document.getElementById('search_product');
+    if (searchInput) {
+        searchInput.addEventListener('input', filterProducts);
+    }
+
+    // Filtres
+    const filterCat = document.getElementById('filter_category');
+    if (filterCat) {
+        filterCat.addEventListener('change', filterProducts);
+    }
+
+    const filterStatus = document.getElementById('filter_status');
+    if (filterStatus) {
+        filterStatus.addEventListener('change', filterProducts);
+    }
+}
+
+// Basculer entre vues
+function switchToView(view) {
+    currentView = view;
+
+    document.getElementById('view_sessions').classList.toggle('active', view === 'sessions');
+    document.getElementById('view_counting').classList.toggle('active', view === 'counting');
+    document.getElementById('view_details').classList.toggle('active', view === 'details');
+
+    document.getElementById('btn_view_sessions').classList.toggle('active', view === 'sessions');
+    document.getElementById('btn_view_counting').classList.toggle('active', view === 'counting');
+    document.getElementById('btn_view_details').classList.toggle('active', view === 'details');
+}
+
+// Charger toutes les sessions
+async function loadSessions() {
+    try {
+        const response = await fetch('/API/inventaires/');
+        const data = await response.json();
+        const sessions = Array.isArray(data) ? data : (data.results || []);
+
+        displaySessionsList(sessions);
+        displaySessionsTable(sessions);
+    } catch (error) {
+        console.error('Erreur chargement sessions:', error);
+    }
+}
+
+// Afficher les sessions en cartes
+function displaySessionsList(sessions) {
+    const container = document.getElementById('sessions_list');
+    if (!container) return;
+
+    container.innerHTML = '';
+
+    if (sessions.length === 0) {
+        container.innerHTML = `
+            <div class="alert alert-info text-center">
+                <i class="fas fa-info-circle me-2"></i>
+                Aucune session. Créez votre première session ci-dessus!
+            </div>
+        `;
+        return;
+    }
+
+    sessions.forEach(session => {
+        const statusClass = `status-${session.statut || 'draft'}`;
+        const statusText = {
+            'draft': 'Brouillon',
+            'in_progress': 'En cours',
+            'validated': 'Validée',
+            'canceled': 'Annulée'
+        }[session.statut] || session.statut;
+
+        const card = document.createElement('div');
+        card.className = 'session-card';
+        if (activeSession && activeSession.id === session.id) {
+            card.className += ' active-session';
+        }
+
+        card.innerHTML = `
+            <div class="row align-items-center">
+                <div class="col-md-1 text-center">
+                    <div class="progress-circle" style="--progress: ${session.completion_percentage || 0}">
+                        <span>${Math.round(session.completion_percentage || 0)}%</span>
+                    </div>
+                </div>
+                <div class="col-md-7">
+                    <h5 class="mb-1">${session.numero}</h5>
+                    <div class="text-muted small">
+                        <i class="fas fa-calendar me-1"></i>${session.date || ''}
+                        <i class="fas fa-user ms-3 me-1"></i>${session.created_by_username || 'N/A'}
+                    </div>
+                    ${session.note ? `<div class="text-muted small mt-1"><i class="fas fa-sticky-note me-1"></i>${session.note}</div>` : ''}
+                </div>
+                <div class="col-md-2">
+                    <span class="session-status-badge ${statusClass}">${statusText}</span>
+                </div>
+                <div class="col-md-2 text-end">
+                    ${session.statut !== 'validated' && session.statut !== 'canceled' ? `
+                        <button class="btn btn-primary" onclick="openSession(${session.id}, event)">
+                            <i class="fas fa-arrow-right me-2"></i>Ouvrir
+                        </button>
+                    ` : `
+                        <button class="btn btn-outline-secondary" onclick="viewSession(${session.id}, event)">
+                            <i class="fas fa-eye me-2"></i>Voir
+                        </button>
+                    `}
+                </div>
+            </div>
+        `;
+
+        container.appendChild(card);
+    });
+}
+
+// Afficher les sessions dans le tableau
+function displaySessionsTable(sessions) {
+    const tbody = document.getElementById('inv_sessions_table');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+
+    if (sessions.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">Aucune session</td></tr>';
+        return;
+    }
+
+    sessions.forEach(session => {
+        const statusClass = `status-${session.statut || 'draft'}`;
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${session.id}</td>
+            <td><strong>${session.numero}</strong></td>
+            <td>${session.date || ''}</td>
+            <td><span class="session-status-badge ${statusClass}">${session.statut || 'draft'}</span></td>
+            <td>
+                <div class="progress" style="height: 20px;">
+                    <div class="progress-bar bg-info" style="width: ${session.completion_percentage || 0}%">
+                        ${Math.round(session.completion_percentage || 0)}%
+                    </div>
+                </div>
+            </td>
+            <td>${session.created_by_username || ''}</td>
+            <td>${session.validated_by_username || ''}</td>
+            <td>${session.note || ''}</td>
+            <td>
+                ${session.statut !== 'validated' ? `
+                    <button class="btn btn-sm btn-primary" onclick="openSession(${session.id}, event)">
+                        Ouvrir
+                    </button>
+                ` : '<span class="text-success"><i class="fas fa-check"></i> Terminée</span>'}
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+// Ouvrir une session pour comptage
+async function openSession(sessionId, event) {
+    if (event) event.stopPropagation();
+
+    try {
+        const response = await fetch(`/API/inventaires/${sessionId}/`);
+        const session = await response.json();
+
+        activeSession = session;
+        sessionProducts = session.lignes || [];
+
+        // Mettre à jour l'indicateur
+        document.getElementById('current_session_indicator').innerHTML = `
+            <i class="fas fa-folder-open me-1"></i>
+            <strong>${session.numero}</strong>
+        `;
+
+        // Activer le bouton comptage
+        document.getElementById('btn_view_counting').disabled = false;
+
+        // Charger les infos de session
+        document.getElementById('active_session_title').textContent = `Session: ${session.numero}`;
+        document.getElementById('active_session_user').textContent = session.created_by_username || 'N/A';
+        document.getElementById('active_session_date').textContent = session.date || '';
+
+        // Basculer vers vue comptage
+        switchToView('counting');
+
+        // Afficher les produits disponibles
+        displayProductsForCounting();
+
+    } catch (error) {
+        console.error('Erreur ouverture session:', error);
+        alert('Erreur lors de l\'ouverture de la session');
+    }
+}
+
+// Voir une session validée (mode consultation)
+async function viewSession(sessionId, event) {
+    if (event) event.stopPropagation();
+
+    try {
+        const response = await fetch(`/API/inventaires/${sessionId}/`);
+        const session = await response.json();
+
+        activeSession = session;
+        sessionProducts = session.lignes || [];
+
+        // Mettre à jour l'indicateur
+        document.getElementById('current_session_indicator').innerHTML = `
+            <i class="fas fa-eye me-1"></i>
+            <strong>${session.numero}</strong>
+            <span class="badge bg-success ms-2">Validée</span>
+        `;
+
+        // Activer le bouton détails
+        document.getElementById('btn_view_details').disabled = false;
+
+        // Remplir les informations
+        document.getElementById('detail_session_numero').textContent = `Session: ${session.numero}`;
+        document.getElementById('detail_session_date').textContent = session.date || '';
+        document.getElementById('detail_session_created_by').textContent = session.created_by_username || 'N/A';
+        document.getElementById('detail_session_validated_by').textContent = session.validated_by_username || 'N/A';
+
+        // Note
+        if (session.note) {
+            document.getElementById('detail_session_note').textContent = session.note;
+            document.getElementById('detail_session_note_container').style.display = 'block';
+        } else {
+            document.getElementById('detail_session_note_container').style.display = 'none';
+        }
+
+        // Statistiques
+        document.getElementById('detail_completion').textContent = Math.round(session.completion_percentage || 0) + '%';
+        document.getElementById('detail_total_products').textContent = session.total_products || 0;
+
+        // Calculer écarts
+        const lignes = session.lignes || [];
+        const ecartsPositifs = lignes.filter(l => l.counted_qty && (l.counted_qty - l.snapshot_qty) > 0).length;
+        const ecartsNegatifs = lignes.filter(l => l.counted_qty && (l.counted_qty - l.snapshot_qty) < 0).length;
+        const totalEcarts = ecartsPositifs + ecartsNegatifs;
+
+        document.getElementById('detail_ecarts_count').textContent = totalEcarts;
+        document.getElementById('detail_ecarts_negatifs').textContent = ecartsNegatifs;
+
+        // Résumé des écarts importants (>10% ou >5 unités)
+        const importantEcarts = lignes.filter(l => {
+            if (!l.counted_qty) return false;
+            const ecart = Math.abs(l.counted_qty - l.snapshot_qty);
+            const pourcentage = l.snapshot_qty > 0 ? (ecart / l.snapshot_qty) * 100 : 0;
+            return ecart > 5 || pourcentage > 10;
+        });
+
+        if (importantEcarts.length > 0) {
+            document.getElementById('detail_ecarts_summary').style.display = 'block';
+            const ecartsList = document.getElementById('detail_ecarts_list');
+            ecartsList.innerHTML = importantEcarts.map(l => {
+                const ecart = l.counted_qty - l.snapshot_qty;
+                const pourcentage = l.snapshot_qty > 0 ? Math.round((Math.abs(ecart) / l.snapshot_qty) * 100) : 0;
+                const colorClass = ecart >= 0 ? 'text-success' : 'text-danger';
+                return `
+                    <div class="alert alert-warning mb-2">
+                        <strong>${l.produit_designation}</strong> (${l.produit_reference})
+                        <br>Théorique: ${l.snapshot_qty} → Compté: ${l.counted_qty}
+                        <br><span class="${colorClass} fw-bold">Écart: ${ecart >= 0 ? '+' : ''}${ecart} (${pourcentage}%)</span>
+                    </div>
+                `;
+            }).join('');
+        } else {
+            document.getElementById('detail_ecarts_summary').style.display = 'none';
+        }
+
+        // Tableau des produits
+        displaySessionDetails(lignes);
+
+        // Basculer vers vue détails
+        switchToView('details');
+
+    } catch (error) {
+        console.error('Erreur visualisation session:', error);
+        alert('Erreur lors de la visualisation de la session');
+    }
+}
+
+// Afficher les détails des produits dans le tableau
+function displaySessionDetails(lignes) {
+    const tbody = document.getElementById('detail_products_table');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+
+    if (lignes.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Aucun produit compté</td></tr>';
+        return;
+    }
+
+    lignes.forEach(line => {
+        const ecart = (line.counted_qty || 0) - (line.snapshot_qty || 0);
+        const ecartClass = ecart > 0 ? 'text-success' : (ecart < 0 ? 'text-danger' : 'text-muted');
+        const ecartIcon = ecart > 0 ? 'fa-arrow-up' : (ecart < 0 ? 'fa-arrow-down' : 'fa-equals');
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td><strong>${line.produit_designation || 'N/A'}</strong></td>
+            <td>${line.produit_reference || ''}</td>
+            <td><span class="badge bg-light text-dark">${line.produit_categorie || 'N/A'}</span></td>
+            <td class="text-center"><strong>${line.snapshot_qty || 0}</strong></td>
+            <td class="text-center"><strong>${line.counted_qty != null ? line.counted_qty : '-'}</strong></td>
+            <td class="text-center">
+                <span class="${ecartClass} fw-bold">
+                    <i class="fas ${ecartIcon} me-1"></i>
+                    ${ecart >= 0 ? '+' : ''}${ecart}
+                </span>
+            </td>
+            <td>${line.counted_by_username || 'N/A'}</td>
+            <td>${line.counted_at ? new Date(line.counted_at).toLocaleString('fr-FR') : '-'}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+// Exporter les détails de la session
+function exportSessionDetails() {
+    if (!activeSession) return;
+
+    // Redirection vers l'API d'export (à créer si nécessaire)
+    window.open(`/API/reports/inventory-session/?session_id=${activeSession.id}&format=excel`, '_blank');
+}
+
+// Créer une nouvelle session
+async function createSession() {
+    const numero = document.getElementById('inv_num').value.trim();
+    const date = document.getElementById('inv_date').value;
+    const note = document.getElementById('inv_note').value.trim();
+
+    if (!numero) {
+        alert('Veuillez saisir un numéro de session');
+        return;
+    }
+
+    if (!date) {
+        alert('Veuillez sélectionner une date');
+        return;
+    }
+
+    try {
+        const response = await fetch('/API/inventaires/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                numero: numero,
+                date: date,
+                note: note
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || error.error || 'Erreur création');
+        }
+
+        const session = await response.json();
+
+        // Réinitialiser formulaire
+        document.getElementById('inv_num').value = '';
+        document.getElementById('inv_note').value = '';
+
+        // Message succès
+        showToast('Session créée avec succès!', 'success');
+
+        // Ouvrir la session
+        await openSession(session.id);
+
+    } catch (error) {
+        console.error('Erreur création session:', error);
+        alert('Erreur: ' + error.message);
+    }
+}
+
+// Charger tous les produits
+async function loadAllProducts() {
+    try {
+        const response = await fetch('/API/produits/');
+        const data = await response.json();
+        allProducts = Array.isArray(data) ? data : (data.results || []);
+        console.log(`[Inventaire] ${allProducts.length} produits chargés`);
+    } catch (error) {
+        console.error('Erreur chargement produits:', error);
+    }
+}
+
+// Charger les catégories
+async function loadCategories() {
+    try {
+        const response = await fetch('/API/categories/');
+        const data = await response.json();
+        const categories = Array.isArray(data) ? data : (data.results || []);
+        const active = categories.filter(c => c.is_active !== false);
+
+        const select = document.getElementById('filter_category');
+        if (select) {
+            active.forEach(cat => {
+                const option = document.createElement('option');
+                option.value = cat.id;
+                option.textContent = cat.nom;
+                select.appendChild(option);
+            });
+        }
+    } catch (error) {
+        console.error('Erreur chargement catégories:', error);
+    }
+}
+
+// Afficher les produits pour comptage
+function displayProductsForCounting() {
+    const filtered = getFilteredProducts();
+
+    if (displayMode === 'grid') {
+        displayProductsGrid(filtered);
+    } else {
+        displayProductsTable(filtered);
+    }
+
+    updateCountingStats();
+}
+
+// Filtrer les produits
+function getFilteredProducts() {
+    let filtered = [...allProducts];
+
+    // Recherche
+    const query = document.getElementById('search_product')?.value.toLowerCase() || '';
+    if (query) {
+        filtered = filtered.filter(p =>
+            (p.designation && p.designation.toLowerCase().includes(query)) ||
+            (p.reference && p.reference.toLowerCase().includes(query)) ||
+            (p.code_barre && p.code_barre.toLowerCase().includes(query))
+        );
+    }
+
+    // Filtre catégorie
+    const category = document.getElementById('filter_category')?.value;
+    if (category) {
+        filtered = filtered.filter(p => p.categorie == category);
+    }
+
+    // Filtre statut
+    const status = document.getElementById('filter_status')?.value;
+    if (status) {
+        filtered = filtered.filter(p => {
+            if (status === 'rupture') return p.quantite === 0;
+            if (status === 'critique') return p.quantite > 0 && p.quantite <= (p.seuil_critique || 0);
+            if (status === 'alerte') return p.quantite > (p.seuil_critique || 0) && p.quantite <= (p.seuil_alerte || 0);
+            if (status === 'normal') return p.quantite > (p.seuil_alerte || 0);
+            return true;
+        });
+    }
+
+    return filtered;
+}
+
+// Afficher en grille
+function displayProductsGrid(products) {
+    const grid = document.getElementById('products_grid_view');
+    if (!grid) return;
+
+    grid.innerHTML = '';
+    document.getElementById('products_count').textContent = products.length;
+
+    if (products.length === 0) {
+        grid.innerHTML = `
+            <div class="col-12">
+                <div class="alert alert-info text-center">
+                    <i class="fas fa-filter me-2"></i>Aucun produit trouvé avec ces filtres.
+                </div>
+            </div>
+        `;
+        return;
+    }
+
+    products.forEach(product => {
+        // Vérifier si déjà compté dans la session
+        const lineInSession = sessionProducts.find(l => l.produit === product.id);
+        const isCounted = lineInSession && lineInSession.counted_qty != null;
+
+        const col = document.createElement('div');
+        col.className = 'col-md-4 col-lg-3';
+        col.innerHTML = `
+            <div class="product-grid-item ${isCounted ? 'counted' : ''}" onclick="selectProductForCounting(${product.id})">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <h6 class="mb-0">${product.designation}</h6>
+                    ${isCounted ? '<i class="fas fa-check-circle text-success"></i>' : ''}
+                </div>
+                <div class="text-muted small mb-2">
+                    <i class="fas fa-tag me-1"></i>${product.categorie_nom || 'N/A'}
+                </div>
+                <div class="mb-2">
+                    <small class="text-muted">Stock théorique:</small>
+                    <strong class="fs-5 ms-2">${product.quantite}</strong>
+                </div>
+                ${product.code_barre ? `
+                    <div class="text-muted small mb-2">
+                        <i class="fas fa-barcode me-1"></i>${product.code_barre}
+                    </div>
+                ` : ''}
+                ${lineInSession ? `
+                    <div class="mt-2 p-2 bg-light rounded">
+                        <small class="text-muted">Compté:</small>
+                        <strong class="ms-2">${lineInSession.counted_qty != null ? lineInSession.counted_qty : '-'}</strong>
+                        ${lineInSession.counted_qty != null ? `
+                            <br><small class="text-muted">Écart:</small>
+                            <strong class="ms-2 ${lineInSession.counted_qty - product.quantite >= 0 ? 'text-success' : 'text-danger'}">
+                                ${lineInSession.counted_qty - product.quantite > 0 ? '+' : ''}${lineInSession.counted_qty - product.quantite}
+                            </strong>
+                        ` : ''}
+                    </div>
+                ` : `
+                    <button class="btn btn-sm btn-outline-primary w-100 mt-2">
+                        <i class="fas fa-plus me-1"></i>Compter
+                    </button>
+                `}
+            </div>
+        `;
+        grid.appendChild(col);
+    });
+}
+
+// Sélectionner un produit pour comptage
+async function selectProductForCounting(productId) {
+    if (!activeSession) {
+        alert('Aucune session active');
+        return;
+    }
+
+    const product = allProducts.find(p => p.id === productId);
+    if (!product) return;
+
+    // Demander la quantité comptée
+    const counted = prompt(`Comptage de: ${product.designation}\n\nStock théorique: ${product.quantite}\n\nQuantité comptée:`, product.quantite);
+
+    if (counted === null) return; // Annulé
+
+    const countedQty = parseInt(counted);
+    if (isNaN(countedQty) || countedQty < 0) {
+        alert('Quantité invalide');
+        return;
+    }
+
+    // Enregistrer le comptage
+    await updateInventoryLine(productId, countedQty);
+}
+
+// Mettre à jour une ligne d'inventaire
+async function updateInventoryLine(productId, countedQty) {
+    try {
+        const response = await fetch(`/API/inventaires/${activeSession.id}/update_line/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                produit_id: productId,
+                counted_qty: countedQty
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error('Erreur mise à jour');
+        }
+
+        const updatedSession = await response.json();
+        activeSession = updatedSession;
+        sessionProducts = updatedSession.lignes || [];
+
+        // Rafraîchir l'affichage
+        displayProductsForCounting();
+
+        showToast('Comptage enregistré!', 'success');
+
+    } catch (error) {
+        console.error('Erreur mise à jour ligne:', error);
+        alert('Erreur lors de l\'enregistrement');
+    }
+}
+
+// Sauvegarder progression
+async function saveProgress() {
+    if (!activeSession) return;
+
+    try {
+        const response = await fetch(`/API/inventaires/${activeSession.id}/save_progress/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        });
+
+        if (response.ok) {
+            showToast('Progression sauvegardée!', 'success');
+        }
+    } catch (error) {
+        console.error('Erreur sauvegarde:', error);
+        alert('Erreur lors de la sauvegarde');
+    }
+}
+
+// Valider la session
+async function validateSession() {
+    if (!activeSession) return;
+
+    if (!confirm(`Valider la session ${activeSession.numero}?\n\nCela appliquera les ajustements de stock.`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/API/inventaires/${activeSession.id}/validate/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || error.error || 'Erreur validation');
+        }
+
+        showToast('Session validée! Stock ajusté.', 'success');
+
+        // Retour à la liste
+        activeSession = null;
+        switchToView('sessions');
+        loadSessions();
+
+    } catch (error) {
+        console.error('Erreur validation:', error);
+        alert('Erreur: ' + error.message);
+    }
+}
+
+// Basculer mode affichage
+function toggleViewMode() {
+    displayMode = displayMode === 'grid' ? 'table' : 'grid';
+
+    document.getElementById('products_grid_view').style.display = displayMode === 'grid' ? 'block' : 'none';
+    document.getElementById('products_table_view').style.display = displayMode === 'table' ? 'block' : 'none';
+
+    document.getElementById('view_mode_icon').className = displayMode === 'grid' ? 'fas fa-th me-2' : 'fas fa-list me-2';
+    document.getElementById('view_mode_text').textContent = displayMode === 'grid' ? 'Grille' : 'Liste';
+
+    displayProductsForCounting();
+}
+
+// Filtrer produits
+function filterProducts() {
+    displayProductsForCounting();
+}
+
+// Mettre à jour stats comptage
+function updateCountingStats() {
+    const counted = sessionProducts.filter(l => l.counted_qty != null).length;
+    const total = sessionProducts.length;
+
+    document.getElementById('counted_products').textContent = counted;
+    document.getElementById('remaining_products').textContent = total - counted;
+    document.getElementById('completed_count').textContent = counted;
+    document.getElementById('total_count').textContent = total;
+
+    const percentage = total > 0 ? Math.round((counted / total) * 100) : 0;
+    document.getElementById('progress_bar').style.width = percentage + '%';
+    document.getElementById('progress_text').textContent = percentage + '%';
+}
+
+// Utilitaires
+function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+    return null;
+}
+
+function showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `alert alert-${type === 'error' ? 'danger' : type} position-fixed`;
+    toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    toast.innerHTML = `<i class="fas fa-${type === 'success' ? 'check' : 'info'}-circle me-2"></i>${message}`;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}
+</script>

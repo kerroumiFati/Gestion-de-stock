@@ -1,0 +1,336 @@
+{% load static %}
+{% load i18n %}
+<script>
+// Load script only once and log
+console.log('[CLIENT PAGE] Template client.html loaded');
+if (!window.__client_script_loaded__) {
+    console.log('[CLIENT PAGE] Loading client.js for the first time');
+    window.__client_script_loaded__ = true;
+    var script = document.createElement('script');
+    script.src = "{% static 'script/client.js' %}";
+    script.type = 'text/javascript';
+    document.head.appendChild(script);
+} else {
+    console.log('[CLIENT PAGE] client.js already loaded, skipping');
+}
+</script>
+
+<style>
+/* Styles modernes pour la page clients */
+.page-container { padding: 20px 0; }
+
+.page-title {
+    font-size: 1.8rem;
+    font-weight: 600;
+    color: #2d3748;
+    margin-bottom: 25px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.page-title i {
+    color: #3b82f6;
+    font-size: 2rem;
+}
+
+.modern-section {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 30px;
+    margin-bottom: 25px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.section-header {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #2d3748;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.section-header i { color: #3b82f6; }
+
+.modern-label {
+    font-weight: 500;
+    color: #4a5568;
+    margin-bottom: 6px;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.modern-label i {
+    color: #3b82f6;
+    font-size: 0.9rem;
+}
+
+.modern-input {
+    border: 1px solid #cbd5e0;
+    border-radius: 6px;
+    padding: 10px 15px;
+    transition: all 0.2s ease;
+    font-size: 0.95rem;
+    width: 100%;
+}
+
+.modern-input:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    outline: none;
+}
+
+.modern-btn {
+    border-radius: 6px;
+    padding: 10px 20px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border: none;
+    cursor: pointer;
+}
+
+.modern-btn-primary {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    color: white;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+.modern-btn-primary:hover {
+    background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+    color: white;
+}
+
+.modern-btn-secondary {
+    background: #e2e8f0;
+    color: #2d3748;
+    border: 1px solid #cbd5e0;
+}
+
+.modern-btn-secondary:hover {
+    background: #cbd5e0;
+    color: #2d3748;
+}
+
+.modern-table {
+    margin-bottom: 0;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.modern-table thead th {
+    background: #f7fafc;
+    border: none;
+    padding: 15px 12px;
+    font-weight: 600;
+    color: #4a5568;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.modern-table tbody td {
+    padding: 12px;
+    border-bottom: 1px solid #e2e8f0;
+    vertical-align: middle;
+}
+
+.modern-table tbody tr:hover {
+    background: #f7fafc;
+}
+
+.action-btn {
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    border: none;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.action-btn-edit {
+    background: #3b82f6;
+    color: white;
+}
+
+.action-btn-edit:hover {
+    background: #2563eb;
+    color: white;
+    transform: scale(1.05);
+}
+
+.action-btn-delete {
+    background: #e2e8f0;
+    color: #4a5568;
+}
+
+.action-btn-delete:hover {
+    background: #cbd5e0;
+    color: #2d3748;
+    transform: scale(1.05);
+}
+
+.modern-modal .modal-content {
+    border-radius: 10px;
+    border: none;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+}
+
+.modern-modal .modal-header {
+    background: #f7fafc;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.modern-modal .modal-title {
+    color: #2d3748;
+    font-weight: 600;
+}
+</style>
+
+<div class="container-fluid page-container">
+    <!-- Modal Erreur -->
+    <div class="modal fade modern-modal" id="error" tabindex="-1" role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fa fa-exclamation-circle"></i> {% trans "Erreur" %}
+                    </h5>
+                    <button type="button" class="close" data-dismiss="modal">
+                        <span>&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <p>{% trans "Impossible de supprimer ce client" %}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Titre de page -->
+    <h1 class="page-title">
+        <i class="fa fa-users"></i>
+        {% trans "Gestion des Clients" %}
+    </h1>
+
+    <!-- Section Formulaire -->
+    <div class="modern-section">
+        <div class="section-header">
+            <i class="fa fa-user-plus"></i>
+            {% trans "Ajouter / Modifier un Client" %}
+        </div>
+
+        <form> {% csrf_token %}
+            <input type="text" id="id" hidden>
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="modern-label" for="nom">
+                        <i class="fa fa-user"></i> {% trans "Nom" %}
+                    </label>
+                    <input class="form-control modern-input" type="text" id="nom" required>
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="modern-label" for="prenom">
+                        <i class="fa fa-user"></i> {% trans "Prénom" %}
+                    </label>
+                    <input class="form-control modern-input" type="text" id="prenom" required>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="modern-label" for="email">
+                        <i class="fa fa-envelope"></i> {% trans "Email" %}
+                    </label>
+                    <input class="form-control modern-input" type="email" id="email" required>
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="modern-label" for="telephone">
+                        <i class="fa fa-phone"></i> {% trans "Téléphone" %}
+                    </label>
+                    <input class="form-control modern-input" type="text" id="telephone" required>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-12 mb-3">
+                    <label class="modern-label" for="adresse">
+                        <i class="fa fa-map-marker-alt"></i> {% trans "Adresse" %}
+                    </label>
+                    <input class="form-control modern-input" type="text" id="adresse" required>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col">
+                    <button type="button" class="modern-btn modern-btn-primary" id="btnClient">
+                        <i class="fa fa-plus"></i> {% trans "Ajouter" %}
+                    </button>
+                    <button type="button" class="modern-btn modern-btn-secondary ml-2" onclick="resetForm()">
+                        <i class="fa fa-undo"></i> {% trans "Réinitialiser" %}
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Section Liste des clients -->
+    <div class="modern-section">
+        <div class="section-header">
+            <i class="fa fa-list"></i>
+            {% trans "Liste des Clients" %}
+        </div>
+
+        <div class="table-responsive">
+            <table id="tclient" class="table modern-table" data-no-datatable="true">
+                <thead>
+                    <tr>
+                        <th>{% trans "ID" %}</th>
+                        <th>{% trans "Nom" %}</th>
+                        <th>{% trans "Prénom" %}</th>
+                        <th>{% trans "Email" %}</th>
+                        <th>{% trans "Téléphone" %}</th>
+                        <th>{% trans "Adresse" %}</th>
+                        <th>{% trans "Actions" %}</th>
+                    </tr>
+                </thead>
+                <tbody id="table-content">
+                    <tr>
+                        <td colspan="7" class="text-center text-muted">{% trans "Chargement..." %}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+function resetForm(){
+    document.getElementById('id').value = '';
+    document.getElementById('nom').value = '';
+    document.getElementById('prenom').value = '';
+    document.getElementById('email').value = '';
+    document.getElementById('telephone').value = '';
+    document.getElementById('adresse').value = '';
+    document.getElementById('btnClient').textContent = 'Ajouter';
+}
+</script>

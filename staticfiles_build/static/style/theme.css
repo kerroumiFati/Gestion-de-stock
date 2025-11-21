@@ -1,0 +1,132 @@
+/* Theme Specific Styles */
+
+/* Chiller Theme */
+.chiller-theme .sidebar-wrapper {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.chiller-theme .sidebar-brand {
+    background: rgba(0,0,0,0.2);
+}
+
+.chiller-theme .sidebar-header {
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.chiller-theme .sidebar-menu li a {
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.chiller-theme .sidebar-menu li a:hover {
+    background: rgba(255,255,255,0.1);
+}
+
+.chiller-theme .sidebar-footer {
+    background: rgba(0,0,0,0.2);
+    border-top: 1px solid rgba(255,255,255,0.1);
+}
+
+/* Statistics Cards */
+.stat-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.stat-card .stat-icon {
+    font-size: 2rem;
+    opacity: 0.8;
+}
+
+.stat-card .stat-number {
+    font-size: 2.5rem;
+    font-weight: bold;
+    margin: 10px 0;
+}
+
+.stat-card .stat-label {
+    font-size: 0.9rem;
+    opacity: 0.9;
+}
+
+/* Action Buttons */
+.action-buttons {
+    display: flex;
+    gap: 5px;
+}
+
+.action-buttons .btn {
+    padding: 5px 10px;
+    font-size: 0.8rem;
+}
+
+/* Data Tables */
+.dataTables_wrapper {
+    padding: 20px 0;
+}
+
+.dataTables_filter {
+    margin-bottom: 20px;
+}
+
+.dataTables_filter input {
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 8px 12px;
+    margin-left: 10px;
+}
+
+/* Modal Overrides */
+.modal-header {
+    background: #34495e;
+    color: white;
+    border-bottom: none;
+}
+
+.modal-title {
+    font-weight: 500;
+}
+
+.modal-footer {
+    border-top: 1px solid #ecf0f1;
+}
+
+/* Loading Spinner */
+.spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(255,255,255,.3);
+    border-radius: 50%;
+    border-top-color: #fff;
+    animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Success/Error Messages */
+.alert {
+    border-radius: 6px;
+    border: none;
+    margin-bottom: 20px;
+}
+
+.alert-success {
+    background: #d4edda;
+    color: #155724;
+}
+
+.alert-danger {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.alert-info {
+    background: #d1ecf1;
+    color: #0c5460;
+}

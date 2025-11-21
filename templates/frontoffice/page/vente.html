@@ -1,0 +1,318 @@
+{% load static %}
+{% load i18n %}
+<script src="{% static 'script/vente.js' %}" type="text/javascript"></script>
+
+<!-- Navigation des onglets -->
+<div class="container-fluid">
+  <ul class="nav nav-tabs" id="venteTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+      <a class="nav-link active" id="nouvelle-vente-tab" data-toggle="tab" href="#nouvelle-vente" role="tab">
+        <i class="fa fa-plus"></i> {% trans "Nouvelle Vente" %}
+      </a>
+    </li>
+    <li class="nav-item" role="presentation">
+      <a class="nav-link" id="liste-ventes-tab" data-toggle="tab" href="#liste-ventes" role="tab">
+        <i class="fa fa-list"></i> {% trans "Liste des Ventes" %}
+      </a>
+    </li>
+    <li class="nav-item" role="presentation">
+      <a class="nav-link" id="stats-ventes-tab" data-toggle="tab" href="#stats-ventes" role="tab">
+        <i class="fa fa-chart-bar"></i> {% trans "Statistiques" %}
+      </a>
+    </li>
+  </ul>
+
+  <div class="tab-content" id="venteTabContent">
+    <!-- Onglet Nouvelle Vente -->
+    <div class="tab-pane fade show active" id="nouvelle-vente" role="tabpanel">
+      <div class="card bg-white mt-3">
+        <div class="card-header card-color">
+          <p class="h4 text-center text-uppercase font-weight-bold pt-2">
+            <i class="fa fa-shopping-cart"></i> {% trans "Nouvelle Vente" %}
+          </p>
+        </div>
+        <div class="card-body container-fluid">
+          <!-- Informations de la vente -->
+          <div class="row">
+            <div class="col-sm-3 mb-2">
+              <label>{% trans "Client" %} *</label>
+              <select id="vente_client" class="form-control">
+                <option value="">{% trans "Choisir un client..." %}</option>
+              </select>
+            </div>
+            <div class="col-sm-2 mb-2">
+              <label>{% trans "Devise" %}</label>
+              <select id="vente_currency" class="form-control">
+                <option value=""></option>
+              </select>
+            </div>
+            <div class="col-sm-2 mb-2">
+              <label>{% trans "Type de paiement" %}</label>
+              <select id="vente_paiement" class="form-control">
+                <option value="cash">{% trans "Espèces" %}</option>
+                <option value="card">{% trans "Carte bancaire" %}</option>
+                <option value="check">{% trans "Chèque" %}</option>
+                <option value="transfer">{% trans "Virement" %}</option>
+                <option value="credit">{% trans "Crédit" %}</option>
+              </select>
+            </div>
+            <div class="col-sm-3 mb-2">
+              <label>{% trans "Entrepôt" %} *</label>
+              <select id="vente_warehouse" class="form-control">
+                <option value="">{% trans "Sélectionner un entrepôt" %}...</option>
+              </select>
+            </div>
+            <div class="col-sm-2 mb-2">
+              <label>{% trans "Remise (%)" %}</label>
+              <input id="vente_remise" type="number" class="form-control" min="0" max="100" step="0.01" value="0">
+            </div>
+            <div class="col-sm-3 mb-2">
+              <label>{% trans "Numéro" %} ({% trans "optionnel" %})</label>
+              <input id="vente_num" type="text" class="form-control" placeholder="{% trans 'Auto-généré' %}">
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-sm-12 mb-2">
+              <label>{% trans "Observations" %}</label>
+              <textarea id="vente_obs" class="form-control" rows="2" placeholder="{% trans 'Commentaires sur la vente...' %}"></textarea>
+            </div>
+          </div>
+
+          <!-- Recherche de produits -->
+          <hr>
+          <h5><i class="fa fa-search"></i> {% trans "Ajouter des produits" %}</h5>
+          <div class="row">
+            <div class="col-sm-3 mb-2">
+              <label>{% trans "Référence" %}</label>
+              <input id="vente_ref" type="text" class="form-control" placeholder="{% trans 'Filtrer par référence...' %}">
+            </div>
+            <div class="col-sm-3 mb-2">
+              <label>{% trans "Code-barres" %}</label>
+              <input id="vente_cb" type="text" class="form-control" placeholder="{% trans 'Scanner ou saisir...' %}">
+            </div>
+            <div class="col-sm-4 mb-2">
+              <label>{% trans "Produit" %}</label>
+              <select id="vente_prod" class="form-control">
+                <option value="">{% trans "Choisir un produit..." %}</option>
+              </select>
+            </div>
+            <div class="col-sm-2 mb-2">
+              <label>{% trans "Quantité" %}</label>
+              <input id="vente_qte" type="number" class="form-control" min="1" value="1">
+            </div>
+          </div>
+          <div class="row">
+            <div class="col">
+              <button id="vente_add_line" class="btn btn-success">
+                <i class="fa fa-plus"></i> {% trans "Ajouter à la vente" %}
+              </button>
+            </div>
+          </div>
+
+          <!-- Tableau des lignes de vente -->
+          <div class="row table-responsive m-auto rounded mt-3">
+            <table id="tbl_vente" class="table table-hover w-100">
+              <thead>
+                <tr class="text-uppercase bg-light">
+                  <th>{% trans "Référence" %}</th>
+                  <th>{% trans "Désignation" %}</th>
+                  <th>{% trans "Prix unitaire" %}</th>
+                  <th>{% trans "Quantité" %}</th>
+                  <th>{% trans "Total ligne" %}</th>
+                  <th>{% trans "Actions" %}</th>
+                </tr>
+              </thead>
+              <tbody id="vente_body"></tbody>
+              <tfoot>
+                <tr class="bg-light font-weight-bold">
+                  <td colspan="4" class="text-right">{% trans "Total HT" %}:</td>
+                  <td id="vente_total_ht">0.00</td>
+                  <td></td>
+                </tr>
+                <tr class="bg-light font-weight-bold">
+                  <td colspan="4" class="text-right">{% trans "Remise" %}:</td>
+                  <td id="vente_remise_montant">0.00</td>
+                  <td></td>
+                </tr>
+                <tr class="bg-primary text-white font-weight-bold">
+                  <td colspan="4" class="text-right">{% trans "Total TTC" %}:</td>
+                  <td id="vente_total_ttc">0.00</td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          <!-- Actions de la vente -->
+          <div class="row mt-3">
+            <div class="col">
+              <button id="vente_save_draft" class="btn btn-outline-primary">
+                <i class="fa fa-save"></i> {% trans "Enregistrer (Brouillon)" %}
+              </button>
+              <button id="vente_complete" class="btn btn-success ml-2">
+                <i class="fa fa-check"></i> {% trans "Finaliser la vente" %}
+              </button>
+              <button id="vente_clear" class="btn btn-outline-secondary ml-2">
+                <i class="fa fa-trash"></i> {% trans "Vider" %}
+              </button>
+              <span id="vente_status" class="ml-3 font-weight-bold"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Onglet Liste des Ventes -->
+    <div class="tab-pane fade" id="liste-ventes" role="tabpanel">
+      <div class="card bg-white mt-3">
+        <div class="card-header card-color">
+          <p class="h4 text-center text-uppercase font-weight-bold pt-2">
+            <i class="fa fa-list"></i> {% trans "Liste des Ventes" %}
+          </p>
+        </div>
+        <div class="card-body">
+          <div class="row mb-3">
+            <div class="col-sm-4">
+              <label for="ventes_filter" class="mr-2">{% trans "Filtrer par statut" %}</label>
+              <select id="ventes_filter" class="form-control form-control-sm">
+                <option value="all">{% trans "Toutes" %}</option>
+                <option value="draft">{% trans "Brouillons" %}</option>
+                <option value="completed">{% trans "Finalisées" %}</option>
+              </select>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table id="tbl_liste_ventes" class="table table-striped table-hover">
+              <thead>
+                <tr>
+                  <th>{% trans "Numéro" %}</th>
+                  <th>{% trans "Date" %}</th>
+                  <th>{% trans "Client" %}</th>
+                  <th>{% trans "Statut" %}</th>
+                  <th>{% trans "Paiement" %}</th>
+                  <th>{% trans "Total TTC" %}</th>
+                  <th>{% trans "Actions" %}</th>
+                </tr>
+              </thead>
+              <tbody id="liste_ventes_body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Détails de la Vente -->
+    <div class="modal fade" id="saleDetailsModal" tabindex="-1" role="dialog" aria-labelledby="saleDetailsModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-xl" role="document">
+        <div class="modal-content">
+          <div class="modal-header bg-primary text-white">
+            <h5 class="modal-title" id="saleDetailsModalLabel">
+              <i class="fa fa-file-invoice"></i> {% trans "Détails de la vente" %}
+            </h5>
+            <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+          <div class="modal-body" id="saleDetailsContent">
+            <div class="text-center py-5">
+              <i class="fa fa-spinner fa-spin fa-3x text-muted"></i>
+              <p class="mt-3 text-muted">{% trans "Chargement des détails..." %}</p>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-dismiss="modal">
+              <i class="fa fa-times"></i> {% trans "Fermer" %}
+            </button>
+            <button type="button" class="btn btn-primary" id="printSaleDetails">
+              <i class="fa fa-print"></i> {% trans "Imprimer" %}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Onglet Statistiques -->
+    <div class="tab-pane fade" id="stats-ventes" role="tabpanel">
+      <div class="card bg-white mt-3">
+        <div class="card-header card-color">
+          <p class="h4 text-center text-uppercase font-weight-bold pt-2">
+            <i class="fa fa-chart-bar"></i> {% trans "Statistiques des Ventes" %}
+          </p>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-3">
+              <div class="card bg-primary text-white">
+                <div class="card-body text-center">
+                  <h4 id="stat_ventes_today">0</h4>
+                  <p>{% trans "Ventes aujourd'hui" %}</p>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="card bg-success text-white">
+                <div class="card-body text-center">
+                  <h4 id="stat_ventes_week">0</h4>
+                  <p>{% trans "Ventes cette semaine" %}</p>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="card bg-info text-white">
+                <div class="card-body text-center">
+                  <h4 id="stat_ventes_month">0</h4>
+                  <p>{% trans "Ventes ce mois" %}</p>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="card bg-warning text-white">
+                <div class="card-body text-center">
+                  <h4 id="stat_ventes_total">0</h4>
+                  <p>{% trans "Total des ventes" %}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="row mt-4">
+            <div class="col-md-3">
+              <div class="card bg-dark text-white">
+                <div class="card-body text-center">
+                  <h4 id="stat_ca_today">0.00</h4>
+                  <p>{% trans "CA" %} {% trans "aujourd'hui" %}</p>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="card bg-secondary text-white">
+                <div class="card-body text-center">
+                  <h4 id="stat_ca_week">0.00</h4>
+                  <p>{% trans "CA" %} {% trans "cette semaine" %}</p>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="card bg-danger text-white">
+                <div class="card-body text-center">
+                  <h4 id="stat_ca_month">0.00</h4>
+                  <p>{% trans "CA" %} {% trans "ce mois" %}</p>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="card" style="background: linear-gradient(45deg, #6a11cb 0%, #2575fc 100%);">
+                <div class="card-body text-center text-white">
+                  <h4 id="stat_ca_total">0.00</h4>
+                  <p>{% trans "CA" %} {% trans "total" %}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>

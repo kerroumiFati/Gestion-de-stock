@@ -1,0 +1,682 @@
+{% load static %}
+{% load i18n %}
+
+<div class="container-fluid">
+    <div class="card bg-white">
+        <div class="card-header card-color">
+            <p class="h4 text-center text-uppercase font-weight-bold pt-2">
+                <i class="fa fa-truck-loading"></i> {% trans "Charger un Van" %}
+            </p>
+        </div>
+        <div class="card-body">
+            <form method="post" id="chargerVanForm">
+                {% csrf_token %}
+
+                <!-- Sélection Van et Entrepôt Source -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label><i class="fa fa-truck"></i> {% trans "Van à charger" %} *</label>
+                            <select name="van" id="van" class="form-control" required>
+                                <option value="">{% trans "-- Sélectionner un van --" %}</option>
+                                {% for van in vans %}
+                                <option value="{{ van.id }}">{{ van.code }} - {{ van.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label><i class="fa fa-warehouse"></i> {% trans "Entrepôt source" %} *</label>
+                            <select name="entrepot_source" id="entrepot_source" class="form-control" required>
+                                <option value="">{% trans "-- Sélectionner l'entrepôt --" %}</option>
+                                {% for source in sources %}
+                                <option value="{{ source.id }}">{{ source.code }} - {{ source.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Onglets pour les méthodes de saisie -->
+                <ul class="nav nav-tabs mb-3" role="tablist">
+                    <li class="nav-item">
+                        <a class="nav-link active" data-toggle="tab" href="#tab-table" role="tab">
+                            <i class="fa fa-table"></i> {% trans "Tableau dynamique" %}
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" data-toggle="tab" href="#tab-scanner" role="tab">
+                            <i class="fa fa-barcode"></i> {% trans "Scanner" %}
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" data-toggle="tab" href="#tab-checkbox" role="tab">
+                            <i class="fa fa-check-square"></i> {% trans "Liste rapide" %}
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" data-toggle="tab" href="#tab-import" role="tab">
+                            <i class="fa fa-file-import"></i> {% trans "Import texte" %}
+                        </a>
+                    </li>
+                </ul>
+
+                <!-- Contenu des onglets -->
+                <div class="tab-content">
+                    <!-- Tab 1: Tableau dynamique -->
+                    <div class="tab-pane fade show active" id="tab-table" role="tabpanel">
+                        <div class="table-responsive">
+                            <table class="table table-bordered" id="productsTable" data-no-datatable="true">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th width="50%">{% trans "Produit" %}</th>
+                                        <th width="20%">{% trans "Stock dispo" %}</th>
+                                        <th width="20%">{% trans "Quantité" %}</th>
+                                        <th width="10%">{% trans "Action" %}</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="productsTableBody">
+                                    <tr>
+                                        <td colspan="4" class="text-center text-muted">
+                                            <i class="fa fa-info-circle"></i> {% trans "Cliquez sur 'Ajouter une ligne' pour commencer" %}
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-success" onclick="addProductRow()">
+                            <i class="fa fa-plus"></i> {% trans "Ajouter une ligne" %}
+                        </button>
+                    </div>
+
+                    <!-- Tab 2: Scanner -->
+                    <div class="tab-pane fade" id="tab-scanner" role="tabpanel">
+                        <div class="form-group">
+                            <label><i class="fa fa-barcode"></i> {% trans "Scanner le code-barres" %}</label>
+                            <input type="text" class="form-control form-control-lg" id="barcodeInput"
+                                   placeholder="{% trans 'Scannez ou tapez le code-barres puis Entrée' %}"
+                                   autocomplete="off">
+                        </div>
+                        <div id="scannedProducts" class="mt-3">
+                            <!-- Les produits scannés apparaîtront ici -->
+                        </div>
+                    </div>
+
+                    <!-- Tab 3: Liste avec checkboxes (Liste rapide améliorée) -->
+                    <div class="tab-pane fade" id="tab-checkbox" role="tabpanel">
+                        <!-- Barre d'outils -->
+                        <div class="mb-3">
+                            <div class="row">
+                                <div class="col-md-8">
+                                    <div class="input-group">
+                                        <div class="input-group-prepend">
+                                            <span class="input-group-text"><i class="fa fa-search"></i></span>
+                                        </div>
+                                        <input type="text" class="form-control" id="searchProduct"
+                                               placeholder="{% trans 'Rechercher un produit par nom ou référence...' %}">
+                                        <div class="input-group-append">
+                                            <button class="btn btn-outline-secondary" type="button" onclick="clearSearch()">
+                                                <i class="fa fa-times"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="btn-group w-100" role="group">
+                                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="selectAllProducts()">
+                                            <i class="fa fa-check-square"></i> {% trans "Tout sélectionner" %}
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="deselectAllProducts()">
+                                            <i class="fa fa-square"></i> {% trans "Tout désélectionner" %}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Compteur de sélection -->
+                            <div class="mt-2">
+                                <small class="text-muted">
+                                    <span id="selectedCount">0</span> {% trans "produit(s) sélectionné(s)" %}
+                                    <span id="totalQuantity" class="ml-2"></span>
+                                </small>
+                            </div>
+                        </div>
+
+                        <!-- Liste des produits -->
+                        <div style="max-height: 500px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 0.25rem; padding: 10px;" id="productCheckboxList">
+                            <p class="text-muted text-center">
+                                <i class="fa fa-spinner fa-spin"></i> {% trans "Chargement des produits..." %}
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Tab 4: Import texte -->
+                    <div class="tab-pane fade" id="tab-import" role="tabpanel">
+                        <div class="alert alert-info">
+                            <i class="fa fa-info-circle"></i> {% trans "Format" %}: <code>REFERENCE,QUANTITE</code> {% trans "(une ligne par produit)" %}
+                        </div>
+                        <textarea id="importText" class="form-control" rows="10"
+                                  style="font-family: monospace;"
+                                  placeholder="PROD-001,50&#10;PROD-002,30&#10;PROD-003,100"></textarea>
+                        <button type="button" class="btn btn-primary mt-2" onclick="importFromText()">
+                            <i class="fa fa-upload"></i> {% trans "Importer" %}
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Récapitulatif -->
+                <div class="card mt-4 border-primary" id="summaryCard" style="display:none;">
+                    <div class="card-header bg-primary text-white">
+                        <h6 class="mb-0"><i class="fa fa-shopping-cart"></i> {% trans "Récapitulatif du chargement" %}</h6>
+                    </div>
+                    <div class="card-body">
+                        <div id="summaryContent"></div>
+                    </div>
+                </div>
+
+                <!-- Hidden input pour les données -->
+                <input type="hidden" name="produits" id="produitsData">
+
+                <!-- Boutons d'action -->
+                <div class="mt-4">
+                    <button type="submit" class="btn btn-primary btn-lg">
+                        <i class="fa fa-check"></i> {% trans "Charger le van" %}
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-lg" onclick="show('stock_dashboard')">
+                        <i class="fa fa-times"></i> {% trans "Annuler" %}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    'use strict';
+
+    // Données globales (scoped to this IIFE to avoid redeclaration errors)
+    let selectedProducts = [];
+    let allProducts = [];
+
+    // Charger tous les produits au chargement de la page
+    document.addEventListener('fragment:loaded', function(e) {
+        if (e.detail.name === 'charger_van') {
+            loadProducts();
+        }
+    });
+
+// Charger la liste des produits
+function loadProducts() {
+    fetch('/API/distribution/produits/')
+        .then(res => res.json())
+        .then(data => {
+            allProducts = data;
+            renderCheckboxList();
+        })
+        .catch(err => console.error('Erreur chargement produits:', err));
+}
+
+// Ajouter une ligne au tableau
+let rowCounter = 0;
+function addProductRow() {
+    const tbody = document.getElementById('productsTableBody');
+    if (tbody.querySelector('td[colspan]')) {
+        tbody.innerHTML = '';
+    }
+
+    const row = document.createElement('tr');
+    row.id = 'row-' + rowCounter;
+    row.innerHTML = `
+        <td>
+            <select class="form-control product-select" onchange="updateStock(this, ${rowCounter})" required>
+                <option value="">-- {% trans "Sélectionner" %} --</option>
+                ${allProducts.map(p => `<option value="${p.reference}" data-stock="${p.stock || 0}">${p.reference} - ${p.designation}</option>`).join('')}
+            </select>
+        </td>
+        <td><span id="stock-${rowCounter}" class="badge badge-info">-</span></td>
+        <td><input type="number" class="form-control quantity-input" min="1" placeholder="0" required></td>
+        <td><button type="button" class="btn btn-sm btn-danger" onclick="removeRow(${rowCounter})"><i class="fa fa-trash"></i></button></td>
+    `;
+    tbody.appendChild(row);
+    rowCounter++;
+    updateSummary();
+}
+
+// Mettre à jour le stock disponible
+function updateStock(select, rowId) {
+    const option = select.selectedOptions[0];
+    const stock = option.dataset.stock || 0;
+    document.getElementById('stock-' + rowId).textContent = stock + ' unités';
+    updateSummary();
+}
+
+// Supprimer une ligne
+function removeRow(rowId) {
+    document.getElementById('row-' + rowId).remove();
+    updateSummary();
+}
+
+// Scanner de code-barres
+document.getElementById('barcodeInput')?.addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        const barcode = this.value.trim();
+        if (barcode) {
+            addScannedProduct(barcode);
+            this.value = '';
+        }
+    }
+});
+
+function addScannedProduct(barcode) {
+    const product = allProducts.find(p => p.reference === barcode || p.code_barre === barcode);
+    if (product) {
+        const existing = selectedProducts.find(p => p.reference === product.reference);
+        if (existing) {
+            existing.quantity++;
+        } else {
+            selectedProducts.push({
+                reference: product.reference,
+                designation: product.designation,
+                quantity: 1
+            });
+        }
+        renderScannedProducts();
+        updateSummary();
+    } else {
+        alert('{% trans "Produit non trouvé" %}: ' + barcode);
+    }
+}
+
+function renderScannedProducts() {
+    const container = document.getElementById('scannedProducts');
+    if (selectedProducts.length === 0) {
+        container.innerHTML = '<p class="text-muted">{% trans "Aucun produit scanné" %}</p>';
+        return;
+    }
+
+    container.innerHTML = selectedProducts.map((p, idx) => `
+        <div class="card mb-2">
+            <div class="card-body p-2">
+                <div class="row align-items-center">
+                    <div class="col-md-5"><strong>${p.reference}</strong> - ${p.designation}</div>
+                    <div class="col-md-3">
+                        <input type="number" class="form-control form-control-sm" value="${p.quantity}"
+                               onchange="updateScannedQuantity(${idx}, this.value)" min="1">
+                    </div>
+                    <div class="col-md-2 text-right">
+                        <button class="btn btn-sm btn-danger" onclick="removeScannedProduct(${idx})">
+                            <i class="fa fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function updateScannedQuantity(idx, qty) {
+    selectedProducts[idx].quantity = parseInt(qty) || 1;
+    updateSummary();
+}
+
+function removeScannedProduct(idx) {
+    selectedProducts.splice(idx, 1);
+    renderScannedProducts();
+    updateSummary();
+}
+
+// Liste avec checkboxes - Version améliorée
+function renderCheckboxList() {
+    const container = document.getElementById('productCheckboxList');
+    if (!allProducts || allProducts.length === 0) {
+        container.innerHTML = '<p class="text-center text-muted"><i class="fa fa-inbox"></i> Aucun produit disponible</p>';
+        return;
+    }
+
+    container.innerHTML = allProducts.map(p => {
+        const stock = p.stock || 0;
+        const stockBadgeClass = stock > 50 ? 'badge-success' : stock > 10 ? 'badge-warning' : 'badge-danger';
+
+        return `
+        <div class="card mb-2 product-checkbox-item" data-name="${(p.designation + ' ' + p.reference).toLowerCase()}" style="border-left: 3px solid ${stock > 10 ? '#28a745' : '#ffc107'};">
+            <div class="card-body p-2">
+                <div class="row align-items-center">
+                    <div class="col-auto">
+                        <div class="custom-control custom-checkbox">
+                            <input type="checkbox" class="custom-control-input" id="check-${p.reference}"
+                                   value="${p.reference}" onchange="toggleProduct('${p.reference}', this.checked)">
+                            <label class="custom-control-label" for="check-${p.reference}"></label>
+                        </div>
+                    </div>
+                    <div class="col">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong style="font-size: 0.9rem;">${p.reference}</strong>
+                                <div class="text-muted small">${p.designation}</div>
+                            </div>
+                            <div class="text-right">
+                                <span class="badge ${stockBadgeClass}" style="font-size: 0.85rem;">
+                                    <i class="fa fa-boxes"></i> ${stock}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Contrôles de quantité -->
+                <div id="qty-controls-${p.reference}" class="mt-2" style="display:none;">
+                    <div class="row align-items-center">
+                        <div class="col-auto">
+                            <label class="mb-0 small text-muted">Quantité:</label>
+                        </div>
+                        <div class="col">
+                            <div class="input-group input-group-sm">
+                                <div class="input-group-prepend">
+                                    <button class="btn btn-outline-secondary" type="button" onclick="adjustQuantity('${p.reference}', -1)">
+                                        <i class="fa fa-minus"></i>
+                                    </button>
+                                </div>
+                                <input type="number" class="form-control text-center" id="qty-${p.reference}"
+                                       value="1" min="1" max="${stock}" style="max-width: 80px;"
+                                       onchange="updateCheckboxQuantity('${p.reference}')">
+                                <div class="input-group-append">
+                                    <button class="btn btn-outline-secondary" type="button" onclick="adjustQuantity('${p.reference}', 1)">
+                                        <i class="fa fa-plus"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <div class="btn-group btn-group-sm" role="group">
+                                <button type="button" class="btn btn-outline-primary" onclick="setQuantity('${p.reference}', 5)" title="x5">
+                                    <small>x5</small>
+                                </button>
+                                <button type="button" class="btn btn-outline-primary" onclick="setQuantity('${p.reference}', 10)" title="x10">
+                                    <small>x10</small>
+                                </button>
+                                <button type="button" class="btn btn-outline-primary" onclick="setQuantity('${p.reference}', 20)" title="x20">
+                                    <small>x20</small>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        `;
+    }).join('');
+
+    updateSelectionCounter();
+}
+
+// Recherche produits améliorée
+document.getElementById('searchProduct')?.addEventListener('input', function() {
+    const search = this.value.toLowerCase();
+    let visibleCount = 0;
+    document.querySelectorAll('.product-checkbox-item').forEach(item => {
+        const name = item.dataset.name;
+        const isVisible = name.includes(search);
+        item.style.display = isVisible ? '' : 'none';
+        if (isVisible) visibleCount++;
+    });
+
+    // Afficher un message si aucun résultat
+    const container = document.getElementById('productCheckboxList');
+    const existingMsg = container.querySelector('.no-results-msg');
+    if (existingMsg) existingMsg.remove();
+
+    if (visibleCount === 0 && search) {
+        const msg = document.createElement('p');
+        msg.className = 'text-center text-muted mt-3 no-results-msg';
+        msg.innerHTML = '<i class="fa fa-search"></i> Aucun produit trouvé pour "' + search + '"';
+        container.insertBefore(msg, container.firstChild);
+    }
+});
+
+function clearSearch() {
+    document.getElementById('searchProduct').value = '';
+    document.getElementById('searchProduct').dispatchEvent(new Event('input'));
+}
+
+function toggleProduct(reference, checked) {
+    const qtyControls = document.getElementById('qty-controls-' + reference);
+    const qtyInput = document.getElementById('qty-' + reference);
+
+    qtyControls.style.display = checked ? 'block' : 'none';
+
+    if (checked) {
+        qtyInput.value = 1;
+        qtyInput.required = true;
+    } else {
+        qtyInput.required = false;
+    }
+
+    updateSummary();
+    updateSelectionCounter();
+}
+
+// Nouvelle fonction: Ajuster la quantité avec +/-
+function adjustQuantity(reference, delta) {
+    const qtyInput = document.getElementById('qty-' + reference);
+    let currentQty = parseInt(qtyInput.value) || 1;
+    let newQty = currentQty + delta;
+
+    // Respecter min et max
+    const min = parseInt(qtyInput.min) || 1;
+    const max = parseInt(qtyInput.max) || 9999;
+    newQty = Math.max(min, Math.min(max, newQty));
+
+    qtyInput.value = newQty;
+    updateSummary();
+    updateSelectionCounter();
+}
+
+// Nouvelle fonction: Définir une quantité prédéfinie
+function setQuantity(reference, quantity) {
+    const qtyInput = document.getElementById('qty-' + reference);
+    const max = parseInt(qtyInput.max) || 9999;
+    qtyInput.value = Math.min(quantity, max);
+    updateSummary();
+    updateSelectionCounter();
+}
+
+// Nouvelle fonction: Mettre à jour la quantité depuis l'input
+function updateCheckboxQuantity(reference) {
+    updateSummary();
+    updateSelectionCounter();
+}
+
+// Nouvelle fonction: Sélectionner tous les produits visibles
+function selectAllProducts() {
+    document.querySelectorAll('.product-checkbox-item').forEach(item => {
+        if (item.style.display !== 'none') {
+            const checkbox = item.querySelector('input[type="checkbox"]');
+            if (checkbox && !checkbox.checked) {
+                checkbox.checked = true;
+                toggleProduct(checkbox.value, true);
+            }
+        }
+    });
+}
+
+// Nouvelle fonction: Désélectionner tous les produits
+function deselectAllProducts() {
+    document.querySelectorAll('.product-checkbox-item input[type="checkbox"]').forEach(checkbox => {
+        if (checkbox.checked) {
+            checkbox.checked = false;
+            toggleProduct(checkbox.value, false);
+        }
+    });
+}
+
+// Nouvelle fonction: Mettre à jour le compteur de sélection
+function updateSelectionCounter() {
+    const checkedBoxes = document.querySelectorAll('#productCheckboxList input[type="checkbox"]:checked');
+    const count = checkedBoxes.length;
+    document.getElementById('selectedCount').textContent = count;
+
+    // Calculer la quantité totale
+    let totalQty = 0;
+    checkedBoxes.forEach(checkbox => {
+        const qtyInput = document.getElementById('qty-' + checkbox.value);
+        if (qtyInput) {
+            totalQty += parseInt(qtyInput.value) || 0;
+        }
+    });
+
+    const totalQtySpan = document.getElementById('totalQuantity');
+    if (count > 0) {
+        totalQtySpan.innerHTML = '| <strong>' + totalQty + '</strong> unité(s) au total';
+    } else {
+        totalQtySpan.innerHTML = '';
+    }
+}
+
+// Import depuis texte
+function importFromText() {
+    const text = document.getElementById('importText').value.trim();
+    const lines = text.split('\n');
+    selectedProducts = [];
+
+    lines.forEach(line => {
+        const [ref, qty] = line.split(',').map(s => s.trim());
+        if (ref && qty) {
+            const product = allProducts.find(p => p.reference === ref);
+            if (product) {
+                selectedProducts.push({
+                    reference: ref,
+                    designation: product.designation,
+                    quantity: parseInt(qty)
+                });
+            }
+        }
+    });
+
+    updateSummary();
+    alert(`{% trans "Importé" %}: ${selectedProducts.length} {% trans "produits" %}`);
+}
+
+// Mettre à jour le récapitulatif
+function updateSummary() {
+    // Collecter les produits de toutes les sources
+    const products = [];
+
+    // Depuis le tableau
+    document.querySelectorAll('#productsTableBody tr').forEach(row => {
+        const select = row.querySelector('.product-select');
+        const qtyInput = row.querySelector('.quantity-input');
+        if (select && qtyInput && select.value && qtyInput.value) {
+            const product = allProducts.find(p => p.reference === select.value);
+            products.push({
+                reference: select.value,
+                designation: product?.designation || '',
+                quantity: parseInt(qtyInput.value)
+            });
+        }
+    });
+
+    // Depuis les checkboxes
+    document.querySelectorAll('.product-checkbox-item input[type="checkbox"]:checked').forEach(cb => {
+        const qtyInput = document.getElementById('qty-' + cb.value);
+        if (qtyInput && qtyInput.value) {
+            const product = allProducts.find(p => p.reference === cb.value);
+            products.push({
+                reference: cb.value,
+                designation: product?.designation || '',
+                quantity: parseInt(qtyInput.value)
+            });
+        }
+    });
+
+    // Fusionner avec les produits scannés
+    selectedProducts.forEach(sp => {
+        const existing = products.find(p => p.reference === sp.reference);
+        if (existing) {
+            existing.quantity += sp.quantity;
+        } else {
+            products.push(sp);
+        }
+    });
+
+    // Afficher le récapitulatif
+    const summaryCard = document.getElementById('summaryCard');
+    const summaryContent = document.getElementById('summaryContent');
+
+    if (products.length === 0) {
+        summaryCard.style.display = 'none';
+        return;
+    }
+
+    summaryCard.style.display = 'block';
+    const totalQty = products.reduce((sum, p) => sum + p.quantity, 0);
+
+    summaryContent.innerHTML = `
+        <p><strong>{% trans "Nombre de produits" %}:</strong> ${products.length}</p>
+        <p><strong>{% trans "Total unités" %}:</strong> ${totalQty}</p>
+        <div class="table-responsive">
+            <table class="table table-sm">
+                <thead><tr><th>Référence</th><th>Produit</th><th class="text-right">Quantité</th></tr></thead>
+                <tbody>
+                    ${products.map(p => `<tr><td><code>${p.reference}</code></td><td>${p.designation}</td><td class="text-right"><strong>${p.quantity}</strong></td></tr>`).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+
+    // Préparer les données pour soumission
+    const data = products.map(p => `${p.reference},${p.quantity}`).join('\n');
+    document.getElementById('produitsData').value = data;
+}
+
+// Validation avant soumission
+document.getElementById('chargerVanForm').addEventListener('submit', function(e) {
+    updateSummary();
+    const data = document.getElementById('produitsData').value;
+    if (!data || data.trim() === '') {
+        e.preventDefault();
+        alert('{% trans "Veuillez ajouter au moins un produit" %}');
+        return false;
+    }
+});
+
+// Exposer les fonctions nécessaires globalement pour les event handlers inline
+window.addProductRow = addProductRow;
+window.updateStock = updateStock;
+window.removeRow = removeRow;
+window.addScannedProduct = addScannedProduct;
+window.updateScannedQuantity = updateScannedQuantity;
+window.removeScannedProduct = removeScannedProduct;
+window.toggleProduct = toggleProduct;
+window.adjustQuantity = adjustQuantity;
+window.setQuantity = setQuantity;
+window.updateCheckboxQuantity = updateCheckboxQuantity;
+window.selectAllProducts = selectAllProducts;
+window.deselectAllProducts = deselectAllProducts;
+window.clearSearch = clearSearch;
+window.importFromText = importFromText;
+
+})(); // End of IIFE
+</script>
+
+<style>
+.nav-tabs .nav-link {
+    color: #495057;
+    border: 1px solid transparent;
+}
+.nav-tabs .nav-link.active {
+    color: #2563eb;
+    background-color: #fff;
+    border-color: #dee2e6 #dee2e6 #fff;
+    font-weight: 600;
+}
+.nav-tabs .nav-link:hover {
+    border-color: #e9ecef #e9ecef #dee2e6;
+}
+.custom-control-label {
+    cursor: pointer;
+    user-select: none;
+}
+</style>

@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  {% load static %}
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <title>Market - Connexion</title>
+  <meta name="theme-color" content="#0f172a">
+
+  <!-- Bootstrap (CDN) -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-xOolHFLEh07PJGoPkLv1Ibc5jZ1aQZr3IChmQZ6WZ5n2e5nDkLtS3qm9Ekf7bW0K" crossorigin="anonymous">
+  <!-- Font Awesome (CDN) -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" rel="stylesheet" integrity="sha512-dYzI7vZ2J4aYHpmvFjQxJXVgYtYtY0eC1mGQyE6l6czVw4GgI1g1C2kKQz3g8rYlQXx0x6xG8mM2Jqg4lB6S/Q==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+  <!-- Page-specific stylesheet -->
+  <link href="{% static 'style/login.css' %}" rel="stylesheet">
+
+  <!-- Page-specific styles moved to static/style/login.css -->
+</head>
+<body class="login-page">
+  <span class="bg-bubble b1"></span>
+  <span class="bg-bubble b2"></span>
+
+  <div class="login-card">
+    <div class="login-header">
+      <div class="brand-icon">
+        <img src="{% static 'img/iconRemovebg.png' %}" alt="Logo" />
+      </div>
+      <h1 class="h4 login-title mb-0">Gestion de Stock</h1>
+      <p class="login-subtitle mb-0">Connectez-vous pour continuer</p>
+    </div>
+
+    <div class="login-body">
+      <h2 class="login-welcome">Bon retour !</h2>
+      <p class="login-desc">Veuillez vous connecter pour accéder au tableau de bord.</p>
+
+      {% if messages %}
+        <div aria-live="polite" aria-atomic="true">
+          {% for message in messages %}
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+              <i class="fas fa-exclamation-triangle mr-1" aria-hidden="true"></i> {{ message }}
+              <button type="button" class="close" data-dismiss="alert" aria-label="Fermer">
+                <span aria-hidden="true">&times;</span>
+              </button>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      <form action="/" method="POST" id="checkLogin" novalidate>
+        {% csrf_token %}
+
+        <div class="form-group">
+          <label for="email" class="form-label">Identifiant</label>
+          <div class="input-with-icon">
+            <i class="fas fa-user input-icon-left" aria-hidden="true"></i>
+            <input class="form-control" type="text" id="email" name="username" placeholder="Votre identifiant" autocomplete="username" required aria-describedby="username-help">
+          </div>
+          <small id="username-help" class="form-text text-muted" style="margin-top:8px;">Votre nom d’utilisateur ou email.</small>
+        </div>
+
+        <div class="form-group">
+          <label for="password" class="form-label">Mot de passe</label>
+          <div class="input-with-icon" id="password_group">
+            <i class="fas fa-lock input-icon-left" aria-hidden="true"></i>
+            <input class="form-control" type="password" id="password" name="password" placeholder="Votre mot de passe" autocomplete="current-password" required>
+            <button type="button" class="input-icon-right btn-icon" id="toggle_pwd" title="Afficher/Masquer" aria-label="Afficher le mot de passe" aria-pressed="false"><i class="far fa-eye" aria-hidden="true"></i></button>
+          </div>
+        </div>
+
+        <div class="inline-actions">
+          <div class="custom-control custom-checkbox">
+            <input type="checkbox" class="custom-control-input" id="remember_me">
+            <label class="custom-control-label" for="remember_me">Se souvenir de moi</label>
+          </div>
+          <a href="#" class="link">Mot de passe oublié ?</a>
+        </div>
+
+        <button id="connect" name="btn_submit" class="btn btn-login" type="submit">
+          Se connecter
+        </button>
+
+        <p class="text-muted" style="margin-top:32px; font-size:14px;">Besoin d’aide ? Contactez l’administrateur.</p>
+      </form>
+    </div>
+
+    <div class="login-footer">
+      <small><i class="fas fa-lock lock" aria-hidden="true"></i> © {% now "Y" %} Market • Sécurité renforcée</small>
+    </div>
+  </div>
+
+  <!-- Scripts (CDN) -->
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-/xUj+3OJ+Y7B1h7K1QvYkBqDk9Ij/m4D4ew3Efr2E1w=" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-Fy6S3B9q64WdZWQUiU+q4/2LcWsCw3on3z7mrFh1NQ1ZbE+6tZ0Q5Iw5yXW4ZlZr" crossorigin="anonymous"></script>
+  <script>
+    (function(){
+      var toggler = document.getElementById('toggle_pwd');
+      var input = document.getElementById('password');
+      var form = document.getElementById('checkLogin');
+      var btn = document.getElementById('connect');
+
+      if (toggler && input){
+        toggler.addEventListener('click', function(){
+          var icon = this.querySelector('i');
+          var isHidden = input.type === 'password';
+          input.type = isHidden ? 'text' : 'password';
+          this.setAttribute('aria-pressed', isHidden ? 'true' : 'false');
+          if(icon){ icon.classList.toggle('fa-eye'); icon.classList.toggle('fa-eye-slash'); }
+        });
+      }
+
+      if (form) {
+        form.addEventListener('submit', function(){
+          if (btn){
+            btn.disabled = true;
+            btn.innerHTML = '<span class="btn-spinner" aria-hidden="true"></span>Connexion...';
+          }
+        });
+      }
+    })();
+  </script>
+</body>
+</html>

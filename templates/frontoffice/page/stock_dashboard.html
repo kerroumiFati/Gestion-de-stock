@@ -1,0 +1,117 @@
+{% load static %}
+{% load i18n %}
+
+<div class="container-fluid">
+    <div class="card bg-white">
+        <div class="card-header card-color">
+            <p class="h4 text-center text-uppercase font-weight-bold pt-2">
+                <i class="fa fa-chart-bar"></i> {% trans "Tableau de Bord des Vans" %}
+            </p>
+        </div>
+        <div class="card-body">
+            {% if van_stats %}
+            <div class="row">
+                {% for stat in van_stats %}
+                <div class="col-md-6 col-lg-4 mb-3">
+                    <div class="card border">
+                        <div class="card-header bg-primary text-white">
+                            <h5 class="mb-0">
+                                <i class="fa fa-truck"></i> {{ stat.van.code }}
+                            </h5>
+                            {% if stat.livreur %}
+                            <small><i class="fa fa-user"></i> {{ stat.livreur.nom }}</small>
+                            {% else %}
+                            <small><i class="fa fa-exclamation-triangle"></i> Non assigné</small>
+                            {% endif %}
+                        </div>
+                        <div class="card-body p-2">
+                            <table class="table table-sm table-borderless mb-2">
+                                <tr>
+                                    <td><strong>Produits:</strong></td>
+                                    <td class="text-right">{{ stat.total_produits }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Unités:</strong></td>
+                                    <td class="text-right">{{ stat.total_quantite }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Valeur:</strong></td>
+                                    <td class="text-right">{{ stat.valeur_stock|floatformat:0 }} {{ currency.symbol|default:"€" }}</td>
+                                </tr>
+                            </table>
+
+                            {% if stat.nb_alertes > 0 %}
+                            <div class="alert alert-warning py-1 px-2 mb-2">
+                                <small><i class="fa fa-exclamation-triangle"></i> {{ stat.nb_alertes }} produit(s) en alerte</small>
+                            </div>
+                            {% endif %}
+
+                            {% if stat.stocks %}
+                            <div style="max-height: 200px; overflow-y: auto;">
+                                <table class="table table-sm table-striped mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Produit</th>
+                                            <th class="text-right">Qté</th>
+                                            <th class="text-center">Statut</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for stock in stat.stocks %}
+                                        <tr>
+                                            <td><small>{{ stock.produit.reference }}</small></td>
+                                            <td class="text-right"><strong>{{ stock.quantity }}</strong></td>
+                                            <td class="text-center">
+                                                {% if stock.quantity <= 0 %}
+                                                <span class="badge badge-danger badge-sm">Vide</span>
+                                                {% elif stock.quantity <= stock.produit.seuil_critique %}
+                                                <span class="badge badge-danger badge-sm">Critique</span>
+                                                {% elif stock.quantity <= stock.produit.seuil_alerte %}
+                                                <span class="badge badge-warning badge-sm">Bas</span>
+                                                {% else %}
+                                                <span class="badge badge-success badge-sm">OK</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                                {% if stat.total_produits > 10 %}
+                                <p class="text-center text-muted mb-0 mt-1">
+                                    <small>+ {{ stat.total_produits|add:"-10" }} autres produits</small>
+                                </p>
+                                {% endif %}
+                            </div>
+                            {% else %}
+                            <p class="text-center text-muted mb-0">
+                                <i class="fa fa-box-open fa-2x d-block mb-2"></i>
+                                <small>Van vide</small>
+                            </p>
+                            {% endif %}
+                        </div>
+                        <div class="card-footer p-2">
+                            <div class="btn-group btn-group-sm w-100">
+                                <a href="{% url 'charger_van' %}" class="btn btn-primary">
+                                    <i class="fa fa-plus"></i> Charger
+                                </a>
+                                <a href="{% url 'stocks_list' %}?entrepot={{ stat.van.id }}" class="btn btn-secondary">
+                                    <i class="fa fa-list"></i> Détails
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="alert alert-info text-center">
+                <h5><i class="fa fa-info-circle"></i> Aucun van configuré</h5>
+                <p>Créez des entrepôts avec un code commençant par "VAN" pour les voir apparaître ici.</p>
+                <a href="{% url 'entrepots_list' %}" class="btn btn-primary">
+                    <i class="fa fa-warehouse"></i> Gérer les entrepôts
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>

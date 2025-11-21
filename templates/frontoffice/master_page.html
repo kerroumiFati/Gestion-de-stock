@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+{% load i18n %}
+{% load static %}
+{% get_current_language as LANGUAGE_CODE %}
+<html lang="{{ LANGUAGE_CODE|default:'fr' }}" dir="{% if LANGUAGE_CODE == 'ar' %}rtl{% else %}ltr{% endif %}"
+
+<head>
+    <meta charset="UTF-8">
+    <title>{% trans "Market" %}</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E📦%3C/text%3E%3C/svg%3E">
+
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" rel="stylesheet">
+    <!-- Material Design Icons -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/material-design-iconic-font/2.2.0/css/material-design-iconic-font.min.css" rel="stylesheet">
+    <!-- DataTables CSS -->
+    <link href="https://cdn.datatables.net/1.11.5/css/dataTables.bootstrap4.min.css" rel="stylesheet">
+    <!-- Select2 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap4-theme@1.5.2/dist/select2-bootstrap4.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'style/select2-custom.css' %}">
+
+    <link rel="stylesheet" href="{% static 'style/style.css' %}">
+    <link rel="stylesheet" href="{% static 'style/theme.css' %}">
+    <link rel="stylesheet" href="{% static 'style/sidebar-improvements.css' %}">
+    <!-- Hamburger Menu CSS -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/hamburgers/1.1.3/hamburgers.min.css" rel="stylesheet">
+
+    <link rel="stylesheet" href="{% static 'style/main.css' %}">
+    <link rel="stylesheet" href="{% static 'style/tables.css' %}">
+    <link rel="stylesheet" href="{% static 'style/components.css' %}">
+    <link rel="stylesheet" href="{% static 'style/stock-management.css' %}">
+    <!-- Responsive CSS -->
+    <link rel="stylesheet" href="{% static 'style/responsive.css' %}">
+    <!-- RTL CSS for Arabic -->
+    {% if LANGUAGE_CODE == 'ar' %}
+    <link rel="stylesheet" href="{% static 'style/rtl.css' %}">
+    {% endif %}
+
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <!-- Popper.js -->
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script>
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/js/bootstrap.min.js"></script>
+    <!-- DataTables JS -->
+    <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.11.5/js/dataTables.bootstrap4.min.js"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Select2 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+    <link rel="icon" href="{% static 'img/no-photo.png' %}" type="image/png">
+
+    <!-- Critical Responsive Styles (inline fallback) -->
+    <style>
+        /* Mobile First - Critical Styles */
+        @media (max-width: 767px) {
+            /* Sidebar mobile */
+            .sidebar-wrapper {
+                position: fixed !important;
+                left: -260px !important;
+                top: 0 !important;
+                bottom: 0 !important;
+                width: 260px !important;
+                z-index: 1050 !important;
+                transition: left 0.3s ease !important;
+            }
+
+            .page-wrapper.toggled .sidebar-wrapper {
+                left: 0 !important;
+            }
+
+            .page-content {
+                margin-left: 0 !important;
+                width: 100% !important;
+                padding: 10px !important;
+            }
+
+            #show-sidebar {
+                display: block !important;
+                position: fixed !important;
+                top: 10px !important;
+                left: 10px !important;
+                z-index: 1040 !important;
+            }
+
+            /* Overlay */
+            .page-wrapper.toggled::before {
+                content: '' !important;
+                position: fixed !important;
+                inset: 0 !important;
+                background: rgba(0,0,0,0.5) !important;
+                z-index: 1049 !important;
+            }
+
+            /* Tables */
+            .table-responsive {
+                overflow-x: auto !important;
+                -webkit-overflow-scrolling: touch !important;
+            }
+
+            table {
+                font-size: 0.85rem !important;
+                min-width: 100% !important;
+            }
+
+            table th, table td {
+                padding: 0.5rem !important;
+                white-space: nowrap !important;
+            }
+
+            /* Cards empilées */
+            .row > [class*="col-"] {
+                flex: 0 0 100% !important;
+                max-width: 100% !important;
+                margin-bottom: 15px !important;
+            }
+
+            /* Formulaires */
+            .modal-dialog {
+                margin: 0.5rem !important;
+                max-width: calc(100% - 1rem) !important;
+            }
+
+            .form-control, .btn {
+                font-size: 0.9rem !important;
+            }
+
+            /* Boutons */
+            .btn-group {
+                display: flex !important;
+                flex-wrap: wrap !important;
+                gap: 5px !important;
+            }
+
+            /* Sidebar menu */
+            .sidebar-menu ul li a {
+                padding: 10px 15px !important;
+                font-size: 0.95rem !important;
+            }
+
+            /* Container */
+            .container-fluid {
+                padding-left: 10px !important;
+                padding-right: 10px !important;
+            }
+
+            /* DataTables */
+            .dataTables_wrapper {
+                overflow-x: auto !important;
+            }
+
+            .dataTables_length, .dataTables_filter {
+                margin-bottom: 10px !important;
+            }
+
+            /* Cards */
+            .card {
+                margin-bottom: 15px !important;
+            }
+
+            .card-body {
+                padding: 15px !important;
+            }
+        }
+
+        /* Tablet */
+        @media (min-width: 768px) and (max-width: 1023px) {
+            .row > .col-md-3, .row > .col-lg-3 {
+                flex: 0 0 50% !important;
+                max-width: 50% !important;
+            }
+        }
+
+        /* Desktop - Position toggle button after sidebar */
+        @media (min-width: 768px) {
+            .sidebar-wrapper {
+                /* Sidebar visible by default on desktop */
+            }
+
+            /* Position toggle button just after sidebar with spacing */
+            #show-sidebar {
+                display: block !important;
+                position: fixed !important;
+                top: 15px !important;
+                left: 275px !important; /* 260px sidebar + 15px spacing */
+                z-index: 1060 !important;
+                transition: left 0.3s ease !important;
+            }
+
+            /* When sidebar is hidden, move button to the left edge */
+            .page-wrapper:not(.toggled) #show-sidebar {
+                left: 15px !important;
+            }
+        }
+
+        /* Sidebar Dropdown Styles */
+        .sidebar-dropdown > a.dropdown-toggle {
+            display: flex !important;
+            align-items: center;
+            gap: 12px;
+            position: relative;
+        }
+
+        .sidebar-dropdown > a.dropdown-toggle i.arrow {
+            margin-left: auto;
+            font-size: 10px;
+            transition: transform .25s ease;
+        }
+
+        .sidebar-dropdown.active > a.dropdown-toggle i.arrow {
+            transform: rotate(-180deg);
+        }
+
+        .sidebar-submenu {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height .3s ease;
+            background: rgba(0,0,0,.15);
+            border-radius: 8px;
+            margin-top: 4px;
+        }
+
+        .sidebar-dropdown.active .sidebar-submenu {
+            max-height: 500px !important;
+            padding: 6px 0 !important;
+        }
+
+        .sidebar-submenu li {
+            margin: 0;
+        }
+
+        .sidebar-submenu li a {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 12px 8px 40px;
+            color: #9ca3af;
+            text-decoration: none;
+            font-size: 13px;
+            transition: all .2s ease;
+            border-radius: 6px;
+            margin: 0 6px;
+        }
+
+        .sidebar-submenu li a:hover {
+            background: rgba(59,130,246,.15);
+            color: #e5e7eb;
+            padding-left: 44px;
+        }
+
+        .sidebar-submenu li a i {
+            width: 16px;
+            text-align: center;
+            font-size: 12px;
+        }
+
+        .sidebar-submenu li a:hover i {
+            color: #3b82f6;
+        }
+    </style>
+</head>
+<body>
+<div class="page-wrapper chiller-theme toggled">
+    <a id="show-sidebar" class="btn btn-sm btn-dark" href="#"> <i
+            class="fas fa-bars"></i>
+    </a>
+    <nav id="sidebar" class="sidebar-wrapper">
+        <div class="sidebar-content">
+            <div class="sidebar-brand">
+                <a href="./" class="h2 pt-2">{% trans "Market" %}</a>
+                <div id="close-sidebar">
+                    <i class="fas fa-times"></i>
+                </div>
+            </div>
+            <div class="sidebar-header">
+                <div class="user-pic">
+                    <img class="img-responsive img-rounded" src="{% static 'img/no-photo.png' %}"
+                         alt="User picture">
+                </div>
+                <div class="user-info">
+						<span class="user-name"> <strong>Admin </strong>
+						</span> <span class="user-role">Admin</span> 
+                </div>
+                <div class="user-actions ml-auto">
+                  <div class="dropdown">
+                    <button class="btn btn-outline-secondary position-relative" type="button" id="alertsDropdownClassic" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                        <i class="fas fa-bell"></i>
+                        <span class="badge badge-danger" id="notification-count-classic" style="position:absolute; top:-6px; right:-6px; display:none;">0</span>
+                    </button>
+                    <div class="dropdown-menu dropdown-menu-right" aria-labelledby="alertsDropdownClassic">
+                        <h6 class="dropdown-header">Notifications</h6>
+                        <div id="alerts-items-classic"></div>
+                        <div class="dropdown-divider"></div>
+                        <a class="dropdown-item text-center" href="#" onclick="show('statistiques');return false;">Voir toutes</a>
+                    </div>
+                  </div>
+                </div>
+           </div>
+           <!-- notifications area moved next to user info -->
+           <!-- sidebar-header  -->
+
+            <!-- sidebar-search  -->
+            <div class="sidebar-menu">
+                <ul>
+                    <li class="sidebar-dropdown">
+                        <a href="#" class="dropdown-toggle sidebar-item">
+                            <i class="fas fa-handshake"></i><span>{% trans "Commercial" %}</span>
+                            <i class="fas fa-chevron-down arrow"></i>
+                        </a>
+                        <ul class="sidebar-submenu">
+                            <li><a href="#" onclick="show('achat');return false;">
+                                <i class="fas fa-shopping-bag"></i>{% trans "Achats" %}
+                            </a></li>
+                            <li><a href="#" onclick="show('vente');return false;">
+                                <i class="fas fa-shopping-cart"></i>{% trans "Ventes" %}
+                            </a></li>
+                            <li><a href="/caisse/">
+                                <i class="fas fa-cash-register"></i>{% trans "Caisse" %}
+                            </a></li>
+                            <li><a href="#" onclick="show('facture');return false;">
+                                <i class="fas fa-file-invoice"></i>{% trans "Factures" %}
+                            </a></li>
+                        </ul>
+                    </li>
+
+                    <li class="sidebar-dropdown">
+                        <a href="#" class="dropdown-toggle sidebar-item">
+                            <i class="fas fa-database"></i><span>{% trans "Gestion des données" %}</span>
+                            <i class="fas fa-chevron-down arrow"></i>
+                        </a>
+                        <ul class="sidebar-submenu">
+                            <li><a href="#" onclick="show('produit');return false;">
+                                <i class="fas fa-box"></i>{% trans "Produits" %}
+                            </a></li>
+                            <li><a href="#" onclick="show('client');return false;">
+                                <i class="fas fa-users"></i>{% trans "Clients" %}
+                            </a></li>
+                            <li><a href="#" onclick="show('fournisseur');return false;">
+                                <i class="fas fa-truck"></i>{% trans "Fournisseurs" %}
+                            </a></li>
+                            <li><a href="#" onclick="show('categorie');return false;">
+                                <i class="fas fa-tags"></i>{% trans "Catégories" %}
+                            </a></li>
+                            <li><a href="#" onclick="show('entrepots');return false;">
+                                <i class="fas fa-warehouse"></i>{% trans "Entrepôts" %}
+                            </a></li>
+                        </ul>
+                    </li>
+
+                    <li class="sidebar-dropdown">
+                        <a href="#" class="dropdown-toggle sidebar-item">
+                            <i class="fas fa-boxes"></i><span>{% trans "Gestion de stock" %}</span>
+                            <i class="fas fa-chevron-down arrow"></i>
+                        </a>
+                        <ul class="sidebar-submenu">
+                            <li><a href="#" onclick="show('inventaire')";return false;">
+                                <i class="fas fa-clipboard-check"></i>{% trans "Inventaire" %}
+                            </a></li>
+                            <li><a href="#" onclick="show('mouvements')";return false;">
+                                <i class="fas fa-exchange-alt"></i>{% trans "Mouvements" %}
+                            </a></li>
+                            <li><a href="#" onclick="show('entrepots_list')";return false;">
+                                <i class="fas fa-warehouse"></i>{% trans "Entrepôts & Vans" %}
+                            </a></li>
+                            <li><a href="#" onclick="show('stocks_list')";return false;">
+                                <i class="fas fa-layer-group"></i>{% trans "Stocks par entrepôt" %}
+                            </a></li>
+                            <li><a href="#" onclick="show('transferts_list')";return false;">
+                                <i class="fas fa-dolly"></i>{% trans "Liste des transferts" %}
+                            </a></li>
+                            <li><a href="#" onclick="show('charger_van')";return false;">
+                                <i class="fas fa-truck-loading"></i>{% trans "Charger un van" %}
+                            </a></li>
+                            <li><a href="#" onclick="show('stock_dashboard')";return false;">
+                                <i class="fas fa-chart-bar"></i>{% trans "Tableau de bord vans" %}
+                            </a></li>
+                        </ul>
+                    </li>
+
+                    <!-- Distribution Module (top-level) -->
+                    <li class="sidebar-dropdown">
+                        <a href="#" class="dropdown-toggle sidebar-item">
+                            <i class="fas fa-truck"></i><span>{% trans "Distribution" %}</span>
+                            <i class="fas fa-chevron-down arrow"></i>
+                        </a>
+                        <ul class="sidebar-submenu">
+                            <li><a href="/admindash/livreurs" class="sidebar-item" onclick="show('livreurs');return false;">
+                                <i class="fas fa-id-badge"></i>{% trans "Livreurs" %}
+                            </a></li>
+                            <li><a href="/admindash/tournees" class="sidebar-item" onclick="show('tournees');return false;">
+                                <i class="fas fa-route"></i>{% trans "Tournées" %}
+                            </a></li>
+                            <li><a href="/admindash/commandes-mobile" class="sidebar-item" onclick="show('commandes_clients_mobile');return false;">
+                                <i class="fas fa-shopping-cart"></i>{% trans "Commandes Clients Mobile" %}
+                            </a></li>
+                            <li><a href="/admindash/distribution" class="sidebar-item" onclick="show('distribution_dashboard');return false;">
+                                <i class="fas fa-chart-pie"></i>{% trans "Tableau de bord Distribution" %}
+                            </a></li>
+                            <li><a href="/admindash/config-clients-chauffeurs" class="sidebar-item" onclick="show('config_clients_chauffeurs');return false;">
+                                <i class="fas fa-users-cog"></i>{% trans "Configuration Clients/Chauffeurs" %}
+                            </a></li>
+                            <li><a href="/livreur/app" class="sidebar-item" onclick="show('livreur_mobile');return false;">
+                                <i class="fas fa-mobile-alt"></i>{% trans "Application Mobile Livreurs" %}
+                            </a></li>
+                            <li><a href="/admindash/livreurs-map/" class="sidebar-item">
+                                <i class="fas fa-map-marked-alt"></i>{% trans "Carte GPS Livreurs" %}
+                            </a></li>
+                        </ul>
+                    </li>
+
+                    <li class="sidebar-dropdown">
+                        <a href="#" class="dropdown-toggle sidebar-item">
+                            <i class="fas fa-chart-line"></i><span>{% trans "Rapports & Analyses" %}</span>
+                            <i class="fas fa-chevron-down arrow"></i>
+                        </a>
+                        <ul class="sidebar-submenu">
+                            <li><a href="#" onclick="show('statistiques')";return false;">
+                                <i class="fas fa-chart-bar"></i>{% trans "Statistiques" %}
+                            </a></li>
+                            <li><a href="#" onclick="show('rapports')";return false;">
+                                <i class="fas fa-file-export"></i>{% trans "Rapports" %}
+                            </a></li>
+                            {% if user.is_staff %}
+                            <li><a href="/audit-logs/">
+                                <i class="fas fa-clipboard-list"></i>{% trans "Journaux d'audit" %}
+                            </a></li>
+                            {% endif %}
+                        </ul>
+                    </li>
+
+                    <li><a href="#" onclick="show('import')" class="sidebar-item">
+                        <i class="fas fa-file-import"></i><span>{% trans "Import de données" %}</span>
+                    </a></li>
+
+                    <li><a href="#" onclick="show('parametres')" class="sidebar-item">
+                        <i class="fas fa-cogs"></i><span>{% trans "Paramètres" %}</span>
+                    </a></li>
+
+                    {% if user.is_staff %}
+                    <li class="header-menu"><span>{% trans "ADMINISTRATION" %}</span></li>
+                    <li><a href="#" onclick="show('admin')" class="sidebar-item">
+                        <i class="fas fa-tools"></i><span>{% trans "Tableau de bord Admin" %}</span>
+                    </a></li>
+                    <li><a href="/users-admin/" class="sidebar-item">
+                        <i class="fas fa-user-shield"></i><span>{% trans "Utilisateurs" %}</span>
+                    </a></li>
+                    {% endif %}
+                </ul>
+            </div>
+
+            <!-- sidebar-menu  -->
+        </div>
+        <!-- sidebar-content  -->
+        <div class="sidebar-footer">
+            <a href="/logout/" class="logout-link">
+                <i class="fa fa-power-off"></i>
+                <span>{% trans "Déconnexion" %}</span>
+            </a>
+        </div>
+    </nav>
+    <!-- sidebar-wrapper  -->
+    <main class="page-content">
+        <div class="container-fluid" id="main-content">
+
+        </div>
+    </main>
+    <!-- page-content" -->
+</div>
+<!-- page-wrapper -->
+<script src="{% static 'script/redirect.js' %}"></script>
+<script src="{% static 'js/main.js' %}"></script>
+<script src="{% static 'js/sidebar-enhancements.js' %}"></script>
+<!-- Initialisation globale de Select2 -->
+<script src="{% static 'script/select2-init.js' %}"></script>
+<script>
+(async function loadAlertsClassic(){
+ try{
+   const res = await fetch('/API/alerts/');
+   if(!res.ok) throw new Error('HTTP '+res.status);
+   const data = await res.json();
+   const count = data.counts && data.counts.total || 0;
+   const badge = document.getElementById('notification-count-classic');
+   if(badge){
+     badge.textContent = count;
+     badge.style.display = count>0 ? 'inline-block' : 'none';
+   }
+   const container = document.getElementById('alerts-items-classic');
+   if(container){
+     container.innerHTML = '';
+     const items = data.items || [];
+     if(items.length===0){
+       container.innerHTML = '<span class="dropdown-item text-muted">Aucune alerte</span>';
+     } else {
+       items.forEach(it=>{
+         const icon = it.level==='rupture' ? 'fas fa-times-circle text-danger' : (it.level==='critique' ? 'fas fa-exclamation-triangle text-warning' : 'fas fa-info-circle text-info');
+         const a = document.createElement('a');
+         a.className = 'dropdown-item';
+         a.href = '#';
+         a.onclick = function(){ show('produit'); return false; };
+         a.innerHTML = `<i class="${icon} mr-2"></i>${it.reference || ''} - ${it.designation || ''} (${it.quantite})`;
+         container.appendChild(a);
+       });
+     }
+   }
+ }catch(e){
+   console.warn('loadAlertsClassic failed', e);
+ }
+})();
+</script>
+
+<script>
+// Sidebar Dropdown Management
+jQuery(document).ready(function($) {
+    console.log('[Sidebar Dropdown] Initializing...');
+
+    // Handle dropdown toggle clicks
+    $('.sidebar-dropdown > .dropdown-toggle').on('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        console.log('[Sidebar Dropdown] Dropdown clicked');
+
+        var $parent = $(this).parent('.sidebar-dropdown');
+        var isActive = $parent.hasClass('active');
+
+        // Close all other dropdowns (accordion behavior)
+        $('.sidebar-dropdown.active').removeClass('active');
+
+        // Toggle current dropdown
+        if (!isActive) {
+            $parent.addClass('active');
+            console.log('[Sidebar Dropdown] Opened dropdown');
+        } else {
+            console.log('[Sidebar Dropdown] Closed dropdown');
+        }
+
+        return false;
+    });
+
+    // Prevent submenu links from closing the dropdown
+    $('.sidebar-submenu a').on('click', function(e) {
+        e.stopPropagation();
+        // Link action will work normally
+    });
+
+    console.log('[Sidebar Dropdown] Found ' + $('.sidebar-dropdown').length + ' dropdowns');
+    console.log('[Sidebar Dropdown] Initialization complete');
+});
+</script>
+</body>
+</html>

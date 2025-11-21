@@ -1,0 +1,152 @@
+/**
+ * Modern Theme Styles
+ */
+
+/* Modern Header */
+.modern-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.5rem;
+    background: #fff;
+    border-bottom: 1px solid #e5e7eb;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    position: sticky;
+    top: 0;
+    z-index: 1030;
+}
+
+.header-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #1f2937;
+    margin: 0;
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Sidebar Menu Toggle Button */
+.sidebar-menu-toggle,
+#sidebar-menu-toggle {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border: none !important;
+    background: none !important;
+    color: #1f2937 !important;
+    font-size: 1.5rem;
+    cursor: pointer;
+    border-radius: 0.5rem;
+    transition: all 0.2s ease;
+    padding: 0 !important;
+    margin: 0 !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+.sidebar-menu-toggle:hover {
+    background: #f3f4f6 !important;
+    color: #3b82f6 !important;
+}
+
+.sidebar-menu-toggle:active {
+    background: #e5e7eb !important;
+}
+
+/* Modern Content Area */
+.modern-content {
+    padding: 1.5rem;
+    background: #f9fafb;
+    min-height: calc(100vh - 80px);
+}
+
+/* Modern Card */
+.modern-card {
+    background: #fff;
+    border-radius: 0.75rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    margin-bottom: 1.5rem;
+}
+
+.modern-card-header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.modern-card-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #1f2937;
+    margin: 0;
+}
+
+.modern-card-body {
+    padding: 1.5rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .modern-header {
+        padding: 0.75rem 1rem;
+    }
+
+    .header-title {
+        font-size: 1.25rem;
+    }
+
+    .modern-content {
+        padding: 1rem;
+    }
+}
+
+/* Ensure toggle button is always visible on all screen sizes */
+@media (min-width: 769px) {
+    .sidebar-menu-toggle,
+    #sidebar-menu-toggle {
+        display: inline-flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+    }
+}
+
+/* Dark theme support */
+[data-theme="dark"] .modern-header {
+    background: #1f2937;
+    border-bottom-color: #374151;
+}
+
+[data-theme="dark"] .header-title {
+    color: #f9fafb;
+}
+
+[data-theme="dark"] .sidebar-menu-toggle {
+    color: #f9fafb !important;
+}
+
+[data-theme="dark"] .sidebar-menu-toggle:hover {
+    background: #374151 !important;
+    color: #60a5fa !important;
+}
+
+[data-theme="dark"] .modern-content {
+    background: #111827;
+}
+
+[data-theme="dark"] .modern-card {
+    background: #1f2937;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] .modern-card-header {
+    border-bottom-color: #374151;
+}
+
+[data-theme="dark"] .modern-card-title {
+    color: #f9fafb;
+}

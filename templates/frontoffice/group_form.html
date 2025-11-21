@@ -1,0 +1,264 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ title }} - UltraThink</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+  <style>
+    body {
+      background: #f7fafc;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+
+    .admin-sidebar {
+      position: fixed;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 260px;
+      background: #2d3748;
+      color: white;
+      padding: 20px 0;
+      overflow-y: auto;
+      z-index: 1000;
+      box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+    }
+
+    .admin-sidebar-header {
+      padding: 0 20px 20px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      margin-bottom: 20px;
+    }
+
+    .admin-sidebar-header h4 {
+      color: white;
+      font-weight: 600;
+      margin: 0;
+      font-size: 1.2rem;
+    }
+
+    .sidebar-menu {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .sidebar-menu-link {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 20px;
+      color: #cbd5e0;
+      text-decoration: none;
+      transition: all 0.2s;
+      border-left: 3px solid transparent;
+    }
+
+    .sidebar-menu-link:hover {
+      background: rgba(255,255,255,0.05);
+      color: white;
+      text-decoration: none;
+    }
+
+    .sidebar-menu-link.active {
+      background: rgba(255,255,255,0.1);
+      color: white;
+      border-left-color: #4299e1;
+      font-weight: 600;
+    }
+
+    .sidebar-menu-link i {
+      width: 20px;
+      text-align: center;
+    }
+
+    .admin-content {
+      margin-left: 260px;
+      padding: 30px;
+      min-height: 100vh;
+    }
+
+    .page-header {
+      background: white;
+      border-radius: 10px;
+      padding: 25px 30px;
+      margin-bottom: 30px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      border: 1px solid #e2e8f0;
+    }
+
+    .page-title {
+      font-size: 1.8rem;
+      font-weight: 600;
+      color: #2d3748;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .modern-section {
+      background: white;
+      border-radius: 10px;
+      padding: 30px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      border: 1px solid #e2e8f0;
+    }
+
+    .form-group label {
+      font-weight: 500;
+      color: #4a5568;
+      margin-bottom: 8px;
+      display: block;
+    }
+
+    .form-group input[type="text"] {
+      border: 1px solid #cbd5e0;
+      border-radius: 6px;
+      padding: 12px 15px;
+      width: 100%;
+      transition: all 0.2s ease;
+      font-size: 1rem;
+    }
+
+    .form-group input:focus {
+      border-color: #4a5568;
+      box-shadow: 0 0 0 3px rgba(74, 85, 104, 0.1);
+      outline: none;
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 15px;
+      padding-top: 20px;
+      border-top: 2px solid #e2e8f0;
+      margin-top: 30px;
+    }
+
+    .modern-btn {
+      border-radius: 8px;
+      padding: 12px 30px;
+      font-weight: 600;
+      font-size: 1rem;
+      transition: all 0.3s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      border: none;
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    .modern-btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    }
+
+    .modern-btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+      color: white;
+      text-decoration: none;
+    }
+
+    .modern-btn-secondary {
+      background: #e2e8f0;
+      color: #2d3748;
+      border: 2px solid #cbd5e0;
+    }
+
+    .modern-btn-secondary:hover {
+      background: #cbd5e0;
+      color: #2d3748;
+      border-color: #a0aec0;
+      transform: translateY(-1px);
+      text-decoration: none;
+    }
+
+    .modern-btn i {
+      font-size: 1.1rem;
+    }
+  </style>
+</head>
+<body>
+  <!-- Sidebar -->
+  <div class="admin-sidebar">
+    <div class="admin-sidebar-header">
+      <h4><i class="fa fa-shield-alt"></i> Administration</h4>
+      <small>Gestion des accès</small>
+    </div>
+    <ul class="sidebar-menu">
+      <li class="sidebar-menu-item">
+        <a href="/users-admin/" class="sidebar-menu-link">
+          <i class="fa fa-users"></i>
+          <span>Utilisateurs</span>
+        </a>
+      </li>
+      <li class="sidebar-menu-item">
+        <a href="/roles-admin/" class="sidebar-menu-link active">
+          <i class="fa fa-user-tag"></i>
+          <span>Rôles / Groupes</span>
+        </a>
+      </li>
+      <li class="sidebar-menu-item">
+        <a href="/audit-logs/" class="sidebar-menu-link">
+          <i class="fa fa-history"></i>
+          <span>Journal d'audit</span>
+        </a>
+      </li>
+      <li class="sidebar-menu-item" style="margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px;">
+        <a href="/admindash/" class="sidebar-menu-link">
+          <i class="fa fa-arrow-left"></i>
+          <span>Retour au dashboard</span>
+        </a>
+      </li>
+    </ul>
+  </div>
+
+  <!-- Main Content -->
+  <div class="admin-content">
+    <div class="page-header">
+      <h1 class="page-title">
+        <i class="fa fa-user-tag"></i>
+        {{ title }}
+      </h1>
+    </div>
+
+    <div class="modern-section">
+      <form method="post">
+        {% csrf_token %}
+
+        <div class="form-group">
+          <label><i class="fa fa-tag"></i> {{ form.name.label }}</label>
+          {{ form.name }}
+          {% if form.name.errors %}
+            <div class="text-danger small mt-1">{{ form.name.errors }}</div>
+          {% endif %}
+          <small class="text-muted d-block mt-2">
+            <i class="fa fa-info-circle"></i>
+            Exemples : livreurs, managers, superviseurs, etc.
+          </small>
+        </div>
+
+        <div class="action-buttons">
+          <button class="modern-btn modern-btn-primary" type="submit">
+            <i class="fa fa-save"></i> Enregistrer
+          </button>
+          <a class="modern-btn modern-btn-secondary" href="/roles-admin/">
+            <i class="fa fa-times"></i> Annuler
+          </a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

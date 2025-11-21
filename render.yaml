@@ -1,0 +1,27 @@
+databases:
+  - name: gestionstock-db
+    databaseName: gestionstock
+    user: gestionstock
+    region: frankfurt
+
+services:
+  - type: web
+    name: gestionstock-app
+    runtime: python
+    buildCommand: "./build.sh"
+    startCommand: "gunicorn Gestion_stock.wsgi:application"
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: gestionstock-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: False
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: ALLOWED_HOSTS
+        value: "*"
+      - key: CORS_ALLOW_ALL_ORIGINS
+        value: True

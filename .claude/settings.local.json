@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python manage.py runserver:*)",
+      "Bash(curl:*)",
+      "Bash(python -m json.tool:*)",
+      "Bash(python manage.py makemigrations:*)",
+      "Bash(python manage.py:*)",
+      "Bash(python:*)",
+      "Bash(pip install:*)",
+      "Bash(timeout /t 3)",
+      "Bash(ping:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

@@ -1,0 +1,469 @@
+{% load static %}
+{% load i18n %}
+<script>
+// Load script only once and log
+console.log('[TOURNEES PAGE] Template tournees.html loaded');
+if (!window.__tournees_script_loaded__) {
+    console.log('[TOURNEES PAGE] Loading tournees.js for the first time');
+    window.__tournees_script_loaded__ = true;
+    var script = document.createElement('script');
+    script.src = "{% static 'script/tournees.js' %}";
+    script.type = 'text/javascript';
+    script.onload = function() {
+        console.log('[TOURNEES PAGE] tournees.js loaded, dispatching fragment:loaded event');
+        // Déclencher l'événement fragment:loaded après que le script soit chargé
+        setTimeout(function() {
+            document.dispatchEvent(new CustomEvent('fragment:loaded', {
+                detail: { name: 'tournees', container: document.getElementById('main-content') }
+            }));
+        }, 100);
+    };
+    document.head.appendChild(script);
+} else {
+    console.log('[TOURNEES PAGE] tournees.js already loaded, re-dispatching fragment:loaded event');
+    // Script already loaded, re-trigger fragment:loaded event
+    setTimeout(function() {
+        document.dispatchEvent(new CustomEvent('fragment:loaded', {
+            detail: { name: 'tournees', container: document.getElementById('main-content') }
+        }));
+    }, 50);
+}
+</script>
+
+<style>
+.page-container { padding: 20px 0; }
+
+.page-title {
+    font-size: 1.8rem;
+    font-weight: 600;
+    color: #2d3748;
+    margin-bottom: 25px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.page-title i { color: #8b5cf6; font-size: 2rem; }
+
+.modern-section {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 30px;
+    margin-bottom: 25px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.stats-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.stat-card {
+    background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+    color: white;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(139, 92, 246, 0.2);
+}
+
+.stat-card.success { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+.stat-card.warning { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+.stat-card.info { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); }
+
+.stat-value { font-size: 2rem; font-weight: bold; margin-bottom: 5px; }
+.stat-label { font-size: 0.9rem; opacity: 0.9; }
+
+.tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    border-bottom: 2px solid #e2e8f0;
+}
+
+.tab {
+    padding: 12px 24px;
+    cursor: pointer;
+    border: none;
+    background: none;
+    color: #6b7280;
+    font-weight: 500;
+    border-bottom: 3px solid transparent;
+    transition: all 0.3s;
+}
+
+.tab.active {
+    color: #8b5cf6;
+    border-bottom-color: #8b5cf6;
+}
+
+.tab:hover {
+    color: #8b5cf6;
+}
+
+.tournee-card {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 15px;
+    transition: all 0.3s;
+}
+
+.tournee-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
+}
+
+.tournee-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.tournee-numero {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #2d3748;
+}
+
+.tournee-info {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.info-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.info-item i { color: #8b5cf6; }
+
+.arrets-list {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid #e2e8f0;
+}
+
+.arret-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    background: #f9fafb;
+    border-radius: 6px;
+    margin-bottom: 8px;
+}
+
+.badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.badge-planifiee { background: #dbeafe; color: #1e40af; }
+.badge-en_cours { background: #fef3c7; color: #92400e; }
+.badge-terminee { background: #d1fae5; color: #065f46; }
+.badge-annulee { background: #fee2e2; color: #991b1b; }
+.badge-livre { background: #d1fae5; color: #065f46; }
+.badge-echec { background: #fee2e2; color: #991b1b; }
+.badge-en_attente { background: #e5e7eb; color: #374151; }
+
+.progress-bar {
+    width: 100%;
+    height: 8px;
+    background: #e5e7eb;
+    border-radius: 10px;
+    overflow: hidden;
+    margin-top: 10px;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #10b981, #059669);
+    transition: width 0.3s;
+}
+
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
+.modal-content {
+    background-color: white;
+    margin: 3% auto;
+    padding: 0;
+    border-radius: 10px;
+    width: 90%;
+    max-width: 900px;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.modal-header {
+    background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+    color: white;
+    padding: 20px 30px;
+    border-radius: 10px 10px 0 0;
+}
+
+.modal-body {
+    padding: 30px;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group.full-width {
+    grid-column: 1 / -1;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+    color: #374151;
+}
+
+.form-group input,
+.form-group select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 0.95rem;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+    outline: none;
+    border-color: #8b5cf6;
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+}
+
+.arrets-section {
+    margin-top: 30px;
+    padding-top: 30px;
+    border-top: 2px solid #e2e8f0;
+}
+
+.arret-form-item {
+    background: #f9fafb;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    position: relative;
+}
+
+.remove-arret {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: #ef4444;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    cursor: pointer;
+    font-size: 1rem;
+}
+
+.btn-primary, .btn-secondary, .btn-success, .btn-danger, .btn-warning {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin: 0 5px;
+}
+
+.btn-primary { background: #8b5cf6; color: white; }
+.btn-primary:hover { background: #7c3aed; }
+.btn-success { background: #10b981; color: white; }
+.btn-success:hover { background: #059669; }
+.btn-warning { background: #f59e0b; color: white; }
+.btn-warning:hover { background: #d97706; }
+.btn-danger { background: #ef4444; color: white; }
+.btn-danger:hover { background: #dc2626; }
+.btn-secondary { background: #6b7280; color: white; }
+.btn-secondary:hover { background: #4b5563; }
+
+.btn-add {
+    background: #10b981;
+    color: white;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    margin-top: 10px;
+}
+
+.close {
+    color: white;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.close:hover { opacity: 0.8; }
+</style>
+
+<div class="page-container">
+    <div class="page-title">
+        <i class="fas fa-route"></i>
+        <span>{% trans "Gestion des Tournées" %}</span>
+    </div>
+
+    <!-- Statistiques -->
+    <div class="stats-cards">
+        <div class="stat-card info">
+            <div class="stat-value" id="total-tournees">0</div>
+            <div class="stat-label">{% trans "Total Tournées" %}</div>
+        </div>
+        <div class="stat-card warning">
+            <div class="stat-value" id="tournees-today">0</div>
+            <div class="stat-label">{% trans "Aujourd'hui" %}</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="tournees-en-cours">0</div>
+            <div class="stat-label">{% trans "En Cours" %}</div>
+        </div>
+        <div class="stat-card success">
+            <div class="stat-value" id="taux-reussite">0%</div>
+            <div class="stat-label">{% trans "Taux de Réussite" %}</div>
+        </div>
+    </div>
+
+    <!-- Onglets -->
+    <div class="tabs">
+        <button class="tab active" onclick="filterTournees('all')">{% trans "Toutes" %}</button>
+        <button class="tab" onclick="filterTournees('planifiee')">{% trans "Planifiées" %}</button>
+        <button class="tab" onclick="filterTournees('en_cours')">{% trans "En cours" %}</button>
+        <button class="tab" onclick="filterTournees('terminee')">{% trans "Terminées" %}</button>
+    </div>
+
+    <!-- Section Liste des Tournées -->
+    <div class="modern-section">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h3>{% trans "Liste des Tournées" %}</h3>
+            <button class="btn-primary" onclick="openTourneeModal()">
+                <i class="fas fa-plus"></i> {% trans "Nouvelle Tournée" %}
+            </button>
+        </div>
+
+        <div id="tournees-container">
+            <div style="text-align: center; padding: 40px;">
+                <i class="fas fa-spinner fa-spin"></i> {% trans "Chargement..." %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Tournée -->
+<div id="tourneeModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <span class="close" onclick="closeTourneeModal()">&times;</span>
+            <h2 id="modal-title">{% trans "Nouvelle Tournée" %}</h2>
+        </div>
+        <div class="modal-body">
+            <form id="tournee-form">
+                <input type="hidden" id="tournee-id">
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="date">{% trans "Date" %} *</label>
+                        <input type="date" id="date" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="livreur">{% trans "Livreur" %} *</label>
+                        <select id="livreur" required>
+                            <option value="">{% trans "Sélectionner un livreur..." %}</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="warehouse">{% trans "Entrepôt de départ" %}</label>
+                        <select id="warehouse">
+                            <option value="">{% trans "Sélectionner..." %}</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="heure_depart_prevue">{% trans "Heure départ prévue" %} *</label>
+                        <input type="time" id="heure_depart_prevue" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="heure_retour_prevue">{% trans "Heure retour prévue" %}</label>
+                        <input type="time" id="heure_retour_prevue">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="distance_km">{% trans "Distance (km)" %}</label>
+                        <input type="number" id="distance_km" step="0.1">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="argent_depart">{% trans "Argent de départ" %} (MAD)</label>
+                        <input type="number" id="argent_depart" step="0.01" value="0" min="0"
+                               placeholder="Ex: 5000.00">
+                        <small style="color: #6b7280; font-size: 0.85rem; display: block; margin-top: 4px;">
+                            💡 Montant prédéfini donné au chauffeur
+                        </small>
+                    </div>
+
+                    <div class="form-group full-width">
+                        <label for="commentaire">{% trans "Commentaire" %}</label>
+                        <textarea id="commentaire" rows="3"></textarea>
+                    </div>
+                </div>
+
+                <!-- Section Arrêts -->
+                <div class="arrets-section">
+                    <h3>{% trans "Arrêts de Livraison" %}</h3>
+                    <div id="arrets-container"></div>
+                    <button type="button" class="btn-add" onclick="addArretForm()">
+                        <i class="fas fa-plus"></i> {% trans "Ajouter un arrêt" %}
+                    </button>
+                </div>
+
+                <div style="margin-top: 30px; text-align: right;">
+                    <button type="button" class="btn-secondary" onclick="closeTourneeModal()">
+                        {% trans "Annuler" %}
+                    </button>
+                    <button type="submit" class="btn-primary">
+                        {% trans "Enregistrer" %}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

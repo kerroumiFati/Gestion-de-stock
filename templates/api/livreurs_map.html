@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carte GPS des Livreurs</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E📦%3C/text%3E%3C/svg%3E">
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+          crossorigin=""/>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f5f5f5;
+        }
+
+        #header {
+            background-color: #2563eb;
+            color: white;
+            padding: 16px 24px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        #header h1 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        #header p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        #stats {
+            display: flex;
+            gap: 16px;
+            padding: 16px 24px;
+            background-color: white;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .stat-card {
+            flex: 1;
+            padding: 12px 16px;
+            border-radius: 8px;
+            background-color: #f9fafb;
+            border: 1px solid #e5e7eb;
+        }
+
+        .stat-card .label {
+            font-size: 12px;
+            color: #6b7280;
+            margin-bottom: 4px;
+        }
+
+        .stat-card .value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #1f2937;
+        }
+
+        #map {
+            height: calc(100vh - 180px);
+            width: 100%;
+        }
+
+        .custom-popup {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        .custom-popup h3 {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 8px;
+        }
+
+        .custom-popup .info-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 4px;
+            font-size: 14px;
+            color: #4b5563;
+        }
+
+        .custom-popup .info-row strong {
+            color: #1f2937;
+            min-width: 80px;
+        }
+
+        .custom-popup .status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-top: 8px;
+        }
+
+        .custom-popup .status.actif {
+            background-color: #d1fae5;
+            color: #065f46;
+        }
+
+        .custom-popup .status.inactif {
+            background-color: #fee2e2;
+            color: #991b1b;
+        }
+
+        .custom-popup .last-update {
+            font-size: 12px;
+            color: #6b7280;
+            margin-top: 8px;
+            font-style: italic;
+        }
+
+        #refresh-btn {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background-color: #2563eb;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background-color 0.2s;
+            z-index: 1000;
+        }
+
+        #refresh-btn:hover {
+            background-color: #1d4ed8;
+        }
+
+        #refresh-btn:active {
+            transform: scale(0.98);
+        }
+
+        #refresh-btn.loading {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+
+        .spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div id="header" style="display: flex; align-items: center; gap: 16px;">
+        <a href="javascript:history.back()" style="
+            background-color: rgba(255,255,255,0.2);
+            color: white;
+            text-decoration: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            transition: background-color 0.2s;
+        " onmouseover="this.style.backgroundColor='rgba(255,255,255,0.3)'" onmouseout="this.style.backgroundColor='rgba(255,255,255,0.2)'" title="Retour">
+            ←
+        </a>
+        <div>
+            <h1>Carte GPS des Livreurs</h1>
+            <p>Suivi en temps réel des positions</p>
+        </div>
+    </div>
+
+    <div id="stats">
+        <div class="stat-card">
+            <div class="label">Total Livreurs</div>
+            <div class="value" id="total-livreurs">{{ livreurs_count }}</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">Avec Position GPS</div>
+            <div class="value" id="gps-livreurs">{{ livreurs_count }}</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">Dernière mise à jour</div>
+            <div class="value" id="last-refresh" style="font-size: 14px;">-</div>
+        </div>
+    </div>
+
+    <div id="map"></div>
+
+    <button id="refresh-btn" onclick="refreshMap()">
+        <span id="refresh-icon">🔄</span>
+        <span>Actualiser</span>
+    </button>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+            crossorigin=""></script>
+
+    <script>
+        // Initialize map centered on Algiers
+        const map = L.map('map').setView([36.7538, 3.0588], 6);
+
+        // Add OpenStreetMap tiles
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            maxZoom: 19
+        }).addTo(map);
+
+        // Store markers
+        let markers = [];
+
+        // Livreurs data from Django template
+        const livreursData = {{ livreurs_json|safe }};
+
+        // Custom icon for livreurs
+        const livreurIcon = L.divIcon({
+            className: 'custom-marker',
+            html: `
+                <div style="
+                    background-color: #2563eb;
+                    width: 40px;
+                    height: 40px;
+                    border-radius: 50%;
+                    border: 3px solid white;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 20px;
+                ">
+                    🚚
+                </div>
+            `,
+            iconSize: [40, 40],
+            iconAnchor: [20, 20],
+            popupAnchor: [0, -20]
+        });
+
+        function formatDate(dateString) {
+            if (!dateString) return 'Jamais';
+            const date = new Date(dateString);
+            const now = new Date();
+            const diff = Math.floor((now - date) / 1000); // seconds
+
+            if (diff < 60) return 'Il y a ' + diff + ' secondes';
+            if (diff < 3600) return 'Il y a ' + Math.floor(diff / 60) + ' minutes';
+            if (diff < 86400) return 'Il y a ' + Math.floor(diff / 3600) + ' heures';
+
+            return date.toLocaleString('fr-FR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        function addMarkers(livreurs) {
+            // Clear existing markers
+            markers.forEach(marker => map.removeLayer(marker));
+            markers = [];
+
+            if (!livreurs || livreurs.length === 0) {
+                console.log('Aucun livreur avec position GPS');
+                return;
+            }
+
+            // Add markers for each livreur
+            livreurs.forEach(livreur => {
+                const marker = L.marker([livreur.lat, livreur.lng], {
+                    icon: livreurIcon
+                }).addTo(map);
+
+                // Popup content
+                const statusClass = livreur.statut === 'actif' ? 'actif' : 'inactif';
+                const popupContent = `
+                    <div class="custom-popup">
+                        <h3>${livreur.nom}</h3>
+                        <div class="info-row">
+                            <strong>Matricule:</strong>
+                            <span>${livreur.matricule || 'N/A'}</span>
+                        </div>
+                        <div class="info-row">
+                            <strong>Position:</strong>
+                            <span>${livreur.lat.toFixed(6)}, ${livreur.lng.toFixed(6)}</span>
+                        </div>
+                        <div class="status ${statusClass}">
+                            ${livreur.statut.toUpperCase()}
+                        </div>
+                        <div class="last-update">
+                            📍 ${formatDate(livreur.last_update)}
+                        </div>
+                    </div>
+                `;
+
+                marker.bindPopup(popupContent);
+                markers.push(marker);
+            });
+
+            // Fit map to show all markers
+            if (markers.length > 0) {
+                const group = new L.featureGroup(markers);
+                map.fitBounds(group.getBounds().pad(0.1));
+            }
+        }
+
+        // Initial markers
+        addMarkers(livreursData);
+
+        // Update last refresh time
+        function updateRefreshTime() {
+            const now = new Date();
+            document.getElementById('last-refresh').textContent = now.toLocaleTimeString('fr-FR', {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+        updateRefreshTime();
+
+        // Refresh map data
+        async function refreshMap() {
+            const btn = document.getElementById('refresh-btn');
+            const icon = document.getElementById('refresh-icon');
+
+            btn.classList.add('loading');
+            icon.innerHTML = '<div class="spinner"></div>';
+
+            try {
+                // Reload the page to get fresh data
+                window.location.reload();
+            } catch (error) {
+                console.error('Error refreshing:', error);
+                btn.classList.remove('loading');
+                icon.textContent = '🔄';
+            }
+        }
+
+        // Auto-refresh every 30 seconds
+        setInterval(() => {
+            refreshMap();
+        }, 30000);
+
+        console.log(`Carte initialisée avec ${livreursData.length} livreur(s)`);
+    </script>
+</body>
+</html>

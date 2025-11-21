@@ -1,0 +1,26 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Réinitialiser le mot de passe</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="p-4">
+  <div class="container">
+    <h1>Réinitialiser le mot de passe</h1>
+    <p>Cette action va générer un nouveau mot de passe pour l'utilisateur <strong>{{ user.username }}</strong>.</p>
+    <p>Le nouveau mot de passe sera affiché une seule fois. Veuillez le copier et le transmettre de manière sécurisée.</p>
+    <form method="post">
+      {% csrf_token %}
+      <div class="form-group">
+        <label for="password">Saisir un mot de passe (optionnel)</label>
+        <input type="text" class="form-control" id="password" name="password" placeholder="Laisser vide pour générer automatiquement" value="{{ prefilled|default:'' }}" />
+        <small class="form-text text-muted">Laisser vide pour générer un mot de passe fort automatiquement.</small>
+      </div>
+      <button class="btn btn-warning" type="submit">Réinitialiser</button>
+      <a class="btn btn-secondary" href="/users-admin/">Annuler</a>
+    </form>
+  </div>
+</body>
+</html>
