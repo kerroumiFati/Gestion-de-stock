@@ -68,8 +68,8 @@ REST_FRAMEWORK = {
         'django_filters.rest_framework.DjangoFilterBackend',
     ),
     'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',  # Pour l'API mobile (prioritaire)
         'rest_framework.authentication.SessionAuthentication',  # Pour le frontend web
-        'rest_framework_simplejwt.authentication.JWTAuthentication',  # Pour l'API mobile
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',

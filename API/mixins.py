@@ -47,17 +47,16 @@ class TenantFilterMixin:
         """
         # Vérifier si l'utilisateur a une company
         if hasattr(self.request, 'company') and self.request.company is not None:
-            # Attacher la company à l'objet créé
-            if 'company' in serializer.Meta.model._meta.get_fields():
+            # Vérifier si le modèle a un champ 'company'
+            model = serializer.Meta.model
+            field_names = [f.name for f in model._meta.get_fields()]
+            if 'company' in field_names:
                 serializer.save(company=self.request.company)
             else:
                 serializer.save()
         else:
-            # Si pas de company, renvoyer une erreur
-            return Response(
-                {"detail": "Vous devez être associé à une entreprise pour créer des données."},
-                status=status.HTTP_403_FORBIDDEN
-            )
+            # Si pas de company, sauvegarder sans company (pour compatibilité)
+            serializer.save()
 
     def check_company_access(self, obj):
         """

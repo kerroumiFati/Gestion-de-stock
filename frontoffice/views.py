@@ -4,6 +4,7 @@ from django.http import HttpResponse, HttpResponseRedirect
 from django.views.generic import TemplateView
 from django.conf import settings
 from django.contrib import messages
+from django.db import models
 from .forms import *
 from .forms_users import UserAdminForm, GroupAdminForm
 from API.models import Produit
@@ -463,9 +464,14 @@ def charger_van(request):
             van = Warehouse.objects.get(id=van_id)
             source = Warehouse.objects.get(id=source_id)
 
+            # Récupérer la company depuis le middleware ou le profil utilisateur
+            company = getattr(request, 'company', None)
+            if not company and hasattr(request.user, 'profile'):
+                company = request.user.profile.company
+
             # Créer le transfert
             transfert = TransfertStock.objects.create(
-                company=request.user.userprofile.company if hasattr(request.user, 'userprofile') else None,
+                company=company,
                 entrepot_source=source,
                 entrepot_destination=van,
                 demandeur=request.user,
@@ -506,8 +512,21 @@ def charger_van(request):
             messages.error(request, f'Erreur: {str(e)}')
 
     # GET - afficher le formulaire
-    vans = Warehouse.objects.filter(code__istartswith='van', is_active=True).order_by('code')
-    sources = Warehouse.objects.exclude(code__istartswith='van').filter(is_active=True).order_by('code')
+    # Récupérer la company de l'utilisateur
+    company = getattr(request, 'company', None)
+    if not company and hasattr(request.user, 'profile'):
+        company = request.user.profile.company
+
+    # Filtrer les entrepôts par company (ou afficher tous si pas de company)
+    warehouses = Warehouse.objects.filter(is_active=True)
+    if company:
+        # Inclure les entrepôts de la company OU ceux sans company (partagés)
+        warehouses = warehouses.filter(models.Q(company=company) | models.Q(company__isnull=True))
+
+    # Vans = entrepôts dont le code contient 'van' (insensible à la casse)
+    vans = warehouses.filter(code__icontains='van').order_by('code')
+    # Sources = tous les autres entrepôts
+    sources = warehouses.exclude(code__icontains='van').order_by('code')
 
     context = {
         'vans': vans,

@@ -1100,8 +1100,8 @@ class ProduitMobileViewSet(viewsets.ReadOnlyModelViewSet):
         """Filtre par company de l'utilisateur"""
         queryset = super().get_queryset()
 
-        # Filtrer par company
-        if hasattr(self.request.user, 'company') and self.request.user.company:
-            queryset = queryset.filter(company=self.request.user.company)
+        # Filtrer par company (depuis le middleware TenantMiddleware)
+        if hasattr(self.request, 'company') and self.request.company:
+            queryset = queryset.filter(company=self.request.company)
 
         return queryset

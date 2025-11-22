@@ -270,7 +270,9 @@ class ProduitViewSet(TenantFilterMixin, viewsets.ModelViewSet):
         return Response(serializer.data)
 
     def perform_create(self, serializer):
-        obj = serializer.save()
+        # Appeler le parent (TenantFilterMixin) pour assigner automatiquement la company
+        super().perform_create(serializer)
+        obj = serializer.instance
         try:
             log_event(self.request, 'produit.create', target=obj, metadata={'id': obj.id, 'reference': getattr(obj, 'reference', None)})
         except Exception:
@@ -325,7 +327,9 @@ class AchatViewSet(TenantFilterMixin, viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def perform_create(self, serializer):
-        obj = serializer.save()
+        # Appeler le parent (TenantFilterMixin) pour assigner automatiquement la company
+        super().perform_create(serializer)
+        obj = serializer.instance
         try:
             # Optionnel: entrepôt spécifié dans la requête
             warehouse_id = self.request.data.get('warehouse') or self.request.data.get('warehouse_id')
@@ -378,7 +382,8 @@ class BonLivraisonViewSet(TenantFilterMixin, viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def perform_create(self, serializer):
-        obj = serializer.save()
+        super().perform_create(serializer)
+        obj = serializer.instance
         try:
             log_event(self.request, 'bonlivraison.create', target=obj, metadata={'id': obj.id, 'numero': getattr(obj, 'numero', None)})
         except Exception:
@@ -432,7 +437,8 @@ class FactureViewSet(TenantFilterMixin, viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def perform_create(self, serializer):
-        obj = serializer.save()
+        super().perform_create(serializer)
+        obj = serializer.instance
         try:
             log_event(self.request, 'facture.create', target=obj, metadata={'id': obj.id, 'numero': getattr(obj, 'numero', None)})
         except Exception:
@@ -1386,9 +1392,10 @@ class LoginViewSet(APIView):
 class VenteViewSet(TenantFilterMixin, viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     queryset = Vente.objects.all().order_by('-date_vente')
-    
+
     def perform_create(self, serializer):
-        obj = serializer.save()
+        super().perform_create(serializer)
+        obj = serializer.instance
         try:
             log_event(self.request, 'vente.create', target=obj, metadata={'id': obj.id, 'numero': getattr(obj, 'numero', None)})
         except Exception:
@@ -1763,7 +1770,8 @@ class WarehouseViewSet(TenantFilterMixin, viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def perform_create(self, serializer):
-        obj = serializer.save()
+        super().perform_create(serializer)
+        obj = serializer.instance
         try:
             log_event(self.request, 'warehouse.create', target=obj, metadata={'id': obj.id, 'code': getattr(obj, 'code', None)})
         except Exception:
