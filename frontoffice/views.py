@@ -456,18 +456,24 @@ def transferts_list(request):
 @login_required
 def charger_van(request):
     """Formulaire pour charger un van rapidement"""
+    from django.http import JsonResponse
+
+    # Récupérer la company de l'utilisateur
+    company = getattr(request, 'company', None)
+
     if request.method == 'POST':
         van_id = request.POST.get('van')
         source_id = request.POST.get('entrepot_source')
         produits_text = request.POST.get('produits')
+        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
 
         try:
             van = Warehouse.objects.get(id=van_id)
             source = Warehouse.objects.get(id=source_id)
 
-            # Créer le transfert
+            # Créer le transfert avec la company du middleware
             transfert = TransfertStock.objects.create(
-                company=request.user.userprofile.company if hasattr(request.user, 'userprofile') else None,
+                company=company,
                 entrepot_source=source,
                 entrepot_destination=van,
                 demandeur=request.user,
@@ -476,6 +482,7 @@ def charger_van(request):
 
             # Parser les produits
             errors = []
+            lignes_count = 0
             for line in produits_text.strip().split('\n'):
                 if not line.strip():
                     continue
@@ -488,6 +495,7 @@ def charger_van(request):
                         produit=produit,
                         quantite=int(qty.strip())
                     )
+                    lignes_count += 1
                 except Exception as e:
                     errors.append(f"Ligne '{line}': {str(e)}")
 
@@ -495,21 +503,51 @@ def charger_van(request):
                 # Valider automatiquement
                 try:
                     transfert.valider(request.user)
+                    if is_ajax:
+                        return JsonResponse({
+                            'success': True,
+                            'message': f'Transfert {transfert.numero} créé et validé avec succès!',
+                            'transfert_numero': transfert.numero,
+                            'lignes_count': lignes_count
+                        })
                     messages.success(request, f'Transfert {transfert.numero} créé et validé avec succès!')
                     return redirect('transferts_list')
                 except Exception as e:
+                    if is_ajax:
+                        return JsonResponse({
+                            'success': False,
+                            'message': f'Transfert créé mais erreur de validation: {str(e)}'
+                        }, status=400)
                     messages.error(request, f'Transfert créé mais erreur de validation: {str(e)}')
                     return redirect('transferts_list')
             else:
+                if is_ajax:
+                    return JsonResponse({
+                        'success': False,
+                        'message': 'Transfert créé avec des erreurs: ' + '; '.join(errors)
+                    }, status=400)
                 messages.warning(request, 'Transfert créé avec des erreurs: ' + '; '.join(errors))
                 return redirect('transferts_list')
 
         except Exception as e:
+            if is_ajax:
+                return JsonResponse({
+                    'success': False,
+                    'message': f'Erreur: {str(e)}'
+                }, status=400)
             messages.error(request, f'Erreur: {str(e)}')
 
     # GET - afficher le formulaire
-    vans = Warehouse.objects.filter(code__istartswith='van', is_active=True).order_by('code')
-    sources = Warehouse.objects.exclude(code__istartswith='van').filter(is_active=True).order_by('code')
+    # Filtrer par company si disponible
+    vans_qs = Warehouse.objects.filter(code__icontains='van', is_active=True)
+    sources_qs = Warehouse.objects.exclude(code__icontains='van').filter(is_active=True)
+
+    if company:
+        vans_qs = vans_qs.filter(company=company)
+        sources_qs = sources_qs.filter(company=company)
+
+    vans = vans_qs.order_by('code')
+    sources = sources_qs.order_by('code')
 
     context = {
         'vans': vans,

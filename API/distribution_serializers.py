@@ -3,6 +3,7 @@ Serializers pour l'API de distribution mobile
 """
 from rest_framework import serializers
 from django.utils import timezone
+from django.db import models
 from .distribution_models import (
     LivreurDistribution, TourneeMobile, ArretTourneeMobile, VenteTourneeMobile,
     LigneVenteTourneeMobile, RapportCaisseMobile, DepenseTourneeMobile, SyncLogMobile,
@@ -22,7 +23,7 @@ class ProduitMobileSerializer(serializers.ModelSerializer):
     """
     categorie_nom = serializers.CharField(source='categorie.nom', read_only=True)
     unite_mesure_display = serializers.CharField(source='get_unite_mesure_display', read_only=True)
-    stock = serializers.IntegerField(source='quantite', read_only=True)
+    stock = serializers.SerializerMethodField()
 
     class Meta:
         model = Produit
@@ -33,6 +34,21 @@ class ProduitMobileSerializer(serializers.ModelSerializer):
             'stock', 'quantite',
             'is_active', 'updated_at'
         )
+
+    def get_stock(self, obj):
+        """
+        Calcule le stock total depuis ProductStock (somme de tous les entrepôts non-van).
+        Exclut les vans pour avoir le stock disponible en entrepôt principal.
+        """
+        from .models import ProductStock
+        # Calculer le stock total depuis ProductStock (entrepôts principaux uniquement, pas les vans)
+        total_stock = ProductStock.objects.filter(
+            produit=obj,
+            warehouse__is_active=True
+        ).exclude(
+            warehouse__code__icontains='van'
+        ).aggregate(total=models.Sum('quantity'))['total']
+        return total_stock or 0
 
 
 class ClientMobileSerializer(serializers.ModelSerializer):

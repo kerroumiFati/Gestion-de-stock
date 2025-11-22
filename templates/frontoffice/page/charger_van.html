@@ -631,15 +631,61 @@ function updateSummary() {
     document.getElementById('produitsData').value = data;
 }
 
-// Validation avant soumission
+// Validation et soumission AJAX
 document.getElementById('chargerVanForm').addEventListener('submit', function(e) {
+    e.preventDefault();
     updateSummary();
+
     const data = document.getElementById('produitsData').value;
     if (!data || data.trim() === '') {
-        e.preventDefault();
         alert('{% trans "Veuillez ajouter au moins un produit" %}');
         return false;
     }
+
+    const van = document.getElementById('van').value;
+    const source = document.getElementById('entrepot_source').value;
+
+    if (!van || !source) {
+        alert('{% trans "Veuillez sélectionner un van et un entrepôt source" %}');
+        return false;
+    }
+
+    // Désactiver le bouton pendant la soumission
+    const submitBtn = this.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> {% trans "Chargement en cours..." %}';
+
+    // Soumettre en AJAX
+    const formData = new FormData(this);
+
+    fetch('/page/charger_van/', {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            // Naviguer vers la liste des transferts
+            show('transferts_list');
+        } else {
+            alert('Erreur: ' + data.message);
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalText;
+        }
+    })
+    .catch(err => {
+        console.error('Erreur:', err);
+        alert('Erreur lors de la soumission du formulaire');
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalText;
+    });
+
+    return false;
 });
 
 // Exposer les fonctions nécessaires globalement pour les event handlers inline

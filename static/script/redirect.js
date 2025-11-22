@@ -43,8 +43,14 @@
       if(targetPath){ history.pushState({page:name}, '', targetPath); }
       else { history.pushState({page:name}, '', '#'+name); }
     }
-    console.log('[REDIRECT] Fetching URL:', '/page/' + encodeURIComponent(name) + '/');
-    fetch('/page/' + encodeURIComponent(name) + '/')
+    // Support for query parameters via opts.params
+    let fetchUrl = '/page/' + encodeURIComponent(name) + '/';
+    if(opts && opts.params){
+      const queryString = new URLSearchParams(opts.params).toString();
+      if(queryString) fetchUrl += '?' + queryString;
+    }
+    console.log('[REDIRECT] Fetching URL:', fetchUrl);
+    fetch(fetchUrl)
       .then(function(res){
         if(!res.ok) throw new Error('HTTP '+res.status);
         return res.text();
