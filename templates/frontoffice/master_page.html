@@ -364,25 +364,28 @@
                             <i class="fas fa-chevron-down arrow"></i>
                         </a>
                         <ul class="sidebar-submenu">
-                            <li><a href="#" onclick="show('inventaire')";return false;">
+                            <li><a href="#" onclick="show('inventaire');return false;">
                                 <i class="fas fa-clipboard-check"></i>{% trans "Inventaire" %}
                             </a></li>
-                            <li><a href="#" onclick="show('mouvements')";return false;">
+                            <li><a href="#" onclick="show('mouvements');return false;">
                                 <i class="fas fa-exchange-alt"></i>{% trans "Mouvements" %}
                             </a></li>
-                            <li><a href="#" onclick="show('entrepots_list')";return false;">
+                            <li><a href="#" onclick="show('entrepots_list');return false;">
                                 <i class="fas fa-warehouse"></i>{% trans "Entrepôts & Vans" %}
                             </a></li>
-                            <li><a href="#" onclick="show('stocks_list')";return false;">
+                            <li><a href="#" onclick="show('stock_management');return false;">
+                                <i class="fas fa-boxes"></i>{% trans "Gestion des Stocks" %}
+                            </a></li>
+                            <li><a href="#" onclick="show('stocks_list');return false;">
                                 <i class="fas fa-layer-group"></i>{% trans "Stocks par entrepôt" %}
                             </a></li>
-                            <li><a href="#" onclick="show('transferts_list')";return false;">
+                            <li><a href="#" onclick="show('transferts_list');return false;">
                                 <i class="fas fa-dolly"></i>{% trans "Liste des transferts" %}
                             </a></li>
-                            <li><a href="#" onclick="show('charger_van')";return false;">
+                            <li><a href="#" onclick="show('charger_van');return false;">
                                 <i class="fas fa-truck-loading"></i>{% trans "Charger un van" %}
                             </a></li>
-                            <li><a href="#" onclick="show('stock_dashboard')";return false;">
+                            <li><a href="#" onclick="show('stock_dashboard');return false;">
                                 <i class="fas fa-chart-bar"></i>{% trans "Tableau de bord vans" %}
                             </a></li>
                         </ul>
@@ -425,10 +428,10 @@
                             <i class="fas fa-chevron-down arrow"></i>
                         </a>
                         <ul class="sidebar-submenu">
-                            <li><a href="#" onclick="show('statistiques')";return false;">
+                            <li><a href="#" onclick="show('statistiques');return false;">
                                 <i class="fas fa-chart-bar"></i>{% trans "Statistiques" %}
                             </a></li>
-                            <li><a href="#" onclick="show('rapports')";return false;">
+                            <li><a href="#" onclick="show('rapports');return false;">
                                 <i class="fas fa-file-export"></i>{% trans "Rapports" %}
                             </a></li>
                             {% if user.is_staff %}

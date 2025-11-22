@@ -139,7 +139,9 @@ router.register(r'achats', views.AchatViewSet)
 router.register(r'bons', views.BonLivraisonViewSet)
 router.register(r'factures', views.FactureViewSet)
 router.register(r'mouvements', views.StockMoveViewSet)
+router.register(r'stock-moves', views.StockMoveViewSet, basename='stock-moves')  # Alias anglais
 router.register(r'entrepots', views.WarehouseViewSet)
+router.register(r'warehouses', views.WarehouseViewSet, basename='warehouses')  # Alias anglais
 router.register(r'stocks', views.ProductStockViewSet)
 router.register(r'inventaires', views.InventorySessionViewSet)
 router.register(r'ventes', views.VenteViewSet)

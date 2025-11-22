@@ -42,6 +42,8 @@ def page(request, name: str):
         return charger_van(request)
     elif name == 'stock_dashboard':
         return stock_dashboard(request)
+    elif name == 'stock_management':
+        return render(request, 'frontoffice/page/stock_management.html')
     elif name == 'livreur_mobile':
         # Vérifier que l'utilisateur est dans le groupe "livreurs" ou est admin
         if not (request.user.is_staff or request.user.groups.filter(name='livreurs').exists()):

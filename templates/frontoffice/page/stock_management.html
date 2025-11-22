@@ -1,0 +1,1048 @@
+{% load i18n %}
+{% load static %}
+
+<style>
+/* Modern Stock Management Styles */
+.stock-dashboard {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.stat-card {
+    background: white;
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    border: none;
+}
+
+.stat-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+}
+
+.stat-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    color: white;
+}
+
+.stat-icon.primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+.stat-icon.success { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
+.stat-icon.warning { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+.stat-icon.danger { background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%); }
+.stat-icon.info { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+
+.stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #2d3748;
+    margin: 0;
+}
+
+.stat-label {
+    font-size: 0.875rem;
+    color: #718096;
+    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.main-card {
+    background: white;
+    border-radius: 20px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+    overflow: hidden;
+}
+
+.card-header-modern {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 20px 30px;
+    border: none;
+}
+
+.search-box {
+    position: relative;
+}
+
+.search-box input {
+    padding-left: 45px;
+    border-radius: 50px;
+    border: 2px solid #e2e8f0;
+    height: 48px;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+}
+
+.search-box input:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+}
+
+.search-box .search-icon {
+    position: absolute;
+    left: 18px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #a0aec0;
+}
+
+.filter-btn {
+    border-radius: 50px;
+    padding: 10px 20px;
+    border: 2px solid #e2e8f0;
+    background: white;
+    color: #4a5568;
+    transition: all 0.3s ease;
+    font-weight: 500;
+}
+
+.filter-btn:hover, .filter-btn.active {
+    background: #667eea;
+    border-color: #667eea;
+    color: white;
+}
+
+.product-table {
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.product-table thead th {
+    background: #f8fafc;
+    color: #4a5568;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.5px;
+    padding: 16px 20px;
+    border: none;
+    position: sticky;
+    top: 0;
+}
+
+.product-table tbody tr {
+    transition: all 0.2s ease;
+}
+
+.product-table tbody tr:hover {
+    background: #f7fafc;
+}
+
+.product-table tbody td {
+    padding: 16px 20px;
+    vertical-align: middle;
+    border-bottom: 1px solid #edf2f7;
+}
+
+.product-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    font-weight: 700;
+    color: white;
+}
+
+.stock-badge {
+    padding: 6px 14px;
+    border-radius: 50px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.stock-badge.ok { background: #c6f6d5; color: #22543d; }
+.stock-badge.alert { background: #fefcbf; color: #744210; }
+.stock-badge.critical { background: #fed7d7; color: #742a2a; }
+.stock-badge.rupture { background: #e2e8f0; color: #4a5568; }
+
+.stock-bar {
+    height: 8px;
+    border-radius: 4px;
+    background: #e2e8f0;
+    overflow: hidden;
+    min-width: 100px;
+}
+
+.stock-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.5s ease;
+}
+
+.stock-bar-fill.ok { background: linear-gradient(90deg, #38a169 0%, #68d391 100%); }
+.stock-bar-fill.alert { background: linear-gradient(90deg, #d69e2e 0%, #f6e05e 100%); }
+.stock-bar-fill.critical { background: linear-gradient(90deg, #e53e3e 0%, #fc8181 100%); }
+
+.action-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    transition: all 0.2s ease;
+    margin: 0 2px;
+}
+
+.action-btn.edit { background: #ebf8ff; color: #3182ce; }
+.action-btn.edit:hover { background: #3182ce; color: white; }
+.action-btn.adjust { background: #f0fff4; color: #38a169; }
+.action-btn.adjust:hover { background: #38a169; color: white; }
+.action-btn.history { background: #faf5ff; color: #805ad5; }
+.action-btn.history:hover { background: #805ad5; color: white; }
+
+.category-filter {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+}
+
+.category-chip {
+    padding: 8px 16px;
+    border-radius: 50px;
+    background: #edf2f7;
+    color: #4a5568;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: none;
+}
+
+.category-chip:hover, .category-chip.active {
+    background: #667eea;
+    color: white;
+}
+
+.category-chip .count {
+    background: rgba(0,0,0,0.1);
+    padding: 2px 8px;
+    border-radius: 50px;
+    margin-left: 6px;
+    font-size: 0.75rem;
+}
+
+.quick-action-bar {
+    background: #f8fafc;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 20px;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #a0aec0;
+}
+
+.empty-state i {
+    font-size: 64px;
+    margin-bottom: 20px;
+    opacity: 0.5;
+}
+
+/* Modal Modern Style */
+.modal-modern .modal-content {
+    border-radius: 20px;
+    border: none;
+    overflow: hidden;
+}
+
+.modal-modern .modal-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    padding: 20px 30px;
+}
+
+.modal-modern .modal-body {
+    padding: 30px;
+}
+
+.modal-modern .form-control {
+    border-radius: 10px;
+    padding: 12px 16px;
+    border: 2px solid #e2e8f0;
+}
+
+.modal-modern .form-control:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+}
+
+.btn-modern {
+    border-radius: 10px;
+    padding: 12px 24px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.btn-modern.primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    color: white;
+}
+
+.btn-modern.primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+/* Loading Skeleton */
+.skeleton {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: 8px;
+}
+
+@keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+</style>
+
+<div class="container-fluid py-4">
+    <!-- Header avec statistiques -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h2 class="mb-1 font-weight-bold text-dark">
+                        <i class="fas fa-boxes mr-2" style="color: #667eea;"></i>
+                        {% trans "Gestion des Stocks" %}
+                    </h2>
+                    <p class="text-muted mb-0">{% trans "Vue d'ensemble et gestion de votre inventaire" %}</p>
+                </div>
+                <div>
+                    <button class="btn btn-modern primary" onclick="openAjustementModal()">
+                        <i class="fas fa-plus mr-2"></i>{% trans "Nouvel ajustement" %}
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cartes de statistiques -->
+    <div class="row mb-4" id="stats-row">
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="stat-card">
+                <div class="d-flex align-items-center">
+                    <div class="stat-icon primary mr-3">
+                        <i class="fas fa-cubes"></i>
+                    </div>
+                    <div>
+                        <p class="stat-value" id="stat-total-products">--</p>
+                        <p class="stat-label">{% trans "Produits en stock" %}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="stat-card">
+                <div class="d-flex align-items-center">
+                    <div class="stat-icon success mr-3">
+                        <i class="fas fa-coins"></i>
+                    </div>
+                    <div>
+                        <p class="stat-value" id="stat-total-value">--</p>
+                        <p class="stat-label">{% trans "Valeur totale" %}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="stat-card">
+                <div class="d-flex align-items-center">
+                    <div class="stat-icon warning mr-3">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                    <div>
+                        <p class="stat-value" id="stat-alerts">--</p>
+                        <p class="stat-label">{% trans "Stock faible" %}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="stat-card">
+                <div class="d-flex align-items-center">
+                    <div class="stat-icon danger mr-3">
+                        <i class="fas fa-times-circle"></i>
+                    </div>
+                    <div>
+                        <p class="stat-value" id="stat-ruptures">--</p>
+                        <p class="stat-label">{% trans "Ruptures" %}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Carte principale -->
+    <div class="main-card">
+        <div class="card-header-modern">
+            <div class="row align-items-center">
+                <div class="col-md-6">
+                    <h5 class="mb-0 font-weight-bold">
+                        <i class="fas fa-list mr-2"></i>{% trans "Inventaire des produits" %}
+                    </h5>
+                </div>
+                <div class="col-md-6">
+                    <div class="search-box">
+                        <i class="fas fa-search search-icon"></i>
+                        <input type="text" class="form-control" id="searchInput"
+                               placeholder="{% trans 'Rechercher par nom, référence ou code-barres...' %}">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card-body p-4">
+            <!-- Filtres par catégorie -->
+            <div class="category-filter" id="category-filters">
+                <button class="category-chip active" data-category="all">
+                    <i class="fas fa-layer-group mr-1"></i>{% trans "Toutes" %}
+                    <span class="count" id="count-all">0</span>
+                </button>
+                <!-- Les catégories seront ajoutées dynamiquement -->
+            </div>
+
+            <!-- Filtres rapides -->
+            <div class="quick-action-bar">
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        <div class="btn-group" role="group">
+                            <button class="filter-btn active" data-filter="all">
+                                <i class="fas fa-th-list mr-1"></i>{% trans "Tous" %}
+                            </button>
+                            <button class="filter-btn" data-filter="alert">
+                                <i class="fas fa-exclamation mr-1"></i>{% trans "Alertes" %}
+                            </button>
+                            <button class="filter-btn" data-filter="rupture">
+                                <i class="fas fa-times mr-1"></i>{% trans "Ruptures" %}
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-6 text-right">
+                        <select class="form-control d-inline-block" style="width: auto; border-radius: 50px;" id="warehouseFilter">
+                            <option value="">{% trans "Tous les entrepôts" %}</option>
+                        </select>
+                        <button class="btn btn-outline-secondary ml-2" style="border-radius: 50px;" onclick="exportStock()">
+                            <i class="fas fa-download mr-1"></i>{% trans "Exporter" %}
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tableau des produits -->
+            <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
+                <table class="table product-table" id="stockTable" data-no-datatable="true">
+                    <thead>
+                        <tr>
+                            <th style="width: 50px;"></th>
+                            <th>{% trans "Produit" %}</th>
+                            <th>{% trans "Catégorie" %}</th>
+                            <th class="text-center">{% trans "Stock" %}</th>
+                            <th style="width: 150px;">{% trans "Niveau" %}</th>
+                            <th class="text-right">{% trans "Prix" %}</th>
+                            <th class="text-right">{% trans "Valeur" %}</th>
+                            <th class="text-center" style="width: 130px;">{% trans "Actions" %}</th>
+                        </tr>
+                    </thead>
+                    <tbody id="stockTableBody">
+                        <tr>
+                            <td colspan="8" class="text-center py-5">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="sr-only">Loading...</span>
+                                </div>
+                                <p class="mt-2 text-muted">{% trans "Chargement des données..." %}</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Résumé bas de page -->
+            <div class="border-top pt-3 mt-3">
+                <div class="row">
+                    <div class="col-md-6">
+                        <span class="text-muted" id="result-count">{% trans "0 produits affichés" %}</span>
+                    </div>
+                    <div class="col-md-6 text-right">
+                        <strong>{% trans "Valeur affichée" %}:</strong>
+                        <span id="displayed-value" class="text-primary font-weight-bold">0.00 DA</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Ajustement Stock -->
+<div class="modal fade modal-modern" id="adjustStockModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-sliders-h mr-2"></i>{% trans "Ajuster le stock" %}
+                </h5>
+                <button type="button" class="close text-white" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="adjustStockForm">
+                    <div class="form-group">
+                        <label class="font-weight-bold">{% trans "Produit" %}</label>
+                        <select class="form-control" id="adjustProductSelect" required>
+                            <option value="">{% trans "Sélectionner un produit..." %}</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="font-weight-bold">{% trans "Entrepôt" %}</label>
+                        <select class="form-control" id="adjustWarehouseSelect" required>
+                            <option value="">{% trans "Sélectionner un entrepôt..." %}</option>
+                        </select>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label class="font-weight-bold">{% trans "Stock actuel" %}</label>
+                                <input type="text" class="form-control" id="currentStock" readonly>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label class="font-weight-bold">{% trans "Nouvelle quantité" %}</label>
+                                <input type="number" class="form-control" id="newQuantity" min="0" required>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="font-weight-bold">{% trans "Motif" %}</label>
+                        <select class="form-control" id="adjustReason" required>
+                            <option value="INV">{% trans "Inventaire" %}</option>
+                            <option value="CORR">{% trans "Correction" %}</option>
+                            <option value="PERTE">{% trans "Perte" %}</option>
+                            <option value="CASSE">{% trans "Casse" %}</option>
+                            <option value="EXP">{% trans "Expiration" %}</option>
+                            <option value="AUTRE">{% trans "Autre" %}</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="font-weight-bold">{% trans "Note" %}</label>
+                        <textarea class="form-control" id="adjustNote" rows="2"
+                                  placeholder="{% trans 'Commentaire optionnel...' %}"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-light" data-dismiss="modal">{% trans "Annuler" %}</button>
+                <button type="button" class="btn btn-modern primary" onclick="submitAdjustment()">
+                    <i class="fas fa-check mr-2"></i>{% trans "Valider l'ajustement" %}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Historique -->
+<div class="modal fade modal-modern" id="historyModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-history mr-2"></i>{% trans "Historique des mouvements" %}
+                </h5>
+                <button type="button" class="close text-white" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div id="historyContent">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    'use strict';
+
+    let allProducts = [];
+    let allWarehouses = [];
+    let allCategories = [];
+    let currentFilter = 'all';
+    let currentCategory = 'all';
+    let searchTerm = '';
+
+    // Couleurs pour les catégories
+    const categoryColors = [
+        '#667eea', '#38a169', '#d69e2e', '#e53e3e', '#805ad5',
+        '#3182ce', '#dd6b20', '#319795', '#d53f8c', '#718096'
+    ];
+
+    // Initialisation
+    document.addEventListener('DOMContentLoaded', init);
+    document.addEventListener('fragment:loaded', function(e) {
+        if (e.detail && e.detail.name === 'stock_management') {
+            init();
+        }
+    });
+
+    function init() {
+        loadData();
+        bindEvents();
+    }
+
+    function bindEvents() {
+        // Recherche
+        const searchInput = document.getElementById('searchInput');
+        if (searchInput) {
+            searchInput.addEventListener('input', debounce(function() {
+                searchTerm = this.value.toLowerCase();
+                renderTable();
+            }, 300));
+        }
+
+        // Filtres de statut
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                currentFilter = this.dataset.filter;
+                renderTable();
+            });
+        });
+
+        // Filtre entrepôt
+        const warehouseFilter = document.getElementById('warehouseFilter');
+        if (warehouseFilter) {
+            warehouseFilter.addEventListener('change', renderTable);
+        }
+    }
+
+    function loadData() {
+        Promise.all([
+            fetch('/API/produits/').then(r => r.json()),
+            fetch('/API/warehouses/').then(r => r.json()),
+            fetch('/API/categories/').then(r => r.json())
+        ])
+        .then(([products, warehouses, categories]) => {
+            // Gérer la pagination si présente
+            allProducts = products.results || products;
+            allWarehouses = warehouses.results || warehouses;
+            allCategories = categories.results || categories;
+
+            renderStats();
+            renderCategoryFilters();
+            renderWarehouseSelect();
+            renderTable();
+        })
+        .catch(err => {
+            console.error('Erreur chargement:', err);
+            document.getElementById('stockTableBody').innerHTML = `
+                <tr>
+                    <td colspan="8" class="text-center py-5 text-danger">
+                        <i class="fas fa-exclamation-circle fa-3x mb-3"></i>
+                        <p>Erreur de chargement des données</p>
+                    </td>
+                </tr>
+            `;
+        });
+    }
+
+    function renderStats() {
+        const totalProducts = allProducts.filter(p => p.quantite > 0).length;
+        const totalValue = allProducts.reduce((sum, p) => sum + (p.quantite * parseFloat(p.prixU || 0)), 0);
+        const alerts = allProducts.filter(p => p.quantite > 0 && p.quantite <= (p.seuil_alerte || 10)).length;
+        const ruptures = allProducts.filter(p => p.quantite <= 0).length;
+
+        document.getElementById('stat-total-products').textContent = totalProducts;
+        document.getElementById('stat-total-value').textContent = formatMoney(totalValue);
+        document.getElementById('stat-alerts').textContent = alerts;
+        document.getElementById('stat-ruptures').textContent = ruptures;
+    }
+
+    function renderCategoryFilters() {
+        const container = document.getElementById('category-filters');
+
+        // Compter les produits par catégorie
+        const categoryCounts = {};
+        allProducts.forEach(p => {
+            const catId = p.categorie || 'none';
+            categoryCounts[catId] = (categoryCounts[catId] || 0) + 1;
+        });
+
+        // Mettre à jour le compteur "Toutes"
+        document.getElementById('count-all').textContent = allProducts.length;
+
+        // Ajouter les boutons de catégorie
+        allCategories.forEach((cat, idx) => {
+            const count = categoryCounts[cat.id] || 0;
+            if (count > 0) {
+                const btn = document.createElement('button');
+                btn.className = 'category-chip';
+                btn.dataset.category = cat.id;
+                btn.innerHTML = `
+                    <span style="color: ${categoryColors[idx % categoryColors.length]};">
+                        <i class="${cat.icone || 'fas fa-tag'} mr-1"></i>
+                    </span>
+                    ${cat.nom}
+                    <span class="count">${count}</span>
+                `;
+                btn.addEventListener('click', function() {
+                    document.querySelectorAll('.category-chip').forEach(c => c.classList.remove('active'));
+                    this.classList.add('active');
+                    currentCategory = this.dataset.category;
+                    renderTable();
+                });
+                container.appendChild(btn);
+            }
+        });
+    }
+
+    function renderWarehouseSelect() {
+        const select = document.getElementById('warehouseFilter');
+        const adjustSelect = document.getElementById('adjustWarehouseSelect');
+
+        allWarehouses.forEach(w => {
+            const option = `<option value="${w.id}">${w.code} - ${w.name}</option>`;
+            if (select) select.insertAdjacentHTML('beforeend', option);
+            if (adjustSelect) adjustSelect.insertAdjacentHTML('beforeend', option);
+        });
+
+        // Remplir aussi le select des produits pour l'ajustement
+        const productSelect = document.getElementById('adjustProductSelect');
+        if (productSelect) {
+            allProducts.forEach(p => {
+                productSelect.insertAdjacentHTML('beforeend',
+                    `<option value="${p.id}" data-stock="${p.quantite}">${p.reference} - ${p.designation}</option>`
+                );
+            });
+        }
+    }
+
+    function renderTable() {
+        const tbody = document.getElementById('stockTableBody');
+        const warehouseId = document.getElementById('warehouseFilter')?.value;
+
+        // Filtrer les produits
+        let filtered = allProducts.filter(p => {
+            // Filtre recherche
+            if (searchTerm) {
+                const searchable = `${p.reference} ${p.designation} ${p.code_barre || ''}`.toLowerCase();
+                if (!searchable.includes(searchTerm)) return false;
+            }
+
+            // Filtre catégorie
+            if (currentCategory !== 'all' && p.categorie != currentCategory) return false;
+
+            // Filtre statut
+            if (currentFilter === 'alert' && (p.quantite <= 0 || p.quantite > (p.seuil_alerte || 10))) return false;
+            if (currentFilter === 'rupture' && p.quantite > 0) return false;
+
+            return true;
+        });
+
+        // Trier par statut (ruptures en premier) puis par nom
+        filtered.sort((a, b) => {
+            if (a.quantite <= 0 && b.quantite > 0) return -1;
+            if (a.quantite > 0 && b.quantite <= 0) return 1;
+            if (a.quantite <= (a.seuil_alerte || 10) && b.quantite > (b.seuil_alerte || 10)) return -1;
+            if (a.quantite > (a.seuil_alerte || 10) && b.quantite <= (b.seuil_alerte || 10)) return 1;
+            return (a.designation || '').localeCompare(b.designation || '');
+        });
+
+        if (filtered.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="8">
+                        <div class="empty-state">
+                            <i class="fas fa-inbox"></i>
+                            <h5>Aucun produit trouvé</h5>
+                            <p class="text-muted">Essayez de modifier vos critères de recherche</p>
+                        </div>
+                    </td>
+                </tr>
+            `;
+            document.getElementById('result-count').textContent = '0 produits affichés';
+            document.getElementById('displayed-value').textContent = '0.00 DA';
+            return;
+        }
+
+        // Calculer la valeur affichée
+        const displayedValue = filtered.reduce((sum, p) => sum + (p.quantite * parseFloat(p.prixU || 0)), 0);
+        document.getElementById('result-count').textContent = `${filtered.length} produits affichés`;
+        document.getElementById('displayed-value').textContent = formatMoney(displayedValue);
+
+        // Rendre le tableau
+        tbody.innerHTML = filtered.map((p, idx) => {
+            const category = allCategories.find(c => c.id === p.categorie) || {};
+            const status = getStockStatus(p);
+            const stockPercent = Math.min(100, (p.quantite / (p.seuil_alerte * 2 || 20)) * 100);
+            const colorIdx = allCategories.indexOf(category);
+            const avatarColor = categoryColors[colorIdx >= 0 ? colorIdx % categoryColors.length : 0];
+
+            return `
+                <tr>
+                    <td>
+                        <div class="product-avatar" style="background: ${avatarColor};">
+                            ${(p.reference || 'P')[0].toUpperCase()}
+                        </div>
+                    </td>
+                    <td>
+                        <div>
+                            <strong class="d-block">${p.designation || 'Sans nom'}</strong>
+                            <small class="text-muted">
+                                <i class="fas fa-barcode mr-1"></i>${p.reference || '-'}
+                                ${p.code_barre ? `<span class="ml-2"><i class="fas fa-qrcode mr-1"></i>${p.code_barre}</span>` : ''}
+                            </small>
+                        </div>
+                    </td>
+                    <td>
+                        <span class="badge" style="background: ${avatarColor}20; color: ${avatarColor};">
+                            <i class="${category.icone || 'fas fa-tag'} mr-1"></i>
+                            ${category.nom || 'Non classé'}
+                        </span>
+                    </td>
+                    <td class="text-center">
+                        <span class="font-weight-bold ${status.class}" style="font-size: 1.1rem;">
+                            ${p.quantite || 0}
+                        </span>
+                        <small class="text-muted d-block">${p.unite_mesure || 'unités'}</small>
+                    </td>
+                    <td>
+                        <div class="stock-bar">
+                            <div class="stock-bar-fill ${status.barClass}" style="width: ${stockPercent}%;"></div>
+                        </div>
+                        <span class="stock-badge ${status.badge} mt-1 d-inline-block">${status.label}</span>
+                    </td>
+                    <td class="text-right">
+                        <strong>${formatMoney(parseFloat(p.prixU || 0))}</strong>
+                    </td>
+                    <td class="text-right">
+                        <strong>${formatMoney(p.quantite * parseFloat(p.prixU || 0))}</strong>
+                    </td>
+                    <td class="text-center">
+                        <button class="action-btn adjust" title="Ajuster" onclick="openAdjustForProduct(${p.id})">
+                            <i class="fas fa-sliders-h"></i>
+                        </button>
+                        <button class="action-btn history" title="Historique" onclick="showHistory(${p.id})">
+                            <i class="fas fa-history"></i>
+                        </button>
+                        <button class="action-btn edit" title="Modifier" onclick="editProduct(${p.id})">
+                            <i class="fas fa-pen"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function getStockStatus(product) {
+        const qty = product.quantite || 0;
+        const alertThreshold = product.seuil_alerte || 10;
+        const criticalThreshold = product.seuil_critique || 5;
+
+        if (qty <= 0) {
+            return { label: 'Rupture', badge: 'rupture', class: 'text-secondary', barClass: 'critical' };
+        } else if (qty <= criticalThreshold) {
+            return { label: 'Critique', badge: 'critical', class: 'text-danger', barClass: 'critical' };
+        } else if (qty <= alertThreshold) {
+            return { label: 'Alerte', badge: 'alert', class: 'text-warning', barClass: 'alert' };
+        }
+        return { label: 'OK', badge: 'ok', class: 'text-success', barClass: 'ok' };
+    }
+
+    function formatMoney(amount) {
+        return new Intl.NumberFormat('fr-DZ', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(amount) + ' DA';
+    }
+
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => func.apply(this, args), wait);
+        };
+    }
+
+    // Fonctions globales pour les boutons
+    window.openAjustementModal = function() {
+        $('#adjustStockModal').modal('show');
+    };
+
+    window.openAdjustForProduct = function(productId) {
+        const product = allProducts.find(p => p.id === productId);
+        if (product) {
+            document.getElementById('adjustProductSelect').value = productId;
+            document.getElementById('currentStock').value = product.quantite || 0;
+            document.getElementById('newQuantity').value = product.quantite || 0;
+            $('#adjustStockModal').modal('show');
+        }
+    };
+
+    window.showHistory = function(productId) {
+        const content = document.getElementById('historyContent');
+        content.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary"></div></div>';
+        $('#historyModal').modal('show');
+
+        fetch(`/API/stock-moves/?produit=${productId}&ordering=-date`)
+            .then(r => r.json())
+            .then(data => {
+                const moves = data.results || data;
+                if (moves.length === 0) {
+                    content.innerHTML = '<div class="text-center py-4 text-muted"><i class="fas fa-history fa-3x mb-3"></i><p>Aucun mouvement enregistré</p></div>';
+                    return;
+                }
+
+                content.innerHTML = `
+                    <table class="table table-sm" data-no-datatable="true">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Type</th>
+                                <th class="text-center">Quantité</th>
+                                <th>Note</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${moves.slice(0, 20).map(m => `
+                                <tr>
+                                    <td>${new Date(m.date).toLocaleString('fr-FR')}</td>
+                                    <td><span class="badge badge-${m.delta > 0 ? 'success' : 'danger'}">${m.source}</span></td>
+                                    <td class="text-center font-weight-bold ${m.delta > 0 ? 'text-success' : 'text-danger'}">
+                                        ${m.delta > 0 ? '+' : ''}${m.delta}
+                                    </td>
+                                    <td>${m.note || '-'}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+            })
+            .catch(err => {
+                content.innerHTML = '<div class="text-center py-4 text-danger"><i class="fas fa-exclamation-circle fa-3x mb-3"></i><p>Erreur de chargement</p></div>';
+            });
+    };
+
+    window.editProduct = function(productId) {
+        // Rediriger vers la page de modification du produit
+        window.show && show('produits');
+        // Ou ouvrir un modal d'édition
+    };
+
+    window.submitAdjustment = function() {
+        const productId = document.getElementById('adjustProductSelect').value;
+        const warehouseId = document.getElementById('adjustWarehouseSelect').value;
+        const newQty = parseInt(document.getElementById('newQuantity').value);
+        const reason = document.getElementById('adjustReason').value;
+        const note = document.getElementById('adjustNote').value;
+
+        if (!productId || !warehouseId) {
+            alert('Veuillez sélectionner un produit et un entrepôt');
+            return;
+        }
+
+        const product = allProducts.find(p => p.id == productId);
+        const delta = newQty - (product?.quantite || 0);
+
+        // Créer le mouvement de stock
+        fetch('/API/stock-moves/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                produit: productId,
+                warehouse: warehouseId,
+                delta: delta,
+                source: reason,
+                note: note || `Ajustement: ${product?.quantite || 0} -> ${newQty}`
+            })
+        })
+        .then(r => {
+            if (!r.ok) throw new Error('Erreur serveur');
+            return r.json();
+        })
+        .then(() => {
+            $('#adjustStockModal').modal('hide');
+            // Recharger les données
+            loadData();
+            // Notification
+            if (window.toastr) {
+                toastr.success('Stock ajusté avec succès');
+            } else {
+                alert('Stock ajusté avec succès');
+            }
+        })
+        .catch(err => {
+            console.error('Erreur:', err);
+            alert('Erreur lors de l\'ajustement du stock');
+        });
+    };
+
+    window.exportStock = function() {
+        // Export CSV simple
+        let csv = 'Reference,Designation,Categorie,Quantite,Prix,Valeur\n';
+        allProducts.forEach(p => {
+            const cat = allCategories.find(c => c.id === p.categorie)?.nom || '';
+            const valeur = p.quantite * parseFloat(p.prixU || 0);
+            csv += `"${p.reference}","${p.designation}","${cat}",${p.quantite},${p.prixU},${valeur}\n`;
+        });
+
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `stock_${new Date().toISOString().slice(0,10)}.csv`;
+        link.click();
+    };
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    // Update product select change handler
+    document.getElementById('adjustProductSelect')?.addEventListener('change', function() {
+        const option = this.selectedOptions[0];
+        if (option) {
+            document.getElementById('currentStock').value = option.dataset.stock || 0;
+            document.getElementById('newQuantity').value = option.dataset.stock || 0;
+        }
+    });
+
+})();
+</script>

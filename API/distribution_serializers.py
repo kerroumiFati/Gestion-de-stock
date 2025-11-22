@@ -22,6 +22,7 @@ class ProduitMobileSerializer(serializers.ModelSerializer):
     """
     categorie_nom = serializers.CharField(source='categorie.nom', read_only=True)
     unite_mesure_display = serializers.CharField(source='get_unite_mesure_display', read_only=True)
+    stock = serializers.IntegerField(source='quantite', read_only=True)
 
     class Meta:
         model = Produit
@@ -29,6 +30,7 @@ class ProduitMobileSerializer(serializers.ModelSerializer):
             'id', 'reference', 'code_barre', 'designation', 'description',
             'categorie', 'categorie_nom',
             'prixU', 'unite_mesure', 'unite_mesure_display',
+            'stock', 'quantite',
             'is_active', 'updated_at'
         )
 
