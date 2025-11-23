@@ -240,12 +240,14 @@ class VenteTourneeMobile(models.Model):
         ('virement', 'Virement'),
     ]
 
-    tournee = models.ForeignKey(TourneeMobile, on_delete=models.CASCADE, related_name='ventes')
-    arret = models.ForeignKey(ArretTourneeMobile, on_delete=models.CASCADE, related_name='ventes')
+    tournee = models.ForeignKey(TourneeMobile, on_delete=models.CASCADE, related_name='ventes',
+                                null=True, blank=True, help_text='Tournée associée (optionnel pour ventes directes)')
+    arret = models.ForeignKey(ArretTourneeMobile, on_delete=models.CASCADE, related_name='ventes',
+                             null=True, blank=True, help_text='Arrêt associé (optionnel pour ventes directes)')
     client = models.ForeignKey('Client', on_delete=models.CASCADE, related_name='ventes_tournees')
 
     # Référence
-    numero_vente = models.CharField('N° Vente', max_length=50, unique=True)
+    numero_vente = models.CharField('N° Vente', max_length=50, unique=True, blank=True)
     date_vente = models.DateTimeField('Date vente', default=timezone.now)
 
     # Montants
@@ -284,7 +286,8 @@ class VenteTourneeMobile(models.Model):
         return f"{self.numero_vente} - {self.client.nom} - {self.montant_total}€"
 
     def save(self, *args, **kwargs):
-        if self.tournee.est_cloturee and not self.pk:
+        # Vérifier si la tournée est clôturée (seulement si une tournée existe)
+        if self.tournee_id and self.tournee.est_cloturee and not self.pk:
             raise ValidationError('Impossible d\'ajouter une vente à une tournée clôturée.')
         super().save(*args, **kwargs)
 
@@ -319,9 +322,10 @@ class LigneVenteTourneeMobile(models.Model):
         return f"{self.produit.designation} x {self.quantite}"
 
     def save(self, *args, **kwargs):
+        from decimal import Decimal
         # Calcul automatique des montants
         self.montant_ht = self.quantite * self.prix_unitaire
-        self.montant_tva = self.montant_ht * (self.taux_tva / 100)
+        self.montant_tva = self.montant_ht * (self.taux_tva / Decimal('100'))
         self.montant_ttc = self.montant_ht + self.montant_tva
         super().save(*args, **kwargs)
 
@@ -533,7 +537,9 @@ class CommandeClient(models.Model):
     reference = models.CharField(max_length=100, unique=True, blank=True)
 
     # Relations
-    company = models.ForeignKey('Company', on_delete=models.CASCADE, related_name='commandes_clients')
+    company = models.ForeignKey('Company', on_delete=models.CASCADE, related_name='commandes_clients',
+                               null=True, blank=True,
+                               help_text='Entreprise - auto-assignée depuis le client si non fournie')
     client = models.ForeignKey('Client', on_delete=models.PROTECT, related_name='commandes')
     livreur = models.ForeignKey(LivreurDistribution, on_delete=models.PROTECT, related_name='commandes_prises')
 

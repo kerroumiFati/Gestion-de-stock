@@ -191,7 +191,21 @@ if (!window.__livreurs_script_loaded__) {
     max-width: 700px;
     max-height: 90vh;
     overflow-y: auto;
+    overflow-x: visible;
     animation: slideDown 0.3s;
+}
+
+/* Fix pour les select dropdowns dans le modal */
+.modal-body select {
+    position: relative;
+    z-index: 1001;
+}
+
+.form-group select {
+    -webkit-appearance: menulist;
+    -moz-appearance: menulist;
+    appearance: menulist;
+    cursor: pointer;
 }
 
 @keyframes slideDown {
@@ -219,6 +233,7 @@ if (!window.__livreurs_script_loaded__) {
 
 .modal-body {
     padding: 30px;
+    overflow: visible;
 }
 
 .form-grid {
@@ -408,6 +423,14 @@ if (!window.__livreurs_script_loaded__) {
                         <input type="email" id="email">
                     </div>
 
+                    <!-- Entrepôt/Van assigné - Déplacé ici pour meilleure visibilité -->
+                    <div class="form-group">
+                        <label for="entrepot">{% trans "Van/Entrepôt assigné" %}</label>
+                        <select id="entrepot" style="height: 42px;">
+                            <option value="">{% trans "Aucun van assigné" %}</option>
+                        </select>
+                    </div>
+
                     <div class="form-group full-width">
                         <label for="adresse">{% trans "Adresse" %}</label>
                         <textarea id="adresse" rows="2"></textarea>
@@ -451,6 +474,7 @@ if (!window.__livreurs_script_loaded__) {
                         <label for="date_expiration_permis">{% trans "Date d'Expiration" %}</label>
                         <input type="date" id="date_expiration_permis">
                     </div>
+
                 </div>
 
                 <div style="margin-top: 30px; text-align: right;">

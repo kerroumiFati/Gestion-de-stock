@@ -6,8 +6,7 @@
   const apiBase = '/API';
   const api = {
     produits: '/API/produits/',
-    categories: '/API/categories/',
-    fournisseurs: '/API/fournisseurs/'
+    categories: '/API/categories/'
   };
   let __cacheProduits = [];
   let __cacheTypesPrix = [];
@@ -81,24 +80,6 @@
     }
   }
 
-  async function loadFournisseurs(){
-    try{
-      console.log('[Produit] Chargement des fournisseurs...');
-      const data = await fetchJSON(api.fournisseurs);
-      const sel = el('#fournisseur');
-      if(!sel){
-        console.warn('[Produit] Element #fournisseur non trouvé');
-        return;
-      }
-      const fournisseurs = Array.isArray(data) ? data : (data.results || []);
-      console.log(`[Produit] ${fournisseurs.length} fournisseurs chargés`);
-      sel.innerHTML = '<option value="">Sélectionner un fournisseur</option>' +
-        fournisseurs.map(f=>`<option value="${f.id}">${f.libelle}</option>`).join('');
-    }catch(e){
-      console.error('[Produit] Erreur chargement fournisseurs:', e);
-      showAlert('Erreur de chargement des fournisseurs', 'warning');
-    }
-  }
 
   async function loadProduits(){
     try{
@@ -146,7 +127,6 @@
         <td>${p.designation||''}</td>
         <td>${p.categorie_nom||''}</td>
         <td>${prixDisplay!=null? toFixed2(prixDisplay): ''} ${p.currency_symbol||''} ${priceLabel}</td>
-        <td>${p.fournisseur_nom||''}</td>
         <td class="text-center">
           <button class="btn btn-sm action-btn-product btn-edit act-edit" title="Modifier">
             <i class="fas fa-edit"></i> Modifier
@@ -166,9 +146,7 @@
       code_barre: el('#code_barre')?.value?.trim(),
       designation: el('#designation')?.value?.trim(),
       categorie: el('#categorie')?.value ? Number(el('#categorie').value) : null,
-      fournisseur: el('#fournisseur')?.value ? Number(el('#fournisseur').value) : null,
       prixU: el('#prixU')?.value ? Number(el('#prixU').value) : 0,
-      quantite: el('#quantite')?.value ? Number(el('#quantite').value) : 0,
     };
     return {id, payload};
   }
@@ -176,8 +154,8 @@
   async function createOrUpdate(){
     const {id, payload} = collectForm();
     // Validation stricte: vérifier que les champs ne sont pas vides/null/undefined
-    if(!payload.reference || !payload.designation || payload.categorie == null || payload.fournisseur == null || !payload.code_barre || payload.quantite == null){
-      showAlert('Veuillez remplir les champs obligatoires (référence, code-barres, désignation, catégorie, fournisseur, quantité)', 'warning');
+    if(!payload.reference || !payload.designation || payload.categorie == null || !payload.code_barre){
+      showAlert('Veuillez remplir les champs obligatoires (référence, code-barres, désignation, catégorie)', 'warning');
       return;
     }
     // Vérification unicité côté client pour éviter une erreur 400 inutile
@@ -228,9 +206,8 @@
   }
 
   function clearForm(){
-    ['#id','#reference','#code_barre','#designation','#prixU','#quantite'].forEach(s=>{ const n=el(s); if(n) n.value=''; });
+    ['#id','#reference','#code_barre','#designation','#prixU'].forEach(s=>{ const n=el(s); if(n) n.value=''; });
     if(el('#categorie')) el('#categorie').value='';
-    if(el('#fournisseur')) el('#fournisseur').value='';
   }
 
   function showAlert(msg, level){
@@ -269,9 +246,7 @@
           if(el('#code_barre')) el('#code_barre').value = p.code_barre||'';
           if(el('#designation')) el('#designation').value = p.designation||'';
           if(el('#categorie')) el('#categorie').value = p.categorie||'';
-          if(el('#fournisseur')) el('#fournisseur').value = p.fournisseur||'';
           if(el('#prixU')) el('#prixU').value = p.prixU!=null? Number(p.prixU): '';
-          if(el('#quantite')) el('#quantite').value = p.quantite!=null? Number(p.quantite): '';
         }catch(err){ showAlert('Chargement produit échoué', 'danger'); }
       }
     });
@@ -292,7 +267,6 @@
     // Charger les données en parallèle
     Promise.all([
       loadCategories(),
-      loadFournisseurs(),
       loadProduits()
     ]).then(() => {
       console.log('[Produit] Toutes les données chargées avec succès');
@@ -344,7 +318,7 @@
       loadPrixProduits();
     });
 
-    // Bouton Check - vérifier les produits avec quantité faible
+    // Bouton Check - vérifier les produits avec stock faible
     const btnRisk = el('#btnrisk');
     if(btnRisk){
       btnRisk.addEventListener('click', async () => {
@@ -354,13 +328,13 @@
           return;
         }
 
-        // Filtrer les produits dont la quantité est inférieure au seuil
-        const lowStockProducts = __cacheProduits.filter(p => (p.quantite || 0) <= riskValue);
+        // Filtrer les produits dont le stock est inférieur au seuil
+        const lowStockProducts = __cacheProduits.filter(p => (p.stock || 0) <= riskValue);
 
         if(lowStockProducts.length === 0){
-          showAlert(`Aucun produit avec quantité ≤ ${riskValue}`, 'info');
+          showAlert(`Aucun produit avec stock ≤ ${riskValue}`, 'info');
         } else {
-          showAlert(`${lowStockProducts.length} produit(s) avec quantité ≤ ${riskValue}`, 'warning');
+          showAlert(`${lowStockProducts.length} produit(s) avec stock ≤ ${riskValue}`, 'warning');
         }
       });
     }

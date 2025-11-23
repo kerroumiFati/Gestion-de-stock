@@ -311,23 +311,9 @@ input[type="number"].form-control-product::-webkit-outer-spin-button {
                     </div>
                 </div>
 
-                <!-- Fournisseur, Stock et Risk Management -->
+                <!-- Risk Management -->
                 <div class="row">
-                    <div class="col-md-4 mb-3">
-                        <label for="fournisseur" class="form-label-product">
-                            <i class="fas fa-truck"></i> {% trans "Fournisseur" %}
-                        </label>
-                        <select class="form-control form-control-product" id="fournisseur" required>
-                            <option value="">{% trans "Sélectionner un fournisseur" %}</option>
-                        </select>
-                    </div>
-                    <div class="col-md-4 mb-3">
-                        <label for="quantite" class="form-label-product">
-                            <i class="fas fa-cubes"></i> {% trans "Quantité en stock" %}
-                        </label>
-                        <input class="form-control form-control-product" type="number" id="quantite" min="0" step="1" required placeholder="0">
-                    </div>
-                    <div class="col-md-4 mb-3">
+                    <div class="col-md-6 mb-3">
                         <label for="risk" class="form-label-product">
                             <i class="fas fa-exclamation-triangle"></i> {% trans "Risk Management" %}
                         </label>
@@ -403,7 +389,6 @@ input[type="number"].form-control-product::-webkit-outer-spin-button {
                                     <th scope="col">{% trans "Désignation" %}</th>
                                     <th scope="col">{% trans "Catégorie" %}</th>
                                     <th scope="col">{% trans "Prix U" %}</th>
-                                    <th scope="col">{% trans "Fournisseur" %}</th>
                                     <th scope="col" class="text-center">{% trans "Actions" %}</th>
                                 </tr>
                             </thead>

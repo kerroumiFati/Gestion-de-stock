@@ -711,8 +711,25 @@ class VenteTourneeViewSet(viewsets.ModelViewSet):
 
     def get_serializer_class(self):
         if self.action == 'create':
+            # Détecter le format mobile (lignes_vente) vs format standard (lignes)
+            if 'lignes_vente' in self.request.data:
+                from .distribution_serializers import VenteMobileCreateSerializer
+                return VenteMobileCreateSerializer
             return VenteTourneeCreateSerializer
         return VenteTourneeSerializer
+
+    def create(self, request, *args, **kwargs):
+        """Override create pour gérer le format mobile"""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        vente = serializer.save()
+
+        # Retourner la vente créée
+        return Response({
+            'id': vente.id,
+            'message': 'Vente créée avec succès',
+            'montant_total': float(vente.montant_total) if vente.montant_total else 0
+        }, status=status.HTTP_201_CREATED)
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -833,12 +850,48 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
             return CommandeClientCreateSerializer
         return CommandeClientSerializer
 
+    def create(self, request, *args, **kwargs):
+        """Override create pour ajouter du logging et gérer les doublons"""
+        import logging
+        logger = logging.getLogger(__name__)
+
+        logger.info(f"=== CREATE COMMANDE REQUEST ===")
+        logger.info(f"Data received: {request.data}")
+
+        # Vérifier si une commande avec le même app_id existe déjà
+        app_id = request.data.get('app_id')
+        if app_id:
+            existing = CommandeClient.objects.filter(app_id=app_id).first()
+            if existing:
+                logger.info(f"Commande avec app_id={app_id} existe déjà, retour de l'existante")
+                serializer = CommandeClientSerializer(existing)
+                return Response(serializer.data, status=status.HTTP_200_OK)
+
+        serializer = self.get_serializer(data=request.data)
+        if not serializer.is_valid():
+            logger.error(f"Validation errors: {serializer.errors}")
+            logger.error(f"Data that failed: {request.data}")
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            self.perform_create(serializer)
+            headers = self.get_success_headers(serializer.data)
+            logger.info(f"Commande créée avec succès: {serializer.data}")
+            return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        except Exception as e:
+            logger.error(f"Error creating commande: {str(e)}")
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
     def get_queryset(self):
+        from django.db.models import Q
         queryset = super().get_queryset()
 
-        # Filtrer par company de l'utilisateur
+        # Filtrer par company de l'utilisateur OU commandes sans company assignée
         if hasattr(self.request.user, 'company') and self.request.user.company:
-            queryset = queryset.filter(company=self.request.user.company)
+            # Inclure les commandes de la company de l'utilisateur ET les commandes sans company
+            queryset = queryset.filter(
+                Q(company=self.request.user.company) | Q(company__isnull=True)
+            )
 
         # Filtres optionnels
         livreur_id = self.request.query_params.get('livreur')

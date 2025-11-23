@@ -10,7 +10,7 @@ from .distribution_models import (
     CommandeClient, LigneCommandeClient
     # BonLivraisonVan, LigneBonLivraisonVan  # TODO: Models not yet created
 )
-from .models import Client, Produit
+from .models import Client, Produit, Company
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -252,16 +252,127 @@ class VenteTourneeCreateSerializer(serializers.ModelSerializer):
         ]
 
     def create(self, validated_data):
+        from API.models import ProductStock
+
         lignes_data = validated_data.pop('lignes')
         vente = VenteTourneeMobile.objects.create(**validated_data)
 
+        # Récupérer le van du livreur pour décrémenter le stock
+        livreur = None
+        if vente.tournee and vente.tournee.livreur:
+            livreur = vente.tournee.livreur
+
         for ligne_data in lignes_data:
-            LigneVenteTourneeMobile.objects.create(vente=vente, **ligne_data)
+            ligne = LigneVenteTourneeMobile.objects.create(vente=vente, **ligne_data)
+
+            # Décrémenter le stock du van si le livreur a un entrepôt
+            if livreur and livreur.entrepot and ligne.produit:
+                try:
+                    stock = ProductStock.objects.get(
+                        warehouse=livreur.entrepot,
+                        produit=ligne.produit
+                    )
+                    stock.quantity = max(0, stock.quantity - ligne.quantite)
+                    stock.save()
+                except ProductStock.DoesNotExist:
+                    pass  # Pas de stock pour ce produit dans ce van
 
         # Marquer comme synchronisé
         vente.est_synchronise = True
         vente.date_synchronisation = timezone.now()
         vente.save()
+
+        return vente
+
+
+class LigneVenteMobileSerializer(serializers.Serializer):
+    """Serializer pour les lignes de vente depuis l'app mobile"""
+    produit = serializers.IntegerField()
+    quantite = serializers.DecimalField(max_digits=10, decimal_places=2)
+    prix_unitaire = serializers.DecimalField(max_digits=10, decimal_places=2)
+    total = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
+
+
+class VenteMobileCreateSerializer(serializers.Serializer):
+    """Serializer pour création de vente depuis l'app mobile (format simplifié)"""
+    app_id = serializers.CharField(max_length=200, required=False)
+    client = serializers.IntegerField()
+    mode_paiement = serializers.ChoiceField(choices=['especes', 'credit', 'cheque'])
+    montant_total = serializers.DecimalField(max_digits=10, decimal_places=2)
+    lignes_vente = LigneVenteMobileSerializer(many=True)
+
+    def create(self, validated_data):
+        from API.models import ProductStock, Client as ClientModel
+        from .distribution_models import LivreurDistribution
+
+        lignes_data = validated_data.pop('lignes_vente')
+        client_id = validated_data.pop('client')
+        mode_paiement = validated_data.pop('mode_paiement')
+        montant_total = validated_data.pop('montant_total')
+        app_id = validated_data.pop('app_id', None)
+
+        # Récupérer le client
+        try:
+            client = ClientModel.objects.get(id=client_id)
+        except ClientModel.DoesNotExist:
+            raise serializers.ValidationError({'client': 'Client introuvable'})
+
+        # Trouver le livreur assigné à ce client
+        livreur = LivreurDistribution.objects.filter(clients_assignes=client).first()
+
+        # Mapper mode_paiement vers type_paiement
+        type_paiement_map = {
+            'especes': 'especes',
+            'credit': 'credit',
+            'cheque': 'cheque'
+        }
+
+        # Générer un numéro de vente unique
+        import uuid
+        numero_vente = f"VM-{timezone.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:6].upper()}"
+
+        # Créer la vente
+        vente = VenteTourneeMobile.objects.create(
+            client=client,
+            numero_vente=numero_vente,
+            montant_total=montant_total,
+            type_paiement=type_paiement_map.get(mode_paiement, 'especes'),
+            date_vente=timezone.now(),
+            est_synchronise=True,
+            date_synchronisation=timezone.now()
+        )
+
+        # Créer les lignes et décrémenter le stock
+        for ligne_data in lignes_data:
+            produit_id = ligne_data['produit']
+            quantite = ligne_data['quantite']
+            prix_unitaire = ligne_data['prix_unitaire']
+
+            try:
+                produit = Produit.objects.get(id=produit_id)
+            except Produit.DoesNotExist:
+                continue
+
+            # Créer la ligne de vente
+            LigneVenteTourneeMobile.objects.create(
+                vente=vente,
+                produit=produit,
+                quantite=quantite,
+                prix_unitaire=prix_unitaire,
+                montant_ttc=quantite * prix_unitaire
+            )
+
+            # Décrémenter le stock du van du livreur
+            if livreur and livreur.entrepot:
+                try:
+                    stock = ProductStock.objects.get(
+                        warehouse=livreur.entrepot,
+                        produit=produit
+                    )
+                    stock.quantity = max(0, stock.quantity - quantite)
+                    stock.save()
+                except ProductStock.DoesNotExist:
+                    pass
 
         return vente
 
@@ -462,7 +573,7 @@ class MobileSyncPushSerializer(serializers.Serializer):
 # ========================================
 
 class LigneCommandeClientSerializer(serializers.ModelSerializer):
-    """Serializer pour LigneCommandeClient"""
+    """Serializer pour LigneCommandeClient (lecture)"""
     produit_reference = serializers.CharField(source='produit.reference', read_only=True)
     produit_designation = serializers.CharField(source='produit.designation', read_only=True)
 
@@ -475,6 +586,14 @@ class LigneCommandeClientSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at'
         ]
         read_only_fields = ['montant_ht', 'montant_tva', 'montant_ttc', 'created_at', 'updated_at']
+
+
+class LigneCommandeClientCreateSerializer(serializers.Serializer):
+    """Serializer pour créer des lignes de commande depuis l'application mobile"""
+    produit = serializers.PrimaryKeyRelatedField(queryset=Produit.objects.all())
+    quantite = serializers.DecimalField(max_digits=10, decimal_places=2)
+    prix_unitaire_ht = serializers.DecimalField(max_digits=10, decimal_places=2)
+    taux_tva = serializers.DecimalField(max_digits=5, decimal_places=2, required=False, default=19)
 
 
 class CommandeClientSerializer(serializers.ModelSerializer):
@@ -501,7 +620,18 @@ class CommandeClientSerializer(serializers.ModelSerializer):
 
 class CommandeClientCreateSerializer(serializers.ModelSerializer):
     """Serializer pour créer des commandes depuis l'application mobile"""
-    lignes = LigneCommandeClientSerializer(many=True)
+    lignes = LigneCommandeClientCreateSerializer(many=True)
+    company = serializers.PrimaryKeyRelatedField(
+        queryset=Company.objects.all(),
+        required=False,
+        allow_null=True
+    )
+    client = serializers.PrimaryKeyRelatedField(queryset=Client.objects.all())
+    livreur = serializers.PrimaryKeyRelatedField(
+        queryset=LivreurDistribution.objects.all(),
+        required=False,
+        allow_null=True
+    )
 
     class Meta:
         model = CommandeClient
@@ -512,13 +642,39 @@ class CommandeClientCreateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         lignes_data = validated_data.pop('lignes')
+
+        # Auto-assigner la company depuis le client si non fournie
+        client = validated_data.get('client')
+        if not validated_data.get('company') and client:
+            if hasattr(client, 'company') and client.company:
+                validated_data['company'] = client.company
+            else:
+                # Fallback: utiliser la première company disponible
+                from .models import Company
+                default_company = Company.objects.first()
+                if default_company:
+                    validated_data['company'] = default_company
+
+        # Auto-assigner le livreur depuis le client si non fourni
+        if not validated_data.get('livreur') and client:
+            # Trouver le livreur assigné à ce client
+            livreur = LivreurDistribution.objects.filter(clients_assignes=client).first()
+            if livreur:
+                validated_data['livreur'] = livreur
+
         commande = CommandeClient.objects.create(**validated_data)
 
         for ligne_data in lignes_data:
             # Retirer les champs calculés s'ils sont présents
             ligne_data.pop('produit_reference', None)
             ligne_data.pop('produit_designation', None)
-            LigneCommandeClient.objects.create(commande=commande, **ligne_data)
+            # Pour les objets Produit du PrimaryKeyRelatedField
+            produit = ligne_data.pop('produit')
+            LigneCommandeClient.objects.create(
+                commande=commande,
+                produit=produit,
+                **ligne_data
+            )
 
         # Marquer comme synchronisé
         commande.synced_at = timezone.now()

@@ -5,6 +5,9 @@ window.currentLivreurId = window.currentLivreurId || null;
 var livreurs = window.livreurs_list;
 var currentLivreurId = window.currentLivreurId;
 
+// Liste des entrepôts/vans
+window.entrepots_list = window.entrepots_list || [];
+
 // Fonction d'initialisation
 window.initLivreursPage = function() {
     // Vérifier que les éléments nécessaires existent avant d'initialiser
@@ -16,8 +19,64 @@ window.initLivreursPage = function() {
 
     console.log('[LIVREURS] Initializing livreurs page');
     loadLivreurs();
+    loadEntrepots();
     setupFormHandlers();
 };
+
+// Charger la liste des entrepôts/vans
+function loadEntrepots() {
+    fetch('/API/entrepots/', {
+        credentials: 'same-origin',
+        headers: {
+            'Accept': 'application/json',
+        }
+    })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            // Gérer le format array ou object avec results
+            const entrepots = Array.isArray(data) ? data : (data.results || []);
+            window.entrepots_list = entrepots;
+            populateEntrepotSelect(entrepots);
+        })
+        .catch(error => {
+            console.error('Erreur chargement entrepôts:', error);
+            // Afficher un message dans le select
+            const select = document.getElementById('entrepot');
+            if (select) {
+                select.innerHTML = '<option value="">Erreur chargement - Reconnectez-vous</option>';
+            }
+        });
+}
+
+// Remplir le select des entrepôts (uniquement les vans)
+function populateEntrepotSelect(entrepots) {
+    const select = document.getElementById('entrepot');
+    if (!select) return;
+
+    select.innerHTML = '<option value="">Aucun van assigné</option>';
+
+    // Filtrer pour afficher UNIQUEMENT les vans
+    const vans = entrepots.filter(e => {
+        const code = (e.code || '').toLowerCase();
+        return code.includes('van');
+    });
+
+    vans.forEach(e => {
+        const name = e.name || e.nom || 'Sans nom';
+        const code = e.code || '';
+        const option = document.createElement('option');
+        option.value = e.id;
+        option.textContent = `🚐 ${name} (${code})`;
+        select.appendChild(option);
+    });
+
+    console.log('[LIVREURS] Vans chargés:', vans.length);
+}
 
 // NE PAS charger automatiquement au DOMContentLoaded car on utilise le chargement dynamique
 // La page sera initialisée uniquement via fragment:loaded
@@ -68,6 +127,11 @@ function loadLivreurs() {
 // Afficher les livreurs dans le tableau
 function displayLivreurs(livreursData) {
     const tbody = document.getElementById('livreurs-tbody');
+
+    if (!tbody) {
+        console.warn('Element livreurs-tbody not found, skipping display');
+        return;
+    }
 
     if (livreursData.length === 0) {
         tbody.innerHTML = `
@@ -188,6 +252,11 @@ function loadLivreurData(id) {
             document.getElementById('capacite_charge').value = livreur.capacite_charge || '';
             document.getElementById('numero_permis').value = livreur.numero_permis || '';
             document.getElementById('date_expiration_permis').value = livreur.date_expiration_permis || '';
+            // Charger l'entrepôt/van assigné
+            const entrepotSelect = document.getElementById('entrepot');
+            if (entrepotSelect) {
+                entrepotSelect.value = livreur.entrepot || '';
+            }
         })
         .catch(error => {
             console.error('Erreur:', error);
@@ -205,6 +274,7 @@ function setupFormHandlers() {
         e.preventDefault();
 
         const id = document.getElementById('livreur-id').value;
+        const entrepotValue = document.getElementById('entrepot').value;
         const data = {
             matricule: document.getElementById('nom').value.substring(0, 10).toUpperCase(),
             nom: document.getElementById('nom').value + ' ' + document.getElementById('prenom').value,
@@ -212,7 +282,8 @@ function setupFormHandlers() {
             email: document.getElementById('email').value,
             vehicule_marque: document.getElementById('vehicule_marque').value || document.getElementById('vehicule_type').value,
             vehicule_immatriculation: document.getElementById('immatriculation').value,
-            statut: 'actif'
+            statut: 'actif',
+            entrepot: entrepotValue ? parseInt(entrepotValue) : null
         };
 
         const url = id ? `/API/livreurs/${id}/` : '/API/livreurs/';

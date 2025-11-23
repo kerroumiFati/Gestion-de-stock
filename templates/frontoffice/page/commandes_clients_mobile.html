@@ -251,6 +251,27 @@
         }
     });
 
+    // Fallback: charger aussi au DOM ready si fragment:loaded n'est pas déclenché
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function() {
+            // Attendre un court délai pour permettre à fragment:loaded de se déclencher d'abord
+            setTimeout(function() {
+                if (allCommandes.length === 0) {
+                    loadCommandes();
+                    loadLivreurs();
+                }
+            }, 500);
+        });
+    } else {
+        // DOM déjà chargé, charger immédiatement
+        setTimeout(function() {
+            if (allCommandes.length === 0) {
+                loadCommandes();
+                loadLivreurs();
+            }
+        }, 100);
+    }
+
     function loadCommandes() {
         fetch('/API/distribution/commandes/')
             .then(res => res.json())

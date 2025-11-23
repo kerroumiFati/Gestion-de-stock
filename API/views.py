@@ -4,7 +4,7 @@ from django.shortcuts import render
 from django.db.models import Sum, Q, F
 from rest_framework import viewsets, generics, status
 from rest_framework import permissions
-from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
 from rest_framework.decorators import api_view, action
 from rest_framework.response import Response
 from django.http import JsonResponse
@@ -171,8 +171,16 @@ class ClientViewSet(TenantFilterMixin, viewsets.ModelViewSet):
         # Si l'utilisateur a une company, filtrer par company
         if hasattr(self.request, 'company') and self.request.company is not None:
             queryset = queryset.filter(company=self.request.company)
-        # Sinon (utilisateur mobile sans company), retourner tous les clients
-        # Cela permet aux livreurs d'accéder aux clients assignés
+        else:
+            # Utilisateur mobile (livreur) - retourner uniquement les clients assignés
+            from .distribution_models import LivreurDistribution
+            try:
+                livreur = LivreurDistribution.objects.get(user=self.request.user)
+                # Filtrer par les clients assignés à ce livreur
+                queryset = livreur.clients_assignes.all().order_by('nom')
+            except LivreurDistribution.DoesNotExist:
+                # Si pas de profil livreur, retourner aucun client
+                return queryset.none()
 
         return queryset
 
@@ -1760,7 +1768,12 @@ class VenteViewSet(TenantFilterMixin, viewsets.ModelViewSet):
 class WarehouseViewSet(TenantFilterMixin, viewsets.ModelViewSet):
     queryset = Warehouse.objects.all().order_by('name')
     serializer_class = WarehouseSerializer
-    permission_classes = [IsAuthenticated]
+
+    def get_permissions(self):
+        """Permettre la lecture des entrepôts sans authentification"""
+        if self.action in ['list', 'retrieve']:
+            return [AllowAny()]
+        return [IsAuthenticated()]
 
     def perform_create(self, serializer):
         obj = serializer.save()
@@ -1778,7 +1791,12 @@ class WarehouseViewSet(TenantFilterMixin, viewsets.ModelViewSet):
     pagination_class = None
 
     def get_queryset(self):
-        qs = super().get_queryset()
+        # Pour les requêtes de lecture sans authentification, retourner tous les entrepôts actifs
+        if self.action in ['list', 'retrieve'] and not self.request.user.is_authenticated:
+            qs = Warehouse.objects.all().order_by('name')
+        else:
+            qs = super().get_queryset()
+
         include_inactive = self.request.query_params.get('include_inactive')
         if include_inactive in (None, '', '0', 'false', 'False'):
             qs = qs.filter(is_active=True)
