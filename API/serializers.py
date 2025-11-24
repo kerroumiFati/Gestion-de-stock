@@ -192,7 +192,7 @@ class ProduitSerializer(serializers.ModelSerializer):
     prix_formatted = serializers.SerializerMethodField()
     categorie_nom = serializers.CharField(source='categorie.nom', read_only=True)
     categorie_path = serializers.CharField(source='categorie.get_full_path', read_only=True)
-    fournisseur_nom = serializers.CharField(source='fournisseur.libelle', read_only=True)
+    fournisseur_nom = serializers.CharField(source='fournisseur.libelle', read_only=True, allow_null=True)
     stock_status = serializers.SerializerMethodField()
     stock_status_display = serializers.CharField(source='get_stock_status_display', read_only=True)
     stock_class = serializers.CharField(source='get_stock_class', read_only=True)
@@ -211,6 +211,15 @@ class ProduitSerializer(serializers.ModelSerializer):
             'prix_multiples', 'nombre_prix',
             'is_active', 'created_at', 'updated_at'
         )
+        extra_kwargs = {
+            'fournisseur': {'required': False, 'allow_null': True},
+            'quantite': {'required': False, 'default': 0},
+            'description': {'required': False, 'allow_blank': True},
+            'currency': {'required': False, 'allow_null': True},
+            'seuil_alerte': {'required': False},
+            'seuil_critique': {'required': False},
+            'unite_mesure': {'required': False},
+        }
     
     def get_stock_mouvements(self, obj):
         from django.db.models import Sum

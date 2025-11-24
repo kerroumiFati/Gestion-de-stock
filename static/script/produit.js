@@ -1,4 +1,4 @@
-/* Rovo Dev: Gestion Produits - inclut Prix U */
+/* Rovo Dev: Gestion Produits - inclut Prix U - v2024.11.24 */
 (function(){
   if(window.__rovodev_produit_loaded){ return; }
   window.__rovodev_produit_loaded = true;

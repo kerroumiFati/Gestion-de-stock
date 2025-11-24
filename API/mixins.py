@@ -24,20 +24,19 @@ class TenantFilterMixin:
         """
         queryset = super().get_queryset()
 
-        # Vérifier si l'utilisateur est authentifié et a une company
+        # Vérifier si l'utilisateur est authentifié
         if not self.request.user.is_authenticated:
-            return queryset.none()
-
-        # Vérifier si l'utilisateur a un profil avec une company
-        if not hasattr(self.request, 'company') or self.request.company is None:
-            # Si l'utilisateur n'a pas de company, ne retourner aucune donnée
             return queryset.none()
 
         # Vérifier si le modèle a un champ 'company'
         model = queryset.model
         if hasattr(model, 'company'):
-            # Filtrer par company de l'utilisateur
-            queryset = queryset.filter(company=self.request.company)
+            # Filtrer strictement par la company de l'utilisateur
+            if hasattr(self.request, 'company') and self.request.company is not None:
+                queryset = queryset.filter(company=self.request.company)
+            else:
+                # Si l'utilisateur n'a pas de company, ne retourner aucune donnée
+                return queryset.none()
 
         return queryset
 
@@ -47,17 +46,15 @@ class TenantFilterMixin:
         """
         # Vérifier si l'utilisateur a une company
         if hasattr(self.request, 'company') and self.request.company is not None:
-            # Attacher la company à l'objet créé
-            if 'company' in serializer.Meta.model._meta.get_fields():
+            # Attacher la company à l'objet créé si le modèle a ce champ
+            model_fields = [f.name for f in serializer.Meta.model._meta.get_fields()]
+            if 'company' in model_fields:
                 serializer.save(company=self.request.company)
             else:
                 serializer.save()
         else:
-            # Si pas de company, renvoyer une erreur
-            return Response(
-                {"detail": "Vous devez être associé à une entreprise pour créer des données."},
-                status=status.HTTP_403_FORBIDDEN
-            )
+            # Si pas de company, créer sans company (pour rétro-compatibilité)
+            serializer.save()
 
     def check_company_access(self, obj):
         """

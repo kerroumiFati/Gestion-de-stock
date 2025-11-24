@@ -339,8 +339,9 @@ class Produit(models.Model):
                                 help_text="Devise du prix (si vide, utilise la devise par défaut)")
     
     # Stock et alertes
-    quantite = models.IntegerField("Quantité en stock")
-    seuil_alerte = models.IntegerField("Seuil d'alerte", default=10, 
+    quantite = models.IntegerField("Quantité en stock", default=0,
+                                   help_text="Quantité initiale en stock (optionnel)")
+    seuil_alerte = models.IntegerField("Seuil d'alerte", default=10,
                                       help_text="Niveau de stock déclenchant une alerte")
     seuil_critique = models.IntegerField("Seuil critique", default=5,
                                         help_text="Niveau de stock critique (urgent)")
@@ -351,7 +352,9 @@ class Produit(models.Model):
     dimensions = models.CharField("Dimensions (LxlxH)", max_length=50, blank=True)
     
     # Gestion
-    fournisseur = models.ForeignKey(Fournisseur, on_delete=models.CASCADE)
+    fournisseur = models.ForeignKey(Fournisseur, on_delete=models.SET_NULL,
+                                    null=True, blank=True,
+                                    help_text="Fournisseur principal du produit (optionnel)")
     is_active = models.BooleanField("Produit actif", default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -1073,6 +1076,16 @@ class Tournee(models.Model):
 
     # Statut
     statut = models.CharField("Statut", max_length=20, choices=STATUT_CHOICES, default='planifiee')
+
+    # Type de prix à utiliser pour les ventes de cette tournée
+    type_prix = models.ForeignKey(
+        TypePrix,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='tournees',
+        help_text="Type de prix à utiliser pour les ventes (Détail, Supérette, Gros, etc.)"
+    )
 
     # Informations complémentaires
     distance_km = models.DecimalField("Distance totale (km)", max_digits=10, decimal_places=2,

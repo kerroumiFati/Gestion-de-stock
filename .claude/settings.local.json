@@ -9,7 +9,11 @@
       "Bash(python:*)",
       "Bash(pip install:*)",
       "Bash(timeout /t 3)",
-      "Bash(ping:*)"
+      "Bash(ping:*)",
+      "Bash(findstr:*)",
+      "Bash(dir:*)",
+      "Bash(del /q \"staticfiles\\script\\produit.cf98c552f9d5.js\" 2)",
+      "Bash(nul)"
     ],
     "deny": [],
     "ask": []
