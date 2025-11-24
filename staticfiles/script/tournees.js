@@ -3,6 +3,7 @@ window.tournees = window.tournees || [];
 window.livreurs_tournees = window.livreurs_tournees || [];
 window.clients_tournees = window.clients_tournees || [];
 window.warehouses_tournees = window.warehouses_tournees || [];
+window.codes_prix_tournees = window.codes_prix_tournees || [];
 window.currentFilter = window.currentFilter || 'all';
 window.arretCounter = window.arretCounter || 0;
 
@@ -10,6 +11,7 @@ var tournees = window.tournees;
 var livreurs = window.livreurs_tournees;
 var clients = window.clients_tournees;
 var warehouses = window.warehouses_tournees;
+var codes_prix = window.codes_prix_tournees;
 var currentFilter = window.currentFilter;
 var arretCounter = window.arretCounter;
 
@@ -38,6 +40,11 @@ window.initTourneesPage = function() {
     loadWarehouses().then(() => {
         populateWarehousesSelect();
     }).catch(err => console.error('Erreur chargement entrepôts:', err));
+
+    // Charger les codes de prix et peupler le select
+    loadCodesPrix().then(() => {
+        populateCodesPrixSelect();
+    }).catch(err => console.error('Erreur chargement codes de prix:', err));
 
     setupFormHandlers();
 
@@ -212,6 +219,61 @@ function loadWarehouses() {
             window.warehouses_tournees = [];
             throw error;
         });
+}
+
+// Charger les codes de prix
+function loadCodesPrix() {
+    return fetch('/API/codes-prix/?page_size=1000', {
+        credentials: 'same-origin',
+        headers: {
+            'Accept': 'application/json',
+        }
+    })
+        .then(response => {
+            if (!response.ok) {
+                console.error('Erreur HTTP codes de prix:', response.status, response.statusText);
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            // Gérer la pagination DRF (data.results) ou tableau direct
+            window.codes_prix_tournees = Array.isArray(data) ? data : (data.results || []);
+            // Filtrer uniquement les codes actifs
+            window.codes_prix_tournees = window.codes_prix_tournees.filter(c => c.is_active);
+            console.log('Codes de prix chargés:', window.codes_prix_tournees.length);
+            return window.codes_prix_tournees;
+        })
+        .catch(error => {
+            console.error('Erreur chargement codes de prix:', error);
+            window.codes_prix_tournees = [];
+            throw error;
+        });
+}
+
+// Peupler le select des codes de prix
+function populateCodesPrixSelect() {
+    const select = document.getElementById('code_prix');
+    if (!select) {
+        console.warn('Element #code_prix not found');
+        return;
+    }
+
+    select.innerHTML = '<option value="">Sélectionner le code de prix...</option>';
+
+    if (!window.codes_prix_tournees || !Array.isArray(window.codes_prix_tournees) || window.codes_prix_tournees.length === 0) {
+        console.warn('window.codes_prix_tournees is empty:', window.codes_prix_tournees);
+        return;
+    }
+
+    console.log('Codes de prix à afficher:', window.codes_prix_tournees.length);
+
+    window.codes_prix_tournees.forEach(codePrix => {
+        const isDefault = codePrix.is_default ? ' (par défaut)' : '';
+        const label = `${codePrix.libelle} (${codePrix.code})${isDefault}`;
+        const selected = codePrix.is_default ? ' selected' : '';
+        select.innerHTML += `<option value="${codePrix.id}"${selected}>${label}</option>`;
+    });
 }
 
 // Afficher les tournées
@@ -866,10 +928,12 @@ function setupFormHandlers() {
         e.preventDefault();
 
         const id = document.getElementById('tournee-id').value;
+        const codePrixValue = document.getElementById('code_prix').value;
         const data = {
             date_tournee: document.getElementById('date').value,
             livreur: document.getElementById('livreur').value,
             warehouse: document.getElementById('warehouse').value || null,
+            code_prix: codePrixValue ? parseInt(codePrixValue) : null,
             heure_depart_prevue: document.getElementById('heure_depart_prevue').value,
             heure_retour_prevue: document.getElementById('heure_retour_prevue').value || null,
             distance_km: document.getElementById('distance_km').value || null,

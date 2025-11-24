@@ -9,6 +9,7 @@
     categories: '/API/categories/'
   };
   let __cacheProduits = [];
+  let __cacheCodesPrix = [];
   let __cacheTypesPrix = [];
   let __cachePrixProduits = [];
 
@@ -277,6 +278,7 @@
     });
 
     // Charger les prix multiples
+    loadCodesPrix();
     loadTypesPrix();
     loadPrixProduits();
     loadAllPrixProduits();
@@ -291,20 +293,20 @@
       renderProduitsWithPrices();
     });
 
-    // Event handlers pour la gestion des prix multiples
-    console.log('[Produit] Attachement des event handlers pour prix multiples');
-    $(document).off('click', '#btn_add_type_prix').on('click', '#btn_add_type_prix', function(e){
+    // Event handlers pour la gestion des codes de prix
+    console.log('[Produit] Attachement des event handlers pour codes de prix');
+    $(document).off('click', '#btn_add_code_prix').on('click', '#btn_add_code_prix', function(e){
       e.preventDefault();
-      console.log('[Produit] Bouton type prix cliqué');
-      addTypePrix();
+      console.log('[Produit] Bouton code prix cliqué');
+      addCodePrix();
     });
-    $(document).off('click', '[data-action="delete-type-prix"]').on('click', '[data-action="delete-type-prix"]', function(e){
+    $(document).off('click', '[data-action="delete-code-prix"]').on('click', '[data-action="delete-code-prix"]', function(e){
       e.preventDefault();
-      deleteTypePrix($(this).data('id'));
+      deleteCodePrix($(this).data('id'));
     });
-    $(document).off('click', '[data-action="toggle-default"]').on('click', '[data-action="toggle-default"]', function(e){
+    $(document).off('click', '[data-action="toggle-default-code"]').on('click', '[data-action="toggle-default-code"]', function(e){
       e.preventDefault();
-      setDefaultTypePrix($(this).data('id'));
+      setDefaultCodePrix($(this).data('id'));
     });
     $(document).off('click', '#btn_add_prix_prod').on('click', '#btn_add_prix_prod', function(e){
       e.preventDefault();
@@ -362,7 +364,119 @@
     return cookieValue ? cookieValue.split('=')[1] : '';
   }
 
-  // Types de Prix
+  // ========== CODES DE PRIX ==========
+  function loadCodesPrix(){
+    $.ajax({ url: apiBase + '/codes-prix/?page_size=1000', method: 'GET', dataType: 'json' })
+      .done(function(data){
+        const list = asList(data);
+        __cacheCodesPrix = list;
+        renderCodesPrix(list);
+        fillCodesPrixSelects(list);
+      })
+      .fail(function(xhr){ console.warn('Erreur chargement codes prix', xhr); });
+  }
+
+  function renderCodesPrix(list){
+    const $tbody = $('#codes_prix_body');
+    if(!$tbody.length) return;
+    $tbody.empty();
+    if(!list || !list.length){
+      $tbody.append('<tr><td colspan="8" class="text-center text-muted">Aucun code de prix défini</td></tr>');
+      return;
+    }
+    list.forEach(function(c){
+      const tr = $('<tr>');
+      tr.append('<td><strong>'+c.code+'</strong></td>');
+      tr.append('<td>'+c.libelle+'</td>');
+      let periode = 'Permanent';
+      if(c.date_debut || c.date_fin){
+        periode = (c.date_debut || '...') + ' → ' + (c.date_fin || '...');
+      }
+      tr.append('<td>'+periode+'</td>');
+      tr.append('<td>'+c.ordre+'</td>');
+      tr.append('<td>'+(c.is_default ? '<span class="badge badge-success">Oui</span>' : 'Non')+'</td>');
+      tr.append('<td>'+(c.is_active ? '<span class="badge badge-success">Actif</span>' : '<span class="badge badge-secondary">Inactif</span>')+'</td>');
+      tr.append('<td><span class="badge badge-primary">'+(c.nombre_tournees || 0)+'</span></td>');
+      const actions = '<button type="button" class="btn btn-sm btn-edit" data-action="toggle-default-code" data-id="'+c.id+'">Définir par défaut</button> ' +
+                     '<button type="button" class="btn btn-sm btn-delete" data-action="delete-code-prix" data-id="'+c.id+'">Supprimer</button>';
+      tr.append('<td>'+actions+'</td>');
+      $tbody.append(tr);
+    });
+  }
+
+  function fillCodesPrixSelects(list){
+    const $sel = $('#prix_prod_code');
+    if(!$sel.length) return;
+    const first = $sel.find('option').first().clone();
+    $sel.empty().append(first);
+    list.forEach(function(c){
+      if(c.is_active){
+        $('<option>').val(c.id).text(c.libelle + ' (' + c.code + ')').appendTo($sel);
+      }
+    });
+  }
+
+  function addCodePrix(){
+    console.log('[Produit] addCodePrix appelé');
+    const code = ($('#code_prix_code').val() || '').trim().toUpperCase();
+    const libelle = ($('#code_prix_libelle').val() || '').trim();
+    const date_debut = $('#code_prix_date_debut').val() || null;
+    const date_fin = $('#code_prix_date_fin').val() || null;
+    const ordre = parseInt($('#code_prix_ordre').val() || '0', 10);
+
+    console.log('[Produit] Données code prix:', { code, libelle, date_debut, date_fin, ordre });
+
+    if(!code){ alert('Code requis'); return; }
+    if(!libelle){ alert('Libellé requis'); return; }
+
+    const data = { code, libelle, date_debut, date_fin, ordre };
+
+    $.ajax({ url: apiBase + '/codes-prix/', method: 'POST', contentType: 'application/json',
+             headers: { 'X-CSRFToken': getCSRFToken() }, data: JSON.stringify(data) })
+      .done(function(resp){
+        console.log('[Produit] Code prix ajouté:', resp);
+        $('#code_prix_code').val('');
+        $('#code_prix_libelle').val('');
+        $('#code_prix_date_debut').val('');
+        $('#code_prix_date_fin').val('');
+        $('#code_prix_ordre').val('0');
+        loadCodesPrix();
+        showAlert('Code de prix ajouté avec succès', 'success');
+      })
+      .fail(function(xhr){
+        console.error('[Produit] Erreur ajout code prix:', xhr);
+        const msg = (xhr.responseJSON && (xhr.responseJSON.detail || xhr.responseJSON.error)) || 'Erreur ajout code prix';
+        showAlert(msg, 'danger');
+      });
+  }
+
+  function deleteCodePrix(id){
+    if(!confirm('Supprimer ce code de prix ?')) return;
+    $.ajax({ url: apiBase + '/codes-prix/' + id + '/', method: 'DELETE', headers: { 'X-CSRFToken': getCSRFToken() } })
+      .done(function(){
+        loadCodesPrix();
+        showAlert('Code de prix supprimé', 'success');
+      })
+      .fail(function(xhr){
+        const msg = (xhr.responseJSON && (xhr.responseJSON.detail || xhr.responseJSON.error)) || 'Erreur suppression';
+        showAlert(msg, 'danger');
+      });
+  }
+
+  function setDefaultCodePrix(id){
+    $.ajax({ url: apiBase + '/codes-prix/' + id + '/', method: 'PATCH', contentType: 'application/json',
+             headers: { 'X-CSRFToken': getCSRFToken() }, data: JSON.stringify({ is_default: true }) })
+      .done(function(){
+        loadCodesPrix();
+        showAlert('Code de prix défini par défaut', 'success');
+      })
+      .fail(function(xhr){
+        const msg = (xhr.responseJSON && (xhr.responseJSON.detail || xhr.responseJSON.error)) || 'Erreur mise à jour';
+        showAlert(msg, 'danger');
+      });
+  }
+
+  // ========== TYPES DE PRIX ==========
   function loadTypesPrix(){
     $.ajax({ url: apiBase + '/types-prix/?page_size=1000', method: 'GET', dataType: 'json' })
       .done(function(data){
@@ -516,16 +630,15 @@
     list.forEach(function(p){
       const tr = $('<tr>');
       tr.append('<td><code>'+p.produit_reference+'</code> - '+p.produit_designation+'</td>');
-      tr.append('<td><strong>'+p.type_prix_libelle+'</strong> ('+p.type_prix_code+')</td>');
-      // Utiliser le currency_symbol du produit, ou fallback vers €
+      // Code de prix (peut être null = Standard)
+      const codePrixLabel = p.code_prix_libelle ? '<span class="badge badge-info">'+p.code_prix_code+'</span>' : '<span class="badge badge-secondary">Standard</span>';
+      tr.append('<td>'+codePrixLabel+'</td>');
+      // Type de prix (Détail, Supérette, Gros)
+      tr.append('<td><strong>'+p.type_prix_libelle+'</strong></td>');
+      // Prix avec symbole de devise
       tr.append('<td class="text-right"><strong>'+p.prix+'</strong> '+(p.currency_symbol || '€')+'</td>');
       tr.append('<td class="text-center">'+p.quantite_min+'</td>');
-      let validite = 'Permanent';
-      if(p.date_debut || p.date_fin){
-        validite = (p.date_debut || '...') + ' → ' + (p.date_fin || '...');
-      }
-      tr.append('<td>'+validite+'</td>');
-      const statusBadge = p.is_valid ? '<span class="badge badge-success">Valide</span>' : '<span class="badge badge-warning">Expiré</span>';
+      const statusBadge = p.is_active ? '<span class="badge badge-success">Actif</span>' : '<span class="badge badge-warning">Inactif</span>';
       tr.append('<td>'+statusBadge+'</td>');
       const actions = '<button type="button" class="btn btn-sm btn-delete" data-action="delete-prix-prod" data-id="'+p.id+'">Supprimer</button>';
       tr.append('<td>'+actions+'</td>');
@@ -558,27 +671,26 @@
 
   function addPrixProduit(){
     const produit = parseInt($('#prix_prod_produit').val() || '0', 10);
+    const code_prix_val = $('#prix_prod_code').val();
+    const code_prix = code_prix_val ? parseInt(code_prix_val, 10) : null;
     const type_prix = parseInt($('#prix_prod_type').val() || '0', 10);
     const prix = parseFloat($('#prix_prod_prix').val() || '0');
     const quantite_min = parseInt($('#prix_prod_qte_min').val() || '1', 10);
-    const date_debut = $('#prix_prod_date_debut').val() || null;
-    const date_fin = $('#prix_prod_date_fin').val() || null;
 
     if(!produit){ alert('Veuillez sélectionner un produit'); return; }
     if(!type_prix){ alert('Veuillez sélectionner un type de prix'); return; }
     if(!prix || prix <= 0){ alert('Prix invalide'); return; }
 
-    const data = { produit, type_prix, prix, quantite_min, date_debut, date_fin };
+    const data = { produit, code_prix, type_prix, prix, quantite_min };
 
     $.ajax({ url: apiBase + '/prix-produits/', method: 'POST', contentType: 'application/json',
              headers: { 'X-CSRFToken': getCSRFToken() }, data: JSON.stringify(data) })
       .done(function(){
         $('#prix_prod_produit').val('');
+        $('#prix_prod_code').val('');
         $('#prix_prod_type').val('');
         $('#prix_prod_prix').val('');
         $('#prix_prod_qte_min').val('1');
-        $('#prix_prod_date_debut').val('');
-        $('#prix_prod_date_fin').val('');
         loadPrixProduits();
         loadAllPrixProduits(); // Recharge tous les prix pour mettre à jour l'affichage
         showAlert('Prix produit ajouté avec succès', 'success');

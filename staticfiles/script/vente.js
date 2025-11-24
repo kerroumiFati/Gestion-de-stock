@@ -6,6 +6,7 @@
   const API_CURRENCIES = '/API/currencies/';
   const API_EXCHANGE_RATES = '/API/exchange-rates/';
   const API_WAREHOUSES = '/API/entrepots/';
+  const API_TYPES_PRIX = '/API/types-prix/';
 
   // Variable globale pour stocker le symbole de devise par défaut
   let DEFAULT_CURRENCY_SYMBOL = '€'; // Valeur par défaut si non configurée
@@ -138,6 +139,37 @@
         fillCurrencySelects(list);
       })
       .fail(function(xhr){ dbg('loadCurrencies fail', xhr.status, xhr.responseText || xhr.statusText); });
+  }
+
+  function loadTypesPrix(){
+    $.ajax({ url: API_TYPES_PRIX + '?page_size=1000', method: 'GET', dataType: 'json' })
+      .done(function(data){
+        const list = asList(data);
+        fillTypePrixSelect(list);
+      })
+      .fail(function(xhr){ dbg('loadTypesPrix fail', xhr.status, xhr.responseText || xhr.statusText); });
+  }
+
+  function fillTypePrixSelect(list){
+    const $sel = $('#vente_type_prix');
+    if(!$sel.length) return;
+    $sel.empty();
+    // Ajouter les options
+    list.forEach(function(t){
+      if(t.is_active){
+        const opt = $('<option>').val(t.id).text(t.libelle + ' (' + t.code + ')');
+        // Définir DETAIL comme défaut
+        if(t.code === 'DETAIL' || t.is_default){
+          opt.prop('selected', true);
+        }
+        $sel.append(opt);
+      }
+    });
+    // Si aucune option sélectionnée, sélectionner la première
+    if($sel.find('option:selected').length === 0 && $sel.find('option').length > 0){
+      $sel.find('option').first().prop('selected', true);
+    }
+    dbg('Types de prix chargés:', list.length);
   }
 
   function addCurrency(){
@@ -307,43 +339,56 @@
     $('#vente_total_ttc').text(totalTTC.toFixed(2)+' '+DEFAULT_CURRENCY_SYMBOL);
   }
 
-    /**
-   * Get the best price for a product, checking for promotional prices first
-   * @param {Object} product - The product object from cache
-   * @returns {number} - The best available price
+  /**
+   * Récupère le prix selon le type de prix sélectionné dans l'interface
+   * @param {Object} product - Le produit
+   * @param {number} typePrixId - L'ID du type de prix (optionnel, sinon utilise le select)
+   * @returns {number} - Le prix correspondant au type sélectionné
    */
-  function getBestPrice(product){
+  function getBestPrice(product, typePrixId){
     if(!product) return 0;
-    
+
+    // Récupérer le type de prix sélectionné si non fourni
+    if(!typePrixId){
+      typePrixId = parseInt($('#vente_type_prix').val() || '0', 10);
+    }
+
     // Check if product has prix_multiples (multiple prices)
     if(product.prix_multiples && Array.isArray(product.prix_multiples) && product.prix_multiples.length > 0){
-      // Filter for active and valid promotional prices
-      const promoPrices = product.prix_multiples.filter(function(pm){
-        return pm.is_active && pm.is_valid && 
-               (pm.type_prix_code === 'PROMO' || pm.type_prix_code === 'PROMOTION' ||
-                (pm.type_prix_libelle && pm.type_prix_libelle.toLowerCase().includes('promo')));
-      });
-      
-      // If promotional prices exist, use the lowest one
-      if(promoPrices.length > 0){
-        const lowestPromo = Math.min.apply(null, promoPrices.map(function(pp){ return Number(pp.prix || 0); }));
-        dbg('Using promotional price:', lowestPromo, 'for product', product.designation);
-        return lowestPromo;
+
+      // Si un type de prix est sélectionné, chercher le prix correspondant
+      if(typePrixId){
+        const matchingPrice = product.prix_multiples.find(function(pm){
+          return pm.is_active && pm.type_prix === typePrixId;
+        });
+
+        if(matchingPrice){
+          dbg('Using price for type_prix', typePrixId, ':', matchingPrice.prix, 'for product', product.designation);
+          return Number(matchingPrice.prix || 0);
+        }
       }
-      
-      // Otherwise, check for any active/valid price
-      const activePrices = product.prix_multiples.filter(function(pm){
-        return pm.is_active && pm.is_valid;
+
+      // Sinon chercher le prix DETAIL par défaut
+      const detailPrice = product.prix_multiples.find(function(pm){
+        return pm.is_active && pm.type_prix_code === 'DETAIL';
       });
-      
-      if(activePrices.length > 0){
-        // Use the first active price (you could also use the lowest or a specific type)
-        const activePrice = Number(activePrices[0].prix || 0);
-        dbg('Using active price:', activePrice, 'for product', product.designation);
-        return activePrice;
+
+      if(detailPrice){
+        dbg('Using DETAIL price:', detailPrice.prix, 'for product', product.designation);
+        return Number(detailPrice.prix || 0);
+      }
+
+      // Sinon prendre le premier prix actif
+      const activePrice = product.prix_multiples.find(function(pm){
+        return pm.is_active;
+      });
+
+      if(activePrice){
+        dbg('Using first active price:', activePrice.prix, 'for product', product.designation);
+        return Number(activePrice.prix || 0);
       }
     }
-    
+
     // Fall back to default prixU
     dbg('Using default price (prixU):', product.prixU, 'for product', product.designation);
     return Number(product.prixU || 0);
@@ -708,6 +753,7 @@
       // Une fois la devise chargée (ou en cas d'erreur), charger le reste
       loadClients();
       loadCurrencies();
+      loadTypesPrix();
       loadWarehouses();
       bindProduitFilters();
       renderLines();

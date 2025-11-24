@@ -277,9 +277,44 @@ class Categorie(models.Model):
 #####################
 #   Types de Prix   #
 #####################
+class CodePrix(models.Model):
+    """Codes de prix pour les promotions/périodes (ex: STANDARD, AID, RAMADAN)"""
+    code = models.CharField(max_length=20, unique=True, help_text="Code unique (ex: STANDARD, AID, RAMADAN)")
+    libelle = models.CharField(max_length=100, help_text="Libellé du code de prix")
+    description = models.TextField(blank=True, help_text="Description du code de prix")
+    date_debut = models.DateField("Date début", null=True, blank=True, help_text="Date de début de validité")
+    date_fin = models.DateField("Date fin", null=True, blank=True, help_text="Date de fin de validité")
+    ordre = models.IntegerField(default=0, help_text="Ordre d'affichage")
+    is_default = models.BooleanField(default=False, help_text="Code de prix par défaut")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['ordre', 'libelle']
+        verbose_name = "Code de prix"
+        verbose_name_plural = "Codes de prix"
+
+    def __str__(self):
+        return f"{self.code} - {self.libelle}"
+
+    def save(self, *args, **kwargs):
+        if self.is_default:
+            CodePrix.objects.filter(is_default=True).exclude(pk=self.pk).update(is_default=False)
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get_default(cls):
+        return cls.objects.filter(is_default=True, is_active=True).first()
+
+
 class TypePrix(models.Model):
-    """Types de prix : détaillant, grossiste, promotionnel, etc."""
-    code = models.CharField(max_length=20, unique=True, help_text="Code unique du type de prix (ex: DETAIL, GROSS, PROMO)")
+    """Types de prix par client : Détail, Supérette, Gros"""
+    TYPE_CHOICES = [
+        ('DETAIL', 'Détail'),
+        ('SUPERETTE', 'Supérette'),
+        ('GROS', 'Gros'),
+    ]
+    code = models.CharField(max_length=20, unique=True, choices=TYPE_CHOICES, help_text="Type de client (DETAIL, SUPERETTE, GROS)")
     libelle = models.CharField(max_length=100, help_text="Libellé du type de prix")
     description = models.TextField(blank=True, help_text="Description du type de prix")
     ordre = models.IntegerField(default=0, help_text="Ordre d'affichage")
@@ -296,7 +331,6 @@ class TypePrix(models.Model):
         return f"{self.code} - {self.libelle}"
 
     def save(self, *args, **kwargs):
-        # S'assurer qu'un seul type de prix est par défaut
         if self.is_default:
             TypePrix.objects.filter(is_default=True).exclude(pk=self.pk).update(is_default=False)
         super().save(*args, **kwargs)
@@ -450,13 +484,16 @@ class Produit(models.Model):
 #   Prix Produits   #
 #####################
 class PrixProduit(models.Model):
-    """Prix multiples pour un produit selon le type de client/quantité"""
+    """Prix multiples pour un produit selon le code de prix et type de client"""
     produit = models.ForeignKey(Produit, on_delete=models.CASCADE, related_name='prix_multiples',
                                 help_text="Produit concerné")
+    code_prix = models.ForeignKey(CodePrix, on_delete=models.PROTECT, related_name='prix',
+                                  null=True, blank=True,
+                                  help_text="Code de prix (STANDARD, AID, RAMADAN, etc.)")
     type_prix = models.ForeignKey(TypePrix, on_delete=models.PROTECT, related_name='prix',
-                                  help_text="Type de prix (détaillant, grossiste, etc.)")
+                                  help_text="Type de client (Détail, Supérette, Gros)")
     prix = models.DecimalField("Prix", max_digits=10, decimal_places=2,
-                               help_text="Montant du prix pour ce type")
+                               help_text="Montant du prix pour cette combinaison")
     currency = models.ForeignKey(Currency, on_delete=models.PROTECT, null=True, blank=True,
                                 help_text="Devise du prix (si vide, hérite de la devise du produit)")
 
@@ -464,34 +501,34 @@ class PrixProduit(models.Model):
     quantite_min = models.IntegerField("Quantité minimum", default=1,
                                        help_text="Quantité minimum pour appliquer ce prix")
 
-    # Validité temporelle (pour les promotions)
-    date_debut = models.DateField("Date de début", null=True, blank=True,
-                                  help_text="Date de début de validité (laisser vide si permanent)")
-    date_fin = models.DateField("Date de fin", null=True, blank=True,
-                                help_text="Date de fin de validité (laisser vide si permanent)")
-
     is_active = models.BooleanField("Prix actif", default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ['produit', 'type_prix__ordre']
+        ordering = ['produit', 'code_prix__ordre', 'type_prix__ordre']
         verbose_name = "Prix produit"
         verbose_name_plural = "Prix produits"
-        unique_together = ['produit', 'type_prix']  # Un seul prix par type pour un produit
+        unique_together = ['produit', 'code_prix', 'type_prix']  # Un seul prix par combinaison produit/code/type
 
     def __str__(self):
         currency_symbol = self.currency.symbol if self.currency else self.produit.currency.symbol if self.produit.currency else '€'
-        return f"{self.produit.reference} - {self.type_prix.libelle}: {self.prix} {currency_symbol}"
+        code_label = self.code_prix.code if self.code_prix else 'STD'
+        return f"{self.produit.reference} - {code_label}/{self.type_prix.code}: {self.prix} {currency_symbol}"
 
     def is_valid_now(self):
-        """Vérifie si ce prix est valide aujourd'hui"""
+        """Vérifie si ce prix est valide aujourd'hui (basé sur les dates du code_prix)"""
         if not self.is_active:
             return False
-        today = timezone.now().date()
-        if self.date_debut and today < self.date_debut:
+        # Si pas de code_prix, c'est un prix standard toujours valide
+        if not self.code_prix:
+            return True
+        if not self.code_prix.is_active:
             return False
-        if self.date_fin and today > self.date_fin:
+        today = timezone.now().date()
+        if self.code_prix.date_debut and today < self.code_prix.date_debut:
+            return False
+        if self.code_prix.date_fin and today > self.code_prix.date_fin:
             return False
         return True
 
@@ -1077,14 +1114,14 @@ class Tournee(models.Model):
     # Statut
     statut = models.CharField("Statut", max_length=20, choices=STATUT_CHOICES, default='planifiee')
 
-    # Type de prix à utiliser pour les ventes de cette tournée
-    type_prix = models.ForeignKey(
-        TypePrix,
+    # Code de prix à utiliser pour les ventes de cette tournée
+    code_prix = models.ForeignKey(
+        CodePrix,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name='tournees',
-        help_text="Type de prix à utiliser pour les ventes (Détail, Supérette, Gros, etc.)"
+        help_text="Code de prix à utiliser pour les ventes (STANDARD, AID, RAMADAN, etc.)"
     )
 
     # Informations complémentaires

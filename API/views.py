@@ -2272,6 +2272,30 @@ def export_inventory_report(request):
         return Response({'error': str(e)}, status=500)
 
 
+####################
+# Codes de Prix API #
+####################
+class CodePrixViewSet(viewsets.ModelViewSet):
+    """API pour les codes promotionnels (STANDARD, AID, RAMADAN, etc.)"""
+    queryset = CodePrix.objects.all().order_by('ordre', 'libelle')
+    serializer_class = CodePrixSerializer
+    permission_classes = [permissions.AllowAny]
+    filterset_fields = ['is_active', 'is_default']
+
+    def perform_create(self, serializer):
+        obj = serializer.save()
+        try:
+            log_event(self.request, 'codeprix.create', target=obj, metadata={'code': obj.code})
+        except Exception:
+            pass
+
+    def perform_update(self, serializer):
+        obj = serializer.save()
+        try:
+            log_event(self.request, 'codeprix.update', target=obj, metadata={'code': obj.code})
+        except Exception:
+            pass
+
 #####################
 # Types de Prix API #
 #####################
@@ -2299,10 +2323,10 @@ class TypePrixViewSet(viewsets.ModelViewSet):
 # Prix Produits API #
 #####################
 class PrixProduitViewSet(viewsets.ModelViewSet):
-    queryset = PrixProduit.objects.all().order_by('produit', 'type_prix__ordre')
+    queryset = PrixProduit.objects.all().order_by('produit', 'code_prix__ordre', 'type_prix__ordre')
     serializer_class = PrixProduitSerializer
     permission_classes = [permissions.AllowAny]
-    filterset_fields = ['produit', 'type_prix', 'is_active']
+    filterset_fields = ['produit', 'code_prix', 'type_prix', 'is_active']
 
     def perform_create(self, serializer):
         obj = serializer.save()

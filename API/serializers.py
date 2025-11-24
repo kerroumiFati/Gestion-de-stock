@@ -143,7 +143,19 @@ class ExchangeRateSerializer(serializers.ModelSerializer):
         fields = ['id', 'from_currency', 'to_currency', 'from_currency_code', 'to_currency_code',
                  'from_currency_symbol', 'to_currency_symbol', 'rate', 'date', 'is_active']
 
-# Serializers pour les Types de Prix et Prix Produits
+# Serializers pour les Codes de Prix et Types de Prix
+class CodePrixSerializer(serializers.ModelSerializer):
+    """Serializer pour les codes promotionnels (STANDARD, AID, RAMADAN, etc.)"""
+    nombre_tournees = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CodePrix
+        fields = ['id', 'code', 'libelle', 'description', 'date_debut', 'date_fin',
+                 'ordre', 'is_default', 'is_active', 'created_at', 'nombre_tournees']
+
+    def get_nombre_tournees(self, obj):
+        return obj.tournees.count()
+
 class TypePrixSerializer(serializers.ModelSerializer):
     nombre_prix = serializers.SerializerMethodField()
 
@@ -156,6 +168,8 @@ class TypePrixSerializer(serializers.ModelSerializer):
         return obj.prix.filter(is_active=True).count()
 
 class PrixProduitSerializer(serializers.ModelSerializer):
+    code_prix_libelle = serializers.CharField(source='code_prix.libelle', read_only=True, allow_null=True)
+    code_prix_code = serializers.CharField(source='code_prix.code', read_only=True, allow_null=True)
     type_prix_libelle = serializers.CharField(source='type_prix.libelle', read_only=True)
     type_prix_code = serializers.CharField(source='type_prix.code', read_only=True)
     produit_reference = serializers.CharField(source='produit.reference', read_only=True)
@@ -168,10 +182,10 @@ class PrixProduitSerializer(serializers.ModelSerializer):
     class Meta:
         model = PrixProduit
         fields = ['id', 'produit', 'produit_reference', 'produit_designation',
+                 'code_prix', 'code_prix_libelle', 'code_prix_code',
                  'type_prix', 'type_prix_libelle', 'type_prix_code',
                  'prix', 'currency', 'currency_code', 'currency_symbol', 'prix_formatted',
-                 'quantite_min', 'date_debut', 'date_fin',
-                 'is_active', 'is_valid', 'created_at', 'updated_at']
+                 'quantite_min', 'is_active', 'is_valid', 'created_at', 'updated_at']
 
     def get_prix_formatted(self, obj):
         currency = obj.get_effective_currency()
@@ -731,6 +745,8 @@ class TourneeSerializer(serializers.ModelSerializer):
     livreur_nom = serializers.SerializerMethodField()
     warehouse_nom = serializers.CharField(source='warehouse.nom', read_only=True, allow_null=True)
     statut_display = serializers.CharField(source='get_statut_display', read_only=True)
+    code_prix_libelle = serializers.CharField(source='code_prix.libelle', read_only=True, allow_null=True)
+    code_prix_code = serializers.CharField(source='code_prix.code', read_only=True, allow_null=True)
     nombre_arrets = serializers.SerializerMethodField()
     arrets_livres = serializers.SerializerMethodField()
     taux_reussite = serializers.SerializerMethodField()
@@ -743,7 +759,9 @@ class TourneeSerializer(serializers.ModelSerializer):
             'warehouse', 'warehouse_nom',
             'heure_depart_prevue', 'heure_depart_reelle',
             'heure_retour_prevue', 'heure_retour_reelle',
-            'statut', 'statut_display', 'distance_km', 'commentaire',
+            'statut', 'statut_display',
+            'code_prix', 'code_prix_libelle', 'code_prix_code',
+            'distance_km', 'commentaire',
             'nombre_arrets', 'arrets_livres', 'taux_reussite',
             'arrets', 'created_at', 'updated_at'
         ]
@@ -796,6 +814,8 @@ class TourneeListSerializer(serializers.ModelSerializer):
     livreur_nom = serializers.SerializerMethodField()
     warehouse_nom = serializers.CharField(source='warehouse.nom', read_only=True, allow_null=True)
     statut_display = serializers.CharField(source='get_statut_display', read_only=True)
+    code_prix_libelle = serializers.CharField(source='code_prix.libelle', read_only=True, allow_null=True)
+    code_prix_code = serializers.CharField(source='code_prix.code', read_only=True, allow_null=True)
     nombre_arrets = serializers.SerializerMethodField()
     arrets_livres = serializers.SerializerMethodField()
     taux_reussite = serializers.SerializerMethodField()
@@ -807,7 +827,9 @@ class TourneeListSerializer(serializers.ModelSerializer):
             'warehouse', 'warehouse_nom',
             'heure_depart_prevue', 'heure_depart_reelle',
             'heure_retour_prevue', 'heure_retour_reelle',
-            'statut', 'statut_display', 'distance_km',
+            'statut', 'statut_display',
+            'code_prix', 'code_prix_libelle', 'code_prix_code',
+            'distance_km',
             'nombre_arrets', 'arrets_livres', 'taux_reussite',
             'created_at'
         ]

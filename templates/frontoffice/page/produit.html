@@ -348,8 +348,8 @@ input[type="number"].form-control-product::-webkit-outer-spin-button {
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" id="types-prix-tab" data-toggle="tab" href="#types-prix" role="tab">
-                        <i class="fa fa-list-ul"></i> {% trans "Types de Prix" %}
+                    <a class="nav-link" id="codes-prix-tab" data-toggle="tab" href="#codes-prix" role="tab">
+                        <i class="fa fa-tags"></i> {% trans "Codes de Prix" %}
                     </a>
                 </li>
                 <li class="nav-item">
@@ -398,48 +398,57 @@ input[type="number"].form-control-product::-webkit-outer-spin-button {
                     </div>
                 </div>
 
-                <!-- Onglet 2 : Types de Prix -->
-                <div class="tab-pane fade" id="types-prix" role="tabpanel">
+                <!-- Onglet 2 : Codes de Prix -->
+                <div class="tab-pane fade" id="codes-prix" role="tabpanel">
                     <div class="alert alert-info">
-                        <i class="fa fa-info-circle"></i> <strong>{% trans "Types de prix" %} :</strong> {% trans "Définissez les différents types de prix (Détaillant, Grossiste, Promotionnel, etc.)" %}
+                        <i class="fa fa-info-circle"></i> <strong>{% trans "Codes de prix" %} :</strong> {% trans "Définissez les codes promotionnels ou périodiques (STANDARD, AID, RAMADAN, etc.)" %}
                     </div>
 
-                    <!-- Formulaire d'ajout de type de prix -->
+                    <!-- Formulaire d'ajout de code de prix -->
                     <div class="row mb-3">
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <label class="form-label-product">{% trans "Code" %} *</label>
-                            <input type="text" id="type_prix_code" class="form-control form-control-product" placeholder="{% trans 'Ex: DETAIL' %}">
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label-product">{% trans "Libellé" %} *</label>
-                            <input type="text" id="type_prix_libelle" class="form-control form-control-product" placeholder="{% trans 'Ex: Prix Détaillant' %}">
+                            <input type="text" id="code_prix_code" class="form-control form-control-product" placeholder="{% trans 'Ex: AID' %}">
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label-product">{% trans "Ordre d'affichage" %}</label>
-                            <input type="number" id="type_prix_ordre" class="form-control form-control-product" min="0" value="0">
+                            <label class="form-label-product">{% trans "Libellé" %} *</label>
+                            <input type="text" id="code_prix_libelle" class="form-control form-control-product" placeholder="{% trans 'Ex: Prix Aïd' %}">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label-product">{% trans "Date début" %}</label>
+                            <input type="date" id="code_prix_date_debut" class="form-control form-control-product">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label-product">{% trans "Date fin" %}</label>
+                            <input type="date" id="code_prix_date_fin" class="form-control form-control-product">
+                        </div>
+                        <div class="col-md-1">
+                            <label class="form-label-product">{% trans "Ordre" %}</label>
+                            <input type="number" id="code_prix_ordre" class="form-control form-control-product" min="0" value="0">
                         </div>
                         <div class="col-md-2 d-flex align-items-end">
-                            <button type="button" id="btn_add_type_prix" class="btn btn-product-primary w-100">
+                            <button type="button" id="btn_add_code_prix" class="btn btn-product-primary w-100">
                                 <i class="fa fa-plus"></i> {% trans "Ajouter" %}
                             </button>
                         </div>
                     </div>
 
-                    <!-- Tableau des types de prix -->
+                    <!-- Tableau des codes de prix -->
                     <div class="table-responsive">
                         <table class="table table-product table-hover">
                             <thead>
                                 <tr>
                                     <th>{% trans "Code" %}</th>
                                     <th>{% trans "Libellé" %}</th>
+                                    <th>{% trans "Période" %}</th>
                                     <th>{% trans "Ordre" %}</th>
                                     <th>{% trans "Défaut" %}</th>
                                     <th>{% trans "Statut" %}</th>
-                                    <th>{% trans "Nb Prix" %}</th>
+                                    <th>{% trans "Nb Tournées" %}</th>
                                     <th>{% trans "Actions" %}</th>
                                 </tr>
                             </thead>
-                            <tbody id="types_prix_body"></tbody>
+                            <tbody id="codes_prix_body"></tbody>
                         </table>
                     </div>
                 </div>
@@ -452,14 +461,21 @@ input[type="number"].form-control-product::-webkit-outer-spin-button {
 
                     <!-- Formulaire d'ajout de prix produit -->
                     <div class="row mb-3">
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <label class="form-label-product">{% trans "Produit" %} *</label>
                             <select id="prix_prod_produit" class="form-control form-control-product">
                                 <option value="">{% trans "Sélectionner un produit" %}</option>
                             </select>
                         </div>
-                        <div class="col-md-3">
-                            <label class="form-label-product">{% trans "Type de Prix" %} *</label>
+                        <div class="col-md-2">
+                            <label class="form-label-product">{% trans "Code Prix" %}</label>
+                            <select id="prix_prod_code" class="form-control form-control-product">
+                                <option value="">{% trans "Standard" %}</option>
+                            </select>
+                            <small class="text-muted">{% trans "(optionnel)" %}</small>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label-product">{% trans "Type Prix" %} *</label>
                             <select id="prix_prod_type" class="form-control form-control-product">
                                 <option value="">{% trans "Sélectionner un type" %}</option>
                             </select>
@@ -507,10 +523,10 @@ input[type="number"].form-control-product::-webkit-outer-spin-button {
                             <thead>
                                 <tr>
                                     <th>{% trans "Produit" %}</th>
-                                    <th>{% trans "Type de Prix" %}</th>
+                                    <th>{% trans "Code Prix" %}</th>
+                                    <th>{% trans "Type Prix" %}</th>
                                     <th>{% trans "Prix" %}</th>
                                     <th>{% trans "Qté Min" %}</th>
-                                    <th>{% trans "Validité" %}</th>
                                     <th>{% trans "Statut" %}</th>
                                     <th>{% trans "Actions" %}</th>
                                 </tr>

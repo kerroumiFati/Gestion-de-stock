@@ -417,6 +417,16 @@ if (!window.__tournees_script_loaded__) {
                     </div>
 
                     <div class="form-group">
+                        <label for="code_prix">{% trans "Code de prix" %} *</label>
+                        <select id="code_prix" required>
+                            <option value="">{% trans "Sélectionner le code de prix..." %}</option>
+                        </select>
+                        <small style="color: #6b7280; font-size: 0.85rem; display: block; margin-top: 4px;">
+                            💰 Code promotionnel utilisé pour les ventes (STANDARD, AID, RAMADAN...)
+                        </small>
+                    </div>
+
+                    <div class="form-group">
                         <label for="heure_depart_prevue">{% trans "Heure départ prévue" %} *</label>
                         <input type="time" id="heure_depart_prevue" required>
                     </div>

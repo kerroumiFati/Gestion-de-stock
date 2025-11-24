@@ -381,6 +381,8 @@ class TourneeSerializer(serializers.ModelSerializer):
     """Serializer pour Tournee"""
     livreur_nom = serializers.CharField(source='livreur.nom', read_only=True)
     livreur_matricule = serializers.CharField(source='livreur.matricule', read_only=True)
+    code_prix_libelle = serializers.CharField(source='code_prix.libelle', read_only=True, allow_null=True)
+    code_prix_code = serializers.CharField(source='code_prix.code', read_only=True, allow_null=True)
     arrets = ArretTourneeSerializer(many=True, read_only=True)
     statistiques = serializers.SerializerMethodField()
 
@@ -389,6 +391,7 @@ class TourneeSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'livreur', 'livreur_nom', 'livreur_matricule',
             'date_tournee', 'numero_tournee', 'statut',
+            'code_prix', 'code_prix_libelle', 'code_prix_code',
             'heure_debut', 'heure_fin',
             'position_depart_lat', 'position_depart_lng',
             'position_fin_lat', 'position_fin_lng',

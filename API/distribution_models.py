@@ -104,6 +104,11 @@ class TourneeMobile(models.Model):
     argent_depart = models.DecimalField('Argent de départ', max_digits=12, decimal_places=2, default=0,
                                         help_text='Montant prédéfini donné au livreur en début de tournée')
 
+    # Code de prix à utiliser pour les ventes de cette tournée
+    code_prix = models.ForeignKey('CodePrix', on_delete=models.SET_NULL, null=True, blank=True,
+                                  related_name='tournees_mobiles',
+                                  help_text='Code de prix à utiliser pour les ventes (STANDARD, AID, RAMADAN, etc.)')
+
     # Clôture
     est_cloturee = models.BooleanField('Clôturée', default=False)
     date_cloture = models.DateTimeField('Date de clôture', null=True, blank=True)
