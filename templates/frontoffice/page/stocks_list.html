@@ -1,6 +1,334 @@
 {% load i18n %}
 {% load static %}
 
+<style>
+/* Styles pour les filtres */
+.stocks-filters-container {
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 10px;
+    border: 1px solid #e9ecef;
+    margin-bottom: 20px;
+}
+
+.stocks-filters-container .filter-group {
+    margin-bottom: 0;
+}
+
+.stocks-filters-container label {
+    font-weight: 500;
+    color: #495057;
+    margin-bottom: 5px;
+    display: block;
+    font-size: 0.85rem;
+}
+
+.stocks-filters-container .form-control {
+    border-radius: 8px;
+    border: 1px solid #dee2e6;
+    font-size: 0.9rem;
+}
+
+.stocks-filters-container .form-control:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+}
+
+.stocks-filters-container .input-group-text {
+    background: white;
+    border-right: none;
+    border-radius: 8px 0 0 8px;
+}
+
+.stocks-filters-container .input-group .form-control {
+    border-left: none;
+    border-radius: 0 8px 8px 0;
+}
+
+.filter-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 2px solid transparent;
+    margin-right: 8px;
+    margin-bottom: 5px;
+}
+
+.filter-badge.all {
+    background: #e9ecef;
+    color: #495057;
+}
+
+.filter-badge.all.active {
+    background: #667eea;
+    color: white;
+}
+
+.filter-badge.ok {
+    background: #d4edda;
+    color: #155724;
+}
+
+.filter-badge.ok.active {
+    background: #28a745;
+    color: white;
+}
+
+.filter-badge.alert {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.filter-badge.alert.active {
+    background: #ffc107;
+    color: #212529;
+}
+
+.filter-badge.critical {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.filter-badge.critical.active {
+    background: #dc3545;
+    color: white;
+}
+
+.filter-badge.rupture {
+    background: #e2e3e5;
+    color: #383d41;
+}
+
+.filter-badge.rupture.active {
+    background: #6c757d;
+    color: white;
+}
+
+.filter-badge:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.filter-badge .count {
+    background: rgba(0,0,0,0.1);
+    padding: 2px 6px;
+    border-radius: 10px;
+    margin-left: 5px;
+    font-size: 0.75rem;
+}
+
+.filter-badge.active .count {
+    background: rgba(255,255,255,0.3);
+}
+
+#filterResultsInfo {
+    font-size: 0.85rem;
+    color: #6c757d;
+}
+
+/* Style du tableau */
+.stocks-table {
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+}
+
+.stocks-table thead th {
+    background: #343a40;
+    color: white;
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 15px 12px;
+    border: none;
+}
+
+.stocks-table tbody tr {
+    transition: all 0.2s;
+}
+
+.stocks-table tbody tr:hover {
+    background-color: #e8f4fd !important;
+}
+
+.stocks-table tbody td {
+    padding: 12px;
+    vertical-align: middle;
+}
+
+.warehouse-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.warehouse-badge.entrepot {
+    background: #e0e7ff;
+    color: #3730a3;
+}
+
+.warehouse-badge.van {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.btn-reset-filters {
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 0.85rem;
+}
+
+/* Custom Select pour Entrepôt */
+.custom-select-container {
+    position: relative;
+    width: 100%;
+}
+
+.custom-select-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    background: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-height: 38px;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+}
+
+.custom-select-trigger:hover {
+    border-color: #667eea;
+}
+
+.custom-select-trigger.open {
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+}
+
+.custom-select-trigger .selected-text {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #000;
+}
+
+.custom-select-trigger .selected-text.placeholder {
+    color: #6c757d;
+}
+
+.custom-select-trigger .arrow {
+    margin-left: 10px;
+    transition: transform 0.2s;
+    color: #495057;
+}
+
+.custom-select-trigger.open .arrow {
+    transform: rotate(180deg);
+}
+
+.custom-select-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #667eea;
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 1050;
+    display: none;
+}
+
+.custom-select-dropdown.open {
+    display: block;
+}
+
+.custom-select-search {
+    padding: 8px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.custom-select-search input {
+    width: 100%;
+    padding: 6px 10px;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    font-size: 0.9rem;
+}
+
+.custom-select-search input:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+.custom-select-options {
+    max-height: 250px;
+    overflow-y: auto;
+}
+
+.custom-select-options::-webkit-scrollbar {
+    width: 6px;
+}
+
+.custom-select-options::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+.custom-select-options::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+.custom-select-options::-webkit-scrollbar-thumb:hover {
+    background: #a1a1a1;
+}
+
+.custom-select-option {
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: background 0.15s;
+    border-bottom: 1px solid #f8f9fa;
+    color: #000;
+}
+
+.custom-select-option:last-child {
+    border-bottom: none;
+}
+
+.custom-select-option:hover {
+    background: #f8f9fa;
+}
+
+.custom-select-option.selected {
+    background: #667eea;
+    color: white;
+}
+
+.custom-select-no-results {
+    padding: 12px;
+    text-align: center;
+    color: #6c757d;
+    font-style: italic;
+}
+</style>
+
 <div class="container-fluid">
     <div class="card bg-white">
         <div class="card-header card-color">
@@ -9,36 +337,124 @@
             </p>
         </div>
         <div class="card-body">
-            <!-- Filtres -->
-            <div class="card mb-3 bg-white border">
-                <div class="card-body">
-                    <form method="get" class="form-inline">
-                        <div class="form-group mr-3">
-                            <label for="entrepot" class="mr-2"><i class="fa fa-warehouse"></i> {% trans "Entrepôt" %}:</label>
-                            <select name="entrepot" id="entrepot" class="form-control" onchange="applyFilters()">
-                                <option value="">{% trans "Tous les entrepôts" %}</option>
-                                {% for e in entrepots %}
-                                <option value="{{ e.id }}" {% if selected_entrepot == e.id|stringformat:"s" %}selected{% endif %}>
-                                    {{ e.code }} - {{ e.name }}
-                                </option>
-                                {% endfor %}
-                            </select>
+            <!-- Filtres améliorés -->
+            <div class="stocks-filters-container">
+                <div class="row">
+                    <!-- Recherche -->
+                    <div class="col-md-4 col-lg-3 mb-3">
+                        <label><i class="fa fa-search mr-1"></i> {% trans "Rechercher" %}</label>
+                        <div class="input-group">
+                            <div class="input-group-prepend">
+                                <span class="input-group-text"><i class="fa fa-search text-muted"></i></span>
+                            </div>
+                            <input type="text" id="searchStock" class="form-control"
+                                   placeholder="{% trans 'Référence, produit...' %}" onkeyup="filterStocksTable()">
                         </div>
-                        <div class="form-group form-check">
-                            <input type="checkbox" name="hide_empty" id="hide_empty" class="form-check-input"
-                                   {% if hide_empty %}checked{% endif %} onchange="applyFilters()">
-                            <label class="form-check-label" for="hide_empty">
-                                {% trans "Masquer les stocks vides" %}
+                    </div>
+
+                    <!-- Filtre Entrepôt -->
+                    <div class="col-md-3 col-lg-2 mb-3">
+                        <label><i class="fa fa-warehouse mr-1"></i> {% trans "Entrepôt" %}</label>
+                        <div class="custom-select-container" id="customSelectEntrepot">
+                            <div class="custom-select-trigger" id="entrepotTrigger">
+                                <span class="selected-text placeholder">{% trans "Tous" %}</span>
+                                <i class="fas fa-chevron-down arrow"></i>
+                            </div>
+                            <div class="custom-select-dropdown" id="entrepotDropdown">
+                                <div class="custom-select-search">
+                                    <input type="text" id="entrepotSearch" placeholder="{% trans 'Rechercher...' %}">
+                                </div>
+                                <div class="custom-select-options" id="entrepotOptions">
+                                    <div class="custom-select-option selected" data-value="">{% trans "Tous" %}</div>
+                                    {% for e in entrepots %}
+                                    <div class="custom-select-option" data-value="{{ e.code }}">
+                                        {{ e.code }} - {{ e.name }}
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
+                                <select id="filterEntrepot">
+                                    <option value="">{% trans "Tous" %}</option>
+                                    {% for e in entrepots %}
+                                    <option value="{{ e.code }}" {% if selected_entrepot == e.id|stringformat:"s" %}selected{% endif %}>
+                                        {{ e.code }} - {{ e.name }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Filtre Type entrepôt -->
+                    <div class="col-md-3 col-lg-2 mb-3">
+                        <label><i class="fa fa-filter mr-1"></i> {% trans "Type" %}</label>
+                        <select id="filterTypeEntrepot" class="form-control" onchange="filterStocksTable()">
+                            <option value="">{% trans "Tous les types" %}</option>
+                            <option value="entrepot">{% trans "Entrepôts" %}</option>
+                            <option value="van">{% trans "Vans" %}</option>
+                        </select>
+                    </div>
+
+                    <!-- Masquer vides -->
+                    <div class="col-md-2 col-lg-2 mb-3 d-flex align-items-end">
+                        <div class="custom-control custom-checkbox">
+                            <input type="checkbox" class="custom-control-input" id="hideEmpty" onchange="filterStocksTable()">
+                            <label class="custom-control-label" for="hideEmpty">
+                                {% trans "Masquer vides" %}
                             </label>
                         </div>
-                    </form>
+                    </div>
+
+                    <!-- Bouton reset -->
+                    <div class="col-md-12 col-lg-3 mb-3 d-flex align-items-end justify-content-end">
+                        <button type="button" class="btn btn-outline-secondary btn-reset-filters" onclick="resetStockFilters()">
+                            <i class="fa fa-redo mr-1"></i> {% trans "Réinitialiser" %}
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Filtres par statut -->
+                <div class="row mt-2">
+                    <div class="col-12">
+                        <label class="mb-2"><i class="fa fa-tags mr-1"></i> {% trans "Filtrer par statut" %}:</label>
+                        <div class="d-flex flex-wrap">
+                            <span class="filter-badge all active" data-status="all" onclick="filterByStatus('all')">
+                                <i class="fa fa-list"></i> {% trans "Tous" %}
+                                <span class="count" id="count-all">0</span>
+                            </span>
+                            <span class="filter-badge ok" data-status="ok" onclick="filterByStatus('ok')">
+                                <i class="fa fa-check-circle"></i> OK
+                                <span class="count" id="count-ok">0</span>
+                            </span>
+                            <span class="filter-badge alert" data-status="alert" onclick="filterByStatus('alert')">
+                                <i class="fa fa-exclamation-triangle"></i> {% trans "Alerte" %}
+                                <span class="count" id="count-alert">0</span>
+                            </span>
+                            <span class="filter-badge critical" data-status="critical" onclick="filterByStatus('critical')">
+                                <i class="fa fa-exclamation-circle"></i> {% trans "Critique" %}
+                                <span class="count" id="count-critical">0</span>
+                            </span>
+                            <span class="filter-badge rupture" data-status="rupture" onclick="filterByStatus('rupture')">
+                                <i class="fa fa-times-circle"></i> {% trans "Rupture" %}
+                                <span class="count" id="count-rupture">0</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Info résultats -->
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <span id="filterResultsInfo"></span>
+                    </div>
                 </div>
             </div>
 
             <!-- Tableau -->
-            <div class="table-responsive">
-                <table class="table table-striped table-hover">
-                    <thead class="thead-dark">
+            <div class="table-responsive stocks-table">
+                <table class="table table-striped table-hover mb-0" id="stocksTable">
+                    <thead>
                         <tr>
                             <th>{% trans "Entrepôt" %}</th>
                             <th>{% trans "Référence" %}</th>
@@ -49,22 +465,35 @@
                             <th class="text-center">{% trans "Statut" %}</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="stocksTableBody">
                         {% for stock in stocks %}
-                        <tr>
-                            <td><strong>{{ stock.warehouse.code }}</strong></td>
-                            <td>{{ stock.produit.reference }}</td>
+                        <tr class="stock-row"
+                            data-warehouse="{{ stock.warehouse.code|lower }}"
+                            data-warehouse-type="{% if 'VAN' in stock.warehouse.code %}van{% else %}entrepot{% endif %}"
+                            data-reference="{{ stock.produit.reference|lower }}"
+                            data-product="{{ stock.produit.designation|lower }}"
+                            data-quantity="{{ stock.quantity }}"
+                            data-status="{% if stock.quantity <= 0 %}rupture{% elif stock.quantity <= stock.produit.seuil_critique %}critical{% elif stock.quantity <= stock.produit.seuil_alerte %}alert{% else %}ok{% endif %}">
+                            <td>
+                                <span class="warehouse-badge {% if 'VAN' in stock.warehouse.code %}van{% else %}entrepot{% endif %}">
+                                    <i class="fa fa-{% if 'VAN' in stock.warehouse.code %}truck{% else %}warehouse{% endif %}"></i>
+                                    {{ stock.warehouse.code }}
+                                </span>
+                            </td>
+                            <td><code>{{ stock.produit.reference }}</code></td>
                             <td>{{ stock.produit.designation }}</td>
                             <td class="text-center">
-                                <strong>{{ stock.quantity }}</strong>
+                                <strong class="{% if stock.quantity <= 0 %}text-secondary{% elif stock.quantity <= stock.produit.seuil_critique %}text-danger{% elif stock.quantity <= stock.produit.seuil_alerte %}text-warning{% else %}text-success{% endif %}">
+                                    {{ stock.quantity }}
+                                </strong>
                             </td>
-                            <td class="text-center">{{ stock.produit.prixU|floatformat:2 }} {{ currency.symbol|default:"€" }}</td>
+                            <td class="text-center">{{ stock.produit.prixU|floatformat:2 }} {{ currency.symbol|default:"DA" }}</td>
                             <td class="text-right">
-                                {{ stock.valeur|floatformat:2 }} {{ currency.symbol|default:"€" }}
+                                <strong>{{ stock.valeur|floatformat:2 }} {{ currency.symbol|default:"DA" }}</strong>
                             </td>
                             <td class="text-center">
                                 {% if stock.quantity <= 0 %}
-                                <span class="badge badge-danger">{% trans "Rupture" %}</span>
+                                <span class="badge badge-secondary">{% trans "Rupture" %}</span>
                                 {% elif stock.quantity <= stock.produit.seuil_critique %}
                                 <span class="badge badge-danger">{% trans "Critique" %}</span>
                                 {% elif stock.quantity <= stock.produit.seuil_alerte %}
@@ -75,13 +504,19 @@
                             </td>
                         </tr>
                         {% empty %}
-                        <tr>
+                        <tr id="emptyRow">
                             <td colspan="7" class="text-center text-muted py-4">
                                 <i class="fa fa-inbox fa-3x d-block mb-3"></i>
                                 {% trans "Aucun stock trouvé" %}
                             </td>
                         </tr>
                         {% endfor %}
+                        <tr id="noResultsRow" style="display: none;">
+                            <td colspan="7" class="text-center text-muted py-4">
+                                <i class="fa fa-filter fa-3x d-block mb-3"></i>
+                                {% trans "Aucun résultat pour ces filtres" %}
+                            </td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
@@ -115,29 +550,341 @@
 </div>
 
 <script>
-// Fonction pour appliquer les filtres (appelée directement par onchange)
-function applyFilters() {
-    loadStocksPage(1);
+// Variables globales
+let currentStatusFilter = 'all';
+
+// Initialisation au chargement
+document.addEventListener('DOMContentLoaded', initStocksFilters);
+
+function initStocksFilters() {
+    updateStatusCounts();
+    filterStocksTable();
 }
 
-// Fonction pour gérer la pagination et les filtres
+// Mettre à jour les compteurs de statut
+function updateStatusCounts() {
+    const rows = document.querySelectorAll('.stock-row');
+    const counts = { all: 0, ok: 0, alert: 0, critical: 0, rupture: 0 };
+
+    rows.forEach(row => {
+        const status = row.dataset.status;
+        counts.all++;
+        if (counts[status] !== undefined) {
+            counts[status]++;
+        }
+    });
+
+    document.getElementById('count-all').textContent = counts.all;
+    document.getElementById('count-ok').textContent = counts.ok;
+    document.getElementById('count-alert').textContent = counts.alert;
+    document.getElementById('count-critical').textContent = counts.critical;
+    document.getElementById('count-rupture').textContent = counts.rupture;
+}
+
+// Filtrer par statut
+function filterByStatus(status) {
+    currentStatusFilter = status;
+
+    // Mettre à jour les badges actifs
+    document.querySelectorAll('.filter-badge').forEach(badge => {
+        badge.classList.remove('active');
+        if (badge.dataset.status === status) {
+            badge.classList.add('active');
+        }
+    });
+
+    filterStocksTable();
+}
+
+// Fonction principale de filtrage
+function filterStocksTable() {
+    const searchValue = document.getElementById('searchStock')?.value.toLowerCase() || '';
+    const entrepotValue = document.getElementById('filterEntrepot')?.value.toLowerCase() || '';
+    const typeValue = document.getElementById('filterTypeEntrepot')?.value || '';
+    const hideEmpty = document.getElementById('hideEmpty')?.checked || false;
+
+    const rows = document.querySelectorAll('.stock-row');
+    let visibleCount = 0;
+    let totalCount = rows.length;
+    let totalValue = 0;
+
+    rows.forEach(row => {
+        const warehouse = row.dataset.warehouse || '';
+        const warehouseType = row.dataset.warehouseType || '';
+        const reference = row.dataset.reference || '';
+        const product = row.dataset.product || '';
+        const quantity = parseInt(row.dataset.quantity) || 0;
+        const status = row.dataset.status || '';
+
+        // Vérifier tous les filtres
+        const matchSearch = !searchValue ||
+            warehouse.includes(searchValue) ||
+            reference.includes(searchValue) ||
+            product.includes(searchValue);
+
+        const matchEntrepot = !entrepotValue || warehouse.includes(entrepotValue);
+        const matchType = !typeValue || warehouseType === typeValue;
+        const matchHideEmpty = !hideEmpty || quantity > 0;
+        const matchStatus = currentStatusFilter === 'all' || status === currentStatusFilter;
+
+        if (matchSearch && matchEntrepot && matchType && matchHideEmpty && matchStatus) {
+            row.style.display = '';
+            visibleCount++;
+
+            // Calculer la valeur totale visible
+            const valueCell = row.querySelector('td:nth-child(6) strong');
+            if (valueCell) {
+                const valueText = valueCell.textContent.replace(/[^\d.,]/g, '').replace(',', '.');
+                totalValue += parseFloat(valueText) || 0;
+            }
+        } else {
+            row.style.display = 'none';
+        }
+    });
+
+    // Afficher/masquer la ligne "Aucun résultat"
+    const noResultsRow = document.getElementById('noResultsRow');
+    const emptyRow = document.getElementById('emptyRow');
+
+    if (noResultsRow) {
+        noResultsRow.style.display = (visibleCount === 0 && totalCount > 0) ? '' : 'none';
+    }
+    if (emptyRow) {
+        emptyRow.style.display = (totalCount === 0) ? '' : 'none';
+    }
+
+    // Mettre à jour les infos
+    updateFilterResultsInfo(visibleCount, totalCount, totalValue);
+}
+
+// Mettre à jour les informations de résultat
+function updateFilterResultsInfo(visible, total, value) {
+    const infoEl = document.getElementById('filterResultsInfo');
+    if (infoEl) {
+        const formattedValue = new Intl.NumberFormat('fr-DZ', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(value);
+
+        if (visible === total) {
+            infoEl.innerHTML = `<i class="fa fa-info-circle mr-1"></i> <strong>${total}</strong> ligne(s) • Valeur totale: <strong>${formattedValue} DA</strong>`;
+        } else {
+            infoEl.innerHTML = `<i class="fa fa-filter mr-1"></i> <strong>${visible}</strong> / ${total} ligne(s) affichée(s) • Valeur filtrée: <strong>${formattedValue} DA</strong>`;
+        }
+    }
+}
+
+// Réinitialiser tous les filtres
+function resetStockFilters() {
+    document.getElementById('searchStock').value = '';
+    document.getElementById('filterEntrepot').value = '';
+    document.getElementById('filterTypeEntrepot').value = '';
+    document.getElementById('hideEmpty').checked = false;
+
+    currentStatusFilter = 'all';
+    document.querySelectorAll('.filter-badge').forEach(badge => {
+        badge.classList.remove('active');
+        if (badge.dataset.status === 'all') {
+            badge.classList.add('active');
+        }
+    });
+
+    filterStocksTable();
+}
+
+// Fonction legacy pour la pagination (si encore utilisée)
+function applyFilters() {
+    filterStocksTable();
+}
+
+// Fonction pour gérer la pagination
 function loadStocksPage(page) {
-    const entrepot = document.getElementById('entrepot')?.value || '';
-    const hideEmpty = document.getElementById('hide_empty')?.checked || false;
+    const entrepot = document.getElementById('filterEntrepot')?.value || '';
+    const hideEmpty = document.getElementById('hideEmpty')?.checked || false;
 
     let url = '/page/stocks_list/?page=' + page;
     if (entrepot) url += '&entrepot=' + entrepot;
     if (hideEmpty) url += '&hide_empty=on';
 
-    // Recharger le contenu via fetch
     fetch(url)
         .then(res => res.text())
         .then(html => {
             const mainContent = document.getElementById('main-content');
             if (mainContent) {
                 mainContent.innerHTML = html;
+                initStocksFilters();
             }
         })
         .catch(err => console.error('Erreur de chargement:', err));
 }
+
+// Initialiser si la page est déjà chargée
+if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    setTimeout(initStocksFilters, 100);
+}
+
+// =============================================
+// Custom Select pour Entrepôt
+// =============================================
+(function() {
+    var initialized = false;
+
+    function initEntrepotCustomSelect() {
+        if (initialized) return;
+
+        var trigger = document.getElementById('entrepotTrigger');
+        var dropdown = document.getElementById('entrepotDropdown');
+        var searchInput = document.getElementById('entrepotSearch');
+        var optionsContainer = document.getElementById('entrepotOptions');
+
+        if (!trigger || !dropdown) {
+            setTimeout(initEntrepotCustomSelect, 200);
+            return;
+        }
+
+        initialized = true;
+        console.log('[StocksList] Custom select initialized');
+
+        // Toggle dropdown
+        trigger.onclick = function(e) {
+            e.stopPropagation();
+            e.preventDefault();
+            var isOpen = dropdown.classList.contains('open');
+
+            if (!isOpen) {
+                dropdown.classList.add('open');
+                trigger.classList.add('open');
+                if (searchInput) {
+                    searchInput.value = '';
+                    searchInput.focus();
+                    filterEntrepotOptions('');
+                }
+            } else {
+                dropdown.classList.remove('open');
+                trigger.classList.remove('open');
+            }
+        };
+
+        // Search filter
+        if (searchInput) {
+            searchInput.oninput = function() {
+                filterEntrepotOptions(this.value);
+            };
+            searchInput.onclick = function(e) {
+                e.stopPropagation();
+            };
+        }
+
+        // Option click
+        if (optionsContainer) {
+            optionsContainer.onclick = function(e) {
+                var option = e.target.closest('.custom-select-option');
+                if (option) {
+                    selectEntrepotOption(option);
+                }
+            };
+        }
+
+        // Close on outside click
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('#customSelectEntrepot')) {
+                dropdown.classList.remove('open');
+                trigger.classList.remove('open');
+            }
+        });
+
+        // Set initial selected value from hidden select
+        var hiddenSelect = document.getElementById('filterEntrepot');
+        if (hiddenSelect && hiddenSelect.value) {
+            var selectedOpt = optionsContainer.querySelector('[data-value="' + hiddenSelect.value + '"]');
+            if (selectedOpt) {
+                selectEntrepotOption(selectedOpt, true);
+            }
+        }
+    }
+
+    function filterEntrepotOptions(searchText) {
+        var optionsContainer = document.getElementById('entrepotOptions');
+        if (!optionsContainer) return;
+
+        var options = optionsContainer.querySelectorAll('.custom-select-option');
+        var search = (searchText || '').toLowerCase().trim();
+        var hasVisible = false;
+
+        options.forEach(function(opt) {
+            var text = (opt.textContent || '').toLowerCase();
+            var match = !search || text.indexOf(search) !== -1;
+            opt.style.display = match ? '' : 'none';
+            if (match) hasVisible = true;
+        });
+
+        var noResults = optionsContainer.querySelector('.custom-select-no-results');
+        if (!hasVisible) {
+            if (!noResults) {
+                noResults = document.createElement('div');
+                noResults.className = 'custom-select-no-results';
+                noResults.textContent = 'Aucun résultat';
+                optionsContainer.appendChild(noResults);
+            }
+            noResults.style.display = '';
+        } else if (noResults) {
+            noResults.style.display = 'none';
+        }
+    }
+
+    function selectEntrepotOption(option, skipFilter) {
+        var trigger = document.getElementById('entrepotTrigger');
+        var dropdown = document.getElementById('entrepotDropdown');
+        var optionsContainer = document.getElementById('entrepotOptions');
+        var hiddenSelect = document.getElementById('filterEntrepot');
+
+        var value = option.getAttribute('data-value');
+        var text = option.textContent.trim();
+
+        // Update trigger text
+        var selectedText = trigger.querySelector('.selected-text');
+        selectedText.textContent = text;
+        selectedText.classList.toggle('placeholder', value === '');
+
+        // Update hidden select
+        if (hiddenSelect) {
+            hiddenSelect.value = value;
+        }
+
+        // Update selected state
+        optionsContainer.querySelectorAll('.custom-select-option').forEach(function(opt) {
+            opt.classList.toggle('selected', opt.getAttribute('data-value') === value);
+        });
+
+        // Close dropdown
+        dropdown.classList.remove('open');
+        trigger.classList.remove('open');
+
+        // Apply filter
+        if (!skipFilter) {
+            filterStocksTable();
+        }
+    }
+
+    // Initialize
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initEntrepotCustomSelect);
+    } else {
+        initEntrepotCustomSelect();
+    }
+
+    // For dynamic loading
+    document.addEventListener('fragment:loaded', function(e) {
+        if (e && e.detail && e.detail.name === 'stocks_list') {
+            initialized = false;
+            initEntrepotCustomSelect();
+        }
+    });
+
+    setTimeout(function() {
+        if (!initialized) {
+            initEntrepotCustomSelect();
+        }
+    }, 500);
+})();
 </script>

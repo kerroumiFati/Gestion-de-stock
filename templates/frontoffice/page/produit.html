@@ -228,6 +228,163 @@ input[type="number"].form-control-product::-webkit-outer-spin-button {
     background: #f8d7da;
     color: #721c24;
 }
+
+/* Custom Select Dropdown avec scroll */
+.custom-select-container {
+    position: relative;
+    width: 100%;
+}
+
+.custom-select-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 15px;
+    border: 1px solid #cbd5e0;
+    border-radius: 6px;
+    background: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-height: 42px;
+}
+
+.custom-select-trigger:hover {
+    border-color: #4a5568;
+}
+
+.custom-select-trigger.open {
+    border-color: #4a5568;
+    box-shadow: 0 0 0 3px rgba(74, 85, 104, 0.1);
+}
+
+.custom-select-trigger .selected-text {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #2d3748;
+}
+
+.custom-select-trigger .selected-text.placeholder {
+    color: #a0aec0;
+}
+
+.custom-select-trigger .arrow {
+    margin-left: 10px;
+    transition: transform 0.2s;
+    color: #4a5568;
+}
+
+.custom-select-trigger.open .arrow {
+    transform: rotate(180deg);
+}
+
+.custom-select-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #cbd5e0;
+    border-top: none;
+    border-radius: 0 0 6px 6px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 1000;
+    display: none;
+}
+
+.custom-select-dropdown.open {
+    display: block;
+}
+
+.custom-select-search {
+    padding: 10px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.custom-select-search input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+
+.custom-select-search input:focus {
+    outline: none;
+    border-color: #4a5568;
+}
+
+.custom-select-options {
+    max-height: 250px;
+    overflow-y: auto;
+}
+
+/* Scrollbar personnalisée */
+.custom-select-options::-webkit-scrollbar {
+    width: 8px;
+}
+
+.custom-select-options::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.custom-select-options::-webkit-scrollbar-thumb {
+    background: #cbd5e0;
+    border-radius: 4px;
+}
+
+.custom-select-options::-webkit-scrollbar-thumb:hover {
+    background: #a0aec0;
+}
+
+.custom-select-option {
+    padding: 10px 15px;
+    cursor: pointer;
+    transition: background 0.15s;
+    border-bottom: 1px solid #f7fafc;
+}
+
+.custom-select-option:hover {
+    background: #f7fafc;
+}
+
+.custom-select-option.selected {
+    background: #edf2f7;
+    font-weight: 500;
+}
+
+.custom-select-option .option-ref {
+    font-weight: 600;
+    color: #2d3748;
+}
+
+.custom-select-option .option-name {
+    color: #718096;
+    font-size: 0.85rem;
+    margin-left: 8px;
+}
+
+.custom-select-no-results {
+    padding: 15px;
+    text-align: center;
+    color: #a0aec0;
+    font-style: italic;
+}
+
+/* Cacher les selects natifs remplacés */
+#prix_prod_produit,
+#prix_prod_filter,
+#prix_prod_code,
+#prix_prod_type {
+    display: none !important;
+    visibility: hidden !important;
+    position: absolute !important;
+    width: 0 !important;
+    height: 0 !important;
+    overflow: hidden !important;
+}
 </style>
 
 <div class="container-fluid">
@@ -463,22 +620,72 @@ input[type="number"].form-control-product::-webkit-outer-spin-button {
                     <div class="row mb-3">
                         <div class="col-md-2">
                             <label class="form-label-product">{% trans "Produit" %} *</label>
-                            <select id="prix_prod_produit" class="form-control form-control-product">
-                                <option value="">{% trans "Sélectionner un produit" %}</option>
-                            </select>
+                            <!-- Custom Select pour Produit -->
+                            <div class="custom-select-container" id="customSelectProduit">
+                                <div class="custom-select-trigger" onclick="toggleCustomSelect('customSelectProduit')">
+                                    <span class="selected-text placeholder">{% trans "Sélectionner un produit" %}</span>
+                                    <i class="fas fa-chevron-down arrow"></i>
+                                </div>
+                                <div class="custom-select-dropdown">
+                                    <div class="custom-select-search">
+                                        <input type="text" placeholder="{% trans 'Rechercher...' %}" oninput="filterCustomSelectOptions('customSelectProduit', this.value)">
+                                    </div>
+                                    <div class="custom-select-options">
+                                        <!-- Options seront ajoutées via JS -->
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Select caché pour compatibilité avec produit.js -->
+                            <div style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">
+                                <select id="prix_prod_produit">
+                                    <option value="">{% trans "Sélectionner un produit" %}</option>
+                                </select>
+                            </div>
                         </div>
                         <div class="col-md-2">
                             <label class="form-label-product">{% trans "Code Prix" %}</label>
-                            <select id="prix_prod_code" class="form-control form-control-product">
-                                <option value="">{% trans "Standard" %}</option>
-                            </select>
+                            <!-- Custom Select pour Code Prix -->
+                            <div class="custom-select-container" id="customSelectCodePrix">
+                                <div class="custom-select-trigger" onclick="toggleCustomSelect('customSelectCodePrix')">
+                                    <span class="selected-text placeholder">{% trans "Standard" %}</span>
+                                    <i class="fas fa-chevron-down arrow"></i>
+                                </div>
+                                <div class="custom-select-dropdown">
+                                    <div class="custom-select-search">
+                                        <input type="text" placeholder="{% trans 'Rechercher...' %}" oninput="filterCustomSelectOptions('customSelectCodePrix', this.value)">
+                                    </div>
+                                    <div class="custom-select-options">
+                                    </div>
+                                </div>
+                            </div>
+                            <div style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">
+                                <select id="prix_prod_code">
+                                    <option value="">{% trans "Standard" %}</option>
+                                </select>
+                            </div>
                             <small class="text-muted">{% trans "(optionnel)" %}</small>
                         </div>
                         <div class="col-md-2">
                             <label class="form-label-product">{% trans "Type Prix" %} *</label>
-                            <select id="prix_prod_type" class="form-control form-control-product">
-                                <option value="">{% trans "Sélectionner un type" %}</option>
-                            </select>
+                            <!-- Custom Select pour Type Prix -->
+                            <div class="custom-select-container" id="customSelectTypePrix">
+                                <div class="custom-select-trigger" onclick="toggleCustomSelect('customSelectTypePrix')">
+                                    <span class="selected-text placeholder">{% trans "Sélectionner un type" %}</span>
+                                    <i class="fas fa-chevron-down arrow"></i>
+                                </div>
+                                <div class="custom-select-dropdown">
+                                    <div class="custom-select-search">
+                                        <input type="text" placeholder="{% trans 'Rechercher...' %}" oninput="filterCustomSelectOptions('customSelectTypePrix', this.value)">
+                                    </div>
+                                    <div class="custom-select-options">
+                                    </div>
+                                </div>
+                            </div>
+                            <div style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">
+                                <select id="prix_prod_type">
+                                    <option value="">{% trans "Sélectionner un type" %}</option>
+                                </select>
+                            </div>
                         </div>
                         <div class="col-md-2">
                             <label class="form-label-product">{% trans "Prix" %} *</label>
@@ -511,9 +718,27 @@ input[type="number"].form-control-product::-webkit-outer-spin-button {
                     <div class="row mb-3">
                         <div class="col-md-4">
                             <label class="form-label-product">{% trans "Filtrer par produit" %}</label>
-                            <select id="prix_prod_filter" class="form-control form-control-product">
-                                <option value="">{% trans "Tous les produits" %}</option>
-                            </select>
+                            <!-- Custom Select pour Filtre Produit -->
+                            <div class="custom-select-container" id="customSelectFilter">
+                                <div class="custom-select-trigger" onclick="toggleCustomSelect('customSelectFilter')">
+                                    <span class="selected-text placeholder">{% trans "Tous les produits" %}</span>
+                                    <i class="fas fa-chevron-down arrow"></i>
+                                </div>
+                                <div class="custom-select-dropdown">
+                                    <div class="custom-select-search">
+                                        <input type="text" placeholder="{% trans 'Rechercher...' %}" oninput="filterCustomSelectOptions('customSelectFilter', this.value)">
+                                    </div>
+                                    <div class="custom-select-options">
+                                        <!-- Options seront ajoutées via JS -->
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Select caché pour compatibilité avec produit.js -->
+                            <div style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">
+                                <select id="prix_prod_filter">
+                                    <option value="">{% trans "Tous les produits" %}</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
 
@@ -539,3 +764,239 @@ input[type="number"].form-control-product::-webkit-outer-spin-button {
         </div>
     </div>
 </div>
+
+<script>
+// ====== Custom Select Dropdown Functions ======
+if (typeof window.allProductsData === 'undefined') {
+    window.allProductsData = [];
+}
+
+// Toggle dropdown open/close
+function toggleCustomSelect(containerId) {
+    const container = document.getElementById(containerId);
+    const trigger = container.querySelector('.custom-select-trigger');
+    const dropdown = container.querySelector('.custom-select-dropdown');
+
+    // Fermer les autres dropdowns
+    document.querySelectorAll('.custom-select-container').forEach(c => {
+        if (c.id !== containerId) {
+            c.querySelector('.custom-select-trigger').classList.remove('open');
+            c.querySelector('.custom-select-dropdown').classList.remove('open');
+        }
+    });
+
+    trigger.classList.toggle('open');
+    dropdown.classList.toggle('open');
+
+    if (dropdown.classList.contains('open')) {
+        const searchInput = dropdown.querySelector('input');
+        if (searchInput) {
+            searchInput.value = '';
+            searchInput.focus();
+            filterCustomSelectOptions(containerId, '');
+        }
+    }
+}
+
+// Filter options based on search
+function filterCustomSelectOptions(containerId, searchTerm) {
+    const container = document.getElementById(containerId);
+    const optionsContainer = container.querySelector('.custom-select-options');
+    const options = optionsContainer.querySelectorAll('.custom-select-option');
+    const search = searchTerm.toLowerCase();
+    let hasResults = false;
+
+    options.forEach(option => {
+        const text = option.textContent.toLowerCase();
+        if (text.includes(search)) {
+            option.style.display = '';
+            hasResults = true;
+        } else {
+            option.style.display = 'none';
+        }
+    });
+
+    // Show/hide no results message
+    let noResults = optionsContainer.querySelector('.custom-select-no-results');
+    if (!hasResults) {
+        if (!noResults) {
+            noResults = document.createElement('div');
+            noResults.className = 'custom-select-no-results';
+            noResults.textContent = 'Aucun résultat';
+            optionsContainer.appendChild(noResults);
+        }
+        noResults.style.display = '';
+    } else if (noResults) {
+        noResults.style.display = 'none';
+    }
+}
+
+// Select an option
+function selectCustomOption(containerId, value, text, hiddenSelectId) {
+    const container = document.getElementById(containerId);
+    const trigger = container.querySelector('.custom-select-trigger');
+    const selectedText = trigger.querySelector('.selected-text');
+    const dropdown = container.querySelector('.custom-select-dropdown');
+    const hiddenSelect = document.getElementById(hiddenSelectId);
+
+    // Update display
+    selectedText.textContent = text;
+    selectedText.classList.remove('placeholder');
+
+    // Update hidden select
+    if (hiddenSelect) {
+        // S'assurer que l'option existe dans le select caché
+        let option = hiddenSelect.querySelector(`option[value="${value}"]`);
+        if (!option && value) {
+            option = document.createElement('option');
+            option.value = value;
+            option.textContent = text;
+            hiddenSelect.appendChild(option);
+        }
+        hiddenSelect.value = value;
+        // Trigger change event for jQuery
+        hiddenSelect.dispatchEvent(new Event('change', { bubbles: true }));
+        // Also trigger for jQuery if available
+        if (typeof $ !== 'undefined') {
+            $(hiddenSelect).val(value).trigger('change');
+        }
+        console.log('[CustomSelect] Valeur définie:', hiddenSelectId, '=', value);
+    }
+
+    // Update selected state
+    container.querySelectorAll('.custom-select-option').forEach(opt => {
+        opt.classList.remove('selected');
+        if (opt.dataset.value === String(value)) {
+            opt.classList.add('selected');
+        }
+    });
+
+    // Close dropdown
+    trigger.classList.remove('open');
+    dropdown.classList.remove('open');
+}
+
+// Populate custom select with products
+function populateCustomSelectProducts(containerId, products, hiddenSelectId, includeAllOption = false) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const optionsContainer = container.querySelector('.custom-select-options');
+    optionsContainer.innerHTML = '';
+
+    // Add "All products" option if needed
+    if (includeAllOption) {
+        const allOption = document.createElement('div');
+        allOption.className = 'custom-select-option';
+        allOption.dataset.value = '';
+        allOption.innerHTML = '<span class="option-ref">{% trans "Tous les produits" %}</span>';
+        allOption.onclick = () => selectCustomOption(containerId, '', '{% trans "Tous les produits" %}', hiddenSelectId);
+        optionsContainer.appendChild(allOption);
+    }
+
+    products.forEach(prod => {
+        const option = document.createElement('div');
+        option.className = 'custom-select-option';
+        option.dataset.value = prod.id;
+        option.innerHTML = `<span class="option-ref">${prod.reference}</span><span class="option-name">${prod.nom}</span>`;
+        option.onclick = () => selectCustomOption(containerId, prod.id, `${prod.reference} - ${prod.nom}`, hiddenSelectId);
+        optionsContainer.appendChild(option);
+    });
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.custom-select-container')) {
+        document.querySelectorAll('.custom-select-container').forEach(container => {
+            container.querySelector('.custom-select-trigger').classList.remove('open');
+            container.querySelector('.custom-select-dropdown').classList.remove('open');
+        });
+    }
+});
+
+// Populate generic custom select
+function populateCustomSelectGeneric(containerId, items, hiddenSelectId, placeholderText, includeEmpty = true) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const optionsContainer = container.querySelector('.custom-select-options');
+    optionsContainer.innerHTML = '';
+
+    // Add empty/default option
+    if (includeEmpty) {
+        const emptyOption = document.createElement('div');
+        emptyOption.className = 'custom-select-option';
+        emptyOption.dataset.value = '';
+        emptyOption.innerHTML = `<span class="option-ref">${placeholderText}</span>`;
+        emptyOption.onclick = () => selectCustomOption(containerId, '', placeholderText, hiddenSelectId);
+        optionsContainer.appendChild(emptyOption);
+    }
+
+    items.forEach(item => {
+        const option = document.createElement('div');
+        option.className = 'custom-select-option';
+        option.dataset.value = item.id;
+        option.innerHTML = `<span class="option-ref">${item.nom || item.name || item.code || ''}</span>`;
+        option.onclick = () => selectCustomOption(containerId, item.id, item.nom || item.name || item.code || '', hiddenSelectId);
+        optionsContainer.appendChild(option);
+    });
+}
+
+// Initialize custom selects - load all data from API
+function initCustomSelects() {
+    // Charger les produits
+    fetch('/API/produits/')
+        .then(response => response.json())
+        .then(data => {
+            const products = Array.isArray(data) ? data : (data.results || []);
+
+            const formattedProducts = products.map(prod => ({
+                id: prod.id,
+                reference: prod.reference || '',
+                nom: prod.designation || prod.nom || ''
+            }));
+
+            if (formattedProducts.length > 0) {
+                window.allProductsData = formattedProducts;
+                populateCustomSelectProducts('customSelectProduit', formattedProducts, 'prix_prod_produit', false);
+                populateCustomSelectProducts('customSelectFilter', formattedProducts, 'prix_prod_filter', true);
+                console.log('[CustomSelect] Chargé', formattedProducts.length, 'produits');
+            }
+        })
+        .catch(err => {
+            console.error('[CustomSelect] Erreur chargement produits:', err);
+        });
+
+    // Charger les codes prix
+    fetch('/API/codes-prix/')
+        .then(response => response.json())
+        .then(data => {
+            const codes = Array.isArray(data) ? data : (data.results || []);
+            populateCustomSelectGeneric('customSelectCodePrix', codes, 'prix_prod_code', 'Standard', true);
+            console.log('[CustomSelect] Chargé', codes.length, 'codes prix');
+        })
+        .catch(err => {
+            console.error('[CustomSelect] Erreur chargement codes prix:', err);
+        });
+
+    // Charger les types prix
+    fetch('/API/types-prix/')
+        .then(response => response.json())
+        .then(data => {
+            const types = Array.isArray(data) ? data : (data.results || []);
+            populateCustomSelectGeneric('customSelectTypePrix', types, 'prix_prod_type', 'Sélectionner un type', true);
+            console.log('[CustomSelect] Chargé', types.length, 'types prix');
+        })
+        .catch(err => {
+            console.error('[CustomSelect] Erreur chargement types prix:', err);
+        });
+}
+
+// Initialiser au chargement
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initCustomSelects);
+} else {
+    // DOM déjà chargé (cas de chargement dynamique via redirect.js)
+    setTimeout(initCustomSelects, 100);
+}
+</script>

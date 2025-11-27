@@ -2,6 +2,141 @@
 {% load i18n %}
 <script src="{% static 'script/vente.js' %}" type="text/javascript"></script>
 
+<style>
+/* Custom Select Dropdown pour Ventes */
+.custom-select-container {
+    position: relative;
+    width: 100%;
+}
+
+.custom-select-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    background: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-height: 38px;
+}
+
+.custom-select-trigger:hover {
+    border-color: #80bdff;
+}
+
+.custom-select-trigger.open {
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+}
+
+.custom-select-trigger .selected-text {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #495057;
+}
+
+.custom-select-trigger .selected-text.placeholder {
+    color: #6c757d;
+}
+
+.custom-select-trigger .arrow {
+    margin-left: 10px;
+    transition: transform 0.2s;
+    color: #495057;
+}
+
+.custom-select-trigger.open .arrow {
+    transform: rotate(180deg);
+}
+
+.custom-select-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #ced4da;
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 1050;
+    display: none;
+}
+
+.custom-select-dropdown.open {
+    display: block;
+}
+
+.custom-select-search {
+    padding: 8px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.custom-select-search input {
+    width: 100%;
+    padding: 6px 10px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+
+.custom-select-search input:focus {
+    outline: none;
+    border-color: #80bdff;
+}
+
+.custom-select-options {
+    max-height: 250px;
+    overflow-y: auto;
+}
+
+.custom-select-options::-webkit-scrollbar {
+    width: 8px;
+}
+
+.custom-select-options::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.custom-select-options::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+
+.custom-select-options::-webkit-scrollbar-thumb:hover {
+    background: #a1a1a1;
+}
+
+.custom-select-option {
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: background 0.15s;
+    border-bottom: 1px solid #f8f9fa;
+    color: #000;
+}
+
+.custom-select-option:hover {
+    background: #f8f9fa;
+}
+
+.custom-select-option.selected {
+    background: #e9ecef;
+    font-weight: 500;
+}
+
+.custom-select-no-results {
+    padding: 12px;
+    text-align: center;
+    color: #6c757d;
+    font-style: italic;
+}
+</style>
+
 <!-- Navigation des onglets -->
 <div class="container-fluid">
   <ul class="nav nav-tabs" id="venteTabs" role="tablist">
@@ -36,9 +171,22 @@
           <div class="row">
             <div class="col-sm-3 mb-2">
               <label>{% trans "Client" %} *</label>
-              <select id="vente_client" class="form-control">
-                <option value="">{% trans "Choisir un client..." %}</option>
-              </select>
+              <!-- Custom Select pour Client -->
+              <div class="custom-select-container" id="customSelectVenteClient">
+                  <div class="custom-select-trigger" id="venteClientTrigger">
+                      <span class="selected-text placeholder">{% trans "Choisir un client..." %}</span>
+                      <i class="fas fa-chevron-down arrow"></i>
+                  </div>
+                  <div class="custom-select-dropdown" id="venteClientDropdown">
+                      <div class="custom-select-search">
+                          <input type="text" id="venteClientSearch" placeholder="{% trans 'Rechercher...' %}">
+                      </div>
+                      <div class="custom-select-options" id="venteClientOptions"></div>
+                  </div>
+                  <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
+                      <select id="vente_client"><option value="">{% trans "Choisir un client..." %}</option></select>
+                  </div>
+              </div>
             </div>
             <div class="col-sm-2 mb-2">
               <label>{% trans "Devise" %}</label>
@@ -64,9 +212,22 @@
             </div>
             <div class="col-sm-3 mb-2">
               <label>{% trans "Entrepôt" %} *</label>
-              <select id="vente_warehouse" class="form-control">
-                <option value="">{% trans "Sélectionner un entrepôt" %}...</option>
-              </select>
+              <!-- Custom Select pour Entrepôt -->
+              <div class="custom-select-container" id="customSelectVenteWarehouse">
+                  <div class="custom-select-trigger" id="venteWarehouseTrigger">
+                      <span class="selected-text placeholder">{% trans "Sélectionner un entrepôt" %}...</span>
+                      <i class="fas fa-chevron-down arrow"></i>
+                  </div>
+                  <div class="custom-select-dropdown" id="venteWarehouseDropdown">
+                      <div class="custom-select-search">
+                          <input type="text" id="venteWarehouseSearch" placeholder="{% trans 'Rechercher...' %}">
+                      </div>
+                      <div class="custom-select-options" id="venteWarehouseOptions"></div>
+                  </div>
+                  <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
+                      <select id="vente_warehouse"><option value="">{% trans "Sélectionner un entrepôt" %}...</option></select>
+                  </div>
+              </div>
             </div>
             <div class="col-sm-2 mb-2">
               <label>{% trans "Remise (%)" %}</label>
@@ -99,9 +260,22 @@
             </div>
             <div class="col-sm-4 mb-2">
               <label>{% trans "Produit" %}</label>
-              <select id="vente_prod" class="form-control">
-                <option value="">{% trans "Choisir un produit..." %}</option>
-              </select>
+              <!-- Custom Select pour Produit -->
+              <div class="custom-select-container" id="customSelectVenteProd">
+                  <div class="custom-select-trigger" id="venteProdTrigger">
+                      <span class="selected-text placeholder">{% trans "Choisir un produit..." %}</span>
+                      <i class="fas fa-chevron-down arrow"></i>
+                  </div>
+                  <div class="custom-select-dropdown" id="venteProdDropdown">
+                      <div class="custom-select-search">
+                          <input type="text" id="venteProdSearch" placeholder="{% trans 'Rechercher...' %}">
+                      </div>
+                      <div class="custom-select-options" id="venteProdOptions"></div>
+                  </div>
+                  <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
+                      <select id="vente_prod"><option value="">{% trans "Choisir un produit..." %}</option></select>
+                  </div>
+              </div>
             </div>
             <div class="col-sm-2 mb-2">
               <label>{% trans "Quantité" %}</label>
@@ -322,3 +496,365 @@
 
   </div>
 </div>
+
+<script>
+(function() {
+    var venteCustomSelectData = {
+        clients: [],
+        warehouses: [],
+        products: []
+    };
+
+    function toggleVenteCustomSelect(containerId) {
+        var container = document.getElementById(containerId);
+        if (!container) return;
+
+        var trigger = container.querySelector('.custom-select-trigger');
+        var dropdown = container.querySelector('.custom-select-dropdown');
+        var isOpen = dropdown.classList.contains('open');
+
+        // Fermer tous les autres dropdowns
+        document.querySelectorAll('.custom-select-dropdown.open').forEach(function(d) {
+            d.classList.remove('open');
+            var t = d.closest('.custom-select-container');
+            if (t) t.querySelector('.custom-select-trigger').classList.remove('open');
+        });
+
+        if (!isOpen) {
+            dropdown.classList.add('open');
+            trigger.classList.add('open');
+            var searchInput = dropdown.querySelector('input');
+            if (searchInput) {
+                searchInput.value = '';
+                searchInput.focus();
+            }
+            filterVenteOptions(containerId, '');
+        }
+    }
+
+    function filterVenteOptions(containerId, searchText) {
+        var container = document.getElementById(containerId);
+        if (!container) return;
+
+        var optionsContainer = container.querySelector('.custom-select-options');
+        var options = optionsContainer.querySelectorAll('.custom-select-option');
+        var search = (searchText || '').toLowerCase().trim();
+        var hasVisible = false;
+
+        for (var i = 0; i < options.length; i++) {
+            var opt = options[i];
+            var text = (opt.textContent || '').toLowerCase();
+            var match = !search || text.indexOf(search) !== -1;
+            opt.style.display = match ? '' : 'none';
+            if (match) hasVisible = true;
+        }
+
+        var noResults = optionsContainer.querySelector('.custom-select-no-results');
+        if (!hasVisible) {
+            if (!noResults) {
+                noResults = document.createElement('div');
+                noResults.className = 'custom-select-no-results';
+                noResults.textContent = 'Aucun résultat trouvé';
+                optionsContainer.appendChild(noResults);
+            }
+            noResults.style.display = '';
+        } else if (noResults) {
+            noResults.style.display = 'none';
+        }
+    }
+
+    function selectVenteOption(containerId, value, text, hiddenSelectId) {
+        var container = document.getElementById(containerId);
+        if (!container) return;
+
+        var trigger = container.querySelector('.custom-select-trigger');
+        var selectedText = trigger.querySelector('.selected-text');
+        var dropdown = container.querySelector('.custom-select-dropdown');
+        var hiddenSelect = document.getElementById(hiddenSelectId);
+
+        selectedText.textContent = text;
+        selectedText.classList.toggle('placeholder', !value);
+
+        dropdown.classList.remove('open');
+        trigger.classList.remove('open');
+
+        if (hiddenSelect) {
+            var option = hiddenSelect.querySelector('option[value="' + value + '"]');
+            if (!option && value) {
+                option = document.createElement('option');
+                option.value = value;
+                option.textContent = text;
+                hiddenSelect.appendChild(option);
+            }
+            hiddenSelect.value = value;
+
+            if (typeof jQuery !== 'undefined') {
+                jQuery(hiddenSelect).val(value).trigger('change');
+            }
+        }
+
+        var allOpts = container.querySelectorAll('.custom-select-option');
+        for (var i = 0; i < allOpts.length; i++) {
+            if (allOpts[i].getAttribute('data-value') === String(value)) {
+                allOpts[i].classList.add('selected');
+            } else {
+                allOpts[i].classList.remove('selected');
+            }
+        }
+    }
+
+    function populateVenteClients() {
+        var optionsContainer = document.getElementById('venteClientOptions');
+        if (!optionsContainer) return;
+
+        optionsContainer.innerHTML = '';
+
+        var defaultOpt = document.createElement('div');
+        defaultOpt.className = 'custom-select-option';
+        defaultOpt.setAttribute('data-value', '');
+        defaultOpt.textContent = 'Choisir un client...';
+        defaultOpt.onclick = function() {
+            selectVenteOption('customSelectVenteClient', '', 'Choisir un client...', 'vente_client');
+        };
+        optionsContainer.appendChild(defaultOpt);
+
+        venteCustomSelectData.clients.forEach(function(c) {
+            var opt = document.createElement('div');
+            opt.className = 'custom-select-option';
+            opt.setAttribute('data-value', c.id);
+            var label = [(c.nom || '').trim(), (c.prenom || '').trim()].filter(Boolean).join(' ') || ('Client #' + c.id);
+            opt.textContent = label;
+            opt.onclick = function() {
+                selectVenteOption('customSelectVenteClient', c.id, label, 'vente_client');
+            };
+            optionsContainer.appendChild(opt);
+        });
+    }
+
+    function populateVenteWarehouses() {
+        var optionsContainer = document.getElementById('venteWarehouseOptions');
+        if (!optionsContainer) return;
+
+        optionsContainer.innerHTML = '';
+
+        var defaultOpt = document.createElement('div');
+        defaultOpt.className = 'custom-select-option';
+        defaultOpt.setAttribute('data-value', '');
+        defaultOpt.textContent = 'Sélectionner un entrepôt...';
+        defaultOpt.onclick = function() {
+            selectVenteOption('customSelectVenteWarehouse', '', 'Sélectionner un entrepôt...', 'vente_warehouse');
+        };
+        optionsContainer.appendChild(defaultOpt);
+
+        venteCustomSelectData.warehouses.forEach(function(w) {
+            var opt = document.createElement('div');
+            opt.className = 'custom-select-option';
+            opt.setAttribute('data-value', w.id);
+            var label = (w.code || '') + ' - ' + (w.name || '');
+            opt.textContent = label;
+            opt.onclick = function() {
+                selectVenteOption('customSelectVenteWarehouse', w.id, label, 'vente_warehouse');
+            };
+            optionsContainer.appendChild(opt);
+        });
+    }
+
+    function populateVenteProducts() {
+        var optionsContainer = document.getElementById('venteProdOptions');
+        if (!optionsContainer) return;
+
+        optionsContainer.innerHTML = '';
+
+        var defaultOpt = document.createElement('div');
+        defaultOpt.className = 'custom-select-option';
+        defaultOpt.setAttribute('data-value', '');
+        defaultOpt.textContent = 'Choisir un produit...';
+        defaultOpt.onclick = function() {
+            selectVenteOption('customSelectVenteProd', '', 'Choisir un produit...', 'vente_prod');
+        };
+        optionsContainer.appendChild(defaultOpt);
+
+        venteCustomSelectData.products.forEach(function(p) {
+            var opt = document.createElement('div');
+            opt.className = 'custom-select-option';
+            opt.setAttribute('data-value', p.id);
+            var label = (p.reference ? (p.reference + ' - ') : '') + (p.designation || 'Produit #' + p.id);
+            opt.textContent = label;
+            opt.onclick = function() {
+                selectVenteOption('customSelectVenteProd', p.id, label, 'vente_prod');
+            };
+            optionsContainer.appendChild(opt);
+        });
+    }
+
+    function loadVenteClients() {
+        console.log('[Vente Custom] Loading clients...');
+        fetch('/API/clients/?page_size=1000')
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                var list = Array.isArray(data) ? data : (data && data.results ? data.results : []);
+                console.log('[Vente Custom] Clients loaded:', list.length);
+                venteCustomSelectData.clients = list;
+                populateVenteClients();
+
+                // Preselect Divers if present
+                var diversId = null;
+                list.forEach(function(c) {
+                    var label = [(c.nom || ''), (c.prenom || '')].join(' ').toLowerCase();
+                    if (!diversId && (label === 'divers' || label.includes('divers'))) {
+                        diversId = c.id;
+                    }
+                });
+                if (diversId) {
+                    var diversClient = list.find(function(c) { return c.id === diversId; });
+                    if (diversClient) {
+                        var label = [(diversClient.nom || '').trim(), (diversClient.prenom || '').trim()].filter(Boolean).join(' ');
+                        selectVenteOption('customSelectVenteClient', diversId, label, 'vente_client');
+                    }
+                }
+            })
+            .catch(function(err) {
+                console.error('[Vente Custom] Error loading clients:', err);
+            });
+    }
+
+    function loadVenteWarehouses() {
+        console.log('[Vente Custom] Loading warehouses...');
+        fetch('/API/entrepots/?page_size=1000')
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                var list = Array.isArray(data) ? data : (data && data.results ? data.results : []);
+                list = list.filter(function(w) { return w && w.is_active !== false; });
+                console.log('[Vente Custom] Warehouses loaded:', list.length);
+                venteCustomSelectData.warehouses = list;
+                populateVenteWarehouses();
+
+                // Try to preselect default warehouse
+                fetch('/API/system-config/')
+                    .then(function(r) { return r.json(); })
+                    .then(function(cfg) {
+                        var dw = cfg && (cfg[0] || cfg).default_warehouse;
+                        if (dw) {
+                            var defWh = list.find(function(w) { return String(w.id) === String(dw); });
+                            if (defWh) {
+                                var label = (defWh.code || '') + ' - ' + (defWh.name || '');
+                                selectVenteOption('customSelectVenteWarehouse', defWh.id, label, 'vente_warehouse');
+                            }
+                        }
+                    })
+                    .catch(function() {});
+            })
+            .catch(function(err) {
+                console.error('[Vente Custom] Error loading warehouses:', err);
+            });
+    }
+
+    function loadVenteProducts() {
+        console.log('[Vente Custom] Loading products...');
+        fetch('/API/produits/?page_size=1000')
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                var list = Array.isArray(data) ? data : (data && data.results ? data.results : []);
+                console.log('[Vente Custom] Products loaded:', list.length);
+                venteCustomSelectData.products = list;
+                populateVenteProducts();
+            })
+            .catch(function(err) {
+                console.error('[Vente Custom] Error loading products:', err);
+            });
+    }
+
+    function initVenteCustomSelects() {
+        console.log('[Vente Custom] Initializing custom selects...');
+
+        // Event listeners pour les triggers
+        var clientTrigger = document.getElementById('venteClientTrigger');
+        if (clientTrigger) {
+            clientTrigger.addEventListener('click', function(e) {
+                e.stopPropagation();
+                toggleVenteCustomSelect('customSelectVenteClient');
+            });
+        }
+
+        var warehouseTrigger = document.getElementById('venteWarehouseTrigger');
+        if (warehouseTrigger) {
+            warehouseTrigger.addEventListener('click', function(e) {
+                e.stopPropagation();
+                toggleVenteCustomSelect('customSelectVenteWarehouse');
+            });
+        }
+
+        var prodTrigger = document.getElementById('venteProdTrigger');
+        if (prodTrigger) {
+            prodTrigger.addEventListener('click', function(e) {
+                e.stopPropagation();
+                toggleVenteCustomSelect('customSelectVenteProd');
+            });
+        }
+
+        // Event listeners pour la recherche
+        var clientSearch = document.getElementById('venteClientSearch');
+        if (clientSearch) {
+            clientSearch.addEventListener('input', function() {
+                filterVenteOptions('customSelectVenteClient', this.value);
+            });
+            clientSearch.addEventListener('click', function(e) { e.stopPropagation(); });
+        }
+
+        var warehouseSearch = document.getElementById('venteWarehouseSearch');
+        if (warehouseSearch) {
+            warehouseSearch.addEventListener('input', function() {
+                filterVenteOptions('customSelectVenteWarehouse', this.value);
+            });
+            warehouseSearch.addEventListener('click', function(e) { e.stopPropagation(); });
+        }
+
+        var prodSearch = document.getElementById('venteProdSearch');
+        if (prodSearch) {
+            prodSearch.addEventListener('input', function() {
+                filterVenteOptions('customSelectVenteProd', this.value);
+            });
+            prodSearch.addEventListener('click', function(e) { e.stopPropagation(); });
+        }
+
+        // Fermer quand on clique ailleurs
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.custom-select-container')) {
+                document.querySelectorAll('.custom-select-dropdown.open').forEach(function(d) {
+                    d.classList.remove('open');
+                    var t = d.closest('.custom-select-container');
+                    if (t) t.querySelector('.custom-select-trigger').classList.remove('open');
+                });
+            }
+        });
+
+        // Charger les données
+        loadVenteClients();
+        loadVenteWarehouses();
+        loadVenteProducts();
+    }
+
+    // Initialiser au chargement
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initVenteCustomSelects);
+    } else {
+        initVenteCustomSelects();
+    }
+
+    // Pour le chargement dynamique
+    document.addEventListener('fragment:loaded', function(e) {
+        if (e && e.detail && e.detail.name === 'vente') {
+            initVenteCustomSelects();
+        }
+    });
+
+    // Fallback
+    setTimeout(function() {
+        var optionsContainer = document.getElementById('venteClientOptions');
+        if (optionsContainer && optionsContainer.children.length === 0) {
+            console.log('[Vente Custom] Fallback initialization...');
+            initVenteCustomSelects();
+        }
+    }, 500);
+})();
+</script>

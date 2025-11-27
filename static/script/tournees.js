@@ -426,8 +426,12 @@ function filterTournees(status) {
     // Mettre à jour les onglets actifs
     document.querySelectorAll('.tab').forEach(tab => {
         tab.classList.remove('active');
+        // Activer l'onglet correspondant au statut
+        if ((status === 'all' && tab.getAttribute('data-tab') === 'tournees') ||
+            tab.getAttribute('data-tab') === status) {
+            tab.classList.add('active');
+        }
     });
-    event.target.classList.add('active');
 
     let filtered = window.tournees;
     if (status !== 'all') {
@@ -1125,3 +1129,665 @@ function getCookie(name) {
     }
     return cookieValue;
 }
+
+// ============================================
+// FONCTIONS PLANNING HEBDOMADAIRE
+// ============================================
+
+// Variables globales pour le planning
+let allPlannings = [];
+let planningsMap = {}; // Map[livreurId][jourSemaine] = planning
+
+// Fonction pour basculer entre les onglets
+function switchTab(tabName) {
+    // Mettre à jour les onglets actifs
+    document.querySelectorAll('.tab').forEach(tab => {
+        tab.classList.remove('active');
+    });
+
+    const activeTab = document.querySelector(`.tab[data-tab="${tabName}"]`);
+    if (activeTab) {
+        activeTab.classList.add('active');
+    }
+
+    // Cacher toutes les sections
+    document.getElementById('tournees-section').style.display = 'none';
+    document.getElementById('planning-section').style.display = 'none';
+    const configSection = document.getElementById('config-clients-section');
+    if (configSection) {
+        configSection.style.display = 'none';
+    }
+
+    // Afficher la bonne section
+    if (tabName === 'planning') {
+        document.getElementById('planning-section').style.display = 'block';
+        loadPlanningsHebdo();
+    } else if (tabName === 'config-clients') {
+        if (configSection) {
+            configSection.style.display = 'block';
+            // Charger les données nécessaires pour la configuration
+            Promise.all([
+                (!window.livreurs_tournees || window.livreurs_tournees.length === 0) ? loadLivreurs() : Promise.resolve(),
+                (!window.clients_tournees || window.clients_tournees.length === 0) ? loadClients() : Promise.resolve()
+            ]).then(() => {
+                // Mettre à jour les variables locales après le chargement
+                livreurs = window.livreurs_tournees;
+                clients = window.clients_tournees;
+                loadConfigClientsLivreurs();
+            }).catch(err => {
+                console.error('Erreur lors du chargement des données:', err);
+                showMessage('Erreur lors du chargement des données', 'error');
+            });
+        }
+    } else {
+        document.getElementById('tournees-section').style.display = 'block';
+        if (tabName === 'tournees') {
+            filterTournees('all');
+        } else {
+            filterTournees(tabName);
+        }
+    }
+}
+
+// Charger les plannings hebdomadaires
+async function loadPlanningsHebdo() {
+    try {
+        const livreurFilter = document.getElementById('filter-livreur-planning').value;
+        let url = '/API/distribution/plannings-hebdo/';
+        if (livreurFilter) {
+            url += `?livreur=${livreurFilter}`;
+        }
+
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Erreur lors du chargement des plannings');
+
+        allPlannings = await response.json();
+        displayPlanningsTable();
+    } catch (error) {
+        console.error('Erreur:', error);
+        showMessage('Erreur lors du chargement des plannings', 'error');
+    }
+}
+
+// Afficher la table des plannings
+function displayPlanningsTable() {
+    const tbody = document.getElementById('planning-table-body');
+
+    // Créer un map des plannings par livreur et jour
+    planningsMap = {};
+    allPlannings.forEach(planning => {
+        if (!planningsMap[planning.livreur]) {
+            planningsMap[planning.livreur] = {};
+        }
+        planningsMap[planning.livreur][planning.jour_semaine] = planning;
+    });
+
+    // Obtenir la liste unique des livreurs
+    const livreursIds = Object.keys(planningsMap);
+
+    if (livreursIds.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="8" style="text-align: center; padding: 40px; color: #6b7280;">
+                    Aucun planning configuré. Cliquez sur "Nouveau Planning" pour commencer.
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    // Générer les lignes du tableau
+    let html = '';
+    livreursIds.forEach(livreurId => {
+        const firstPlanning = Object.values(planningsMap[livreurId])[0];
+        html += `<tr style="border-bottom: 1px solid #e5e7eb;">`;
+        html += `<td style="padding: 12px; font-weight: 500;">${firstPlanning.livreur_nom}</td>`;
+
+        // Pour chaque jour de la semaine (1-7)
+        for (let jour = 1; jour <= 7; jour++) {
+            const planning = planningsMap[livreurId][jour];
+            if (planning) {
+                const statusIcon = planning.is_active ? '✅' : '❌';
+                const codePrix = planning.code_prix_code || 'Aucun';
+                html += `
+                    <td style="padding: 12px; text-align: center; background: ${planning.is_active ? '#f0fdf4' : '#fef2f2'};">
+                        <div style="font-size: 1.2rem;">${statusIcon}</div>
+                        <small style="color: #6b7280; display: block; margin-top: 4px;">${codePrix}</small>
+                        <div style="margin-top: 8px;">
+                            <button class="btn-sm btn-primary" onclick="editPlanning(${planning.id})" style="padding: 4px 8px; font-size: 0.75rem; margin-right: 4px;">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn-sm btn-danger" onclick="deletePlanning(${planning.id})" style="padding: 4px 8px; font-size: 0.75rem;">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                `;
+            } else {
+                html += `
+                    <td style="padding: 12px; text-align: center; background: #f9fafb;">
+                        <button class="btn-sm btn-success" onclick="openPlanningModal(${livreurId}, ${jour})" style="padding: 4px 8px; font-size: 0.75rem;">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </td>
+                `;
+            }
+        }
+        html += `</tr>`;
+    });
+
+    tbody.innerHTML = html;
+}
+
+// Ouvrir le modal de planning
+function openPlanningModal(livreurId = null, jourSemaine = null) {
+    document.getElementById('planningModal').style.display = 'block';
+    document.getElementById('planning-form').reset();
+    document.getElementById('planning-id').value = '';
+    document.getElementById('planning-modal-title').textContent = 'Nouveau Planning Hebdomadaire';
+
+    // Pré-remplir si livreur et jour fournis
+    if (livreurId) {
+        document.getElementById('planning-livreur').value = livreurId;
+    }
+    if (jourSemaine) {
+        document.getElementById('planning-jour').value = jourSemaine;
+    }
+
+    // Charger les livreurs si pas encore fait
+    loadLivreursForPlanning();
+    // Charger les codes prix
+    loadCodesPrixForPlanning();
+}
+
+// Fermer le modal de planning
+function closePlanningModal() {
+    document.getElementById('planningModal').style.display = 'none';
+}
+
+// Charger les livreurs pour le planning
+async function loadLivreursForPlanning() {
+    try {
+        const response = await fetch('/API/distribution/livreurs/');
+        const livreurs = await response.json();
+
+        const select = document.getElementById('planning-livreur');
+        const filterSelect = document.getElementById('filter-livreur-planning');
+
+        // Remplir les deux selects
+        [select, filterSelect].forEach(sel => {
+            const currentValue = sel.value;
+            sel.innerHTML = '<option value="">Sélectionner un livreur...</option>';
+            livreurs.forEach(livreur => {
+                const option = document.createElement('option');
+                option.value = livreur.id;
+                option.textContent = livreur.nom;
+                sel.appendChild(option);
+            });
+            if (currentValue) sel.value = currentValue;
+        });
+    } catch (error) {
+        console.error('Erreur lors du chargement des livreurs:', error);
+    }
+}
+
+// Charger les codes prix
+async function loadCodesPrixForPlanning() {
+    try {
+        const response = await fetch('/API/codes-prix/');
+        const codesPrix = await response.json();
+
+        const select = document.getElementById('planning-code-prix');
+        select.innerHTML = '<option value="">Aucun (optionnel)</option>';
+        codesPrix.forEach(code => {
+            const option = document.createElement('option');
+            option.value = code.id;
+            option.textContent = `${code.code} - ${code.libelle}`;
+            select.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Erreur lors du chargement des codes prix:', error);
+    }
+}
+
+// Enregistrer le planning
+document.addEventListener('DOMContentLoaded', function() {
+    const planningForm = document.getElementById('planning-form');
+    if (planningForm) {
+        planningForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const planningId = document.getElementById('planning-id').value;
+            const data = {
+                livreur: parseInt(document.getElementById('planning-livreur').value),
+                jour_semaine: parseInt(document.getElementById('planning-jour').value),
+                code_prix: document.getElementById('planning-code-prix').value || null,
+                is_active: document.getElementById('planning-actif').checked,
+                date_debut: document.getElementById('planning-date-debut').value || null,
+                date_fin: document.getElementById('planning-date-fin').value || null,
+                notes: document.getElementById('planning-notes').value || ''
+            };
+
+            try {
+                const url = planningId
+                    ? `/API/distribution/plannings-hebdo/${planningId}/`
+                    : '/API/distribution/plannings-hebdo/';
+
+                const method = planningId ? 'PUT' : 'POST';
+
+                const response = await fetch(url, {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(JSON.stringify(errorData));
+                }
+
+                showMessage('Planning enregistré avec succès!', 'success');
+                closePlanningModal();
+                loadPlanningsHebdo();
+            } catch (error) {
+                console.error('Erreur:', error);
+                showMessage('Erreur lors de l\'enregistrement du planning', 'error');
+            }
+        });
+    }
+});
+
+// Éditer un planning
+async function editPlanning(planningId) {
+    try {
+        const response = await fetch(`/API/distribution/plannings-hebdo/${planningId}/`);
+        const planning = await response.json();
+
+        document.getElementById('planning-id').value = planning.id;
+        document.getElementById('planning-livreur').value = planning.livreur;
+        document.getElementById('planning-jour').value = planning.jour_semaine;
+        document.getElementById('planning-code-prix').value = planning.code_prix || '';
+        document.getElementById('planning-actif').checked = planning.is_active;
+        document.getElementById('planning-date-debut').value = planning.date_debut || '';
+        document.getElementById('planning-date-fin').value = planning.date_fin || '';
+        document.getElementById('planning-notes').value = planning.notes || '';
+
+        document.getElementById('planning-modal-title').textContent = 'Modifier Planning Hebdomadaire';
+        document.getElementById('planningModal').style.display = 'block';
+
+        loadLivreursForPlanning();
+        loadCodesPrixForPlanning();
+    } catch (error) {
+        console.error('Erreur:', error);
+        showMessage('Erreur lors du chargement du planning', 'error');
+    }
+}
+
+// Supprimer un planning
+async function deletePlanning(planningId) {
+    if (!confirm('Êtes-vous sûr de vouloir supprimer ce planning?')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/API/distribution/plannings-hebdo/${planningId}/`, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        });
+
+        if (!response.ok) throw new Error('Erreur lors de la suppression');
+
+        showMessage('Planning supprimé avec succès!', 'success');
+        loadPlanningsHebdo();
+    } catch (error) {
+        console.error('Erreur:', error);
+        showMessage('Erreur lors de la suppression du planning', 'error');
+    }
+}
+
+// Générer les tournées de la semaine
+async function genererSemaine() {
+    // Obtenir le lundi de la semaine courante
+    const today = new Date();
+    const dayOfWeek = today.getDay(); // 0 = dimanche, 1 = lundi, ...
+    const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // Ajuster pour obtenir le lundi
+    const monday = new Date(today);
+    monday.setDate(today.getDate() + diff);
+
+    const dateDebut = monday.toISOString().split('T')[0];
+
+    if (!confirm(`Générer les tournées pour la semaine du ${formatDate(dateDebut)}?`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/API/distribution/plannings-hebdo/generer_semaine/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({ date_debut: dateDebut })
+        });
+
+        if (!response.ok) throw new Error('Erreur lors de la génération');
+
+        const result = await response.json();
+        showMessage(result.message || 'Tournées générées avec succès!', 'success');
+
+        // Revenir à l'onglet des tournées pour voir le résultat
+        switchTab('tournees');
+    } catch (error) {
+        console.error('Erreur:', error);
+        showMessage('Erreur lors de la génération des tournées', 'error');
+    }
+}
+
+// ============================================
+// FONCTIONS CONFIGURATION CLIENTS/LIVREURS
+// ============================================
+
+// Variables globales pour la configuration
+let allConfigs = [];
+
+// Charger les configurations client/livreur
+async function loadConfigClientsLivreurs() {
+    try {
+        const livreurFilter = document.getElementById('filter-livreur-config').value;
+        const jourFilter = document.getElementById('filter-jour-config').value;
+
+        let url = '/API/distribution/clients-livreurs-hebdo/';
+        const params = [];
+        if (livreurFilter) params.push(`livreur=${livreurFilter}`);
+        if (jourFilter) params.push(`jour_semaine=${jourFilter}`);
+        if (params.length > 0) url += '?' + params.join('&');
+
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Erreur lors du chargement des configurations');
+
+        allConfigs = await response.json();
+        displayConfigTable();
+
+        // Peupler le filtre livreur si vide
+        if (document.getElementById('filter-livreur-config').options.length <= 1) {
+            populateConfigLivreurFilter();
+        }
+    } catch (error) {
+        console.error('Erreur:', error);
+        document.getElementById('config-table-body').innerHTML = `
+            <tr>
+                <td colspan="6" style="text-align: center; padding: 20px; color: #ef4444;">
+                    <i class="fas fa-exclamation-triangle"></i> ${error.message}
+                </td>
+            </tr>`;
+    }
+}
+
+// Afficher la table de configuration
+function displayConfigTable() {
+    const tbody = document.getElementById('config-table-body');
+
+    if (allConfigs.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" style="text-align: center; padding: 40px; color: #6b7280;">
+                    <i class="fas fa-info-circle"></i> Aucune configuration trouvée
+                </td>
+            </tr>`;
+        return;
+    }
+
+    const joursNoms = {
+        1: 'Lundi', 2: 'Mardi', 3: 'Mercredi', 4: 'Jeudi',
+        5: 'Vendredi', 6: 'Samedi', 7: 'Dimanche'
+    };
+
+    tbody.innerHTML = allConfigs.map(config => `
+        <tr style="border-bottom: 1px solid #e5e7eb;">
+            <td style="padding: 12px;">
+                <strong>${config.client_nom || 'N/A'}</strong>
+                ${config.client_telephone ? `<br><small style="color: #6b7280;">${config.client_telephone}</small>` : ''}
+            </td>
+            <td style="padding: 12px;">
+                <strong>${config.livreur_nom || 'N/A'}</strong>
+            </td>
+            <td style="padding: 12px; text-align: center;">
+                <span style="background: #e0e7ff; color: #3730a3; padding: 4px 12px; border-radius: 12px; font-weight: 500;">
+                    ${joursNoms[config.jour_semaine] || config.jour_semaine}
+                </span>
+            </td>
+            <td style="padding: 12px; text-align: center;">
+                ${config.ordre_passage ? `<strong>#${config.ordre_passage}</strong>` : '-'}
+            </td>
+            <td style="padding: 12px; text-align: center;">
+                ${config.is_active ?
+                    '<span style="color: #10b981; font-weight: 500;">✓ Actif</span>' :
+                    '<span style="color: #ef4444; font-weight: 500;">✗ Inactif</span>'}
+            </td>
+            <td style="padding: 12px; text-align: center;">
+                <button onclick="editConfig(${config.id})" style="background: none; border: none; color: #3b82f6; cursor: pointer; margin-right: 10px;" title="Modifier">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button onclick="deleteConfig(${config.id})" style="background: none; border: none; color: #ef4444; cursor: pointer;" title="Supprimer">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+// Peupler le filtre livreur de la configuration
+function populateConfigLivreurFilter() {
+    const select = document.getElementById('filter-livreur-config');
+    const selectModal = document.getElementById('config-livreur');
+
+    // Utiliser les variables window pour garantir les données à jour
+    const livreursData = window.livreurs_tournees || livreurs || [];
+
+    if (livreursData && livreursData.length > 0) {
+        // Filtre
+        if (select) {
+            select.innerHTML = '<option value="">Tous les livreurs</option>' +
+                livreursData.map(l => `<option value="${l.id}">${l.nom}</option>`).join('');
+        }
+
+        // Modal
+        if (selectModal) {
+            selectModal.innerHTML = '<option value="">Sélectionner un livreur...</option>' +
+                livreursData.map(l => `<option value="${l.id}">${l.nom}</option>`).join('');
+        }
+    } else {
+        console.warn('Aucun livreur disponible pour les selects');
+        if (select) {
+            select.innerHTML = '<option value="">Aucun livreur disponible</option>';
+        }
+        if (selectModal) {
+            selectModal.innerHTML = '<option value="">Aucun livreur disponible</option>';
+        }
+    }
+}
+
+// Ouvrir le modal de configuration
+async function openConfigModal(configId = null) {
+    const modal = document.getElementById('configModal');
+    const title = document.getElementById('config-modal-title');
+    const form = document.getElementById('config-form');
+
+    form.reset();
+    document.getElementById('config-id').value = '';
+    document.getElementById('config-actif').checked = true;
+
+    // S'assurer que les données sont chargées
+    try {
+        // Charger les livreurs si pas encore chargés
+        if (!window.livreurs_tournees || window.livreurs_tournees.length === 0) {
+            await loadLivreurs();
+        }
+
+        // Charger les clients si pas encore chargés
+        if (!window.clients_tournees || window.clients_tournees.length === 0) {
+            await loadClients();
+        }
+
+        // Mettre à jour les variables locales après le chargement
+        livreurs = window.livreurs_tournees;
+        clients = window.clients_tournees;
+
+        console.log('Clients chargés pour modal:', clients.length);
+        console.log('Livreurs chargés pour modal:', livreurs.length);
+
+        // Peupler les selects
+        populateConfigLivreurFilter();
+
+        // Peupler le select des clients
+        const clientSelect = document.getElementById('config-client');
+        if (clients && clients.length > 0) {
+            clientSelect.innerHTML = '<option value="">Sélectionner un client...</option>' +
+                clients.map(c => `<option value="${c.id}">${c.nom}</option>`).join('');
+        } else {
+            console.warn('Aucun client disponible pour le select');
+            clientSelect.innerHTML = '<option value="">Aucun client disponible</option>';
+        }
+
+        if (configId) {
+            // Mode édition
+            title.textContent = 'Modifier Configuration';
+            const config = allConfigs.find(c => c.id === configId);
+            if (config) {
+                document.getElementById('config-id').value = config.id;
+                document.getElementById('config-client').value = config.client;
+                document.getElementById('config-livreur').value = config.livreur;
+                document.getElementById('config-jour').value = config.jour_semaine;
+                document.getElementById('config-ordre').value = config.ordre_passage || '';
+                document.getElementById('config-actif').checked = config.is_active;
+            }
+        } else {
+            // Mode création
+            title.textContent = 'Nouvelle Configuration Client/Livreur';
+        }
+
+        modal.style.display = 'block';
+    } catch (error) {
+        console.error('Erreur lors du chargement des données:', error);
+        showMessage('Erreur lors du chargement des données. Veuillez réessayer.', 'error');
+    }
+}
+
+// Fermer le modal de configuration
+function closeConfigModal() {
+    document.getElementById('configModal').style.display = 'none';
+}
+
+// Éditer une configuration
+function editConfig(configId) {
+    openConfigModal(configId);
+}
+
+// Supprimer une configuration
+async function deleteConfig(configId) {
+    if (!confirm('Êtes-vous sûr de vouloir désactiver cette configuration ?')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/API/distribution/clients-livreurs-hebdo/${configId}/`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({ is_active: false })
+        });
+
+        if (!response.ok) throw new Error('Erreur lors de la suppression');
+
+        showMessage('Configuration désactivée avec succès!', 'success');
+        loadConfigClientsLivreurs();
+    } catch (error) {
+        console.error('Erreur:', error);
+        showMessage('Erreur lors de la suppression', 'error');
+    }
+}
+
+// Sauvegarder la configuration
+async function saveConfig(event) {
+    event.preventDefault();
+
+    const configId = document.getElementById('config-id').value;
+    const data = {
+        client: parseInt(document.getElementById('config-client').value),
+        livreur: parseInt(document.getElementById('config-livreur').value),
+        jour_semaine: parseInt(document.getElementById('config-jour').value),
+        ordre_passage: document.getElementById('config-ordre').value ?
+            parseInt(document.getElementById('config-ordre').value) : null,
+        is_active: document.getElementById('config-actif').checked
+    };
+
+    try {
+        let url = '/API/distribution/clients-livreurs-hebdo/';
+        let method = 'POST';
+
+        if (configId) {
+            url += `${configId}/`;
+            method = 'PUT';
+        }
+
+        const response = await fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify(data)
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            console.error('Erreur serveur:', errorData);
+
+            // Extraire les messages d'erreur
+            let errorMessage = 'Erreur lors de la sauvegarde: ';
+            if (errorData.detail) {
+                errorMessage += errorData.detail;
+            } else if (typeof errorData === 'object') {
+                // Afficher toutes les erreurs de validation
+                const errors = [];
+                for (const [field, messages] of Object.entries(errorData)) {
+                    if (Array.isArray(messages)) {
+                        errors.push(`${field}: ${messages.join(', ')}`);
+                    } else {
+                        errors.push(`${field}: ${messages}`);
+                    }
+                }
+                errorMessage += errors.join('; ');
+            } else {
+                errorMessage += errorData;
+            }
+
+            throw new Error(errorMessage);
+        }
+
+        showMessage(configId ? 'Configuration modifiée avec succès!' : 'Configuration créée avec succès!', 'success');
+        closeConfigModal();
+        loadConfigClientsLivreurs();
+    } catch (error) {
+        console.error('Erreur:', error);
+        showMessage(error.message, 'error');
+    }
+}
+
+// Configurer le gestionnaire de formulaire de configuration
+document.addEventListener('fragment:loaded', function(e) {
+    if (e.detail.name === 'tournees') {
+        const configForm = document.getElementById('config-form');
+        if (configForm) {
+            configForm.removeEventListener('submit', saveConfig);
+            configForm.addEventListener('submit', saveConfig);
+        }
+    }
+});

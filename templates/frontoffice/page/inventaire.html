@@ -116,6 +116,148 @@
 .badge-critique { background: #fed7aa; color: #9a3412; }
 .badge-alerte { background: #fef3c7; color: #92400e; }
 .badge-normal { background: #d1fae5; color: #065f46; }
+
+/* Custom Select pour Catégories */
+.custom-select-container {
+    position: relative;
+    width: 100%;
+}
+
+.custom-select-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    background: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-height: 48px;
+    font-size: 1rem;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+}
+
+.custom-select-trigger:hover {
+    border-color: #667eea;
+}
+
+.custom-select-trigger.open {
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+    border-radius: 8px 8px 0 0;
+}
+
+.custom-select-trigger .selected-text {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #000;
+}
+
+.custom-select-trigger .selected-text.placeholder {
+    color: #6c757d;
+}
+
+.custom-select-trigger .arrow {
+    margin-left: 10px;
+    transition: transform 0.2s;
+    color: #495057;
+}
+
+.custom-select-trigger.open .arrow {
+    transform: rotate(180deg);
+}
+
+.custom-select-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #667eea;
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 9999;
+    display: none;
+}
+
+.custom-select-dropdown.open {
+    display: block;
+}
+
+.custom-select-search {
+    padding: 10px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.custom-select-search input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    font-size: 0.9rem;
+}
+
+.custom-select-search input:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+.custom-select-options {
+    max-height: 250px;
+    overflow-y: auto;
+}
+
+.custom-select-options::-webkit-scrollbar {
+    width: 6px;
+}
+
+.custom-select-options::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+.custom-select-options::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+.custom-select-options::-webkit-scrollbar-thumb:hover {
+    background: #a1a1a1;
+}
+
+.custom-select-option {
+    padding: 10px 16px;
+    cursor: pointer;
+    transition: background 0.15s;
+    border-bottom: 1px solid #f8f9fa;
+    color: #000;
+}
+
+.custom-select-option:last-child {
+    border-bottom: none;
+}
+
+.custom-select-option:hover {
+    background: #f8f9fa;
+}
+
+.custom-select-option.selected {
+    background: #667eea;
+    color: white;
+}
+
+.custom-select-no-results {
+    padding: 12px;
+    text-align: center;
+    color: #6c757d;
+    font-style: italic;
+}
 </style>
 
 <div class="container-fluid p-4">
@@ -260,9 +402,26 @@
                     </div>
                 </div>
                 <div class="col-md-3">
-                    <select id="filter_category" class="form-select form-select-lg">
-                        <option value="">Toutes catégories</option>
-                    </select>
+                    <div class="custom-select-container" id="customSelectCategory">
+                        <div class="custom-select-trigger" id="categoryTrigger">
+                            <span class="selected-text placeholder">Toutes catégories</span>
+                            <i class="fas fa-chevron-down arrow"></i>
+                        </div>
+                        <div class="custom-select-dropdown" id="categoryDropdown">
+                            <div class="custom-select-search">
+                                <input type="text" id="categorySearch" placeholder="Rechercher une catégorie...">
+                            </div>
+                            <div class="custom-select-options" id="categoryOptions">
+                                <div class="custom-select-option selected" data-value="">Toutes catégories</div>
+                                <!-- Les catégories seront chargées dynamiquement -->
+                            </div>
+                        </div>
+                        <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
+                            <select id="filter_category">
+                                <option value="">Toutes catégories</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
                 <div class="col-md-2">
                     <select id="filter_status" class="form-select form-select-lg">
@@ -521,6 +680,14 @@ function switchToView(view) {
     document.getElementById('btn_view_sessions').classList.toggle('active', view === 'sessions');
     document.getElementById('btn_view_counting').classList.toggle('active', view === 'counting');
     document.getElementById('btn_view_details').classList.toggle('active', view === 'details');
+
+    // Réinitialiser le custom select catégorie quand on passe en vue comptage
+    if (view === 'counting') {
+        setTimeout(function() {
+            categorySelectInitialized = false;
+            initCategoryCustomSelect();
+        }, 100);
+    }
 }
 
 // Charger toutes les sessions
@@ -889,6 +1056,7 @@ async function loadCategories() {
         const categories = Array.isArray(data) ? data : (data.results || []);
         const active = categories.filter(c => c.is_active !== false);
 
+        // Peupler le select caché pour compatibilité
         const select = document.getElementById('filter_category');
         if (select) {
             active.forEach(cat => {
@@ -898,9 +1066,183 @@ async function loadCategories() {
                 select.appendChild(option);
             });
         }
+
+        // Peupler le custom select
+        const optionsContainer = document.getElementById('categoryOptions');
+        if (optionsContainer) {
+            active.forEach(cat => {
+                const opt = document.createElement('div');
+                opt.className = 'custom-select-option';
+                opt.setAttribute('data-value', cat.id);
+                opt.textContent = cat.nom;
+                optionsContainer.appendChild(opt);
+            });
+        }
+
+        // Initialiser le custom select
+        initCategoryCustomSelect();
+
     } catch (error) {
         console.error('Erreur chargement catégories:', error);
     }
+}
+
+// Custom Select pour Catégories
+var categorySelectInitialized = false;
+var categoryCloseListenerAdded = false;
+
+function initCategoryCustomSelect() {
+    console.log('[Inventaire] Tentative init custom select catégorie...');
+
+    var trigger = document.getElementById('categoryTrigger');
+    var dropdown = document.getElementById('categoryDropdown');
+    var searchInput = document.getElementById('categorySearch');
+    var optionsContainer = document.getElementById('categoryOptions');
+
+    if (!trigger || !dropdown) {
+        console.log('[Inventaire] Éléments non trouvés, retry dans 300ms');
+        setTimeout(initCategoryCustomSelect, 300);
+        return;
+    }
+
+    // Toujours réattacher les events (au cas où le DOM a changé)
+    console.log('[Inventaire] Custom select catégorie - attachement des events');
+
+    // Toggle dropdown
+    trigger.onclick = function(e) {
+        e.stopPropagation();
+        e.preventDefault();
+        console.log('[Inventaire] Category trigger clicked');
+
+        var isOpen = dropdown.classList.contains('open');
+
+        // Fermer tous les autres dropdowns
+        document.querySelectorAll('.custom-select-dropdown.open').forEach(function(d) {
+            if (d !== dropdown) {
+                d.classList.remove('open');
+                var t = d.closest('.custom-select-container');
+                if (t) {
+                    var tr = t.querySelector('.custom-select-trigger');
+                    if (tr) tr.classList.remove('open');
+                }
+            }
+        });
+
+        if (!isOpen) {
+            dropdown.classList.add('open');
+            trigger.classList.add('open');
+            if (searchInput) {
+                searchInput.value = '';
+                setTimeout(function() { searchInput.focus(); }, 50);
+                filterCategoryOptions('');
+            }
+        } else {
+            dropdown.classList.remove('open');
+            trigger.classList.remove('open');
+        }
+    };
+
+    // Search filter
+    if (searchInput) {
+        searchInput.oninput = function() {
+            filterCategoryOptions(this.value);
+        };
+        searchInput.onclick = function(e) {
+            e.stopPropagation();
+        };
+        searchInput.onkeydown = function(e) {
+            e.stopPropagation();
+        };
+    }
+
+    // Option click - utiliser event delegation
+    if (optionsContainer) {
+        optionsContainer.onclick = function(e) {
+            e.stopPropagation();
+            var option = e.target.closest('.custom-select-option');
+            if (option) {
+                console.log('[Inventaire] Option selected:', option.textContent);
+                selectCategoryOption(option);
+            }
+        };
+    }
+
+    // Close on outside click (une seule fois)
+    if (!categoryCloseListenerAdded) {
+        categoryCloseListenerAdded = true;
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('#customSelectCategory')) {
+                var dd = document.getElementById('categoryDropdown');
+                var tr = document.getElementById('categoryTrigger');
+                if (dd) dd.classList.remove('open');
+                if (tr) tr.classList.remove('open');
+            }
+        });
+    }
+
+    categorySelectInitialized = true;
+    console.log('[Inventaire] Custom select catégorie initialisé avec succès');
+}
+
+function filterCategoryOptions(searchText) {
+    var optionsContainer = document.getElementById('categoryOptions');
+    if (!optionsContainer) return;
+
+    var options = optionsContainer.querySelectorAll('.custom-select-option');
+    var search = (searchText || '').toLowerCase().trim();
+    var hasVisible = false;
+
+    options.forEach(function(opt) {
+        var text = (opt.textContent || '').toLowerCase();
+        var match = !search || text.indexOf(search) !== -1;
+        opt.style.display = match ? '' : 'none';
+        if (match) hasVisible = true;
+    });
+
+    var noResults = optionsContainer.querySelector('.custom-select-no-results');
+    if (!hasVisible) {
+        if (!noResults) {
+            noResults = document.createElement('div');
+            noResults.className = 'custom-select-no-results';
+            noResults.textContent = 'Aucun résultat';
+            optionsContainer.appendChild(noResults);
+        }
+        noResults.style.display = '';
+    } else if (noResults) {
+        noResults.style.display = 'none';
+    }
+}
+
+function selectCategoryOption(option) {
+    var trigger = document.getElementById('categoryTrigger');
+    var dropdown = document.getElementById('categoryDropdown');
+    var optionsContainer = document.getElementById('categoryOptions');
+    var hiddenSelect = document.getElementById('filter_category');
+
+    var value = option.getAttribute('data-value');
+    var text = option.textContent.trim();
+
+    // Update trigger text
+    var selectedText = trigger.querySelector('.selected-text');
+    selectedText.textContent = text;
+    selectedText.classList.toggle('placeholder', value === '');
+
+    // Update hidden select
+    if (hiddenSelect) {
+        hiddenSelect.value = value;
+    }
+
+    // Update selected state
+    optionsContainer.querySelectorAll('.custom-select-option').forEach(function(opt) {
+        opt.classList.toggle('selected', opt.getAttribute('data-value') === value);
+    });
+
+    // Close dropdown
+    dropdown.classList.remove('open');
+    trigger.classList.remove('open');
+
+    // Apply filter
+    filterProducts();
 }
 
 // Afficher les produits pour comptage

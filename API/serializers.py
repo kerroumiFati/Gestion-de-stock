@@ -332,14 +332,16 @@ class LigneFactureSerializer(serializers.ModelSerializer):
 
 class FactureSerializer(serializers.ModelSerializer):
     lignes = LigneFactureSerializer(many=True)
+    client_nom = serializers.CharField(source='client.nom', read_only=True)
+    client_prenom = serializers.CharField(source='client.prenom', read_only=True)
 
     class Meta:
         model = Facture
         fields = (
-            'id', 'numero', 'date_emission', 'client', 'bon_livraison', 'statut',
-            'tva_rate', 'total_ht', 'total_tva', 'total_ttc', 'lignes'
+            'id', 'numero', 'date_emission', 'client', 'client_nom', 'client_prenom',
+            'bon_livraison', 'statut', 'tva_rate', 'total_ht', 'total_tva', 'total_ttc', 'lignes'
         )
-        read_only_fields = ('total_ht', 'total_tva', 'total_ttc')
+        read_only_fields = ('total_ht', 'total_tva', 'total_ttc', 'client_nom', 'client_prenom')
 
     def to_representation(self, instance):
         """Convertir datetime en date pour éviter l'erreur de sérialisation"""

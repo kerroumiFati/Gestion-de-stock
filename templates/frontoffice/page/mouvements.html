@@ -1,6 +1,145 @@
 {% load static %}
 {% load i18n %}
 <script src="{% static 'script/mouvements.js' %}" type="text/javascript"></script>
+
+<style>
+/* Custom Select Dropdown pour Mouvements */
+.custom-select-container {
+    position: relative;
+    width: 100%;
+}
+
+.custom-select-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    background: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-height: 38px;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+}
+
+.custom-select-trigger:hover {
+    border-color: #80bdff;
+}
+
+.custom-select-trigger.open {
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+}
+
+.custom-select-trigger .selected-text {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #000;
+}
+
+.custom-select-trigger .selected-text.placeholder {
+    color: #6c757d;
+}
+
+.custom-select-trigger .arrow {
+    margin-left: 10px;
+    transition: transform 0.2s;
+    color: #495057;
+}
+
+.custom-select-trigger.open .arrow {
+    transform: rotate(180deg);
+}
+
+.custom-select-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #ced4da;
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 1050;
+    display: none;
+}
+
+.custom-select-dropdown.open {
+    display: block;
+}
+
+.custom-select-search {
+    padding: 8px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.custom-select-search input {
+    width: 100%;
+    padding: 6px 10px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+
+.custom-select-search input:focus {
+    outline: none;
+    border-color: #80bdff;
+}
+
+.custom-select-options {
+    max-height: 250px;
+    overflow-y: auto;
+}
+
+.custom-select-options::-webkit-scrollbar {
+    width: 8px;
+}
+
+.custom-select-options::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.custom-select-options::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+
+.custom-select-options::-webkit-scrollbar-thumb:hover {
+    background: #a1a1a1;
+}
+
+.custom-select-option {
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: background 0.15s;
+    border-bottom: 1px solid #f8f9fa;
+    color: #000;
+}
+
+.custom-select-option:hover {
+    background: #f8f9fa;
+}
+
+.custom-select-option.selected {
+    background: #e9ecef;
+    font-weight: 500;
+}
+
+.custom-select-no-results {
+    padding: 12px;
+    text-align: center;
+    color: #6c757d;
+    font-style: italic;
+}
+</style>
+
 <div class="container-fluid">
   <div class="card bg-white">
     <div class="card-header card-color">
@@ -10,7 +149,22 @@
       <div class="row mb-2">
         <div class="col-sm-3">
           <label>{% trans "Produit" %}</label>
-          <select id="mv_prod" class="form-control"><option value="">Tous</option></select>
+          <!-- Custom Select Produit Filtre -->
+          <div class="custom-select-container" id="customSelectMvProd">
+            <div class="custom-select-trigger" data-target="mv_prod">
+              <span class="selected-text placeholder">Tous</span>
+              <i class="fas fa-chevron-down arrow"></i>
+            </div>
+            <div class="custom-select-dropdown">
+              <div class="custom-select-search">
+                <input type="text" placeholder="{% trans 'Rechercher...' %}">
+              </div>
+              <div class="custom-select-options"></div>
+            </div>
+            <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
+              <select id="mv_prod"><option value="">Tous</option></select>
+            </div>
+          </div>
         </div>
         <div class="col-sm-2">
           <label>Source</label>
@@ -21,7 +175,22 @@
         </div>
         <div class="col-sm-2">
           <label>{% trans "Entrepôt" %}</label>
-          <select id="mv_wh" class="form-control"><option value="">Tous</option></select>
+          <!-- Custom Select Entrepôt Filtre -->
+          <div class="custom-select-container" id="customSelectMvWh">
+            <div class="custom-select-trigger" data-target="mv_wh">
+              <span class="selected-text placeholder">Tous</span>
+              <i class="fas fa-chevron-down arrow"></i>
+            </div>
+            <div class="custom-select-dropdown">
+              <div class="custom-select-search">
+                <input type="text" placeholder="{% trans 'Rechercher...' %}">
+              </div>
+              <div class="custom-select-options"></div>
+            </div>
+            <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
+              <select id="mv_wh"><option value="">Tous</option></select>
+            </div>
+          </div>
         </div>
         <div class="col-sm-3">
           <label>Après</label>
@@ -35,7 +204,7 @@
           <button id="mv_filter" class="btn btn-outline-primary">{% trans "Filtrer" %}</button>
         </div>
       </div>
-      
+
       <!-- Boutons d'action et statistiques -->
       <div class="row mb-3">
         <div class="col-sm-6">
@@ -53,7 +222,7 @@
           <small id="results-count" class="text-muted">Chargement...</small>
         </div>
       </div>
-      
+
       <!-- Résumé des mouvements -->
       <div class="row mb-3">
         <div class="col-md-4">
@@ -81,6 +250,7 @@
           </div>
         </div>
       </div>
+
       <!-- Sections d'opérations -->
       <ul class="nav nav-tabs mb-3" role="tablist">
         <li class="nav-item">
@@ -96,13 +266,29 @@
           <a class="nav-link" id="tab-return" data-toggle="tab" href="#pane-return" role="tab">4- Retour fournisseur</a>
         </li>
       </ul>
+
       <div class="tab-content mb-4">
+        <!-- Transfert de stock -->
         <div class="tab-pane fade show active" id="pane-transfer" role="tabpanel" aria-labelledby="tab-transfer">
           <div class="border rounded p-3">
             <div class="form-row">
               <div class="form-group col-md-4">
                 <label>{% trans "Produit" %}</label>
-                <select id="mv_transfer_produit" class="form-control"></select>
+                <div class="custom-select-container" id="customSelectTransferProduit">
+                  <div class="custom-select-trigger" data-target="mv_transfer_produit">
+                    <span class="selected-text placeholder">Sélectionner...</span>
+                    <i class="fas fa-chevron-down arrow"></i>
+                  </div>
+                  <div class="custom-select-dropdown">
+                    <div class="custom-select-search">
+                      <input type="text" placeholder="{% trans 'Rechercher...' %}">
+                    </div>
+                    <div class="custom-select-options"></div>
+                  </div>
+                  <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
+                    <select id="mv_transfer_produit"></select>
+                  </div>
+                </div>
               </div>
               <div class="form-group col-md-2">
                 <label>{% trans "Quantité" %}</label>
@@ -110,11 +296,39 @@
               </div>
               <div class="form-group col-md-3">
                 <label>De (entrepôt)</label>
-                <select id="mv_transfer_from" class="form-control"></select>
+                <div class="custom-select-container" id="customSelectTransferFrom">
+                  <div class="custom-select-trigger" data-target="mv_transfer_from">
+                    <span class="selected-text placeholder">Sélectionner...</span>
+                    <i class="fas fa-chevron-down arrow"></i>
+                  </div>
+                  <div class="custom-select-dropdown">
+                    <div class="custom-select-search">
+                      <input type="text" placeholder="{% trans 'Rechercher...' %}">
+                    </div>
+                    <div class="custom-select-options"></div>
+                  </div>
+                  <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
+                    <select id="mv_transfer_from"></select>
+                  </div>
+                </div>
               </div>
               <div class="form-group col-md-3">
                 <label>Vers (entrepôt)</label>
-                <select id="mv_transfer_to" class="form-control"></select>
+                <div class="custom-select-container" id="customSelectTransferTo">
+                  <div class="custom-select-trigger" data-target="mv_transfer_to">
+                    <span class="selected-text placeholder">Sélectionner...</span>
+                    <i class="fas fa-chevron-down arrow"></i>
+                  </div>
+                  <div class="custom-select-dropdown">
+                    <div class="custom-select-search">
+                      <input type="text" placeholder="{% trans 'Rechercher...' %}">
+                    </div>
+                    <div class="custom-select-options"></div>
+                  </div>
+                  <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
+                    <select id="mv_transfer_to"></select>
+                  </div>
+                </div>
               </div>
             </div>
             <div class="form-row">
@@ -126,12 +340,28 @@
             <button id="mv_transfer_submit" class="btn btn-primary">Enregistrer le transfert</button>
           </div>
         </div>
+
+        <!-- Perte / Casse / Expiration -->
         <div class="tab-pane fade" id="pane-loss" role="tabpanel" aria-labelledby="tab-loss">
           <div class="border rounded p-3">
             <div class="form-row">
               <div class="form-group col-md-4">
                 <label>{% trans "Produit" %}</label>
-                <select id="mv_loss_produit" class="form-control"></select>
+                <div class="custom-select-container" id="customSelectLossProduit">
+                  <div class="custom-select-trigger" data-target="mv_loss_produit">
+                    <span class="selected-text placeholder">Sélectionner...</span>
+                    <i class="fas fa-chevron-down arrow"></i>
+                  </div>
+                  <div class="custom-select-dropdown">
+                    <div class="custom-select-search">
+                      <input type="text" placeholder="{% trans 'Rechercher...' %}">
+                    </div>
+                    <div class="custom-select-options"></div>
+                  </div>
+                  <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
+                    <select id="mv_loss_produit"></select>
+                  </div>
+                </div>
               </div>
               <div class="form-group col-md-2">
                 <label>{% trans "Quantité" %}</label>
@@ -147,7 +377,21 @@
               </div>
               <div class="form-group col-md-3">
                 <label>{% trans "Entrepôt" %}</label>
-                <select id="mv_loss_warehouse" class="form-control"></select>
+                <div class="custom-select-container" id="customSelectLossWarehouse">
+                  <div class="custom-select-trigger" data-target="mv_loss_warehouse">
+                    <span class="selected-text placeholder">Sélectionner...</span>
+                    <i class="fas fa-chevron-down arrow"></i>
+                  </div>
+                  <div class="custom-select-dropdown">
+                    <div class="custom-select-search">
+                      <input type="text" placeholder="{% trans 'Rechercher...' %}">
+                    </div>
+                    <div class="custom-select-options"></div>
+                  </div>
+                  <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
+                    <select id="mv_loss_warehouse"></select>
+                  </div>
+                </div>
               </div>
               <div class="form-group col-md-12">
                 <label>Note</label>
@@ -157,12 +401,28 @@
             <button id="mv_loss_submit" class="btn btn-danger">Enregistrer la sortie</button>
           </div>
         </div>
+
+        <!-- Échantillon / Don / Consommation interne -->
         <div class="tab-pane fade" id="pane-outflow" role="tabpanel" aria-labelledby="tab-outflow">
           <div class="border rounded p-3">
             <div class="form-row">
               <div class="form-group col-md-4">
                 <label>{% trans "Produit" %}</label>
-                <select id="mv_outflow_produit" class="form-control"></select>
+                <div class="custom-select-container" id="customSelectOutflowProduit">
+                  <div class="custom-select-trigger" data-target="mv_outflow_produit">
+                    <span class="selected-text placeholder">Sélectionner...</span>
+                    <i class="fas fa-chevron-down arrow"></i>
+                  </div>
+                  <div class="custom-select-dropdown">
+                    <div class="custom-select-search">
+                      <input type="text" placeholder="{% trans 'Rechercher...' %}">
+                    </div>
+                    <div class="custom-select-options"></div>
+                  </div>
+                  <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
+                    <select id="mv_outflow_produit"></select>
+                  </div>
+                </div>
               </div>
               <div class="form-group col-md-2">
                 <label>{% trans "Quantité" %}</label>
@@ -178,7 +438,21 @@
               </div>
               <div class="form-group col-md-3">
                 <label>{% trans "Entrepôt" %}</label>
-                <select id="mv_outflow_warehouse" class="form-control"></select>
+                <div class="custom-select-container" id="customSelectOutflowWarehouse">
+                  <div class="custom-select-trigger" data-target="mv_outflow_warehouse">
+                    <span class="selected-text placeholder">Sélectionner...</span>
+                    <i class="fas fa-chevron-down arrow"></i>
+                  </div>
+                  <div class="custom-select-dropdown">
+                    <div class="custom-select-search">
+                      <input type="text" placeholder="{% trans 'Rechercher...' %}">
+                    </div>
+                    <div class="custom-select-options"></div>
+                  </div>
+                  <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
+                    <select id="mv_outflow_warehouse"></select>
+                  </div>
+                </div>
               </div>
               <div class="form-group col-md-12">
                 <label>Note</label>
@@ -189,7 +463,7 @@
           </div>
         </div>
 
-        <!-- Nouvel onglet : Retour fournisseur -->
+        <!-- Retour fournisseur -->
         <div class="tab-pane fade" id="pane-return" role="tabpanel" aria-labelledby="tab-return">
           <div class="border rounded p-3 bg-light">
             <div class="alert alert-info mb-3">
@@ -198,7 +472,21 @@
             <div class="form-row">
               <div class="form-group col-md-4">
                 <label><i class="fa fa-box"></i> Produit *</label>
-                <select id="mv_return_produit" class="form-control"></select>
+                <div class="custom-select-container" id="customSelectReturnProduit">
+                  <div class="custom-select-trigger" data-target="mv_return_produit">
+                    <span class="selected-text placeholder">Sélectionner...</span>
+                    <i class="fas fa-chevron-down arrow"></i>
+                  </div>
+                  <div class="custom-select-dropdown">
+                    <div class="custom-select-search">
+                      <input type="text" placeholder="{% trans 'Rechercher...' %}">
+                    </div>
+                    <div class="custom-select-options"></div>
+                  </div>
+                  <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
+                    <select id="mv_return_produit"></select>
+                  </div>
+                </div>
               </div>
               <div class="form-group col-md-2">
                 <label><i class="fa fa-sort-numeric-up"></i> Quantité *</label>
@@ -206,13 +494,39 @@
               </div>
               <div class="form-group col-md-3">
                 <label><i class="fa fa-user-tie"></i> Fournisseur *</label>
-                <select id="mv_return_fournisseur" class="form-control">
-                  <option value="">Sélectionner un fournisseur</option>
-                </select>
+                <div class="custom-select-container" id="customSelectReturnFournisseur">
+                  <div class="custom-select-trigger" data-target="mv_return_fournisseur">
+                    <span class="selected-text placeholder">Sélectionner...</span>
+                    <i class="fas fa-chevron-down arrow"></i>
+                  </div>
+                  <div class="custom-select-dropdown">
+                    <div class="custom-select-search">
+                      <input type="text" placeholder="{% trans 'Rechercher...' %}">
+                    </div>
+                    <div class="custom-select-options"></div>
+                  </div>
+                  <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
+                    <select id="mv_return_fournisseur"><option value="">Sélectionner un fournisseur</option></select>
+                  </div>
+                </div>
               </div>
               <div class="form-group col-md-3">
                 <label><i class="fa fa-warehouse"></i> Entrepôt *</label>
-                <select id="mv_return_warehouse" class="form-control"></select>
+                <div class="custom-select-container" id="customSelectReturnWarehouse">
+                  <div class="custom-select-trigger" data-target="mv_return_warehouse">
+                    <span class="selected-text placeholder">Sélectionner...</span>
+                    <i class="fas fa-chevron-down arrow"></i>
+                  </div>
+                  <div class="custom-select-dropdown">
+                    <div class="custom-select-search">
+                      <input type="text" placeholder="{% trans 'Rechercher...' %}">
+                    </div>
+                    <div class="custom-select-options"></div>
+                  </div>
+                  <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
+                    <select id="mv_return_warehouse"></select>
+                  </div>
+                </div>
               </div>
             </div>
             <div class="form-row">
@@ -257,3 +571,366 @@
     </div>
   </div>
 </div>
+
+<script>
+(function() {
+    var mvData = {
+        products: [],
+        warehouses: [],
+        fournisseurs: []
+    };
+
+    // Liste des custom selects pour produits
+    var productSelects = [
+        { containerId: 'customSelectMvProd', hiddenId: 'mv_prod', defaultText: 'Tous', includeAll: true },
+        { containerId: 'customSelectTransferProduit', hiddenId: 'mv_transfer_produit', defaultText: 'Sélectionner...', includeAll: false },
+        { containerId: 'customSelectLossProduit', hiddenId: 'mv_loss_produit', defaultText: 'Sélectionner...', includeAll: false },
+        { containerId: 'customSelectOutflowProduit', hiddenId: 'mv_outflow_produit', defaultText: 'Sélectionner...', includeAll: false },
+        { containerId: 'customSelectReturnProduit', hiddenId: 'mv_return_produit', defaultText: 'Sélectionner...', includeAll: false }
+    ];
+
+    // Liste des custom selects pour entrepôts
+    var warehouseSelects = [
+        { containerId: 'customSelectMvWh', hiddenId: 'mv_wh', defaultText: 'Tous', includeAll: true },
+        { containerId: 'customSelectTransferFrom', hiddenId: 'mv_transfer_from', defaultText: 'Sélectionner...', includeAll: false },
+        { containerId: 'customSelectTransferTo', hiddenId: 'mv_transfer_to', defaultText: 'Sélectionner...', includeAll: false },
+        { containerId: 'customSelectLossWarehouse', hiddenId: 'mv_loss_warehouse', defaultText: 'Sélectionner...', includeAll: false },
+        { containerId: 'customSelectOutflowWarehouse', hiddenId: 'mv_outflow_warehouse', defaultText: 'Sélectionner...', includeAll: false },
+        { containerId: 'customSelectReturnWarehouse', hiddenId: 'mv_return_warehouse', defaultText: 'Sélectionner...', includeAll: false }
+    ];
+
+    function toggleCustomSelect(containerId) {
+        var container = document.getElementById(containerId);
+        if (!container) return;
+
+        var trigger = container.querySelector('.custom-select-trigger');
+        var dropdown = container.querySelector('.custom-select-dropdown');
+        var isOpen = dropdown.classList.contains('open');
+
+        // Fermer tous les autres
+        document.querySelectorAll('.custom-select-dropdown.open').forEach(function(d) {
+            d.classList.remove('open');
+            var t = d.closest('.custom-select-container');
+            if (t) t.querySelector('.custom-select-trigger').classList.remove('open');
+        });
+
+        if (!isOpen) {
+            dropdown.classList.add('open');
+            trigger.classList.add('open');
+            var searchInput = dropdown.querySelector('input');
+            if (searchInput) {
+                searchInput.value = '';
+                searchInput.focus();
+            }
+            filterOptions(containerId, '');
+        }
+    }
+
+    function filterOptions(containerId, searchText) {
+        var container = document.getElementById(containerId);
+        if (!container) return;
+
+        var optionsContainer = container.querySelector('.custom-select-options');
+        var options = optionsContainer.querySelectorAll('.custom-select-option');
+        var search = (searchText || '').toLowerCase().trim();
+        var hasVisible = false;
+
+        for (var i = 0; i < options.length; i++) {
+            var opt = options[i];
+            var text = (opt.textContent || '').toLowerCase();
+            var match = !search || text.indexOf(search) !== -1;
+            opt.style.display = match ? '' : 'none';
+            if (match) hasVisible = true;
+        }
+
+        var noResults = optionsContainer.querySelector('.custom-select-no-results');
+        if (!hasVisible) {
+            if (!noResults) {
+                noResults = document.createElement('div');
+                noResults.className = 'custom-select-no-results';
+                noResults.textContent = 'Aucun résultat trouvé';
+                optionsContainer.appendChild(noResults);
+            }
+            noResults.style.display = '';
+        } else if (noResults) {
+            noResults.style.display = 'none';
+        }
+    }
+
+    function selectOption(containerId, value, text, hiddenSelectId) {
+        var container = document.getElementById(containerId);
+        if (!container) return;
+
+        var trigger = container.querySelector('.custom-select-trigger');
+        var selectedText = trigger.querySelector('.selected-text');
+        var dropdown = container.querySelector('.custom-select-dropdown');
+        var hiddenSelect = document.getElementById(hiddenSelectId);
+
+        selectedText.textContent = text;
+        selectedText.classList.toggle('placeholder', !value);
+
+        dropdown.classList.remove('open');
+        trigger.classList.remove('open');
+
+        if (hiddenSelect) {
+            var option = hiddenSelect.querySelector('option[value="' + value + '"]');
+            if (!option && value !== '') {
+                option = document.createElement('option');
+                option.value = value;
+                option.textContent = text;
+                hiddenSelect.appendChild(option);
+            }
+            hiddenSelect.value = value;
+
+            if (typeof jQuery !== 'undefined') {
+                jQuery(hiddenSelect).val(value).trigger('change');
+            }
+        }
+
+        var allOpts = container.querySelectorAll('.custom-select-option');
+        for (var i = 0; i < allOpts.length; i++) {
+            if (allOpts[i].getAttribute('data-value') === String(value)) {
+                allOpts[i].classList.add('selected');
+            } else {
+                allOpts[i].classList.remove('selected');
+            }
+        }
+    }
+
+    function populateProductSelect(config) {
+        var container = document.getElementById(config.containerId);
+        if (!container) return;
+
+        var optionsContainer = container.querySelector('.custom-select-options');
+        optionsContainer.innerHTML = '';
+
+        // Option par défaut
+        var defaultOpt = document.createElement('div');
+        defaultOpt.className = 'custom-select-option';
+        defaultOpt.setAttribute('data-value', '');
+        defaultOpt.textContent = config.defaultText;
+        defaultOpt.onclick = function() {
+            selectOption(config.containerId, '', config.defaultText, config.hiddenId);
+        };
+        optionsContainer.appendChild(defaultOpt);
+
+        // Produits
+        mvData.products.forEach(function(p) {
+            var opt = document.createElement('div');
+            opt.className = 'custom-select-option';
+            opt.setAttribute('data-value', p.id);
+            var label = (p.reference ? (p.reference + ' - ') : '') + (p.designation || 'Produit #' + p.id);
+            opt.textContent = label;
+            opt.onclick = function() {
+                selectOption(config.containerId, p.id, label, config.hiddenId);
+            };
+            optionsContainer.appendChild(opt);
+        });
+    }
+
+    function populateWarehouseSelect(config) {
+        var container = document.getElementById(config.containerId);
+        if (!container) return;
+
+        var optionsContainer = container.querySelector('.custom-select-options');
+        optionsContainer.innerHTML = '';
+
+        // Option par défaut
+        var defaultOpt = document.createElement('div');
+        defaultOpt.className = 'custom-select-option';
+        defaultOpt.setAttribute('data-value', '');
+        defaultOpt.textContent = config.defaultText;
+        defaultOpt.onclick = function() {
+            selectOption(config.containerId, '', config.defaultText, config.hiddenId);
+        };
+        optionsContainer.appendChild(defaultOpt);
+
+        // Entrepôts
+        mvData.warehouses.forEach(function(w) {
+            var opt = document.createElement('div');
+            opt.className = 'custom-select-option';
+            opt.setAttribute('data-value', w.id);
+            var label = (w.code || '') + ' - ' + (w.name || 'Entrepôt #' + w.id);
+            opt.textContent = label;
+            opt.onclick = function() {
+                selectOption(config.containerId, w.id, label, config.hiddenId);
+            };
+            optionsContainer.appendChild(opt);
+        });
+    }
+
+    function populateFournisseurSelect() {
+        var container = document.getElementById('customSelectReturnFournisseur');
+        if (!container) return;
+
+        var optionsContainer = container.querySelector('.custom-select-options');
+        optionsContainer.innerHTML = '';
+
+        // Option par défaut
+        var defaultOpt = document.createElement('div');
+        defaultOpt.className = 'custom-select-option';
+        defaultOpt.setAttribute('data-value', '');
+        defaultOpt.textContent = 'Sélectionner un fournisseur';
+        defaultOpt.onclick = function() {
+            selectOption('customSelectReturnFournisseur', '', 'Sélectionner un fournisseur', 'mv_return_fournisseur');
+        };
+        optionsContainer.appendChild(defaultOpt);
+
+        // Fournisseurs
+        mvData.fournisseurs.forEach(function(f) {
+            var opt = document.createElement('div');
+            opt.className = 'custom-select-option';
+            opt.setAttribute('data-value', f.id);
+            var label = f.libelle || f.nom || f.name || ('Fournisseur #' + f.id);
+            opt.textContent = label;
+            opt.onclick = function() {
+                selectOption('customSelectReturnFournisseur', f.id, label, 'mv_return_fournisseur');
+            };
+            optionsContainer.appendChild(opt);
+        });
+    }
+
+    function loadProducts() {
+        console.log('[Mouvements] Loading products...');
+        fetch('/API/produits/?page_size=1000')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                var list = Array.isArray(data) ? data : (data && data.results ? data.results : []);
+                console.log('[Mouvements] Products loaded:', list.length);
+                mvData.products = list;
+                productSelects.forEach(populateProductSelect);
+            })
+            .catch(function(err) {
+                console.error('[Mouvements] Error loading products:', err);
+            });
+    }
+
+    function loadWarehouses() {
+        console.log('[Mouvements] Loading warehouses...');
+        fetch('/API/entrepots/?page_size=1000')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                var list = Array.isArray(data) ? data : (data && data.results ? data.results : []);
+                list = list.filter(function(w) { return w && w.is_active !== false; });
+                console.log('[Mouvements] Warehouses loaded:', list.length);
+                mvData.warehouses = list;
+                warehouseSelects.forEach(populateWarehouseSelect);
+            })
+            .catch(function(err) {
+                console.error('[Mouvements] Error loading warehouses:', err);
+            });
+    }
+
+    function loadFournisseurs() {
+        console.log('[Mouvements] Loading fournisseurs...');
+        fetch('/API/fournisseurs/?page_size=1000')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                var list = Array.isArray(data) ? data : (data && data.results ? data.results : []);
+                console.log('[Mouvements] Fournisseurs loaded:', list.length);
+                mvData.fournisseurs = list;
+                populateFournisseurSelect();
+            })
+            .catch(function(err) {
+                console.error('[Mouvements] Error loading fournisseurs:', err);
+            });
+    }
+
+    var mouvementsSelectsInitialized = false;
+
+    function initCustomSelects() {
+        console.log('[Mouvements] Initializing custom selects... initialized=' + mouvementsSelectsInitialized);
+
+        var containers = document.querySelectorAll('.custom-select-container');
+        if (!containers.length) {
+            console.log('[Mouvements] No custom select containers found, retrying in 200ms...');
+            setTimeout(initCustomSelects, 200);
+            return;
+        }
+
+        // Éviter la double initialisation des event listeners
+        if (!mouvementsSelectsInitialized) {
+            mouvementsSelectsInitialized = true;
+
+            // Ajouter les event listeners pour tous les triggers avec onclick
+            containers.forEach(function(container) {
+                var trigger = container.querySelector('.custom-select-trigger');
+                var searchInput = container.querySelector('.custom-select-search input');
+
+                if (trigger) {
+                    trigger.onclick = function(e) {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        console.log('[Mouvements] Trigger clicked:', container.id);
+                        toggleCustomSelect(container.id);
+                    };
+                }
+
+                if (searchInput) {
+                    searchInput.oninput = function() {
+                        filterOptions(container.id, this.value);
+                    };
+                    searchInput.onclick = function(e) {
+                        e.stopPropagation();
+                    };
+                }
+            });
+
+            // Fermer quand on clique ailleurs (une seule fois)
+            document.addEventListener('click', function(e) {
+                if (!e.target.closest('.custom-select-container')) {
+                    document.querySelectorAll('.custom-select-dropdown.open').forEach(function(d) {
+                        d.classList.remove('open');
+                        var t = d.closest('.custom-select-container');
+                        if (t) t.querySelector('.custom-select-trigger').classList.remove('open');
+                    });
+                }
+            });
+
+            console.log('[Mouvements] Event listeners attached to', containers.length, 'containers');
+        }
+
+        // Charger les données
+        loadProducts();
+        loadWarehouses();
+        loadFournisseurs();
+    }
+
+    // Initialiser
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initCustomSelects);
+    } else {
+        initCustomSelects();
+    }
+
+    // Pour le chargement dynamique
+    document.addEventListener('fragment:loaded', function(e) {
+        if (e && e.detail && e.detail.name === 'mouvements') {
+            mouvementsSelectsInitialized = false; // Reset pour réattacher les events
+            initCustomSelects();
+        }
+    });
+
+    // Fallback
+    setTimeout(function() {
+        if (!mouvementsSelectsInitialized) {
+            console.log('[Mouvements] Fallback initialization...');
+            initCustomSelects();
+        }
+    }, 500);
+
+    // Second fallback pour les données
+    setTimeout(function() {
+        var container = document.getElementById('customSelectMvProd');
+        if (container) {
+            var opts = container.querySelector('.custom-select-options');
+            if (opts && opts.children.length === 0) {
+                console.log('[Mouvements] Second fallback - reloading data...');
+                loadProducts();
+                loadWarehouses();
+                loadFournisseurs();
+            }
+        }
+    }, 1000);
+})();
+</script>

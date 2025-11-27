@@ -668,3 +668,321 @@ class LigneCommandeClient(models.Model):
 
         # Recalculer les totaux de la commande
         self.commande.calculer_totaux()
+
+
+###########################
+# Planning Hebdomadaire   #
+###########################
+
+class PlanningHebdomadaire(models.Model):
+    """
+    Planning hebdomadaire des tournées pour un livreur.
+    Permet de programmer les tournées récurrentes par jour de la semaine.
+    """
+    JOURS_SEMAINE_CHOICES = [
+        (1, 'Lundi'),
+        (2, 'Mardi'),
+        (3, 'Mercredi'),
+        (4, 'Jeudi'),
+        (5, 'Vendredi'),
+        (6, 'Samedi'),
+        (7, 'Dimanche'),
+    ]
+
+    # Relations
+    company = models.ForeignKey('Company', on_delete=models.CASCADE, related_name='plannings_hebdo',
+                               null=True, blank=True,
+                               help_text='Entreprise à laquelle appartient ce planning')
+    livreur = models.ForeignKey(LivreurDistribution, on_delete=models.CASCADE, related_name='plannings_hebdo')
+
+    # Configuration
+    jour_semaine = models.PositiveSmallIntegerField('Jour de la semaine', choices=JOURS_SEMAINE_CHOICES,
+                                                     help_text='1=Lundi, 7=Dimanche')
+    code_prix = models.ForeignKey('CodePrix', on_delete=models.SET_NULL, null=True, blank=True,
+                                  related_name='plannings_hebdo',
+                                  help_text='Code prix à appliquer pour cette tournée')
+
+    # Planning actif
+    is_active = models.BooleanField('Actif', default=True,
+                                    help_text='Si inactif, les tournées ne seront pas générées automatiquement')
+
+    # Date de début et fin (optionnel)
+    date_debut = models.DateField('Date de début', null=True, blank=True,
+                                  help_text='Date à partir de laquelle le planning s\'applique')
+    date_fin = models.DateField('Date de fin', null=True, blank=True,
+                               help_text='Date jusqu\'à laquelle le planning s\'applique')
+
+    # Notes
+    notes = models.TextField('Notes', blank=True)
+
+    # Métadonnées
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                  related_name='plannings_hebdo_crees')
+
+    class Meta:
+        verbose_name = 'Planning hebdomadaire'
+        verbose_name_plural = 'Plannings hebdomadaires'
+        ordering = ['livreur', 'jour_semaine']
+        unique_together = [['livreur', 'jour_semaine', 'company']]
+        indexes = [
+            models.Index(fields=['livreur', 'jour_semaine']),
+            models.Index(fields=['company', 'is_active']),
+        ]
+
+    def __str__(self):
+        jour_name = dict(self.JOURS_SEMAINE_CHOICES)[self.jour_semaine]
+        return f"{self.livreur.nom} - {jour_name}"
+
+    def clean(self):
+        # Vérifier que date_fin >= date_debut
+        if self.date_debut and self.date_fin and self.date_fin < self.date_debut:
+            raise ValidationError('La date de fin doit être postérieure à la date de début.')
+
+    def est_valide_pour_date(self, date):
+        """Vérifie si ce planning est valide pour une date donnée"""
+        if not self.is_active:
+            return False
+
+        # Vérifier le jour de la semaine (1=Lundi, 7=Dimanche)
+        if date.isoweekday() != self.jour_semaine:
+            return False
+
+        # Vérifier la plage de dates
+        if self.date_debut and date < self.date_debut:
+            return False
+        if self.date_fin and date > self.date_fin:
+            return False
+
+        return True
+
+    def generer_tournee_pour_date(self, date, clients_list=None):
+        """
+        Génère une tournée réelle (TourneeMobile) basée sur ce planning pour une date donnée.
+
+        Args:
+            date: Date pour laquelle générer la tournée
+            clients_list: Liste optionnelle de clients à inclure dans la tournée
+
+        Returns:
+            TourneeMobile créée ou None si le planning n'est pas valide pour cette date
+        """
+        if not self.est_valide_pour_date(date):
+            return None
+
+        # Vérifier si une tournée existe déjà pour ce livreur à cette date
+        existing = TourneeMobile.objects.filter(
+            livreur=self.livreur,
+            date_tournee=date,
+            company=self.company
+        ).first()
+
+        if existing:
+            # Retourner la tournée existante sans la modifier
+            return existing
+
+        # Créer une nouvelle tournée
+        tournee = TourneeMobile.objects.create(
+            company=self.company,
+            livreur=self.livreur,
+            date_tournee=date,
+            statut='planifiee',
+            code_prix=self.code_prix,
+            notes=f"Générée depuis planning hebdomadaire: {self}"
+        )
+
+        # Si une liste de clients est fournie, créer les arrêts
+        if clients_list:
+            for idx, client in enumerate(clients_list, start=1):
+                ArretTourneeMobile.objects.create(
+                    company=self.company,
+                    tournee=tournee,
+                    client=client,
+                    ordre_passage=idx,
+                    statut='en_attente'
+                )
+
+        return tournee
+
+    @classmethod
+    def generer_tournees_pour_semaine(cls, date_debut_semaine, company=None):
+        """
+        Génère toutes les tournées planifiées pour une semaine donnée.
+
+        Args:
+            date_debut_semaine: Date du lundi de la semaine à générer
+            company: Company optionnelle pour filtrer
+
+        Returns:
+            Liste des tournées créées
+        """
+        from datetime import timedelta
+
+        tournees_creees = []
+
+        # Récupérer tous les plannings actifs
+        plannings = cls.objects.filter(is_active=True)
+        if company:
+            plannings = plannings.filter(company=company)
+
+        # Pour chaque jour de la semaine (0-6 pour lundi-dimanche)
+        for jour_offset in range(7):
+            date = date_debut_semaine + timedelta(days=jour_offset)
+            jour_semaine = date.isoweekday()  # 1=Lundi, 7=Dimanche
+
+            # Trouver les plannings pour ce jour
+            plannings_jour = plannings.filter(jour_semaine=jour_semaine)
+
+            for planning in plannings_jour:
+                tournee = planning.generer_tournee_pour_date(date)
+                if tournee:
+                    tournees_creees.append(tournee)
+
+        return tournees_creees
+
+
+class ClientLivreurHebdo(models.Model):
+    """
+    Configuration hebdomadaire de l'association Client-Livreur.
+    Permet de définir quel livreur dessert quel client pour chaque jour de la semaine.
+    """
+    JOURS_SEMAINE_CHOICES = [
+        (1, 'Lundi'),
+        (2, 'Mardi'),
+        (3, 'Mercredi'),
+        (4, 'Jeudi'),
+        (5, 'Vendredi'),
+        (6, 'Samedi'),
+        (7, 'Dimanche'),
+    ]
+
+    # Relations
+    company = models.ForeignKey('Company', on_delete=models.CASCADE,
+                               related_name='clients_livreurs_hebdo',
+                               null=True, blank=True,
+                               help_text='Entreprise à laquelle appartient cette configuration')
+    client = models.ForeignKey('Client', on_delete=models.CASCADE,
+                               related_name='livreurs_hebdo')
+    livreur = models.ForeignKey(LivreurDistribution, on_delete=models.CASCADE,
+                                related_name='clients_hebdo')
+
+    # Configuration
+    jour_semaine = models.PositiveSmallIntegerField('Jour de la semaine',
+                                                     choices=JOURS_SEMAINE_CHOICES,
+                                                     help_text='1=Lundi, 7=Dimanche')
+
+    # Ordre de passage (optionnel)
+    ordre_passage = models.PositiveIntegerField('Ordre de passage',
+                                               null=True, blank=True,
+                                               help_text='Ordre de visite du client dans la tournée')
+
+    # Planning actif
+    is_active = models.BooleanField('Actif', default=True,
+                                    help_text='Si inactif, cette configuration ne sera pas utilisée')
+
+    # Période de validité (optionnel)
+    date_debut = models.DateField('Date de début', null=True, blank=True,
+                                  help_text='Date à partir de laquelle cette configuration s\'applique')
+    date_fin = models.DateField('Date de fin', null=True, blank=True,
+                               help_text='Date jusqu\'à laquelle cette configuration s\'applique')
+
+    # Notes
+    notes = models.TextField('Notes', blank=True)
+
+    # Métadonnées
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                  related_name='configs_clients_livreurs_creees')
+
+    class Meta:
+        verbose_name = 'Configuration Client-Livreur Hebdomadaire'
+        verbose_name_plural = 'Configurations Clients-Livreurs Hebdomadaires'
+        ordering = ['livreur', 'jour_semaine', 'ordre_passage']
+        unique_together = [['client', 'jour_semaine', 'company']]
+        indexes = [
+            models.Index(fields=['livreur', 'jour_semaine', 'is_active']),
+            models.Index(fields=['client', 'jour_semaine']),
+            models.Index(fields=['company', 'is_active']),
+        ]
+
+    def __str__(self):
+        jour_name = dict(self.JOURS_SEMAINE_CHOICES)[self.jour_semaine]
+        return f"{self.client.nom} -> {self.livreur.nom} ({jour_name})"
+
+    def clean(self):
+        # Vérifier que date_fin >= date_debut
+        if self.date_debut and self.date_fin and self.date_fin < self.date_debut:
+            raise ValidationError('La date de fin doit être postérieure à la date de début.')
+
+    def est_valide_pour_date(self, date):
+        """Vérifie si cette configuration est valide pour une date donnée"""
+        if not self.is_active:
+            return False
+
+        # Vérifier le jour de la semaine
+        if date.isoweekday() != self.jour_semaine:
+            return False
+
+        # Vérifier la plage de dates
+        if self.date_debut and date < self.date_debut:
+            return False
+        if self.date_fin and date > self.date_fin:
+            return False
+
+        return True
+
+    @classmethod
+    def get_clients_for_livreur(cls, livreur, jour_semaine, company=None, date=None):
+        """
+        Récupère tous les clients assignés à un livreur pour un jour donné.
+
+        Args:
+            livreur: Instance de LivreurDistribution
+            jour_semaine: Numéro du jour (1-7)
+            company: Company optionnelle pour filtrer
+            date: Date optionnelle pour vérifier la validité
+
+        Returns:
+            QuerySet des configurations clients-livreurs
+        """
+        configs = cls.objects.filter(
+            livreur=livreur,
+            jour_semaine=jour_semaine,
+            is_active=True
+        )
+
+        if company:
+            configs = configs.filter(company=company)
+
+        # Filtrer par date si fournie
+        if date:
+            configs = [c for c in configs if c.est_valide_pour_date(date)]
+
+        return configs
+
+    @classmethod
+    def get_livreur_for_client(cls, client, jour_semaine, company=None):
+        """
+        Récupère le livreur assigné à un client pour un jour donné.
+
+        Args:
+            client: Instance de Client
+            jour_semaine: Numéro du jour (1-7)
+            company: Company optionnelle pour filtrer
+
+        Returns:
+            Instance de LivreurDistribution ou None
+        """
+        config = cls.objects.filter(
+            client=client,
+            jour_semaine=jour_semaine,
+            is_active=True
+        )
+
+        if company:
+            config = config.filter(company=company)
+
+        config = config.first()
+        return config.livreur if config else None

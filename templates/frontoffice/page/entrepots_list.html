@@ -27,8 +27,52 @@
             <div class="tab-content">
                 <!-- Tab 1: Liste -->
                 <div class="tab-pane fade show active" id="tab-liste" role="tabpanel">
+
+                    <!-- Filtres -->
+                    <div class="filters-container mb-3">
+                        <div class="row">
+                            <div class="col-md-4 col-lg-3 mb-2">
+                                <div class="input-group">
+                                    <div class="input-group-prepend">
+                                        <span class="input-group-text"><i class="fa fa-search"></i></span>
+                                    </div>
+                                    <input type="text" id="filterSearch" class="form-control"
+                                           placeholder="{% trans 'Rechercher par code ou nom...' %}"
+                                           onkeyup="filterEntrepots()">
+                                </div>
+                            </div>
+                            <div class="col-md-3 col-lg-2 mb-2">
+                                <select id="filterType" class="form-control" onchange="filterEntrepots()">
+                                    <option value="">{% trans "Tous les types" %}</option>
+                                    <option value="van">{% trans "Vans uniquement" %}</option>
+                                    <option value="entrepot">{% trans "Entrepôts uniquement" %}</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3 col-lg-2 mb-2">
+                                <select id="filterStatut" class="form-control" onchange="filterEntrepots()">
+                                    <option value="">{% trans "Tous les statuts" %}</option>
+                                    <option value="actif">{% trans "Actifs" %}</option>
+                                    <option value="inactif">{% trans "Inactifs" %}</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2 col-lg-2 mb-2">
+                                <select id="filterLivreur" class="form-control" onchange="filterEntrepots()">
+                                    <option value="">{% trans "Tous les livreurs" %}</option>
+                                    <option value="avec">{% trans "Avec livreur" %}</option>
+                                    <option value="sans">{% trans "Sans livreur" %}</option>
+                                </select>
+                            </div>
+                            <div class="col-md-12 col-lg-3 mb-2 text-right">
+                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="resetFilters()">
+                                    <i class="fa fa-redo"></i> {% trans "Réinitialiser" %}
+                                </button>
+                                <span class="ml-2 text-muted" id="filterResultCount"></span>
+                            </div>
+                        </div>
+                    </div>
+
             <div class="table-responsive">
-                <table class="table table-striped table-hover">
+                <table class="table table-striped table-hover" id="entrepotsTable">
                     <thead class="thead-dark">
                         <tr>
                             <th>{% trans "Code" %}</th>
@@ -41,9 +85,14 @@
                             <th>{% trans "Statut" %}</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="entrepotsTableBody">
                         {% for entrepot in entrepots %}
-                        <tr>
+                        <tr class="entrepot-row"
+                            data-code="{{ entrepot.code|lower }}"
+                            data-name="{{ entrepot.name|lower }}"
+                            data-type="{% if entrepot.est_van %}van{% else %}entrepot{% endif %}"
+                            data-statut="{% if entrepot.is_active %}actif{% else %}inactif{% endif %}"
+                            data-livreur="{% if entrepot.livreur %}avec{% else %}sans{% endif %}">
                             <td><strong>{{ entrepot.code }}</strong></td>
                             <td>{{ entrepot.name }}</td>
                             <td>
@@ -72,13 +121,19 @@
                             </td>
                         </tr>
                         {% empty %}
-                        <tr>
+                        <tr id="emptyRow">
                             <td colspan="8" class="text-center text-muted py-4">
                                 <i class="fa fa-inbox fa-3x d-block mb-3"></i>
                                 {% trans "Aucun entrepôt trouvé" %}
                             </td>
                         </tr>
                         {% endfor %}
+                        <tr id="noResultsRow" style="display: none;">
+                            <td colspan="8" class="text-center text-muted py-4">
+                                <i class="fa fa-filter fa-3x d-block mb-3"></i>
+                                {% trans "Aucun résultat pour ces filtres" %}
+                            </td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
@@ -172,6 +227,84 @@
 </div>
 
 <script>
+// ========== FILTRAGE ==========
+
+// Fonction de filtrage des entrepôts
+function filterEntrepots() {
+    const searchValue = document.getElementById('filterSearch').value.toLowerCase();
+    const typeValue = document.getElementById('filterType').value;
+    const statutValue = document.getElementById('filterStatut').value;
+    const livreurValue = document.getElementById('filterLivreur').value;
+
+    const rows = document.querySelectorAll('.entrepot-row');
+    let visibleCount = 0;
+    let totalCount = rows.length;
+
+    rows.forEach(row => {
+        const code = row.dataset.code || '';
+        const name = row.dataset.name || '';
+        const type = row.dataset.type || '';
+        const statut = row.dataset.statut || '';
+        const livreur = row.dataset.livreur || '';
+
+        // Vérifier tous les filtres
+        const matchSearch = !searchValue || code.includes(searchValue) || name.includes(searchValue);
+        const matchType = !typeValue || type === typeValue;
+        const matchStatut = !statutValue || statut === statutValue;
+        const matchLivreur = !livreurValue || livreur === livreurValue;
+
+        if (matchSearch && matchType && matchStatut && matchLivreur) {
+            row.style.display = '';
+            visibleCount++;
+        } else {
+            row.style.display = 'none';
+        }
+    });
+
+    // Afficher/masquer la ligne "Aucun résultat"
+    const noResultsRow = document.getElementById('noResultsRow');
+    const emptyRow = document.getElementById('emptyRow');
+
+    if (noResultsRow) {
+        noResultsRow.style.display = (visibleCount === 0 && totalCount > 0) ? '' : 'none';
+    }
+    if (emptyRow) {
+        emptyRow.style.display = (totalCount === 0) ? '' : 'none';
+    }
+
+    // Mettre à jour le compteur
+    updateFilterCount(visibleCount, totalCount);
+}
+
+// Mettre à jour le compteur de résultats
+function updateFilterCount(visible, total) {
+    const countEl = document.getElementById('filterResultCount');
+    if (countEl) {
+        if (visible === total) {
+            countEl.textContent = `${total} élément${total > 1 ? 's' : ''}`;
+        } else {
+            countEl.textContent = `${visible} / ${total} élément${total > 1 ? 's' : ''}`;
+        }
+    }
+}
+
+// Réinitialiser les filtres
+function resetFilters() {
+    document.getElementById('filterSearch').value = '';
+    document.getElementById('filterType').value = '';
+    document.getElementById('filterStatut').value = '';
+    document.getElementById('filterLivreur').value = '';
+    filterEntrepots();
+}
+
+// Initialiser le compteur au chargement
+document.addEventListener('DOMContentLoaded', function() {
+    const rows = document.querySelectorAll('.entrepot-row');
+    updateFilterCount(rows.length, rows.length);
+});
+
+// ========== FORMULAIRE ==========
+
 // Mettre à jour le préfixe du code selon le type
 function updateCodePrefix() {
     const type = document.getElementById('type').value;
@@ -244,5 +377,50 @@ document.getElementById('formAjouterEntrepot')?.addEventListener('submit', async
 }
 .nav-tabs .nav-link:hover {
     border-color: #e9ecef #e9ecef #dee2e6;
+}
+
+/* Styles pour les filtres */
+.filters-container {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+}
+
+.filters-container .form-control {
+    font-size: 0.9rem;
+}
+
+.filters-container .input-group-text {
+    background: #fff;
+    border-right: none;
+}
+
+.filters-container .input-group .form-control {
+    border-left: none;
+}
+
+.filters-container .input-group .form-control:focus {
+    border-color: #ced4da;
+    box-shadow: none;
+}
+
+.filters-container select.form-control {
+    cursor: pointer;
+}
+
+#filterResultCount {
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+/* Animation pour les lignes filtrées */
+.entrepot-row {
+    transition: opacity 0.2s ease;
+}
+
+/* Highlight sur hover */
+#entrepotsTable tbody tr:hover {
+    background-color: #e8f4fd !important;
 }
 </style>

@@ -243,6 +243,8 @@ CSRF_TRUSTED_ORIGINS = [
     'http://localhost:8000',
     'http://127.0.0.1:8000',
     'http://192.168.0.150:8000',
+    'https://*.ngrok-free.dev',
+    'https://*.ngrok.io',
 ]
 # Session configuration for Django 4.x compatibility
 SESSION_SERIALIZER = 'django.contrib.sessions.serializers.JSONSerializer'

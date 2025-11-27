@@ -313,27 +313,35 @@
             <!-- sidebar-search  -->
             <div class="sidebar-menu">
                 <ul>
+                    {# ===== COMMERCIAL ===== #}
                     <li class="sidebar-dropdown">
                         <a href="#" class="dropdown-toggle sidebar-item">
                             <i class="fas fa-handshake"></i><span>{% trans "Commercial" %}</span>
                             <i class="fas fa-chevron-down arrow"></i>
                         </a>
                         <ul class="sidebar-submenu">
+                            {% if perms.API.view_ventes or user.is_superuser %}
                             <li><a href="#" onclick="show('achat');return false;">
                                 <i class="fas fa-shopping-bag"></i>{% trans "Achats" %}
                             </a></li>
                             <li><a href="#" onclick="show('vente');return false;">
                                 <i class="fas fa-shopping-cart"></i>{% trans "Ventes" %}
                             </a></li>
+                            {% endif %}
+                            {% if perms.API.view_caisse or user.is_superuser %}
                             <li><a href="/caisse/">
                                 <i class="fas fa-cash-register"></i>{% trans "Caisse" %}
                             </a></li>
+                            {% endif %}
+                            {% if perms.API.view_ventes or user.is_superuser %}
                             <li><a href="#" onclick="show('facture');return false;">
                                 <i class="fas fa-file-invoice"></i>{% trans "Factures" %}
                             </a></li>
+                            {% endif %}
                         </ul>
                     </li>
 
+                    {# ===== GESTION DES DONNÉES ===== #}
                     <li class="sidebar-dropdown">
                         <a href="#" class="dropdown-toggle sidebar-item">
                             <i class="fas fa-database"></i><span>{% trans "Gestion des données" %}</span>
@@ -343,21 +351,31 @@
                             <li><a href="#" onclick="show('produit');return false;">
                                 <i class="fas fa-box"></i>{% trans "Produits" %}
                             </a></li>
+                            {% if perms.API.manage_clients or user.is_superuser %}
                             <li><a href="#" onclick="show('client');return false;">
                                 <i class="fas fa-users"></i>{% trans "Clients" %}
                             </a></li>
+                            {% endif %}
+                            {% if perms.API.manage_fournisseurs or user.is_superuser %}
                             <li><a href="#" onclick="show('fournisseur');return false;">
                                 <i class="fas fa-truck"></i>{% trans "Fournisseurs" %}
                             </a></li>
+                            {% endif %}
+                            {% if perms.API.manage_categories or user.is_superuser %}
                             <li><a href="#" onclick="show('categorie');return false;">
                                 <i class="fas fa-tags"></i>{% trans "Catégories" %}
                             </a></li>
+                            {% endif %}
+                            {% if perms.API.manage_entrepots or user.is_superuser %}
                             <li><a href="#" onclick="show('entrepots');return false;">
                                 <i class="fas fa-warehouse"></i>{% trans "Entrepôts" %}
                             </a></li>
+                            {% endif %}
                         </ul>
                     </li>
 
+                    {# ===== GESTION DE STOCK ===== #}
+                    {% if perms.API.view_stock_management or user.is_superuser %}
                     <li class="sidebar-dropdown">
                         <a href="#" class="dropdown-toggle sidebar-item">
                             <i class="fas fa-boxes"></i><span>{% trans "Gestion de stock" %}</span>
@@ -379,61 +397,95 @@
                             <li><a href="#" onclick="show('stocks_list');return false;">
                                 <i class="fas fa-layer-group"></i>{% trans "Stocks par entrepôt" %}
                             </a></li>
+                            {% if perms.API.manage_transferts or user.is_superuser %}
                             <li><a href="#" onclick="show('transferts_list');return false;">
                                 <i class="fas fa-dolly"></i>{% trans "Liste des transferts" %}
                             </a></li>
+                            {% endif %}
+                            {% if perms.API.charger_van or user.is_superuser %}
                             <li><a href="#" onclick="show('charger_van');return false;">
                                 <i class="fas fa-truck-loading"></i>{% trans "Charger un van" %}
                             </a></li>
+                            {% endif %}
+                            {% if perms.API.view_stock_dashboard or user.is_superuser %}
                             <li><a href="#" onclick="show('stock_dashboard');return false;">
                                 <i class="fas fa-chart-bar"></i>{% trans "Tableau de bord vans" %}
                             </a></li>
+                            {% endif %}
                         </ul>
                     </li>
+                    {% endif %}
 
-                    <!-- Distribution Module (top-level) -->
+                    {# ===== DISTRIBUTION ===== #}
+                    {% if perms.API.view_distribution or user.is_superuser %}
                     <li class="sidebar-dropdown">
                         <a href="#" class="dropdown-toggle sidebar-item">
                             <i class="fas fa-truck"></i><span>{% trans "Distribution" %}</span>
                             <i class="fas fa-chevron-down arrow"></i>
                         </a>
                         <ul class="sidebar-submenu">
+                            {% if perms.API.view_livreurs or perms.API.manage_livreurs or user.is_superuser %}
                             <li><a href="/admindash/livreurs" class="sidebar-item" onclick="show('livreurs');return false;">
                                 <i class="fas fa-id-badge"></i>{% trans "Livreurs" %}
                             </a></li>
+                            {% endif %}
+                            {% if perms.API.view_tournees or perms.API.manage_tournees or user.is_superuser %}
                             <li><a href="/admindash/tournees" class="sidebar-item" onclick="show('tournees');return false;">
                                 <i class="fas fa-route"></i>{% trans "Tournées" %}
                             </a></li>
+                            {% endif %}
+                            {% if perms.API.view_commandes_mobile or user.is_superuser %}
                             <li><a href="/admindash/commandes-mobile" class="sidebar-item" onclick="show('commandes_clients_mobile');return false;">
                                 <i class="fas fa-shopping-cart"></i>{% trans "Commandes Clients Mobile" %}
                             </a></li>
+                            {% endif %}
+                            {% if perms.API.view_distribution_dashboard or user.is_superuser %}
                             <li><a href="/admindash/distribution" class="sidebar-item" onclick="show('distribution_dashboard');return false;">
                                 <i class="fas fa-chart-pie"></i>{% trans "Tableau de bord Distribution" %}
                             </a></li>
+                            {% endif %}
+                            {% if perms.API.view_config_clients_chauffeurs or perms.API.manage_config_clients_chauffeurs or user.is_superuser %}
                             <li><a href="/admindash/config-clients-chauffeurs" class="sidebar-item" onclick="show('config_clients_chauffeurs');return false;">
                                 <i class="fas fa-users-cog"></i>{% trans "Configuration Clients/Chauffeurs" %}
                             </a></li>
+                            {% endif %}
+                            {% if perms.API.view_stats_livreurs or user.is_superuser %}
+                            <li><a href="#" class="sidebar-item" onclick="show('stats_livreurs');return false;">
+                                <i class="fas fa-chart-bar"></i>{% trans "Statistiques Livreurs" %}
+                            </a></li>
+                            {% endif %}
+                            {% if perms.API.view_app_mobile_livreurs or user.is_superuser %}
                             <li><a href="/livreur/app" class="sidebar-item" onclick="show('livreur_mobile');return false;">
                                 <i class="fas fa-mobile-alt"></i>{% trans "Application Mobile Livreurs" %}
                             </a></li>
+                            {% endif %}
+                            {% if perms.API.view_carte_gps_livreurs or user.is_superuser %}
                             <li><a href="/admindash/livreurs-map/" class="sidebar-item">
                                 <i class="fas fa-map-marked-alt"></i>{% trans "Carte GPS Livreurs" %}
                             </a></li>
+                            {% endif %}
                         </ul>
                     </li>
+                    {% endif %}
 
+                    {# ===== RAPPORTS & ANALYSES ===== #}
+                    {% if perms.API.view_rapports or perms.API.view_statistiques or user.is_superuser %}
                     <li class="sidebar-dropdown">
                         <a href="#" class="dropdown-toggle sidebar-item">
                             <i class="fas fa-chart-line"></i><span>{% trans "Rapports & Analyses" %}</span>
                             <i class="fas fa-chevron-down arrow"></i>
                         </a>
                         <ul class="sidebar-submenu">
+                            {% if perms.API.view_statistiques or user.is_superuser %}
                             <li><a href="#" onclick="show('statistiques');return false;">
                                 <i class="fas fa-chart-bar"></i>{% trans "Statistiques" %}
                             </a></li>
+                            {% endif %}
+                            {% if perms.API.view_rapports or user.is_superuser %}
                             <li><a href="#" onclick="show('rapports');return false;">
                                 <i class="fas fa-file-export"></i>{% trans "Rapports" %}
                             </a></li>
+                            {% endif %}
                             {% if user.is_staff %}
                             <li><a href="/audit-logs/">
                                 <i class="fas fa-clipboard-list"></i>{% trans "Journaux d'audit" %}
@@ -441,23 +493,31 @@
                             {% endif %}
                         </ul>
                     </li>
+                    {% endif %}
 
+                    {% if perms.API.export_data or user.is_superuser %}
                     <li><a href="#" onclick="show('import')" class="sidebar-item">
                         <i class="fas fa-file-import"></i><span>{% trans "Import de données" %}</span>
                     </a></li>
+                    {% endif %}
 
+                    {% if perms.API.view_parametres or user.is_superuser %}
                     <li><a href="#" onclick="show('parametres')" class="sidebar-item">
                         <i class="fas fa-cogs"></i><span>{% trans "Paramètres" %}</span>
                     </a></li>
+                    {% endif %}
 
-                    {% if user.is_staff %}
+                    {# ===== ADMINISTRATION ===== #}
+                    {% if user.is_staff or perms.API.view_admin %}
                     <li class="header-menu"><span>{% trans "ADMINISTRATION" %}</span></li>
                     <li><a href="#" onclick="show('admin')" class="sidebar-item">
                         <i class="fas fa-tools"></i><span>{% trans "Tableau de bord Admin" %}</span>
                     </a></li>
+                    {% if perms.API.manage_users or user.is_superuser %}
                     <li><a href="/users-admin/" class="sidebar-item">
                         <i class="fas fa-user-shield"></i><span>{% trans "Utilisateurs" %}</span>
                     </a></li>
+                    {% endif %}
                     {% endif %}
                 </ul>
             </div>

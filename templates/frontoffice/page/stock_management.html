@@ -204,37 +204,6 @@
 .action-btn.history { background: #faf5ff; color: #805ad5; }
 .action-btn.history:hover { background: #805ad5; color: white; }
 
-.category-filter {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    margin-bottom: 20px;
-}
-
-.category-chip {
-    padding: 8px 16px;
-    border-radius: 50px;
-    background: #edf2f7;
-    color: #4a5568;
-    font-size: 0.875rem;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    border: none;
-}
-
-.category-chip:hover, .category-chip.active {
-    background: #667eea;
-    color: white;
-}
-
-.category-chip .count {
-    background: rgba(0,0,0,0.1);
-    padding: 2px 8px;
-    border-radius: 50px;
-    margin-left: 6px;
-    font-size: 0.75rem;
-}
-
 .quick-action-bar {
     background: #f8fafc;
     border-radius: 12px;
@@ -312,6 +281,305 @@
 @keyframes shimmer {
     0% { background-position: 200% 0; }
     100% { background-position: -200% 0; }
+}
+
+/* Custom Warehouse Select Dropdown */
+.warehouse-select-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+.warehouse-select-trigger {
+    padding: 10px 20px;
+    border: 2px solid #e2e8f0;
+    border-radius: 50px;
+    background: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    font-weight: 500;
+    color: #4a5568;
+    transition: all 0.3s ease;
+    min-width: 200px;
+}
+
+.warehouse-select-trigger:hover {
+    border-color: #667eea;
+    color: #667eea;
+}
+
+.warehouse-select-trigger.open {
+    border-color: #667eea;
+    border-radius: 20px 20px 0 0;
+}
+
+.warehouse-select-trigger .fa-chevron-down {
+    margin-left: auto;
+    transition: transform 0.2s;
+    font-size: 12px;
+}
+
+.warehouse-select-trigger.open .fa-chevron-down {
+    transform: rotate(180deg);
+}
+
+.warehouse-select-dropdown {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 2px solid #667eea;
+    border-top: none;
+    border-radius: 0 0 15px 15px;
+    z-index: 1000;
+    box-shadow: 0 8px 20px rgba(102, 126, 234, 0.2);
+    overflow: hidden;
+}
+
+.warehouse-select-dropdown.open {
+    display: block;
+}
+
+.warehouse-select-search {
+    width: 100%;
+    padding: 12px 15px;
+    border: none;
+    border-bottom: 1px solid #e2e8f0;
+    font-size: 0.9rem;
+    outline: none;
+    background: #f8fafc;
+}
+
+.warehouse-select-search:focus {
+    background: white;
+}
+
+.warehouse-select-options {
+    max-height: 250px;
+    overflow-y: auto;
+    background: white;
+}
+
+.warehouse-select-option {
+    padding: 12px 15px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: all 0.2s;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.warehouse-select-option:last-child {
+    border-bottom: none;
+}
+
+.warehouse-select-option:hover {
+    background: #eff6ff;
+}
+
+.warehouse-select-option.selected {
+    background: #667eea;
+    color: white;
+}
+
+.warehouse-select-option .warehouse-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+}
+
+.warehouse-select-option .warehouse-icon.entrepot {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.warehouse-select-option .warehouse-icon.van {
+    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    color: white;
+}
+
+.warehouse-select-option .warehouse-info {
+    flex: 1;
+}
+
+.warehouse-select-option .warehouse-name {
+    font-weight: 500;
+    font-size: 0.9rem;
+}
+
+.warehouse-select-option .warehouse-code {
+    font-size: 0.75rem;
+    opacity: 0.7;
+}
+
+.warehouse-select-option.selected .warehouse-icon {
+    background: rgba(255,255,255,0.2);
+}
+
+/* Scrollbar pour le dropdown */
+.warehouse-select-options::-webkit-scrollbar {
+    width: 6px;
+}
+
+.warehouse-select-options::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+.warehouse-select-options::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+.warehouse-select-options::-webkit-scrollbar-thumb:hover {
+    background: #a1a1a1;
+}
+
+/* Custom Select pour Modal Ajustement */
+.custom-select-container {
+    position: relative;
+    width: 100%;
+}
+
+.custom-select-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border: 2px solid #e2e8f0;
+    border-radius: 10px;
+    background: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-height: 48px;
+}
+
+.custom-select-trigger:hover {
+    border-color: #667eea;
+}
+
+.custom-select-trigger.open {
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+    border-radius: 10px 10px 0 0;
+}
+
+.custom-select-trigger .selected-text {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #000;
+    font-weight: 500;
+}
+
+.custom-select-trigger .selected-text.placeholder {
+    color: #a0aec0;
+    font-weight: 400;
+}
+
+.custom-select-trigger .arrow {
+    margin-left: 10px;
+    transition: transform 0.2s;
+    color: #718096;
+}
+
+.custom-select-trigger.open .arrow {
+    transform: rotate(180deg);
+}
+
+.custom-select-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 2px solid #667eea;
+    border-top: none;
+    border-radius: 0 0 10px 10px;
+    box-shadow: 0 8px 20px rgba(102, 126, 234, 0.2);
+    z-index: 1060;
+    display: none;
+}
+
+.custom-select-dropdown.open {
+    display: block;
+}
+
+.custom-select-search {
+    padding: 10px;
+    border-bottom: 1px solid #e2e8f0;
+    background: #f8fafc;
+}
+
+.custom-select-search input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    font-size: 0.9rem;
+}
+
+.custom-select-search input:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+.custom-select-options {
+    max-height: 250px;
+    overflow-y: auto;
+}
+
+.custom-select-options::-webkit-scrollbar {
+    width: 6px;
+}
+
+.custom-select-options::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+.custom-select-options::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+.custom-select-options::-webkit-scrollbar-thumb:hover {
+    background: #a1a1a1;
+}
+
+.custom-select-option {
+    padding: 10px 16px;
+    cursor: pointer;
+    transition: background 0.15s;
+    border-bottom: 1px solid #f1f5f9;
+    color: #000;
+}
+
+.custom-select-option:last-child {
+    border-bottom: none;
+}
+
+.custom-select-option:hover {
+    background: #eff6ff;
+}
+
+.custom-select-option.selected {
+    background: #667eea;
+    color: white;
+}
+
+.custom-select-no-results {
+    padding: 16px;
+    text-align: center;
+    color: #a0aec0;
+    font-style: italic;
 }
 </style>
 
@@ -412,15 +680,6 @@
         </div>
 
         <div class="card-body p-4">
-            <!-- Filtres par catégorie -->
-            <div class="category-filter" id="category-filters">
-                <button class="category-chip active" data-category="all">
-                    <i class="fas fa-layer-group mr-1"></i>{% trans "Toutes" %}
-                    <span class="count" id="count-all">0</span>
-                </button>
-                <!-- Les catégories seront ajoutées dynamiquement -->
-            </div>
-
             <!-- Filtres rapides -->
             <div class="quick-action-bar">
                 <div class="row align-items-center">
@@ -437,10 +696,22 @@
                             </button>
                         </div>
                     </div>
-                    <div class="col-md-6 text-right">
-                        <select class="form-control d-inline-block" style="width: auto; border-radius: 50px;" id="warehouseFilter">
-                            <option value="">{% trans "Tous les entrepôts" %}</option>
-                        </select>
+                    <div class="col-md-6 text-right d-flex justify-content-end align-items-center">
+                        <!-- Custom Dropdown Entrepôt -->
+                        <div class="warehouse-select-wrapper">
+                            <input type="hidden" id="warehouseFilter" value="">
+                            <div class="warehouse-select-trigger" id="warehouse-select-trigger" onclick="toggleWarehouseDropdown()">
+                                <i class="fas fa-warehouse mr-2"></i>
+                                <span id="warehouse-select-text">{% trans "Tous les entrepôts" %}</span>
+                                <i class="fas fa-chevron-down ml-2"></i>
+                            </div>
+                            <div class="warehouse-select-dropdown" id="warehouse-dropdown">
+                                <input type="text" class="warehouse-select-search" id="warehouse-search" placeholder="{% trans 'Rechercher...' %}" oninput="filterWarehouses()">
+                                <div class="warehouse-select-options" id="warehouse-options-list">
+                                    <!-- Options chargées dynamiquement -->
+                                </div>
+                            </div>
+                        </div>
                         <button class="btn btn-outline-secondary ml-2" style="border-radius: 50px;" onclick="exportStock()">
                             <i class="fas fa-download mr-1"></i>{% trans "Exporter" %}
                         </button>
@@ -508,15 +779,45 @@
                 <form id="adjustStockForm">
                     <div class="form-group">
                         <label class="font-weight-bold">{% trans "Produit" %}</label>
-                        <select class="form-control" id="adjustProductSelect" required>
-                            <option value="">{% trans "Sélectionner un produit..." %}</option>
-                        </select>
+                        <!-- Custom Select Produit -->
+                        <div class="custom-select-container" id="customSelectAdjustProduct">
+                            <div class="custom-select-trigger" data-target="adjustProductSelect">
+                                <span class="selected-text placeholder">{% trans "Sélectionner un produit..." %}</span>
+                                <i class="fas fa-chevron-down arrow"></i>
+                            </div>
+                            <div class="custom-select-dropdown">
+                                <div class="custom-select-search">
+                                    <input type="text" placeholder="{% trans 'Rechercher un produit...' %}">
+                                </div>
+                                <div class="custom-select-options"></div>
+                            </div>
+                            <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
+                                <select id="adjustProductSelect" required>
+                                    <option value="">{% trans "Sélectionner un produit..." %}</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label class="font-weight-bold">{% trans "Entrepôt" %}</label>
-                        <select class="form-control" id="adjustWarehouseSelect" required>
-                            <option value="">{% trans "Sélectionner un entrepôt..." %}</option>
-                        </select>
+                        <!-- Custom Select Entrepôt -->
+                        <div class="custom-select-container" id="customSelectAdjustWarehouse">
+                            <div class="custom-select-trigger" data-target="adjustWarehouseSelect">
+                                <span class="selected-text placeholder">{% trans "Sélectionner un entrepôt..." %}</span>
+                                <i class="fas fa-chevron-down arrow"></i>
+                            </div>
+                            <div class="custom-select-dropdown">
+                                <div class="custom-select-search">
+                                    <input type="text" placeholder="{% trans 'Rechercher un entrepôt...' %}">
+                                </div>
+                                <div class="custom-select-options"></div>
+                            </div>
+                            <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
+                                <select id="adjustWarehouseSelect" required>
+                                    <option value="">{% trans "Sélectionner un entrepôt..." %}</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
                     <div class="row">
                         <div class="col-md-6">
@@ -590,8 +891,8 @@
     let allProducts = [];
     let allWarehouses = [];
     let allCategories = [];
+    let allProductStocks = [];
     let currentFilter = 'all';
-    let currentCategory = 'all';
     let searchTerm = '';
 
     // Couleurs pour les catégories
@@ -644,16 +945,17 @@
         Promise.all([
             fetch('/API/produits/').then(r => r.json()),
             fetch('/API/warehouses/').then(r => r.json()),
-            fetch('/API/categories/').then(r => r.json())
+            fetch('/API/categories/').then(r => r.json()),
+            fetch('/API/stocks/').then(r => r.json())
         ])
-        .then(([products, warehouses, categories]) => {
+        .then(([products, warehouses, categories, productStocks]) => {
             // Gérer la pagination si présente
             allProducts = products.results || products;
             allWarehouses = warehouses.results || warehouses;
             allCategories = categories.results || categories;
+            allProductStocks = productStocks.results || productStocks;
 
             renderStats();
-            renderCategoryFilters();
             renderWarehouseSelect();
             renderTable();
         })
@@ -682,79 +984,347 @@
         document.getElementById('stat-ruptures').textContent = ruptures;
     }
 
-    function renderCategoryFilters() {
-        const container = document.getElementById('category-filters');
+    function renderWarehouseSelect() {
+        // Remplir le dropdown personnalisé pour le filtre
+        renderWarehouseOptions(allWarehouses);
 
-        // Compter les produits par catégorie
-        const categoryCounts = {};
+        // Remplir les custom selects du modal ajustement
+        populateAdjustProductSelect();
+        populateAdjustWarehouseSelect();
+        initAdjustCustomSelects();
+    }
+
+    // Populate custom select for products in adjust modal
+    function populateAdjustProductSelect() {
+        const container = document.getElementById('customSelectAdjustProduct');
+        if (!container) return;
+
+        const optionsContainer = container.querySelector('.custom-select-options');
+        optionsContainer.innerHTML = '';
+
+        // Option par défaut
+        const defaultOpt = document.createElement('div');
+        defaultOpt.className = 'custom-select-option';
+        defaultOpt.setAttribute('data-value', '');
+        defaultOpt.textContent = 'Sélectionner un produit...';
+        defaultOpt.onclick = function() {
+            selectAdjustOption('customSelectAdjustProduct', '', 'Sélectionner un produit...', 'adjustProductSelect', null);
+        };
+        optionsContainer.appendChild(defaultOpt);
+
+        // Produits
         allProducts.forEach(p => {
-            const catId = p.categorie || 'none';
-            categoryCounts[catId] = (categoryCounts[catId] || 0) + 1;
+            const opt = document.createElement('div');
+            opt.className = 'custom-select-option';
+            opt.setAttribute('data-value', p.id);
+            const label = (p.reference || '') + ' - ' + (p.designation || 'Produit #' + p.id);
+            opt.textContent = label;
+            opt.onclick = function() {
+                selectAdjustOption('customSelectAdjustProduct', p.id, label, 'adjustProductSelect', p.quantite);
+            };
+            optionsContainer.appendChild(opt);
+        });
+    }
+
+    // Populate custom select for warehouses in adjust modal
+    function populateAdjustWarehouseSelect() {
+        const container = document.getElementById('customSelectAdjustWarehouse');
+        if (!container) return;
+
+        const optionsContainer = container.querySelector('.custom-select-options');
+        optionsContainer.innerHTML = '';
+
+        // Option par défaut
+        const defaultOpt = document.createElement('div');
+        defaultOpt.className = 'custom-select-option';
+        defaultOpt.setAttribute('data-value', '');
+        defaultOpt.textContent = 'Sélectionner un entrepôt...';
+        defaultOpt.onclick = function() {
+            selectAdjustOption('customSelectAdjustWarehouse', '', 'Sélectionner un entrepôt...', 'adjustWarehouseSelect', null);
+        };
+        optionsContainer.appendChild(defaultOpt);
+
+        // Entrepôts
+        allWarehouses.forEach(w => {
+            const opt = document.createElement('div');
+            opt.className = 'custom-select-option';
+            opt.setAttribute('data-value', w.id);
+            const label = (w.code || '') + ' - ' + (w.name || 'Entrepôt #' + w.id);
+            opt.textContent = label;
+            opt.onclick = function() {
+                selectAdjustOption('customSelectAdjustWarehouse', w.id, label, 'adjustWarehouseSelect', null);
+            };
+            optionsContainer.appendChild(opt);
+        });
+    }
+
+    // Toggle custom select in adjust modal
+    function toggleAdjustCustomSelect(containerId) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+
+        const trigger = container.querySelector('.custom-select-trigger');
+        const dropdown = container.querySelector('.custom-select-dropdown');
+        const isOpen = dropdown.classList.contains('open');
+
+        // Fermer tous les autres custom selects du modal
+        document.querySelectorAll('#adjustStockModal .custom-select-dropdown.open').forEach(d => {
+            d.classList.remove('open');
+            const t = d.closest('.custom-select-container');
+            if (t) t.querySelector('.custom-select-trigger').classList.remove('open');
         });
 
-        // Mettre à jour le compteur "Toutes"
-        document.getElementById('count-all').textContent = allProducts.length;
+        if (!isOpen) {
+            dropdown.classList.add('open');
+            trigger.classList.add('open');
+            const searchInput = dropdown.querySelector('input');
+            if (searchInput) {
+                searchInput.value = '';
+                searchInput.focus();
+            }
+            filterAdjustOptions(containerId, '');
+        }
+    }
 
-        // Ajouter les boutons de catégorie
-        allCategories.forEach((cat, idx) => {
-            const count = categoryCounts[cat.id] || 0;
-            if (count > 0) {
-                const btn = document.createElement('button');
-                btn.className = 'category-chip';
-                btn.dataset.category = cat.id;
-                btn.innerHTML = `
-                    <span style="color: ${categoryColors[idx % categoryColors.length]};">
-                        <i class="${cat.icone || 'fas fa-tag'} mr-1"></i>
-                    </span>
-                    ${cat.nom}
-                    <span class="count">${count}</span>
-                `;
-                btn.addEventListener('click', function() {
-                    document.querySelectorAll('.category-chip').forEach(c => c.classList.remove('active'));
-                    this.classList.add('active');
-                    currentCategory = this.dataset.category;
-                    renderTable();
+    // Filter options in custom select
+    function filterAdjustOptions(containerId, searchText) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+
+        const optionsContainer = container.querySelector('.custom-select-options');
+        const options = optionsContainer.querySelectorAll('.custom-select-option');
+        const search = (searchText || '').toLowerCase().trim();
+        let hasVisible = false;
+
+        options.forEach(opt => {
+            const text = (opt.textContent || '').toLowerCase();
+            const match = !search || text.includes(search);
+            opt.style.display = match ? '' : 'none';
+            if (match) hasVisible = true;
+        });
+
+        let noResults = optionsContainer.querySelector('.custom-select-no-results');
+        if (!hasVisible) {
+            if (!noResults) {
+                noResults = document.createElement('div');
+                noResults.className = 'custom-select-no-results';
+                noResults.textContent = 'Aucun résultat trouvé';
+                optionsContainer.appendChild(noResults);
+            }
+            noResults.style.display = '';
+        } else if (noResults) {
+            noResults.style.display = 'none';
+        }
+    }
+
+    // Select option in adjust modal custom select
+    function selectAdjustOption(containerId, value, text, hiddenSelectId, stockValue) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+
+        const trigger = container.querySelector('.custom-select-trigger');
+        const selectedText = trigger.querySelector('.selected-text');
+        const dropdown = container.querySelector('.custom-select-dropdown');
+        const hiddenSelect = document.getElementById(hiddenSelectId);
+
+        selectedText.textContent = text;
+        selectedText.classList.toggle('placeholder', !value);
+
+        dropdown.classList.remove('open');
+        trigger.classList.remove('open');
+
+        if (hiddenSelect) {
+            let option = hiddenSelect.querySelector(`option[value="${value}"]`);
+            if (!option && value !== '') {
+                option = document.createElement('option');
+                option.value = value;
+                option.textContent = text;
+                hiddenSelect.appendChild(option);
+            }
+            hiddenSelect.value = value;
+        }
+
+        // Update stock display if this is the product select
+        if (containerId === 'customSelectAdjustProduct' && stockValue !== null) {
+            document.getElementById('currentStock').value = stockValue || 0;
+            document.getElementById('newQuantity').value = stockValue || 0;
+        }
+
+        // Update selected state
+        container.querySelectorAll('.custom-select-option').forEach(opt => {
+            opt.classList.toggle('selected', opt.getAttribute('data-value') === String(value));
+        });
+    }
+
+    // Initialize adjust modal custom selects event listeners
+    function initAdjustCustomSelects() {
+        ['customSelectAdjustProduct', 'customSelectAdjustWarehouse'].forEach(containerId => {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+
+            const trigger = container.querySelector('.custom-select-trigger');
+            const searchInput = container.querySelector('.custom-select-search input');
+
+            if (trigger && !trigger.hasAttribute('data-init')) {
+                trigger.setAttribute('data-init', 'true');
+                trigger.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    toggleAdjustCustomSelect(containerId);
                 });
-                container.appendChild(btn);
+            }
+
+            if (searchInput && !searchInput.hasAttribute('data-init')) {
+                searchInput.setAttribute('data-init', 'true');
+                searchInput.addEventListener('input', function() {
+                    filterAdjustOptions(containerId, this.value);
+                });
+                searchInput.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                });
+            }
+        });
+
+        // Close when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.custom-select-container')) {
+                document.querySelectorAll('#adjustStockModal .custom-select-dropdown.open').forEach(d => {
+                    d.classList.remove('open');
+                    const t = d.closest('.custom-select-container');
+                    if (t) t.querySelector('.custom-select-trigger').classList.remove('open');
+                });
             }
         });
     }
 
-    function renderWarehouseSelect() {
-        const select = document.getElementById('warehouseFilter');
-        const adjustSelect = document.getElementById('adjustWarehouseSelect');
+    // Afficher les options du dropdown entrepôt
+    function renderWarehouseOptions(warehouses) {
+        const optionsList = document.getElementById('warehouse-options-list');
+        const selectedValue = document.getElementById('warehouseFilter').value;
 
-        allWarehouses.forEach(w => {
-            const option = `<option value="${w.id}">${w.code} - ${w.name}</option>`;
-            if (select) select.insertAdjacentHTML('beforeend', option);
-            if (adjustSelect) adjustSelect.insertAdjacentHTML('beforeend', option);
+        // Option "Tous les entrepôts"
+        let html = `
+            <div class="warehouse-select-option ${!selectedValue ? 'selected' : ''}"
+                 data-value=""
+                 onclick="selectWarehouse('', 'Tous les entrepôts')">
+                <div class="warehouse-icon entrepot">
+                    <i class="fas fa-layer-group"></i>
+                </div>
+                <div class="warehouse-info">
+                    <div class="warehouse-name">Tous les entrepôts</div>
+                    <div class="warehouse-code">Afficher tout le stock</div>
+                </div>
+            </div>
+        `;
+
+        // Options des entrepôts
+        warehouses.forEach(w => {
+            const isVan = w.code && w.code.startsWith('VAN');
+            html += `
+                <div class="warehouse-select-option ${w.id == selectedValue ? 'selected' : ''}"
+                     data-value="${w.id}"
+                     data-name="${(w.name || '').toLowerCase()}"
+                     data-code="${(w.code || '').toLowerCase()}"
+                     onclick="selectWarehouse('${w.id}', '${(w.name || w.code).replace(/'/g, "\\'")}')">
+                    <div class="warehouse-icon ${isVan ? 'van' : 'entrepot'}">
+                        <i class="fas fa-${isVan ? 'truck' : 'warehouse'}"></i>
+                    </div>
+                    <div class="warehouse-info">
+                        <div class="warehouse-name">${w.name || w.code}</div>
+                        <div class="warehouse-code">${w.code}</div>
+                    </div>
+                </div>
+            `;
         });
 
-        // Remplir aussi le select des produits pour l'ajustement
-        const productSelect = document.getElementById('adjustProductSelect');
-        if (productSelect) {
-            allProducts.forEach(p => {
-                productSelect.insertAdjacentHTML('beforeend',
-                    `<option value="${p.id}" data-stock="${p.quantite}">${p.reference} - ${p.designation}</option>`
-                );
-            });
-        }
+        optionsList.innerHTML = html;
     }
+
+    // Toggle dropdown entrepôt
+    window.toggleWarehouseDropdown = function() {
+        const trigger = document.getElementById('warehouse-select-trigger');
+        const dropdown = document.getElementById('warehouse-dropdown');
+        const isOpen = dropdown.classList.contains('open');
+
+        if (isOpen) {
+            closeWarehouseDropdown();
+        } else {
+            trigger.classList.add('open');
+            dropdown.classList.add('open');
+            document.getElementById('warehouse-search').focus();
+        }
+    };
+
+    // Fermer dropdown entrepôt
+    window.closeWarehouseDropdown = function() {
+        document.getElementById('warehouse-select-trigger').classList.remove('open');
+        document.getElementById('warehouse-dropdown').classList.remove('open');
+        document.getElementById('warehouse-search').value = '';
+        renderWarehouseOptions(allWarehouses);
+    };
+
+    // Sélectionner un entrepôt
+    window.selectWarehouse = function(id, name) {
+        document.getElementById('warehouseFilter').value = id;
+        document.getElementById('warehouse-select-text').textContent = name;
+        closeWarehouseDropdown();
+        renderTable();
+    };
+
+    // Filtrer les entrepôts
+    window.filterWarehouses = function() {
+        const searchValue = document.getElementById('warehouse-search').value.toLowerCase();
+        const filtered = allWarehouses.filter(w => {
+            const searchable = `${w.name || ''} ${w.code || ''}`.toLowerCase();
+            return searchable.includes(searchValue);
+        });
+        renderWarehouseOptions(filtered);
+    };
+
+    // Fermer dropdown si clic en dehors
+    document.addEventListener('click', function(e) {
+        const wrapper = document.querySelector('.warehouse-select-wrapper');
+        if (wrapper && !wrapper.contains(e.target)) {
+            closeWarehouseDropdown();
+        }
+    });
 
     function renderTable() {
         const tbody = document.getElementById('stockTableBody');
         const warehouseId = document.getElementById('warehouseFilter')?.value;
 
+        // Si un entrepôt est sélectionné, on filtre par les stocks de cet entrepôt
+        let productsToShow = allProducts;
+
+        if (warehouseId) {
+            // Récupérer les IDs des produits qui ont du stock dans cet entrepôt
+            const productIdsInWarehouse = allProductStocks
+                .filter(ps => ps.warehouse == warehouseId)
+                .map(ps => ps.produit);
+
+            // Créer une map des quantités par produit pour cet entrepôt
+            const warehouseStockMap = {};
+            allProductStocks
+                .filter(ps => ps.warehouse == warehouseId)
+                .forEach(ps => {
+                    warehouseStockMap[ps.produit] = ps.quantity;
+                });
+
+            // Filtrer et adapter les quantités
+            productsToShow = allProducts
+                .filter(p => productIdsInWarehouse.includes(p.id))
+                .map(p => ({
+                    ...p,
+                    quantite: warehouseStockMap[p.id] || 0
+                }));
+        }
+
         // Filtrer les produits
-        let filtered = allProducts.filter(p => {
+        let filtered = productsToShow.filter(p => {
             // Filtre recherche
             if (searchTerm) {
                 const searchable = `${p.reference} ${p.designation} ${p.code_barre || ''}`.toLowerCase();
                 if (!searchable.includes(searchTerm)) return false;
             }
-
-            // Filtre catégorie
-            if (currentCategory !== 'all' && p.categorie != currentCategory) return false;
 
             // Filtre statut
             if (currentFilter === 'alert' && (p.quantite <= 0 || p.quantite > (p.seuil_alerte || 10))) return false;
@@ -896,7 +1466,8 @@
     window.openAdjustForProduct = function(productId) {
         const product = allProducts.find(p => p.id === productId);
         if (product) {
-            document.getElementById('adjustProductSelect').value = productId;
+            const label = (product.reference || '') + ' - ' + (product.designation || 'Produit #' + product.id);
+            selectAdjustOption('customSelectAdjustProduct', product.id, label, 'adjustProductSelect', product.quantite);
             document.getElementById('currentStock').value = product.quantite || 0;
             document.getElementById('newQuantity').value = product.quantite || 0;
             $('#adjustStockModal').modal('show');
@@ -1035,14 +1606,5 @@
         return cookieValue;
     }
 
-    // Update product select change handler
-    document.getElementById('adjustProductSelect')?.addEventListener('change', function() {
-        const option = this.selectedOptions[0];
-        if (option) {
-            document.getElementById('currentStock').value = option.dataset.stock || 0;
-            document.getElementById('newQuantity').value = option.dataset.stock || 0;
-        }
-    });
-
-})();
+    })();
 </script>

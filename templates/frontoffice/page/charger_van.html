@@ -60,6 +60,11 @@
                             <i class="fa fa-file-import"></i> {% trans "Import texte" %}
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" data-toggle="tab" href="#tab-stock-van" role="tab" id="tab-stock-van-link">
+                            <i class="fa fa-truck"></i> {% trans "Stock actuel du Van" %}
+                        </a>
+                    </li>
                 </ul>
 
                 <!-- Contenu des onglets -->
@@ -162,6 +167,93 @@
                         <button type="button" class="btn btn-primary mt-2" onclick="importFromText()">
                             <i class="fa fa-upload"></i> {% trans "Importer" %}
                         </button>
+                    </div>
+
+                    <!-- Tab 5: Stock actuel du Van -->
+                    <div class="tab-pane fade" id="tab-stock-van" role="tabpanel">
+                        <div class="alert alert-info">
+                            <i class="fa fa-info-circle"></i> {% trans "Sélectionnez un van ci-dessus pour voir son stock actuel" %}
+                        </div>
+
+                        <!-- Statistiques du stock -->
+                        <div class="row mb-3" id="vanStockStats" style="display:none;">
+                            <div class="col-md-4">
+                                <div class="card bg-primary text-white">
+                                    <div class="card-body text-center">
+                                        <h4 id="totalProducts">0</h4>
+                                        <p class="mb-0">{% trans "Produits différents" %}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card bg-success text-white">
+                                    <div class="card-body text-center">
+                                        <h4 id="totalQuantity">0</h4>
+                                        <p class="mb-0">{% trans "Unités totales" %}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card bg-info text-white">
+                                    <div class="card-body text-center">
+                                        <h4 id="lowStockCount">0</h4>
+                                        <p class="mb-0">{% trans "Produits stock faible" %}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Barre de recherche -->
+                        <div class="row mb-3" id="vanStockSearch" style="display:none;">
+                            <div class="col-md-8">
+                                <div class="input-group">
+                                    <div class="input-group-prepend">
+                                        <span class="input-group-text"><i class="fa fa-search"></i></span>
+                                    </div>
+                                    <input type="text" class="form-control" id="searchVanStock"
+                                           placeholder="{% trans 'Rechercher dans le stock du van...' %}">
+                                    <div class="input-group-append">
+                                        <button class="btn btn-outline-secondary" type="button" onclick="clearVanStockSearch()">
+                                            <i class="fa fa-times"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <button type="button" class="btn btn-outline-primary btn-block" onclick="loadVanStock()">
+                                    <i class="fa fa-sync"></i> {% trans "Rafraîchir" %}
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Tableau du stock du van -->
+                        <div class="table-responsive">
+                            <table class="table table-hover table-bordered" id="vanStockTable">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th width="15%">{% trans "Référence" %}</th>
+                                        <th width="35%">{% trans "Désignation" %}</th>
+                                        <th width="15%">{% trans "Code-barres" %}</th>
+                                        <th width="15%" class="text-center">{% trans "Quantité" %}</th>
+                                        <th width="20%" class="text-center">{% trans "Statut" %}</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="vanStockTableBody">
+                                    <tr>
+                                        <td colspan="5" class="text-center text-muted py-4">
+                                            <i class="fa fa-truck"></i> {% trans "Sélectionnez un van pour voir son stock" %}
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Message vide -->
+                        <div id="emptyVanStock" style="display:none;" class="text-center text-muted py-5">
+                            <i class="fa fa-box-open fa-3x mb-3"></i>
+                            <h5>{% trans "Ce van est vide" %}</h5>
+                            <p>{% trans "Aucun produit dans ce van actuellement" %}</p>
+                        </div>
                     </div>
                 </div>
 
@@ -688,6 +780,186 @@ document.getElementById('chargerVanForm').addEventListener('submit', function(e)
     return false;
 });
 
+// ============================================
+// FONCTIONS STOCK DU VAN
+// ============================================
+
+let vanStockData = [];
+
+// Charger le stock du van sélectionné
+async function loadVanStock() {
+    const vanId = document.getElementById('van').value;
+
+    if (!vanId) {
+        alert('{% trans "Veuillez d\'abord sélectionner un van" %}');
+        // Revenir au premier onglet
+        document.querySelector('a[href="#tab-table"]').click();
+        return;
+    }
+
+    const tbody = document.getElementById('vanStockTableBody');
+    tbody.innerHTML = `
+        <tr>
+            <td colspan="5" class="text-center py-4">
+                <i class="fa fa-spinner fa-spin fa-2x"></i>
+                <p class="mt-2">{% trans "Chargement du stock du van..." %}</p>
+            </td>
+        </tr>
+    `;
+
+    try {
+        // Récupérer les informations du van pour obtenir le warehouse_id
+        const vanResponse = await fetch(`/API/warehouses/${vanId}/`);
+        if (!vanResponse.ok) throw new Error('Van non trouvé');
+
+        const vanData = await vanResponse.json();
+
+        // Récupérer le stock du van
+        const stockResponse = await fetch(`/API/product-stocks/?warehouse=${vanId}`);
+        if (!stockResponse.ok) throw new Error('Erreur lors du chargement du stock');
+
+        vanStockData = await stockResponse.json();
+
+        // Afficher les données
+        displayVanStock();
+
+    } catch (error) {
+        console.error('Erreur:', error);
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="5" class="text-center text-danger py-4">
+                    <i class="fa fa-exclamation-triangle fa-2x"></i>
+                    <p class="mt-2">{% trans "Erreur lors du chargement du stock" %}: ${error.message}</p>
+                </td>
+            </tr>
+        `;
+    }
+}
+
+// Afficher le stock du van
+function displayVanStock() {
+    const tbody = document.getElementById('vanStockTableBody');
+    const emptyMsg = document.getElementById('emptyVanStock');
+    const statsDiv = document.getElementById('vanStockStats');
+    const searchDiv = document.getElementById('vanStockSearch');
+
+    if (!vanStockData || vanStockData.length === 0) {
+        tbody.innerHTML = '';
+        emptyMsg.style.display = 'block';
+        statsDiv.style.display = 'none';
+        searchDiv.style.display = 'none';
+        return;
+    }
+
+    emptyMsg.style.display = 'none';
+    statsDiv.style.display = 'flex';
+    searchDiv.style.display = 'flex';
+
+    // Calculer les statistiques
+    let totalProducts = vanStockData.length;
+    let totalQuantity = vanStockData.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0);
+    let lowStockCount = vanStockData.filter(item => (parseFloat(item.quantity) || 0) < 10).length;
+
+    document.getElementById('totalProducts').textContent = totalProducts;
+    document.getElementById('totalQuantity').textContent = Math.round(totalQuantity);
+    document.getElementById('lowStockCount').textContent = lowStockCount;
+
+    // Afficher les produits
+    tbody.innerHTML = vanStockData.map(item => {
+        const quantity = parseFloat(item.quantity) || 0;
+        let statusBadge, statusClass;
+
+        if (quantity === 0) {
+            statusBadge = '<span class="badge badge-danger">{% trans "Épuisé" %}</span>';
+            statusClass = 'table-danger';
+        } else if (quantity < 10) {
+            statusBadge = '<span class="badge badge-warning">{% trans "Stock faible" %}</span>';
+            statusClass = 'table-warning';
+        } else if (quantity < 50) {
+            statusBadge = '<span class="badge badge-info">{% trans "Stock moyen" %}</span>';
+            statusClass = '';
+        } else {
+            statusBadge = '<span class="badge badge-success">{% trans "En stock" %}</span>';
+            statusClass = '';
+        }
+
+        return `
+            <tr class="${statusClass} van-stock-item"
+                data-search="${(item.produit_reference + ' ' + item.produit_designation).toLowerCase()}">
+                <td><strong>${item.produit_reference || '-'}</strong></td>
+                <td>${item.produit_designation || '-'}</td>
+                <td><code>${item.produit_code_barre || '-'}</code></td>
+                <td class="text-center">
+                    <span class="badge badge-primary" style="font-size: 1rem; padding: 0.5rem 1rem;">
+                        ${Math.round(quantity)}
+                    </span>
+                </td>
+                <td class="text-center">${statusBadge}</td>
+            </tr>
+        `;
+    }).join('');
+
+    // Activer la recherche
+    setupVanStockSearch();
+}
+
+// Configurer la recherche dans le stock du van
+function setupVanStockSearch() {
+    const searchInput = document.getElementById('searchVanStock');
+    if (!searchInput) return;
+
+    searchInput.addEventListener('input', function() {
+        const search = this.value.toLowerCase();
+        let visibleCount = 0;
+
+        document.querySelectorAll('.van-stock-item').forEach(row => {
+            const searchText = row.dataset.search;
+            const isVisible = searchText.includes(search);
+            row.style.display = isVisible ? '' : 'none';
+            if (isVisible) visibleCount++;
+        });
+
+        // Afficher un message si aucun résultat
+        const tbody = document.getElementById('vanStockTableBody');
+        const existingMsg = tbody.querySelector('.no-results-msg');
+        if (existingMsg) existingMsg.remove();
+
+        if (visibleCount === 0 && search) {
+            const row = document.createElement('tr');
+            row.className = 'no-results-msg';
+            row.innerHTML = `
+                <td colspan="5" class="text-center text-muted py-4">
+                    <i class="fa fa-search"></i> {% trans "Aucun produit trouvé pour" %} "${search}"
+                </td>
+            `;
+            tbody.appendChild(row);
+        }
+    });
+}
+
+// Effacer la recherche du stock du van
+function clearVanStockSearch() {
+    const searchInput = document.getElementById('searchVanStock');
+    if (searchInput) {
+        searchInput.value = '';
+        searchInput.dispatchEvent(new Event('input'));
+    }
+}
+
+// Charger automatiquement le stock quand le van change
+document.getElementById('van')?.addEventListener('change', function() {
+    // Si l'utilisateur est sur l'onglet "Stock actuel du Van", recharger automatiquement
+    const stockTab = document.getElementById('tab-stock-van');
+    if (stockTab && stockTab.classList.contains('active')) {
+        loadVanStock();
+    }
+});
+
+// Ajouter event listener pour l'onglet "Stock actuel du Van"
+document.getElementById('tab-stock-van-link')?.addEventListener('click', function() {
+    loadVanStock();
+});
+
 // Exposer les fonctions nécessaires globalement pour les event handlers inline
 window.addProductRow = addProductRow;
 window.updateStock = updateStock;
@@ -703,6 +975,8 @@ window.selectAllProducts = selectAllProducts;
 window.deselectAllProducts = deselectAllProducts;
 window.clearSearch = clearSearch;
 window.importFromText = importFromText;
+window.loadVanStock = loadVanStock;
+window.clearVanStockSearch = clearVanStockSearch;
 
 })(); // End of IIFE
 </script>

@@ -255,6 +255,13 @@ if (!window.__tournees_script_loaded__) {
     border: 1px solid #d1d5db;
     border-radius: 6px;
     font-size: 0.95rem;
+    background-color: white;
+}
+
+.form-group select option {
+    background-color: white;
+    color: #1f2937;
+    padding: 8px;
 }
 
 .form-group input:focus,
@@ -362,14 +369,15 @@ if (!window.__tournees_script_loaded__) {
 
     <!-- Onglets -->
     <div class="tabs">
-        <button class="tab active" onclick="filterTournees('all')">{% trans "Toutes" %}</button>
-        <button class="tab" onclick="filterTournees('planifiee')">{% trans "Planifiées" %}</button>
-        <button class="tab" onclick="filterTournees('en_cours')">{% trans "En cours" %}</button>
-        <button class="tab" onclick="filterTournees('terminee')">{% trans "Terminées" %}</button>
+        <button class="tab active" data-tab="tournees" onclick="switchTab('tournees')">{% trans "Toutes" %}</button>
+        <button class="tab" data-tab="planning" onclick="switchTab('planning')">{% trans "Planning Hebdomadaire" %}</button>
+        <button class="tab" data-tab="planifiee" onclick="filterTournees('planifiee')">{% trans "Planifiées" %}</button>
+        <button class="tab" data-tab="en_cours" onclick="filterTournees('en_cours')">{% trans "En cours" %}</button>
+        <button class="tab" data-tab="terminee" onclick="filterTournees('terminee')">{% trans "Terminées" %}</button>
     </div>
 
     <!-- Section Liste des Tournées -->
-    <div class="modern-section">
+    <div id="tournees-section" class="modern-section">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
             <h3>{% trans "Liste des Tournées" %}</h3>
             <button class="btn-primary" onclick="openTourneeModal()">
@@ -383,6 +391,55 @@ if (!window.__tournees_script_loaded__) {
             </div>
         </div>
     </div>
+
+    <!-- Section Planning Hebdomadaire -->
+    <div id="planning-section" class="modern-section" style="display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h3>{% trans "Planning Hebdomadaire des Tournées" %}</h3>
+            <div>
+                <button class="btn-success" onclick="genererSemaine()">
+                    <i class="fas fa-calendar-plus"></i> {% trans "Générer Tournées de la Semaine" %}
+                </button>
+                <button class="btn-primary" onclick="openPlanningModal()">
+                    <i class="fas fa-plus"></i> {% trans "Nouveau Planning" %}
+                </button>
+            </div>
+        </div>
+
+        <!-- Filtre par livreur -->
+        <div style="margin-bottom: 20px;">
+            <label for="filter-livreur-planning">{% trans "Filtrer par livreur:" %}</label>
+            <select id="filter-livreur-planning" onchange="loadPlanningsHebdo()">
+                <option value="">{% trans "Tous les livreurs" %}</option>
+            </select>
+        </div>
+
+        <!-- Table de planning par jour de la semaine -->
+        <div class="table-responsive">
+            <table class="table" style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="background: #f3f4f6;">
+                        <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e5e7eb;">{% trans "Livreur" %}</th>
+                        <th style="padding: 12px; text-align: center; border-bottom: 2px solid #e5e7eb;">{% trans "Lundi" %}</th>
+                        <th style="padding: 12px; text-align: center; border-bottom: 2px solid #e5e7eb;">{% trans "Mardi" %}</th>
+                        <th style="padding: 12px; text-align: center; border-bottom: 2px solid #e5e7eb;">{% trans "Mercredi" %}</th>
+                        <th style="padding: 12px; text-align: center; border-bottom: 2px solid #e5e7eb;">{% trans "Jeudi" %}</th>
+                        <th style="padding: 12px; text-align: center; border-bottom: 2px solid #e5e7eb;">{% trans "Vendredi" %}</th>
+                        <th style="padding: 12px; text-align: center; border-bottom: 2px solid #e5e7eb;">{% trans "Samedi" %}</th>
+                        <th style="padding: 12px; text-align: center; border-bottom: 2px solid #e5e7eb;">{% trans "Dimanche" %}</th>
+                    </tr>
+                </thead>
+                <tbody id="planning-table-body">
+                    <tr>
+                        <td colspan="8" style="text-align: center; padding: 40px;">
+                            <i class="fas fa-spinner fa-spin"></i> {% trans "Chargement..." %}
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
 </div>
 
 <!-- Modal Tournée -->
@@ -477,3 +534,89 @@ if (!window.__tournees_script_loaded__) {
         </div>
     </div>
 </div>
+
+<!-- Modal Planning Hebdomadaire -->
+<div id="planningModal" class="modal">
+    <div class="modal-content" style="max-width: 600px;">
+        <div class="modal-header">
+            <span class="close" onclick="closePlanningModal()">&times;</span>
+            <h2 id="planning-modal-title">{% trans "Nouveau Planning Hebdomadaire" %}</h2>
+        </div>
+        <div class="modal-body">
+            <form id="planning-form">
+                <input type="hidden" id="planning-id">
+
+                <div class="form-group">
+                    <label for="planning-livreur">{% trans "Livreur" %} *</label>
+                    <select id="planning-livreur" required>
+                        <option value="">{% trans "Sélectionner un livreur..." %}</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="planning-jour">{% trans "Jour de la semaine" %} *</label>
+                    <select id="planning-jour" required>
+                        <option value="">{% trans "Sélectionner un jour..." %}</option>
+                        <option value="1">{% trans "Lundi" %}</option>
+                        <option value="2">{% trans "Mardi" %}</option>
+                        <option value="3">{% trans "Mercredi" %}</option>
+                        <option value="4">{% trans "Jeudi" %}</option>
+                        <option value="5">{% trans "Vendredi" %}</option>
+                        <option value="6">{% trans "Samedi" %}</option>
+                        <option value="7">{% trans "Dimanche" %}</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="planning-code-prix">{% trans "Code de prix" %}</label>
+                    <select id="planning-code-prix">
+                        <option value="">{% trans "Sélectionner le code de prix..." %}</option>
+                    </select>
+                    <small style="color: #6b7280; font-size: 0.85rem; display: block; margin-top: 4px;">
+                        💰 Code promotionnel par défaut pour les tournées (STANDARD, AID, RAMADAN...)
+                    </small>
+                </div>
+
+                <div class="form-group">
+                    <label for="planning-actif">
+                        <input type="checkbox" id="planning-actif" checked> {% trans "Actif" %}
+                    </label>
+                    <small style="color: #6b7280; font-size: 0.85rem; display: block; margin-top: 4px;">
+                        Si coché, les tournées seront automatiquement générées pour ce jour
+                    </small>
+                </div>
+
+                <div class="form-group">
+                    <label for="planning-date-debut">{% trans "Date de début" %} (optionnel)</label>
+                    <input type="date" id="planning-date-debut">
+                    <small style="color: #6b7280; font-size: 0.85rem; display: block; margin-top: 4px;">
+                        Date à partir de laquelle le planning s'applique
+                    </small>
+                </div>
+
+                <div class="form-group">
+                    <label for="planning-date-fin">{% trans "Date de fin" %} (optionnel)</label>
+                    <input type="date" id="planning-date-fin">
+                    <small style="color: #6b7280; font-size: 0.85rem; display: block; margin-top: 4px;">
+                        Date jusqu'à laquelle le planning s'applique
+                    </small>
+                </div>
+
+                <div class="form-group">
+                    <label for="planning-notes">{% trans "Notes" %}</label>
+                    <textarea id="planning-notes" rows="3" placeholder="{% trans 'Notes sur ce planning...' %}"></textarea>
+                </div>
+
+                <div style="margin-top: 30px; text-align: right;">
+                    <button type="button" class="btn-secondary" onclick="closePlanningModal()">
+                        {% trans "Annuler" %}
+                    </button>
+                    <button type="submit" class="btn-primary">
+                        {% trans "Enregistrer" %}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+

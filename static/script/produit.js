@@ -670,18 +670,23 @@
   }
 
   function addPrixProduit(){
-    const produit = parseInt($('#prix_prod_produit').val() || '0', 10);
+    const produitVal = $('#prix_prod_produit').val();
+    const produit = parseInt(produitVal || '0', 10);
     const code_prix_val = $('#prix_prod_code').val();
     const code_prix = code_prix_val ? parseInt(code_prix_val, 10) : null;
-    const type_prix = parseInt($('#prix_prod_type').val() || '0', 10);
+    const typePrixVal = $('#prix_prod_type').val();
+    const type_prix = parseInt(typePrixVal || '0', 10);
     const prix = parseFloat($('#prix_prod_prix').val() || '0');
     const quantite_min = parseInt($('#prix_prod_qte_min').val() || '1', 10);
+
+    console.log('[PrixProduit] Valeurs:', { produitVal, produit, code_prix_val, code_prix, typePrixVal, type_prix, prix, quantite_min });
 
     if(!produit){ alert('Veuillez sélectionner un produit'); return; }
     if(!type_prix){ alert('Veuillez sélectionner un type de prix'); return; }
     if(!prix || prix <= 0){ alert('Prix invalide'); return; }
 
     const data = { produit, code_prix, type_prix, prix, quantite_min };
+    console.log('[PrixProduit] Data envoyée:', data);
 
     $.ajax({ url: apiBase + '/prix-produits/', method: 'POST', contentType: 'application/json',
              headers: { 'X-CSRFToken': getCSRFToken() }, data: JSON.stringify(data) })
@@ -696,7 +701,23 @@
         showAlert('Prix produit ajouté avec succès', 'success');
       })
       .fail(function(xhr){
-        const msg = (xhr.responseJSON && (xhr.responseJSON.detail || xhr.responseJSON.error)) || 'Erreur ajout prix';
+        console.error('[PrixProduit] Erreur:', xhr.status, xhr.responseJSON);
+        let msg = 'Erreur ajout prix';
+        if (xhr.responseJSON) {
+          if (xhr.responseJSON.non_field_errors) {
+            msg = xhr.responseJSON.non_field_errors.join(', ');
+            // Message plus clair pour l'erreur de duplication
+            if (msg.includes('unique') || msg.includes('existe') || msg.includes('already')) {
+              msg = 'Ce prix existe déjà pour cette combinaison produit/code/type';
+            }
+          } else if (xhr.responseJSON.detail) {
+            msg = xhr.responseJSON.detail;
+          } else if (xhr.responseJSON.error) {
+            msg = xhr.responseJSON.error;
+          } else {
+            msg = JSON.stringify(xhr.responseJSON);
+          }
+        }
         showAlert(msg, 'danger');
       });
   }

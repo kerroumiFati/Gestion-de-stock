@@ -2,6 +2,7 @@
 (function(){
   const apiBase = '/API';
   const $ = window.jQuery;
+  let mouvementsDataTable = null;
 
   function notify(type, msg){
     const cls = type === 'success' ? 'alert-success' : type === 'warning' ? 'alert-warning' : 'alert-danger';
@@ -44,6 +45,26 @@
     });
   }
 
+  function getDeltaBadge(delta) {
+    if (delta > 0) {
+      return `<span class="badge badge-success">+${delta}</span>`;
+    } else if (delta < 0) {
+      return `<span class="badge badge-danger">${delta}</span>`;
+    }
+    return `<span class="badge badge-secondary">${delta}</span>`;
+  }
+
+  function getSourceBadge(source) {
+    const colors = {
+      'BL': 'primary', 'BC': 'info', 'ACHAT': 'success', 'INV': 'warning',
+      'CORR': 'secondary', 'TRANS': 'info', 'PERTE': 'danger', 'CASSE': 'danger',
+      'EXP': 'warning', 'SAMPLE': 'purple', 'DON': 'pink', 'CONS': 'orange',
+      'VENTE': 'primary', 'RETOUR': 'danger'
+    };
+    const color = colors[source] || 'secondary';
+    return `<span class="badge badge-${color}">${source || ''}</span>`;
+  }
+
   function reloadJournal(){
     const params = {};
     const prod = $('#mv_prod').val();
@@ -57,31 +78,63 @@
     if (after) params.date_after = new Date(after).toISOString();
     if (before) params.date_before = new Date(before).toISOString();
 
+    console.log('[Mouvements.js] Loading journal with params:', params);
+
     return $.get(apiBase + '/mouvements/', params).then(function(rows){
-      const tbody = $('#tmouv tbody');
-      tbody.empty();
+      console.log('[Mouvements.js] Loaded rows:', rows.length);
+
       let totalIn = 0, totalOut = 0;
-      rows.forEach(r => {
+
+      // Préparer les données pour DataTables
+      const tableData = rows.map(r => {
         const d = new Date(r.date);
         const delta = Number(r.delta);
         if (delta > 0) totalIn += delta; else totalOut += Math.abs(delta);
-        const tr = $('<tr>');
-        tr.append($('<td>').text(d.toLocaleString()));
-        tr.append($('<td>').text(r.produit_reference ? `${r.produit_reference} - ${r.produit_designation || ''}` : r.produit));
-        tr.append($('<td>').text(r.warehouse_code ? `${r.warehouse_code} - ${r.warehouse_name||''}` : ''));
-        tr.append($('<td>').text(delta));
-        tr.append($('<td>').text(r.source));
-        tr.append($('<td>').text(r.ref_id || ''));
-        tr.append($('<td>').text(r.note || ''));
-        tbody.append(tr);
+
+        return [
+          d.toLocaleString('fr-FR'),
+          r.produit_reference ? `${r.produit_reference} - ${r.produit_designation || ''}` : r.produit,
+          r.warehouse_code ? `${r.warehouse_code} - ${r.warehouse_name||''}` : '',
+          getDeltaBadge(delta),
+          getSourceBadge(r.source),
+          r.ref_id || '',
+          r.note || ''
+        ];
       });
+
+      // Détruire l'ancienne instance DataTables si elle existe
+      if (mouvementsDataTable) {
+        mouvementsDataTable.destroy();
+        mouvementsDataTable = null;
+      }
+
+      // Vider le tbody
+      $('#tmouv tbody').empty();
+
+      // Initialiser DataTables avec les nouvelles données
+      mouvementsDataTable = $('#tmouv').DataTable({
+        data: tableData,
+        destroy: true,
+        language: {
+          url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/fr-FR.json',
+          emptyTable: 'Aucun mouvement trouvé'
+        },
+        order: [[0, 'desc']],
+        columnDefs: [
+          { targets: [3, 4], className: 'text-center' }
+        ],
+        pageLength: 25,
+        lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "Tous"]]
+      });
+
       $('#results-count').text(`${rows.length} lignes`);
       $('#total-entrees').text(totalIn);
       $('#total-sorties').text(totalOut);
       $('#solde').text(totalIn - totalOut);
+
     }).catch(function(err){
       notify('error', 'Erreur lors du chargement du journal');
-      console.error(err);
+      console.error('[Mouvements.js] Error:', err);
     });
   }
 
@@ -97,33 +150,64 @@
       });
     });
     $('#mv_reset').on('click', function(){
+      // Reset hidden selects
       $('#mv_prod').val('');
       $('#mv_src').val('');
       $('#mv_after').val('');
       $('#mv_before').val('');
       $('#mv_wh').val('');
+
+      // Reset custom selects triggers text
+      resetCustomSelectTrigger('customSelectMvProd', 'Tous');
+      resetCustomSelectTrigger('customSelectMvWh', 'Tous');
+
       reloadJournal();
     });
     $('#mv_export').on('click', function(){
-      // Simple CSV export from current table
-      const headers = [];
-      $('#tmouv thead tr th').each(function(){ headers.push($(this).text()); });
-      let csv = headers.join(',') + '\n';
-      $('#tmouv tbody tr').each(function(){
-        const cols = [];
-        $(this).find('td').each(function(){
-          let t = $(this).text().replace(/"/g,'""');
-          if (t.indexOf(',')>=0) t = '"'+t+'"';
-          cols.push(t);
+      // Export CSV depuis DataTables
+      if (mouvementsDataTable) {
+        const headers = [];
+        $('#tmouv thead tr th').each(function(){ headers.push($(this).text()); });
+        let csv = headers.join(',') + '\n';
+
+        // Utiliser les données de DataTables
+        mouvementsDataTable.rows().every(function(){
+          const data = this.data();
+          const cols = data.map(function(cell){
+            // Retirer les balises HTML pour l'export
+            let t = $('<div>').html(cell).text().replace(/"/g,'""');
+            if (t.indexOf(',')>=0) t = '"'+t+'"';
+            return t;
+          });
+          csv += cols.join(',') + '\n';
         });
-        csv += cols.join(',') + '\n';
-      });
-      const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = 'mouvements.csv'; a.click();
-      URL.revokeObjectURL(url);
+
+        const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'mouvements.csv'; a.click();
+        URL.revokeObjectURL(url);
+      }
     });
+  }
+
+  function resetCustomSelectTrigger(containerId, defaultText) {
+    const container = document.getElementById(containerId);
+    if (container) {
+      const trigger = container.querySelector('.custom-select-trigger');
+      if (trigger) {
+        const selectedText = trigger.querySelector('.selected-text');
+        if (selectedText) {
+          selectedText.textContent = defaultText;
+          selectedText.classList.add('placeholder');
+        }
+      }
+      // Reset selected state in options
+      const options = container.querySelectorAll('.custom-select-option');
+      options.forEach(function(opt) {
+        opt.classList.toggle('selected', opt.getAttribute('data-value') === '');
+      });
+    }
   }
 
   function getCookie(name){

@@ -7,7 +7,7 @@ from django.db import models
 from .distribution_models import (
     LivreurDistribution, TourneeMobile, ArretTourneeMobile, VenteTourneeMobile,
     LigneVenteTourneeMobile, RapportCaisseMobile, DepenseTourneeMobile, SyncLogMobile,
-    CommandeClient, LigneCommandeClient
+    CommandeClient, LigneCommandeClient, PlanningHebdomadaire, ClientLivreurHebdo
     # BonLivraisonVan, LigneBonLivraisonVan  # TODO: Models not yet created
 )
 from .models import Client, Produit, Company
@@ -737,3 +737,108 @@ class RapportCaisseCreateSerializer(serializers.ModelSerializer):
 # ========================================
 # TODO: Serializers for BonLivraisonVan removed - models not yet created
 # Re-add when BonLivraisonVan and LigneBonLivraisonVan models are implemented
+
+
+# ========================================
+# Planning Hebdomadaire
+# ========================================
+
+class PlanningHebdomadaireSerializer(serializers.ModelSerializer):
+    """Serializer pour PlanningHebdomadaire"""
+    livreur_nom = serializers.CharField(source='livreur.nom', read_only=True)
+    livreur_matricule = serializers.CharField(source='livreur.matricule', read_only=True)
+    code_prix_libelle = serializers.CharField(source='code_prix.libelle', read_only=True, allow_null=True)
+    code_prix_code = serializers.CharField(source='code_prix.code', read_only=True, allow_null=True)
+    jour_semaine_display = serializers.CharField(source='get_jour_semaine_display', read_only=True)
+    created_by_username = serializers.CharField(source='created_by.username', read_only=True, allow_null=True)
+
+    class Meta:
+        from .distribution_models import PlanningHebdomadaire
+        model = PlanningHebdomadaire
+        fields = [
+            'id', 'company', 'livreur', 'livreur_nom', 'livreur_matricule',
+            'jour_semaine', 'jour_semaine_display',
+            'code_prix', 'code_prix_libelle', 'code_prix_code',
+            'is_active', 'date_debut', 'date_fin', 'notes',
+            'created_by', 'created_by_username',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+
+
+class PlanningHebdomadaireCreateSerializer(serializers.ModelSerializer):
+    """Serializer pour créer un planning hebdomadaire"""
+    company = serializers.PrimaryKeyRelatedField(
+        queryset=Company.objects.all(),
+        required=False,
+        allow_null=True
+    )
+
+    class Meta:
+        from .distribution_models import PlanningHebdomadaire
+        model = PlanningHebdomadaire
+        fields = [
+            'company', 'livreur', 'jour_semaine', 'code_prix',
+            'is_active', 'date_debut', 'date_fin', 'notes'
+        ]
+
+    def create(self, validated_data):
+        from .distribution_models import PlanningHebdomadaire
+
+        # Auto-assigner created_by si disponible dans le contexte
+        request = self.context.get('request')
+        if request and hasattr(request, 'user'):
+            validated_data['created_by'] = request.user
+
+        # Auto-assigner company si disponible dans le contexte
+        if not validated_data.get('company') and request and hasattr(request, 'company'):
+            validated_data['company'] = request.company
+
+        return PlanningHebdomadaire.objects.create(**validated_data)
+
+
+# ========================================
+# Configuration Client-Livreur Hebdomadaire
+# ========================================
+
+class ClientLivreurHebdoSerializer(serializers.ModelSerializer):
+    """Serializer pour ClientLivreurHebdo"""
+    client_nom = serializers.CharField(source='client.nom', read_only=True)
+    client_code = serializers.CharField(source='client.code_client', read_only=True)
+    client_telephone = serializers.CharField(source='client.telephone', read_only=True)
+    client_adresse = serializers.CharField(source='client.adresse', read_only=True)
+    livreur_nom = serializers.CharField(source='livreur.nom', read_only=True)
+    livreur_matricule = serializers.CharField(source='livreur.matricule', read_only=True)
+    jour_semaine_display = serializers.CharField(source='get_jour_semaine_display', read_only=True)
+    created_by_username = serializers.CharField(source='created_by.username', read_only=True, allow_null=True)
+
+    class Meta:
+        model = ClientLivreurHebdo
+        fields = [
+            'id', 'company', 'client', 'client_nom', 'client_code',
+            'client_telephone', 'client_adresse',
+            'livreur', 'livreur_nom', 'livreur_matricule',
+            'jour_semaine', 'jour_semaine_display', 'ordre_passage',
+            'is_active', 'date_debut', 'date_fin', 'notes',
+            'created_by', 'created_by_username',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+
+
+class ClientLivreurHebdoCreateSerializer(serializers.ModelSerializer):
+    """Serializer pour créer une configuration client-livreur hebdomadaire"""
+
+    class Meta:
+        model = ClientLivreurHebdo
+        fields = [
+            'client', 'livreur', 'jour_semaine',
+            'ordre_passage', 'is_active', 'date_debut', 'date_fin', 'notes'
+        ]
+        extra_kwargs = {
+            'ordre_passage': {'required': False, 'allow_null': True},
+            'is_active': {'required': False, 'default': True},
+            'date_debut': {'required': False, 'allow_null': True},
+            'date_fin': {'required': False, 'allow_null': True},
+            'notes': {'required': False, 'allow_blank': True},
+        }

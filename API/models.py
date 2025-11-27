@@ -1491,3 +1491,59 @@ class LigneTransfertStock(models.Model):
             return stock.quantity
         except ProductStock.DoesNotExist:
             return 0
+
+
+#####################
+# Permissions Pages #
+#####################
+class PagePermission(models.Model):
+    """
+    Modèle pour gérer les permissions d'accès aux pages de l'application.
+    Ce modèle n'a pas de données, il sert juste à créer des permissions Django.
+    """
+    class Meta:
+        managed = False  # Pas de table en base de données
+        default_permissions = ()  # Pas de permissions CRUD par défaut
+        permissions = [
+            # Ventes et Caisse
+            ('view_caisse', 'Peut accéder à la caisse'),
+            ('view_ventes', 'Peut voir les ventes'),
+            ('create_vente', 'Peut créer des ventes'),
+
+            # Stock
+            ('view_stock_management', 'Peut voir la gestion des stocks'),
+            ('view_stock_dashboard', 'Peut voir le tableau de bord des stocks'),
+            ('manage_transferts', 'Peut gérer les transferts'),
+            ('charger_van', 'Peut charger les vans'),
+
+            # Distribution
+            ('view_distribution', 'Peut voir le module distribution'),
+            ('view_livreurs', 'Peut voir les livreurs'),
+            ('manage_livreurs', 'Peut gérer les livreurs'),
+            ('view_tournees', 'Peut voir les tournées'),
+            ('manage_tournees', 'Peut gérer les tournées'),
+            ('view_commandes_mobile', 'Peut voir les commandes mobile'),
+            ('view_distribution_dashboard', 'Peut voir le tableau de bord distribution'),
+            ('view_config_clients_chauffeurs', 'Peut voir la config clients/chauffeurs'),
+            ('manage_config_clients_chauffeurs', 'Peut gérer la config clients/chauffeurs'),
+            ('view_stats_livreurs', 'Peut voir les statistiques livreurs'),
+            ('view_app_mobile_livreurs', 'Peut accéder à l\'app mobile livreurs'),
+            ('view_carte_gps_livreurs', 'Peut voir la carte GPS livreurs'),
+
+            # Configuration
+            ('view_parametres', 'Peut voir les paramètres'),
+            ('manage_clients', 'Peut gérer les clients'),
+            ('manage_fournisseurs', 'Peut gérer les fournisseurs'),
+            ('manage_categories', 'Peut gérer les catégories'),
+            ('manage_entrepots', 'Peut gérer les entrepôts'),
+
+            # Rapports
+            ('view_rapports', 'Peut voir les rapports'),
+            ('view_statistiques', 'Peut voir les statistiques'),
+            ('export_data', 'Peut exporter les données'),
+
+            # Administration
+            ('view_admin', 'Peut voir l\'administration'),
+            ('manage_users', 'Peut gérer les utilisateurs'),
+            ('manage_roles', 'Peut gérer les rôles'),
+        ]

@@ -1,10 +1,11 @@
 """
 Vues API pour la gestion de la distribution mobile
 """
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
+from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
 from django.db import transaction
 from django.shortcuts import get_object_or_404, render
@@ -17,7 +18,7 @@ import string
 from .distribution_models import (
     LivreurDistribution, TourneeMobile, ArretTourneeMobile, VenteTourneeMobile,
     LigneVenteTourneeMobile, RapportCaisseMobile, DepenseTourneeMobile, SyncLogMobile,
-    CommandeClient, LigneCommandeClient
+    CommandeClient, LigneCommandeClient, PlanningHebdomadaire, ClientLivreurHebdo
     # BonLivraisonVan, LigneBonLivraisonVan  # TODO: Models not yet created
 )
 from .distribution_serializers import (
@@ -28,7 +29,9 @@ from .distribution_serializers import (
     RapportCaisseSerializer, DepenseTourneeSerializer,
     SyncLogSerializer,
     SyncDeltaSerializer, SyncResponseSerializer, MobileSyncPushSerializer,
-    CommandeClientSerializer, CommandeClientCreateSerializer, LigneCommandeClientSerializer
+    CommandeClientSerializer, CommandeClientCreateSerializer, LigneCommandeClientSerializer,
+    PlanningHebdomadaireSerializer, PlanningHebdomadaireCreateSerializer,
+    ClientLivreurHebdoSerializer, ClientLivreurHebdoCreateSerializer
     # BonLivraisonVanSerializer, BonLivraisonVanCreateSerializer, BonLivraisonVanMobileSerializer  # TODO: Serializers not yet created
 )
 
@@ -988,6 +991,333 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
 
+class PlanningHebdomadaireViewSet(viewsets.ModelViewSet):
+    """ViewSet pour la gestion des plannings hebdomadaires"""
+    queryset = PlanningHebdomadaire.objects.all()
+    serializer_class = PlanningHebdomadaireSerializer
+    permission_classes = [AllowAny]  # TODO: Ajouter authentification en production
+
+    def get_serializer_class(self):
+        """Utiliser PlanningHebdomadaireCreateSerializer pour create"""
+        if self.action == 'create':
+            return PlanningHebdomadaireCreateSerializer
+        return PlanningHebdomadaireSerializer
+
+    def get_queryset(self):
+        from django.db.models import Q
+        queryset = super().get_queryset()
+
+        # Filtrer par company de l'utilisateur si applicable
+        if hasattr(self.request, 'company') and self.request.company:
+            queryset = queryset.filter(
+                Q(company=self.request.company) | Q(company__isnull=True)
+            )
+
+        # Filtres optionnels
+        livreur_id = self.request.query_params.get('livreur')
+        jour_semaine = self.request.query_params.get('jour_semaine')
+        is_active = self.request.query_params.get('is_active')
+
+        if livreur_id:
+            queryset = queryset.filter(livreur_id=livreur_id)
+
+        if jour_semaine:
+            queryset = queryset.filter(jour_semaine=jour_semaine)
+
+        if is_active is not None:
+            queryset = queryset.filter(is_active=is_active.lower() == 'true')
+
+        return queryset.select_related('livreur', 'code_prix', 'created_by', 'company')
+
+    def perform_create(self, serializer):
+        """Attacher la company et le created_by lors de la création"""
+        kwargs = {}
+        if hasattr(self.request, 'company') and self.request.company:
+            kwargs['company'] = self.request.company
+        if hasattr(self.request, 'user'):
+            kwargs['created_by'] = self.request.user
+        serializer.save(**kwargs)
+
+    @action(detail=False, methods=['post'])
+    def generer_semaine(self, request):
+        """Générer toutes les tournées pour une semaine donnée basées sur les plannings"""
+        from datetime import datetime, timedelta
+
+        date_debut_str = request.data.get('date_debut')
+        if not date_debut_str:
+            return Response(
+                {'error': 'date_debut requise (format YYYY-MM-DD)'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            date_debut = datetime.strptime(date_debut_str, '%Y-%m-%d').date()
+        except ValueError:
+            return Response(
+                {'error': 'Format de date invalide. Utilisez YYYY-MM-DD'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # S'assurer que date_debut est un lundi
+        if date_debut.weekday() != 0:  # 0 = lundi
+            # Ajuster au lundi précédent
+            date_debut = date_debut - timedelta(days=date_debut.weekday())
+
+        # Générer les tournées
+        company = self.request.company if hasattr(self.request, 'company') else None
+        tournees_creees = PlanningHebdomadaire.generer_tournees_pour_semaine(date_debut, company)
+
+        # Sérialiser les tournées créées
+        from .distribution_serializers import TourneeSerializer
+        serializer = TourneeSerializer(tournees_creees, many=True)
+
+        return Response({
+            'message': f'{len(tournees_creees)} tournée(s) générée(s) pour la semaine du {date_debut}',
+            'date_debut': date_debut,
+            'tournees': serializer.data
+        })
+
+    @action(detail=True, methods=['post'])
+    def generer_tournee(self, request, pk=None):
+        """Générer une tournée pour une date donnée basée sur ce planning"""
+        from datetime import datetime
+
+        planning = self.get_object()
+        date_str = request.data.get('date')
+
+        if not date_str:
+            return Response(
+                {'error': 'date requise (format YYYY-MM-DD)'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        except ValueError:
+            return Response(
+                {'error': 'Format de date invalide. Utilisez YYYY-MM-DD'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Générer la tournée
+        tournee = planning.generer_tournee_pour_date(date)
+
+        if not tournee:
+            return Response(
+                {'error': 'Impossible de générer la tournée pour cette date (planning inactif ou date invalide)'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Sérialiser la tournée créée
+        from .distribution_serializers import TourneeSerializer
+        serializer = TourneeSerializer(tournee)
+
+        return Response({
+            'message': 'Tournée générée avec succès',
+            'tournee': serializer.data
+        })
+
+    @action(detail=False, methods=['get'])
+    def par_livreur(self, request):
+        """Récupérer tous les plannings d'un livreur"""
+        livreur_id = request.query_params.get('livreur_id')
+
+        if not livreur_id:
+            return Response(
+                {'error': 'livreur_id requis'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        plannings = self.get_queryset().filter(livreur_id=livreur_id, is_active=True)
+        serializer = self.get_serializer(plannings, many=True)
+
+        return Response(serializer.data)
+
+
+class ClientLivreurHebdoViewSet(viewsets.ModelViewSet):
+    """ViewSet pour gérer la configuration hebdomadaire des clients par livreur"""
+    queryset = ClientLivreurHebdo.objects.all()
+    serializer_class = ClientLivreurHebdoSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['livreur', 'client', 'jour_semaine', 'is_active']
+    search_fields = ['client__nom', 'livreur__nom']
+    ordering_fields = ['jour_semaine', 'ordre_passage']
+    ordering = ['jour_semaine', 'ordre_passage']
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        company = self.request.user.company if hasattr(self.request.user, 'company') else None
+
+        if company:
+            queryset = queryset.filter(company=company)
+
+        return queryset.select_related('client', 'livreur', 'company', 'created_by')
+
+    def get_serializer_class(self):
+        if self.action in ['create', 'update', 'partial_update']:
+            return ClientLivreurHebdoCreateSerializer
+        return ClientLivreurHebdoSerializer
+
+    def perform_create(self, serializer):
+        """Assigner automatiquement la company et created_by lors de la création"""
+        kwargs = {}
+
+        # Assigner created_by
+        if self.request.user.is_authenticated:
+            kwargs['created_by'] = self.request.user
+
+            # Assigner company depuis l'utilisateur connecté
+            if hasattr(self.request.user, 'company') and self.request.user.company:
+                kwargs['company'] = self.request.user.company
+
+        serializer.save(**kwargs)
+
+    def perform_update(self, serializer):
+        """Ne pas modifier la company lors de la mise à jour"""
+        serializer.save()
+
+    @action(detail=False, methods=['get'])
+    def par_livreur(self, request):
+        """Récupérer tous les clients d'un livreur pour un jour donné"""
+        livreur_id = request.query_params.get('livreur_id')
+        jour_semaine = request.query_params.get('jour_semaine')
+
+        if not livreur_id:
+            return Response(
+                {'error': 'livreur_id requis'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        queryset = self.get_queryset().filter(livreur_id=livreur_id, is_active=True)
+
+        if jour_semaine:
+            queryset = queryset.filter(jour_semaine=jour_semaine)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'])
+    def par_client(self, request):
+        """Récupérer le livreur assigné à un client pour un jour donné"""
+        client_id = request.query_params.get('client_id')
+        jour_semaine = request.query_params.get('jour_semaine')
+
+        if not client_id:
+            return Response(
+                {'error': 'client_id requis'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        queryset = self.get_queryset().filter(client_id=client_id, is_active=True)
+
+        if jour_semaine:
+            queryset = queryset.filter(jour_semaine=jour_semaine)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['post'])
+    def assigner_clients(self, request):
+        """Assigner plusieurs clients à un livreur pour un ou plusieurs jours"""
+        livreur_id = request.data.get('livreur_id')
+        clients_ids = request.data.get('clients_ids', [])
+        jours_semaine = request.data.get('jours_semaine', [])
+
+        if not livreur_id or not clients_ids or not jours_semaine:
+            return Response(
+                {'error': 'livreur_id, clients_ids et jours_semaine requis'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Vérifier que le livreur existe
+        try:
+            livreur = LivreurDistribution.objects.get(id=livreur_id)
+        except LivreurDistribution.DoesNotExist:
+            return Response(
+                {'error': 'Livreur non trouvé'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        company = request.user.company if hasattr(request.user, 'company') else None
+        created_assignments = []
+        errors = []
+
+        for client_id in clients_ids:
+            try:
+                from .models import Client
+                client = Client.objects.get(id=client_id)
+
+                for jour in jours_semaine:
+                    # Vérifier si une assignation existe déjà
+                    existing = ClientLivreurHebdo.objects.filter(
+                        client=client,
+                        jour_semaine=jour,
+                        company=company,
+                        is_active=True
+                    ).first()
+
+                    if existing:
+                        # Mettre à jour l'assignation existante
+                        existing.livreur = livreur
+                        existing.updated_by = request.user
+                        existing.save()
+                        created_assignments.append({
+                            'client_id': client_id,
+                            'jour_semaine': jour,
+                            'action': 'updated'
+                        })
+                    else:
+                        # Créer une nouvelle assignation
+                        assignment = ClientLivreurHebdo.objects.create(
+                            client=client,
+                            livreur=livreur,
+                            jour_semaine=jour,
+                            company=company,
+                            created_by=request.user
+                        )
+                        created_assignments.append({
+                            'client_id': client_id,
+                            'jour_semaine': jour,
+                            'action': 'created',
+                            'id': assignment.id
+                        })
+
+            except Client.DoesNotExist:
+                errors.append(f'Client {client_id} non trouvé')
+            except Exception as e:
+                errors.append(f'Erreur pour client {client_id}: {str(e)}')
+
+        return Response({
+            'message': f'{len(created_assignments)} assignation(s) créée(s)/modifiée(s)',
+            'assignments': created_assignments,
+            'errors': errors
+        })
+
+    @action(detail=False, methods=['delete'])
+    def supprimer_assignations(self, request):
+        """Supprimer des assignations (désactiver)"""
+        assignations_ids = request.data.get('assignations_ids', [])
+
+        if not assignations_ids:
+            return Response(
+                {'error': 'assignations_ids requis'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        company = request.user.company if hasattr(request.user, 'company') else None
+
+        assignations = self.get_queryset().filter(id__in=assignations_ids)
+        count = assignations.count()
+
+        # Désactiver au lieu de supprimer
+        assignations.update(is_active=False, updated_by=request.user)
+
+        return Response({
+            'message': f'{count} assignation(s) désactivée(s)',
+            'count': count
+        })
+
+
 class SyncViewSet(viewsets.ViewSet):
     """ViewSet pour la synchronisation mobile"""
     permission_classes = [AllowAny]  # TODO: Ajouter authentification en production
@@ -1158,3 +1488,226 @@ class ProduitMobileViewSet(viewsets.ReadOnlyModelViewSet):
             queryset = queryset.filter(company=self.request.company)
 
         return queryset
+
+
+############################
+# Statistiques Livreurs    #
+############################
+
+from rest_framework.views import APIView
+from django.db.models import Sum, Count, Q, F
+from django.db.models.functions import TruncDate
+from collections import defaultdict
+
+
+class StatsLivreursAPIView(APIView):
+    """
+    API pour les statistiques détaillées des livreurs
+    GET /API/distribution/stats-livreurs/?date_debut=YYYY-MM-DD&date_fin=YYYY-MM-DD&livreur_id=X
+    """
+    permission_classes = [AllowAny]  # Accessible depuis le frontend avec session auth
+
+    def get(self, request):
+        # Récupérer les paramètres
+        date_debut_str = request.query_params.get('date_debut')
+        date_fin_str = request.query_params.get('date_fin')
+        livreur_id = request.query_params.get('livreur_id')
+
+        # Validation des dates
+        if not date_debut_str or not date_fin_str:
+            return Response(
+                {'error': 'date_debut et date_fin sont requis (format YYYY-MM-DD)'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            date_debut = datetime.strptime(date_debut_str, '%Y-%m-%d').date()
+            date_fin = datetime.strptime(date_fin_str, '%Y-%m-%d').date()
+        except ValueError:
+            return Response(
+                {'error': 'Format de date invalide. Utilisez YYYY-MM-DD'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Récupérer la company de l'utilisateur
+        company = None
+        if hasattr(request.user, 'company') and request.user.company:
+            company = request.user.company
+
+        # Filtrer les tournées
+        tournees_qs = TourneeMobile.objects.filter(
+            date_tournee__gte=date_debut,
+            date_tournee__lte=date_fin
+        )
+
+        if company:
+            tournees_qs = tournees_qs.filter(company=company)
+
+        if livreur_id:
+            tournees_qs = tournees_qs.filter(livreur_id=livreur_id)
+
+        # Filtrer les ventes
+        ventes_qs = VenteTourneeMobile.objects.filter(
+            date_vente__date__gte=date_debut,
+            date_vente__date__lte=date_fin
+        )
+
+        if company:
+            ventes_qs = ventes_qs.filter(company=company)
+
+        if livreur_id:
+            ventes_qs = ventes_qs.filter(tournee__livreur_id=livreur_id)
+
+        # Filtrer les arrêts
+        arrets_qs = ArretTourneeMobile.objects.filter(
+            tournee__date_tournee__gte=date_debut,
+            tournee__date_tournee__lte=date_fin
+        )
+
+        if company:
+            arrets_qs = arrets_qs.filter(company=company)
+
+        if livreur_id:
+            arrets_qs = arrets_qs.filter(tournee__livreur_id=livreur_id)
+
+        # ========================================
+        # RÉSUMÉ GLOBAL
+        # ========================================
+        summary = {
+            'total_clients': arrets_qs.filter(statut='livre').values('client').distinct().count(),
+            'total_tournees': tournees_qs.count(),
+            'total_especes': float(ventes_qs.filter(type_paiement='especes').aggregate(
+                total=Sum('montant_total'))['total'] or 0),
+            'total_cheques': float(ventes_qs.filter(type_paiement='cheque').aggregate(
+                total=Sum('montant_total'))['total'] or 0),
+            'total_credits': float(ventes_qs.filter(type_paiement='credit').aggregate(
+                total=Sum('montant_total'))['total'] or 0),
+            'total_ventes': float(ventes_qs.aggregate(total=Sum('montant_total'))['total'] or 0),
+        }
+
+        # ========================================
+        # STATISTIQUES PAR LIVREUR
+        # ========================================
+        livreurs_stats = []
+
+        # Récupérer tous les livreurs concernés
+        livreurs_ids = tournees_qs.values_list('livreur_id', flat=True).distinct()
+        livreurs = LivreurDistribution.objects.filter(id__in=livreurs_ids)
+
+        for livreur in livreurs:
+            # Tournées du livreur
+            tournees_livreur = tournees_qs.filter(livreur=livreur)
+
+            # Ventes du livreur
+            ventes_livreur = ventes_qs.filter(tournee__livreur=livreur)
+
+            # Arrêts du livreur
+            arrets_livreur = arrets_qs.filter(tournee__livreur=livreur)
+
+            # Calculer les stats
+            especes = float(ventes_livreur.filter(type_paiement='especes').aggregate(
+                total=Sum('montant_total'))['total'] or 0)
+            cheques = float(ventes_livreur.filter(type_paiement='cheque').aggregate(
+                total=Sum('montant_total'))['total'] or 0)
+            credits = float(ventes_livreur.filter(type_paiement='credit').aggregate(
+                total=Sum('montant_total'))['total'] or 0)
+
+            total_arrets = arrets_livreur.count()
+            arrets_livres = arrets_livreur.filter(statut='livre').count()
+            arrets_echec = arrets_livreur.filter(statut='echec').count()
+
+            livreurs_stats.append({
+                'id': livreur.id,
+                'nom': livreur.nom,
+                'matricule': livreur.matricule,
+                'tournees': tournees_livreur.count(),
+                'clients_visites': arrets_livreur.filter(statut='livre').values('client').distinct().count(),
+                'total_arrets': total_arrets,
+                'arrets_livres': arrets_livres,
+                'arrets_echec': arrets_echec,
+                'especes': especes,
+                'cheques': cheques,
+                'credits': credits,
+                'total': especes + cheques + credits,
+            })
+
+        # Trier par total décroissant
+        livreurs_stats.sort(key=lambda x: x['total'], reverse=True)
+
+        # ========================================
+        # STATISTIQUES PAR JOUR
+        # ========================================
+        par_jour = []
+
+        # Regrouper les ventes par jour
+        ventes_par_jour = ventes_qs.annotate(
+            jour=TruncDate('date_vente')
+        ).values('jour').annotate(
+            total=Sum('montant_total'),
+            especes=Sum('montant_total', filter=Q(type_paiement='especes')),
+            cheques=Sum('montant_total', filter=Q(type_paiement='cheque')),
+            credits=Sum('montant_total', filter=Q(type_paiement='credit')),
+            nb_ventes=Count('id')
+        ).order_by('jour')
+
+        # Pour chaque jour, récupérer les stats par livreur
+        jours_data = {}
+        for v in ventes_par_jour:
+            jour = v['jour']
+            if jour not in jours_data:
+                jours_data[jour] = {
+                    'date': jour,
+                    'date_label': jour.strftime('%d/%m'),
+                    'jour_semaine': ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'][jour.weekday()],
+                    'total': float(v['total'] or 0),
+                    'especes': float(v['especes'] or 0),
+                    'cheques': float(v['cheques'] or 0),
+                    'credits': float(v['credits'] or 0),
+                    'nb_ventes': v['nb_ventes'],
+                    'livreurs': []
+                }
+
+        # Ajouter les stats par livreur pour chaque jour
+        for jour, data in jours_data.items():
+            jour_ventes = ventes_qs.filter(date_vente__date=jour)
+            jour_arrets = arrets_qs.filter(tournee__date_tournee=jour)
+
+            livreurs_jour_ids = jour_ventes.values_list('tournee__livreur_id', flat=True).distinct()
+
+            for lid in livreurs_jour_ids:
+                try:
+                    liv = LivreurDistribution.objects.get(id=lid)
+                    liv_ventes = jour_ventes.filter(tournee__livreur_id=lid)
+                    liv_arrets = jour_arrets.filter(tournee__livreur_id=lid)
+
+                    data['livreurs'].append({
+                        'id': liv.id,
+                        'nom': liv.nom,
+                        'clients': liv_arrets.values('client').distinct().count(),
+                        'livres': liv_arrets.filter(statut='livre').count(),
+                        'echecs': liv_arrets.filter(statut='echec').count(),
+                        'especes': float(liv_ventes.filter(type_paiement='especes').aggregate(
+                            total=Sum('montant_total'))['total'] or 0),
+                        'cheques': float(liv_ventes.filter(type_paiement='cheque').aggregate(
+                            total=Sum('montant_total'))['total'] or 0),
+                        'credits': float(liv_ventes.filter(type_paiement='credit').aggregate(
+                            total=Sum('montant_total'))['total'] or 0),
+                        'total': float(liv_ventes.aggregate(total=Sum('montant_total'))['total'] or 0),
+                    })
+                except LivreurDistribution.DoesNotExist:
+                    pass
+
+        # Convertir en liste triée par date
+        par_jour = sorted(jours_data.values(), key=lambda x: x['date'])
+
+        # Convertir les dates en string pour JSON
+        for jour in par_jour:
+            jour['date'] = jour['date'].strftime('%Y-%m-%d')
+
+        return Response({
+            'date_debut': date_debut_str,
+            'date_fin': date_fin_str,
+            'summary': summary,
+            'livreurs': livreurs_stats,
+            'par_jour': par_jour,
+        })

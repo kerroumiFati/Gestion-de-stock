@@ -1,0 +1,936 @@
+{% load static %}
+{% load i18n %}
+
+<style>
+/* Styles pour les statistiques livreurs */
+.stats-livreurs-container {
+    padding: 0;
+}
+
+.stats-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 25px 30px;
+    border-radius: 15px;
+    margin-bottom: 25px;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+}
+
+.stats-header h2 {
+    margin: 0 0 5px 0;
+    font-weight: 600;
+}
+
+.stats-header p {
+    margin: 0;
+    opacity: 0.9;
+}
+
+/* Filtres */
+.filters-card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 25px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    border: 1px solid #e9ecef;
+}
+
+.filters-card .form-group {
+    margin-bottom: 0;
+}
+
+.filters-card label {
+    font-weight: 600;
+    color: #495057;
+    font-size: 0.85rem;
+    margin-bottom: 5px;
+}
+
+.filters-card .form-control {
+    border-radius: 8px;
+    border: 1px solid #dee2e6;
+}
+
+.filters-card .form-control:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+}
+
+.btn-filter {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    color: white;
+    padding: 10px 25px;
+    border-radius: 8px;
+    font-weight: 500;
+    transition: all 0.3s;
+}
+
+.btn-filter:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    color: white;
+}
+
+.btn-export {
+    background: #28a745;
+    border: none;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-weight: 500;
+}
+
+.btn-export:hover {
+    background: #218838;
+    color: white;
+}
+
+/* Résumé global */
+.summary-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-bottom: 25px;
+}
+
+.summary-card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    border: 1px solid #e9ecef;
+    transition: transform 0.2s;
+}
+
+.summary-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+.summary-card .icon {
+    width: 50px;
+    height: 50px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    margin-bottom: 15px;
+}
+
+.summary-card .icon.purple { background: rgba(102, 126, 234, 0.15); color: #667eea; }
+.summary-card .icon.green { background: rgba(40, 167, 69, 0.15); color: #28a745; }
+.summary-card .icon.blue { background: rgba(23, 162, 184, 0.15); color: #17a2b8; }
+.summary-card .icon.orange { background: rgba(253, 126, 20, 0.15); color: #fd7e14; }
+.summary-card .icon.red { background: rgba(220, 53, 69, 0.15); color: #dc3545; }
+.summary-card .icon.teal { background: rgba(32, 201, 151, 0.15); color: #20c997; }
+
+.summary-card .value {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: #212529;
+    margin-bottom: 5px;
+}
+
+.summary-card .label {
+    color: #6c757d;
+    font-size: 0.85rem;
+}
+
+/* Tableau des livreurs */
+.livreurs-table-card {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    border: 1px solid #e9ecef;
+    overflow: hidden;
+}
+
+.livreurs-table-card .card-header {
+    background: #f8f9fa;
+    border-bottom: 1px solid #e9ecef;
+    padding: 15px 20px;
+}
+
+.livreurs-table-card .card-header h5 {
+    margin: 0;
+    font-weight: 600;
+    color: #212529;
+}
+
+.stats-table {
+    margin: 0;
+}
+
+.stats-table thead th {
+    background: #343a40;
+    color: white;
+    font-weight: 600;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 12px 10px;
+    border: none;
+    white-space: nowrap;
+}
+
+.stats-table tbody tr {
+    transition: background 0.2s;
+}
+
+.stats-table tbody tr:hover {
+    background: #f8f9fa;
+}
+
+.stats-table tbody td {
+    padding: 12px 10px;
+    vertical-align: middle;
+    border-color: #e9ecef;
+}
+
+.livreur-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.livreur-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.livreur-details h6 {
+    margin: 0;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.livreur-details small {
+    color: #6c757d;
+}
+
+.taux-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 0.8rem;
+}
+
+.taux-badge.excellent { background: #d4edda; color: #155724; }
+.taux-badge.bon { background: #cce5ff; color: #004085; }
+.taux-badge.moyen { background: #fff3cd; color: #856404; }
+.taux-badge.faible { background: #f8d7da; color: #721c24; }
+
+.paiement-cell {
+    text-align: right;
+    font-weight: 500;
+}
+
+.paiement-cell.especes { color: #28a745; }
+.paiement-cell.cheque { color: #17a2b8; }
+.paiement-cell.credit { color: #dc3545; }
+
+/* Détails par jour */
+.details-section {
+    margin-top: 25px;
+}
+
+.day-tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.day-tab {
+    padding: 10px 20px;
+    border-radius: 8px;
+    border: 2px solid #dee2e6;
+    background: white;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-weight: 500;
+}
+
+.day-tab:hover {
+    border-color: #667eea;
+    color: #667eea;
+}
+
+.day-tab.active {
+    background: #667eea;
+    border-color: #667eea;
+    color: white;
+}
+
+/* Charts */
+.chart-card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    border: 1px solid #e9ecef;
+    margin-bottom: 25px;
+}
+
+.chart-card h5 {
+    margin-bottom: 20px;
+    font-weight: 600;
+    color: #212529;
+}
+
+/* Loading */
+.loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255,255,255,0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+}
+
+/* Quick date buttons */
+.quick-dates {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.quick-date-btn {
+    padding: 5px 12px;
+    border-radius: 20px;
+    border: 1px solid #dee2e6;
+    background: white;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.quick-date-btn:hover {
+    background: #667eea;
+    border-color: #667eea;
+    color: white;
+}
+
+.quick-date-btn.active {
+    background: #667eea;
+    border-color: #667eea;
+    color: white;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .summary-cards {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .stats-table {
+        font-size: 0.8rem;
+    }
+
+    .livreur-avatar {
+        display: none;
+    }
+}
+</style>
+
+<div class="stats-livreurs-container">
+    <!-- Header -->
+    <div class="stats-header">
+        <h2><i class="fas fa-chart-bar mr-2"></i>{% trans "Statistiques des Livreurs" %}</h2>
+        <p>{% trans "Performances détaillées par jour avec filtrage par date" %}</p>
+    </div>
+
+    <!-- Filtres -->
+    <div class="filters-card">
+        <div class="row align-items-end">
+            <div class="col-md-2 col-6 mb-2">
+                <div class="form-group">
+                    <label><i class="fas fa-calendar mr-1"></i>{% trans "Date début" %}</label>
+                    <input type="date" id="dateDebut" class="form-control">
+                </div>
+            </div>
+            <div class="col-md-2 col-6 mb-2">
+                <div class="form-group">
+                    <label><i class="fas fa-calendar mr-1"></i>{% trans "Date fin" %}</label>
+                    <input type="date" id="dateFin" class="form-control">
+                </div>
+            </div>
+            <div class="col-md-3 mb-2">
+                <div class="form-group">
+                    <label><i class="fas fa-truck mr-1"></i>{% trans "Livreur" %}</label>
+                    <select id="filterLivreur" class="form-control">
+                        <option value="">{% trans "Tous les livreurs" %}</option>
+                    </select>
+                </div>
+            </div>
+            <div class="col-md-3 mb-2">
+                <label class="d-block">&nbsp;</label>
+                <div class="quick-dates">
+                    <button class="quick-date-btn" onclick="setQuickDate('today')">{% trans "Aujourd'hui" %}</button>
+                    <button class="quick-date-btn" onclick="setQuickDate('week')">{% trans "Cette semaine" %}</button>
+                    <button class="quick-date-btn active" onclick="setQuickDate('month')">{% trans "Ce mois" %}</button>
+                    <button class="quick-date-btn" onclick="setQuickDate('year')">{% trans "Cette année" %}</button>
+                </div>
+            </div>
+            <div class="col-md-2 mb-2">
+                <label class="d-block d-md-none">&nbsp;</label>
+                <button class="btn btn-filter btn-block" onclick="loadStats()">
+                    <i class="fas fa-search mr-1"></i>{% trans "Filtrer" %}
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Résumé global -->
+    <div class="summary-cards" id="summaryCards">
+        <div class="summary-card">
+            <div class="icon purple"><i class="fas fa-users"></i></div>
+            <div class="value" id="totalClients">0</div>
+            <div class="label">{% trans "Clients visités" %}</div>
+        </div>
+        <div class="summary-card">
+            <div class="icon blue"><i class="fas fa-route"></i></div>
+            <div class="value" id="totalTournees">0</div>
+            <div class="label">{% trans "Tournées effectuées" %}</div>
+        </div>
+        <div class="summary-card">
+            <div class="icon green"><i class="fas fa-money-bill-wave"></i></div>
+            <div class="value" id="totalEspeces">0 DA</div>
+            <div class="label">{% trans "Espèces" %}</div>
+        </div>
+        <div class="summary-card">
+            <div class="icon teal"><i class="fas fa-money-check"></i></div>
+            <div class="value" id="totalCheques">0 DA</div>
+            <div class="label">{% trans "Chèques" %}</div>
+        </div>
+        <div class="summary-card">
+            <div class="icon orange"><i class="fas fa-credit-card"></i></div>
+            <div class="value" id="totalCredits">0 DA</div>
+            <div class="label">{% trans "Crédits" %}</div>
+        </div>
+        <div class="summary-card">
+            <div class="icon red"><i class="fas fa-chart-line"></i></div>
+            <div class="value" id="totalVentes">0 DA</div>
+            <div class="label">{% trans "Total ventes" %}</div>
+        </div>
+    </div>
+
+    <!-- Graphiques -->
+    <div class="row">
+        <div class="col-md-8 mb-3">
+            <div class="chart-card">
+                <h5><i class="fas fa-chart-line mr-2"></i>{% trans "Évolution des ventes par jour" %}</h5>
+                <canvas id="ventesChart" height="100"></canvas>
+            </div>
+        </div>
+        <div class="col-md-4 mb-3">
+            <div class="chart-card">
+                <h5><i class="fas fa-chart-pie mr-2"></i>{% trans "Répartition paiements" %}</h5>
+                <canvas id="paiementsChart" height="180"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tableau des livreurs -->
+    <div class="livreurs-table-card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5><i class="fas fa-table mr-2"></i>{% trans "Performance par livreur" %}</h5>
+            <button class="btn btn-export btn-sm" onclick="exportStats()">
+                <i class="fas fa-download mr-1"></i>{% trans "Exporter" %}
+            </button>
+        </div>
+        <div class="table-responsive">
+            <table class="table stats-table mb-0" id="statsTable">
+                <thead>
+                    <tr>
+                        <th>{% trans "Livreur" %}</th>
+                        <th class="text-center">{% trans "Clients" %}</th>
+                        <th class="text-center">{% trans "Tournées" %}</th>
+                        <th class="text-center">{% trans "Taux réussite" %}</th>
+                        <th class="text-right">{% trans "Espèces" %}</th>
+                        <th class="text-right">{% trans "Chèques" %}</th>
+                        <th class="text-right">{% trans "Crédits" %}</th>
+                        <th class="text-right">{% trans "Total" %}</th>
+                    </tr>
+                </thead>
+                <tbody id="statsTableBody">
+                    <tr>
+                        <td colspan="8" class="text-center py-4 text-muted">
+                            <i class="fas fa-spinner fa-spin fa-2x mb-2 d-block"></i>
+                            {% trans "Chargement des statistiques..." %}
+                        </td>
+                    </tr>
+                </tbody>
+                <tfoot id="statsTableFoot" style="display: none;">
+                    <tr class="bg-light font-weight-bold">
+                        <td>{% trans "TOTAL" %}</td>
+                        <td class="text-center" id="footClients">0</td>
+                        <td class="text-center" id="footTournees">0</td>
+                        <td class="text-center" id="footTaux">-</td>
+                        <td class="text-right" id="footEspeces">0 DA</td>
+                        <td class="text-right" id="footCheques">0 DA</td>
+                        <td class="text-right" id="footCredits">0 DA</td>
+                        <td class="text-right" id="footTotal">0 DA</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+
+    <!-- Détails par jour -->
+    <div class="details-section">
+        <div class="livreurs-table-card">
+            <div class="card-header">
+                <h5><i class="fas fa-calendar-alt mr-2"></i>{% trans "Détails par jour" %}</h5>
+            </div>
+            <div class="card-body">
+                <div class="day-tabs" id="dayTabs">
+                    <!-- Les onglets de jour seront générés ici -->
+                </div>
+                <div class="table-responsive">
+                    <table class="table stats-table mb-0">
+                        <thead>
+                            <tr>
+                                <th>{% trans "Livreur" %}</th>
+                                <th class="text-center">{% trans "Clients" %}</th>
+                                <th class="text-center">{% trans "Livrés" %}</th>
+                                <th class="text-center">{% trans "Échecs" %}</th>
+                                <th class="text-right">{% trans "Espèces" %}</th>
+                                <th class="text-right">{% trans "Chèques" %}</th>
+                                <th class="text-right">{% trans "Crédits" %}</th>
+                                <th class="text-right">{% trans "Total" %}</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dayDetailsBody">
+                            <tr>
+                                <td colspan="8" class="text-center py-4 text-muted">
+                                    {% trans "Sélectionnez une période pour voir les détails par jour" %}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+(function() {
+    'use strict';
+
+    // Variables globales
+    let statsData = null;
+    let livreurs = [];
+    let ventesChart = null;
+    let paiementsChart = null;
+    let selectedDay = null;
+
+    // Initialisation
+    document.addEventListener('DOMContentLoaded', initStatsLivreurs);
+    document.addEventListener('fragment:loaded', function(e) {
+        if (e.detail.name === 'stats_livreurs') {
+            initStatsLivreurs();
+        }
+    });
+
+    function initStatsLivreurs() {
+        // Définir les dates par défaut (ce mois)
+        setQuickDate('month');
+
+        // Charger les livreurs pour le filtre
+        loadLivreurs();
+
+        // Charger les stats
+        loadStats();
+    }
+
+    // Charger la liste des livreurs
+    async function loadLivreurs() {
+        try {
+            const response = await fetch('/API/distribution/livreurs/');
+            if (!response.ok) throw new Error('Erreur API');
+            livreurs = await response.json();
+
+            const select = document.getElementById('filterLivreur');
+            select.innerHTML = '<option value="">{% trans "Tous les livreurs" %}</option>';
+            livreurs.forEach(l => {
+                select.innerHTML += `<option value="${l.id}">${l.nom} (${l.matricule})</option>`;
+            });
+        } catch (error) {
+            console.error('Erreur chargement livreurs:', error);
+        }
+    }
+
+    // Définir les dates rapides
+    window.setQuickDate = function(period) {
+        const today = new Date();
+        let dateDebut, dateFin;
+
+        // Mettre à jour les boutons actifs
+        document.querySelectorAll('.quick-date-btn').forEach(btn => btn.classList.remove('active'));
+        event.target.classList.add('active');
+
+        switch(period) {
+            case 'today':
+                dateDebut = dateFin = today;
+                break;
+            case 'week':
+                const dayOfWeek = today.getDay();
+                const monday = new Date(today);
+                monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+                dateDebut = monday;
+                dateFin = today;
+                break;
+            case 'month':
+                dateDebut = new Date(today.getFullYear(), today.getMonth(), 1);
+                dateFin = today;
+                break;
+            case 'year':
+                dateDebut = new Date(today.getFullYear(), 0, 1);
+                dateFin = today;
+                break;
+        }
+
+        document.getElementById('dateDebut').value = formatDate(dateDebut);
+        document.getElementById('dateFin').value = formatDate(dateFin);
+    }
+
+    function formatDate(date) {
+        return date.toISOString().split('T')[0];
+    }
+
+    function formatNumber(num) {
+        return new Intl.NumberFormat('fr-DZ').format(num || 0);
+    }
+
+    function formatMoney(num) {
+        return formatNumber(Math.round(num || 0)) + ' DA';
+    }
+
+    // Charger les statistiques
+    window.loadStats = async function() {
+        const dateDebut = document.getElementById('dateDebut').value;
+        const dateFin = document.getElementById('dateFin').value;
+        const livreurId = document.getElementById('filterLivreur').value;
+
+        if (!dateDebut || !dateFin) {
+            alert('{% trans "Veuillez sélectionner une période" %}');
+            return;
+        }
+
+        // Afficher le loading
+        document.getElementById('statsTableBody').innerHTML = `
+            <tr>
+                <td colspan="8" class="text-center py-4 text-muted">
+                    <i class="fas fa-spinner fa-spin fa-2x mb-2 d-block"></i>
+                    {% trans "Chargement des statistiques..." %}
+                </td>
+            </tr>
+        `;
+
+        try {
+            let url = `/API/distribution/stats-livreurs/?date_debut=${dateDebut}&date_fin=${dateFin}`;
+            if (livreurId) url += `&livreur_id=${livreurId}`;
+
+            const response = await fetch(url);
+            if (!response.ok) throw new Error('Erreur API');
+            statsData = await response.json();
+
+            // Mettre à jour l'affichage
+            updateSummaryCards(statsData.summary);
+            updateTable(statsData.livreurs);
+            updateCharts(statsData);
+            updateDayTabs(statsData.par_jour);
+
+        } catch (error) {
+            console.error('Erreur chargement stats:', error);
+            document.getElementById('statsTableBody').innerHTML = `
+                <tr>
+                    <td colspan="8" class="text-center py-4 text-danger">
+                        <i class="fas fa-exclamation-triangle fa-2x mb-2 d-block"></i>
+                        {% trans "Erreur lors du chargement des statistiques" %}
+                    </td>
+                </tr>
+            `;
+        }
+    }
+
+    // Mettre à jour les cartes de résumé
+    function updateSummaryCards(summary) {
+        document.getElementById('totalClients').textContent = formatNumber(summary.total_clients);
+        document.getElementById('totalTournees').textContent = formatNumber(summary.total_tournees);
+        document.getElementById('totalEspeces').textContent = formatMoney(summary.total_especes);
+        document.getElementById('totalCheques').textContent = formatMoney(summary.total_cheques);
+        document.getElementById('totalCredits').textContent = formatMoney(summary.total_credits);
+        document.getElementById('totalVentes').textContent = formatMoney(summary.total_ventes);
+    }
+
+    // Mettre à jour le tableau
+    function updateTable(livreursStats) {
+        const tbody = document.getElementById('statsTableBody');
+        const tfoot = document.getElementById('statsTableFoot');
+
+        if (!livreursStats || livreursStats.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="8" class="text-center py-4 text-muted">
+                        <i class="fas fa-inbox fa-2x mb-2 d-block"></i>
+                        {% trans "Aucune donnée pour cette période" %}
+                    </td>
+                </tr>
+            `;
+            tfoot.style.display = 'none';
+            return;
+        }
+
+        let html = '';
+        let totals = { clients: 0, tournees: 0, especes: 0, cheques: 0, credits: 0, total: 0, livres: 0, total_arrets: 0 };
+
+        livreursStats.forEach(l => {
+            const initials = l.nom.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+            const tauxReussite = l.total_arrets > 0 ? Math.round((l.arrets_livres / l.total_arrets) * 100) : 0;
+            let tauxClass = 'faible';
+            if (tauxReussite >= 90) tauxClass = 'excellent';
+            else if (tauxReussite >= 75) tauxClass = 'bon';
+            else if (tauxReussite >= 50) tauxClass = 'moyen';
+
+            html += `
+                <tr>
+                    <td>
+                        <div class="livreur-info">
+                            <div class="livreur-avatar">${initials}</div>
+                            <div class="livreur-details">
+                                <h6>${l.nom}</h6>
+                                <small>${l.matricule}</small>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="text-center">${formatNumber(l.clients_visites)}</td>
+                    <td class="text-center">${formatNumber(l.tournees)}</td>
+                    <td class="text-center">
+                        <span class="taux-badge ${tauxClass}">${tauxReussite}%</span>
+                    </td>
+                    <td class="text-right paiement-cell especes">${formatMoney(l.especes)}</td>
+                    <td class="text-right paiement-cell cheque">${formatMoney(l.cheques)}</td>
+                    <td class="text-right paiement-cell credit">${formatMoney(l.credits)}</td>
+                    <td class="text-right"><strong>${formatMoney(l.total)}</strong></td>
+                </tr>
+            `;
+
+            totals.clients += l.clients_visites || 0;
+            totals.tournees += l.tournees || 0;
+            totals.especes += l.especes || 0;
+            totals.cheques += l.cheques || 0;
+            totals.credits += l.credits || 0;
+            totals.total += l.total || 0;
+            totals.livres += l.arrets_livres || 0;
+            totals.total_arrets += l.total_arrets || 0;
+        });
+
+        tbody.innerHTML = html;
+
+        // Mettre à jour le pied de tableau
+        document.getElementById('footClients').textContent = formatNumber(totals.clients);
+        document.getElementById('footTournees').textContent = formatNumber(totals.tournees);
+        document.getElementById('footTaux').innerHTML = `<span class="taux-badge ${totals.total_arrets > 0 ? (Math.round((totals.livres / totals.total_arrets) * 100) >= 75 ? 'bon' : 'moyen') : ''}">${totals.total_arrets > 0 ? Math.round((totals.livres / totals.total_arrets) * 100) : 0}%</span>`;
+        document.getElementById('footEspeces').textContent = formatMoney(totals.especes);
+        document.getElementById('footCheques').textContent = formatMoney(totals.cheques);
+        document.getElementById('footCredits').textContent = formatMoney(totals.credits);
+        document.getElementById('footTotal').textContent = formatMoney(totals.total);
+        tfoot.style.display = '';
+    }
+
+    // Mettre à jour les graphiques
+    function updateCharts(data) {
+        // Graphique des ventes par jour
+        const ctx1 = document.getElementById('ventesChart').getContext('2d');
+        if (ventesChart) ventesChart.destroy();
+
+        const labels = data.par_jour ? data.par_jour.map(d => d.date_label) : [];
+        const ventesData = data.par_jour ? data.par_jour.map(d => d.total) : [];
+
+        ventesChart = new Chart(ctx1, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: '{% trans "Ventes" %}',
+                    data: ventesData,
+                    borderColor: '#667eea',
+                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return formatNumber(value) + ' DA';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        // Graphique des paiements
+        const ctx2 = document.getElementById('paiementsChart').getContext('2d');
+        if (paiementsChart) paiementsChart.destroy();
+
+        paiementsChart = new Chart(ctx2, {
+            type: 'doughnut',
+            data: {
+                labels: ['{% trans "Espèces" %}', '{% trans "Chèques" %}', '{% trans "Crédits" %}'],
+                datasets: [{
+                    data: [
+                        data.summary.total_especes || 0,
+                        data.summary.total_cheques || 0,
+                        data.summary.total_credits || 0
+                    ],
+                    backgroundColor: ['#28a745', '#17a2b8', '#dc3545'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+    }
+
+    // Mettre à jour les onglets par jour
+    function updateDayTabs(parJour) {
+        const tabsContainer = document.getElementById('dayTabs');
+
+        if (!parJour || parJour.length === 0) {
+            tabsContainer.innerHTML = '<p class="text-muted">{% trans "Aucune donnée disponible" %}</p>';
+            return;
+        }
+
+        let html = '';
+        parJour.forEach((jour, index) => {
+            html += `
+                <button class="day-tab ${index === 0 ? 'active' : ''}" onclick="selectDay(${index})">
+                    ${jour.date_label}
+                    <br><small>${formatMoney(jour.total)}</small>
+                </button>
+            `;
+        });
+
+        tabsContainer.innerHTML = html;
+
+        // Sélectionner le premier jour
+        selectDay(0);
+    }
+
+    // Sélectionner un jour
+    window.selectDay = function(index) {
+        selectedDay = index;
+
+        // Mettre à jour les onglets actifs
+        document.querySelectorAll('.day-tab').forEach((tab, i) => {
+            tab.classList.toggle('active', i === index);
+        });
+
+        // Afficher les détails du jour
+        const jourData = statsData.par_jour[index];
+        const tbody = document.getElementById('dayDetailsBody');
+
+        if (!jourData || !jourData.livreurs || jourData.livreurs.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="8" class="text-center py-4 text-muted">
+                        {% trans "Aucune donnée pour ce jour" %}
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        let html = '';
+        jourData.livreurs.forEach(l => {
+            const initials = l.nom.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+
+            html += `
+                <tr>
+                    <td>
+                        <div class="livreur-info">
+                            <div class="livreur-avatar">${initials}</div>
+                            <div class="livreur-details">
+                                <h6>${l.nom}</h6>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="text-center">${formatNumber(l.clients)}</td>
+                    <td class="text-center text-success">${formatNumber(l.livres)}</td>
+                    <td class="text-center text-danger">${formatNumber(l.echecs)}</td>
+                    <td class="text-right paiement-cell especes">${formatMoney(l.especes)}</td>
+                    <td class="text-right paiement-cell cheque">${formatMoney(l.cheques)}</td>
+                    <td class="text-right paiement-cell credit">${formatMoney(l.credits)}</td>
+                    <td class="text-right"><strong>${formatMoney(l.total)}</strong></td>
+                </tr>
+            `;
+        });
+
+        tbody.innerHTML = html;
+    }
+
+    // Exporter les statistiques
+    window.exportStats = function() {
+        if (!statsData) {
+            alert('{% trans "Aucune donnée à exporter" %}');
+            return;
+        }
+
+        // Créer le CSV
+        let csv = 'Livreur,Matricule,Clients,Tournées,Taux Réussite,Espèces,Chèques,Crédits,Total\n';
+
+        statsData.livreurs.forEach(l => {
+            const tauxReussite = l.total_arrets > 0 ? Math.round((l.arrets_livres / l.total_arrets) * 100) : 0;
+            csv += `"${l.nom}","${l.matricule}",${l.clients_visites},${l.tournees},${tauxReussite}%,${l.especes},${l.cheques},${l.credits},${l.total}\n`;
+        });
+
+        // Télécharger
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `stats_livreurs_${document.getElementById('dateDebut').value}_${document.getElementById('dateFin').value}.csv`;
+        link.click();
+    }
+
+    // Initialiser si la page est déjà chargée
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        setTimeout(initStatsLivreurs, 100);
+    }
+
+})();
+</script>

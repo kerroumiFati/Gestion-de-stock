@@ -1,6 +1,153 @@
 {% load static %}
 {% load i18n %}
 <script src="{% static 'script/achat.js' %}" type="text/javascript"></script>
+
+<style>
+/* Custom Select Dropdown avec scroll pour Achats */
+.custom-select-container {
+    position: relative;
+    width: 100%;
+}
+
+.custom-select-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    background: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-height: 38px;
+}
+
+.custom-select-trigger:hover {
+    border-color: #80bdff;
+}
+
+.custom-select-trigger.open {
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+}
+
+.custom-select-trigger .selected-text {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #495057;
+}
+
+.custom-select-trigger .selected-text.placeholder {
+    color: #6c757d;
+}
+
+.custom-select-trigger .arrow {
+    margin-left: 10px;
+    transition: transform 0.2s;
+    color: #495057;
+}
+
+.custom-select-trigger.open .arrow {
+    transform: rotate(180deg);
+}
+
+.custom-select-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #ced4da;
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 1050;
+    display: none;
+}
+
+.custom-select-dropdown.open {
+    display: block;
+}
+
+.custom-select-search {
+    padding: 8px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.custom-select-search input {
+    width: 100%;
+    padding: 6px 10px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+
+.custom-select-search input:focus {
+    outline: none;
+    border-color: #80bdff;
+}
+
+.custom-select-options {
+    max-height: 250px;
+    overflow-y: auto;
+}
+
+.custom-select-options::-webkit-scrollbar {
+    width: 8px;
+}
+
+.custom-select-options::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.custom-select-options::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+
+.custom-select-options::-webkit-scrollbar-thumb:hover {
+    background: #a1a1a1;
+}
+
+.custom-select-option {
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: background 0.15s;
+    border-bottom: 1px solid #f8f9fa;
+}
+
+.custom-select-option:hover {
+    background: #f8f9fa;
+}
+
+.custom-select-option.selected {
+    background: #e9ecef;
+    font-weight: 500;
+}
+
+.custom-select-option .option-ref {
+    font-weight: 500;
+    color: #212529;
+}
+
+.custom-select-option .option-name {
+    color: #6c757d;
+    font-size: 0.85rem;
+    margin-left: 8px;
+}
+
+.custom-select-no-results {
+    padding: 12px;
+    text-align: center;
+    color: #6c757d;
+    font-style: italic;
+}
+
+</style>
+
 <div class="container-fluid">
     <div class="modal fade" id="error" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel"
          aria-hidden="true">
@@ -59,15 +206,47 @@
                 <div class="row">
                     <div class="col-sm-4 mb-2">
                         <label for="nom">{% trans "Fournisseur" %} : </label>
-                        <select class="form-control" id="fournisseur">
-                            <option value="" class="twichiya">{% trans "Sélectionner un fournisseur" %}</option>
-                        </select>
+                        <!-- Custom Select pour Fournisseur -->
+                        <div class="custom-select-container" id="customSelectFournisseur">
+                            <div class="custom-select-trigger" onclick="toggleAchatCustomSelect('customSelectFournisseur')">
+                                <span class="selected-text placeholder">{% trans "Sélectionner un fournisseur" %}</span>
+                                <i class="fas fa-chevron-down arrow"></i>
+                            </div>
+                            <div class="custom-select-dropdown">
+                                <div class="custom-select-search">
+                                    <input type="text" placeholder="{% trans 'Rechercher...' %}" oninput="filterAchatCustomSelect('customSelectFournisseur', this.value)">
+                                </div>
+                                <div class="custom-select-options"></div>
+                            </div>
+                            <!-- Select caché pour compatibilité -->
+                            <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
+                                <select id="fournisseur">
+                                    <option value="" class="twichiya">{% trans "Sélectionner un fournisseur" %}</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
                     <div class="col-sm-4 mb-2">
                         <label for="warehouse">{% trans "Entrepôt" %} : </label>
-                        <select class="form-control" id="warehouse">
-                            <option value="" class="twichiya">{% trans "Sélectionner un entrepôt" %}</option>
-                        </select>
+                        <!-- Custom Select pour Entrepôt -->
+                        <div class="custom-select-container" id="customSelectWarehouse">
+                            <div class="custom-select-trigger" onclick="toggleAchatCustomSelect('customSelectWarehouse')">
+                                <span class="selected-text placeholder">{% trans "Sélectionner un entrepôt" %}</span>
+                                <i class="fas fa-chevron-down arrow"></i>
+                            </div>
+                            <div class="custom-select-dropdown">
+                                <div class="custom-select-search">
+                                    <input type="text" placeholder="{% trans 'Rechercher...' %}" oninput="filterAchatCustomSelect('customSelectWarehouse', this.value)">
+                                </div>
+                                <div class="custom-select-options"></div>
+                            </div>
+                            <!-- Select caché pour compatibilité -->
+                            <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
+                                <select id="warehouse">
+                                    <option value="" class="twichiya">{% trans "Sélectionner un entrepôt" %}</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
                     <div class="col-sm-4 mb-2">
                         <label for="ref">{% trans "Référence" %}: </label>
@@ -81,9 +260,25 @@
                     </div>
                     <div class="col-sm-6 mb-2">
                         <label for="nom">{% trans "Produit" %}: </label>
-                        <select class="form-control" id="sproduit">
-                            <option value="" class="opr">{% trans "Sélectionner un produit" %}</option>
-                        </select>
+                        <!-- Custom Select pour Produit -->
+                        <div class="custom-select-container" id="customSelectSproduit">
+                            <div class="custom-select-trigger" onclick="toggleAchatCustomSelect('customSelectSproduit')">
+                                <span class="selected-text placeholder">{% trans "Sélectionner un produit" %}</span>
+                                <i class="fas fa-chevron-down arrow"></i>
+                            </div>
+                            <div class="custom-select-dropdown">
+                                <div class="custom-select-search">
+                                    <input type="text" placeholder="{% trans 'Rechercher...' %}" oninput="filterAchatCustomSelect('customSelectSproduit', this.value)">
+                                </div>
+                                <div class="custom-select-options"></div>
+                            </div>
+                            <!-- Select caché pour compatibilité -->
+                            <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
+                                <select id="sproduit">
+                                    <option value="" class="opr">{% trans "Sélectionner un produit" %}</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -98,11 +293,43 @@
                   <div class="form-row align-items-end mb-2">
                     <div class="form-group col-md-4">
                       <label>{% trans "Produit" %}</label>
-                      <select id="ps_prod" class="form-control"><option value="">{% trans "Sélectionner un produit" %}</option></select>
+                      <!-- Custom Select pour Produit -->
+                      <div class="custom-select-container" id="customSelectPsProd">
+                          <div class="custom-select-trigger" onclick="toggleAchatCustomSelect('customSelectPsProd')">
+                              <span class="selected-text placeholder">{% trans "Sélectionner un produit" %}</span>
+                              <i class="fas fa-chevron-down arrow"></i>
+                          </div>
+                          <div class="custom-select-dropdown">
+                              <div class="custom-select-search">
+                                  <input type="text" placeholder="{% trans 'Rechercher...' %}" oninput="filterAchatCustomSelect('customSelectPsProd', this.value)">
+                              </div>
+                              <div class="custom-select-options"></div>
+                          </div>
+                          <!-- Select caché pour compatibilité -->
+                          <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
+                              <select id="ps_prod"><option value="">{% trans "Sélectionner un produit" %}</option></select>
+                          </div>
+                      </div>
                     </div>
                     <div class="form-group col-md-4">
                       <label>{% trans "Entrepôt" %}</label>
-                      <select id="ps_wh" class="form-control"><option value="">{% trans "Tous les entrepôts" %}</option></select>
+                      <!-- Custom Select pour Entrepôt -->
+                      <div class="custom-select-container" id="customSelectPsWh">
+                          <div class="custom-select-trigger" onclick="toggleAchatCustomSelect('customSelectPsWh')">
+                              <span class="selected-text placeholder">{% trans "Tous les entrepôts" %}</span>
+                              <i class="fas fa-chevron-down arrow"></i>
+                          </div>
+                          <div class="custom-select-dropdown">
+                              <div class="custom-select-search">
+                                  <input type="text" placeholder="{% trans 'Rechercher...' %}" oninput="filterAchatCustomSelect('customSelectPsWh', this.value)">
+                              </div>
+                              <div class="custom-select-options"></div>
+                          </div>
+                          <!-- Select caché pour compatibilité -->
+                          <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
+                              <select id="ps_wh"><option value="">{% trans "Tous les entrepôts" %}</option></select>
+                          </div>
+                      </div>
                     </div>
                     <div class="form-group col-md-4 text-right">
                       <button id="ps_refresh" type="button" class="btn btn-outline-primary">{% trans "Rafraîchir" %}</button>
@@ -163,4 +390,347 @@
   activate('#section-achat');
 })();
 
+// Custom Select Functions for Achat page
+window.achatCustomSelectData = {
+    products: [],
+    warehouses: [],
+    fournisseurs: []
+};
+
+function toggleAchatCustomSelect(containerId) {
+    const container = document.getElementById(containerId);
+    const trigger = container.querySelector('.custom-select-trigger');
+    const dropdown = container.querySelector('.custom-select-dropdown');
+    const isOpen = dropdown.classList.contains('open');
+
+    // Fermer tous les autres dropdowns
+    document.querySelectorAll('.custom-select-dropdown.open').forEach(d => {
+        d.classList.remove('open');
+        d.closest('.custom-select-container').querySelector('.custom-select-trigger').classList.remove('open');
+    });
+
+    if (!isOpen) {
+        dropdown.classList.add('open');
+        trigger.classList.add('open');
+        const searchInput = dropdown.querySelector('input');
+        if (searchInput) {
+            searchInput.value = '';
+            searchInput.focus();
+            filterAchatCustomSelect(containerId, '');
+        }
+    }
+}
+
+function filterAchatCustomSelect(containerId, searchText) {
+    const container = document.getElementById(containerId);
+    const optionsContainer = container.querySelector('.custom-select-options');
+    const options = optionsContainer.querySelectorAll('.custom-select-option');
+    const search = searchText.toLowerCase().trim();
+    let hasVisible = false;
+
+    options.forEach(opt => {
+        const text = (opt.textContent || '').toLowerCase();
+        const match = !search || text.includes(search);
+        opt.style.display = match ? '' : 'none';
+        if (match) hasVisible = true;
+    });
+
+    // Message "Aucun résultat"
+    let noResults = optionsContainer.querySelector('.custom-select-no-results');
+    if (!hasVisible) {
+        if (!noResults) {
+            noResults = document.createElement('div');
+            noResults.className = 'custom-select-no-results';
+            noResults.textContent = 'Aucun résultat trouvé';
+            optionsContainer.appendChild(noResults);
+        }
+        noResults.style.display = '';
+    } else if (noResults) {
+        noResults.style.display = 'none';
+    }
+}
+
+function selectAchatCustomOption(containerId, value, text, hiddenSelectId) {
+    const container = document.getElementById(containerId);
+    const trigger = container.querySelector('.custom-select-trigger');
+    const selectedText = trigger.querySelector('.selected-text');
+    const dropdown = container.querySelector('.custom-select-dropdown');
+    const hiddenSelect = document.getElementById(hiddenSelectId);
+
+    // Mettre à jour l'affichage
+    selectedText.textContent = text;
+    selectedText.classList.remove('placeholder');
+
+    // Fermer le dropdown
+    dropdown.classList.remove('open');
+    trigger.classList.remove('open');
+
+    // Mettre à jour le select caché
+    if (hiddenSelect) {
+        // Créer l'option si elle n'existe pas
+        let option = hiddenSelect.querySelector(`option[value="${value}"]`);
+        if (!option && value) {
+            option = document.createElement('option');
+            option.value = value;
+            option.textContent = text;
+            hiddenSelect.appendChild(option);
+        }
+        hiddenSelect.value = value;
+
+        // Déclencher l'événement change pour jQuery
+        if (typeof jQuery !== 'undefined') {
+            jQuery(hiddenSelect).val(value).trigger('change');
+        } else {
+            hiddenSelect.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    }
+
+    // Marquer l'option comme sélectionnée
+    container.querySelectorAll('.custom-select-option').forEach(opt => {
+        opt.classList.toggle('selected', opt.getAttribute('data-value') === String(value));
+    });
+}
+
+function populateAchatCustomSelectProducts() {
+    const container = document.getElementById('customSelectPsProd');
+    console.log('[Achat] populateAchatCustomSelectProducts - container:', container);
+    if (!container) return;
+
+    const optionsContainer = container.querySelector('.custom-select-options');
+    console.log('[Achat] populateAchatCustomSelectProducts - optionsContainer:', optionsContainer);
+    optionsContainer.innerHTML = '';
+
+    // Option par défaut
+    const defaultOpt = document.createElement('div');
+    defaultOpt.className = 'custom-select-option';
+    defaultOpt.setAttribute('data-value', '');
+    defaultOpt.innerHTML = '<span class="option-name">Sélectionner un produit</span>';
+    defaultOpt.onclick = function() {
+        selectAchatCustomOption('customSelectPsProd', '', 'Sélectionner un produit', 'ps_prod');
+        container.querySelector('.selected-text').classList.add('placeholder');
+    };
+    optionsContainer.appendChild(defaultOpt);
+
+    // Ajouter les produits
+    window.achatCustomSelectData.products.forEach(function(p) {
+        const opt = document.createElement('div');
+        opt.className = 'custom-select-option';
+        opt.setAttribute('data-value', p.id);
+        opt.innerHTML = '<span class="option-ref">' + (p.reference || '') + '</span><span class="option-name">' + (p.designation || '') + '</span>';
+        opt.onclick = function() {
+            selectAchatCustomOption('customSelectPsProd', p.id, (p.reference || '') + ' - ' + (p.designation || ''), 'ps_prod');
+        };
+        optionsContainer.appendChild(opt);
+    });
+}
+
+function populateAchatCustomSelectWarehouses() {
+    const container = document.getElementById('customSelectPsWh');
+    if (!container) return;
+
+    const optionsContainer = container.querySelector('.custom-select-options');
+    optionsContainer.innerHTML = '';
+
+    // Option par défaut
+    const defaultOpt = document.createElement('div');
+    defaultOpt.className = 'custom-select-option';
+    defaultOpt.setAttribute('data-value', '');
+    defaultOpt.innerHTML = '<span class="option-name">Tous les entrepôts</span>';
+    defaultOpt.onclick = function() {
+        selectAchatCustomOption('customSelectPsWh', '', 'Tous les entrepôts', 'ps_wh');
+        container.querySelector('.selected-text').classList.add('placeholder');
+    };
+    optionsContainer.appendChild(defaultOpt);
+
+    // Ajouter les entrepôts
+    window.achatCustomSelectData.warehouses.forEach(function(w) {
+        const opt = document.createElement('div');
+        opt.className = 'custom-select-option';
+        opt.setAttribute('data-value', w.id);
+        opt.innerHTML = '<span class="option-ref">' + (w.code || '') + '</span><span class="option-name">' + (w.name || '') + '</span>';
+        opt.onclick = function() {
+            selectAchatCustomOption('customSelectPsWh', w.id, (w.code || '') + ' - ' + (w.name || ''), 'ps_wh');
+        };
+        optionsContainer.appendChild(opt);
+    });
+}
+
+// Custom select pour Entrepôt dans section Achats
+function populateAchatCustomSelectWarehouse() {
+    const container = document.getElementById('customSelectWarehouse');
+    if (!container) return;
+
+    const optionsContainer = container.querySelector('.custom-select-options');
+    optionsContainer.innerHTML = '';
+
+    // Option par défaut
+    const defaultOpt = document.createElement('div');
+    defaultOpt.className = 'custom-select-option';
+    defaultOpt.setAttribute('data-value', '');
+    defaultOpt.innerHTML = '<span class="option-name">Sélectionner un entrepôt</span>';
+    defaultOpt.onclick = function() {
+        selectAchatCustomOption('customSelectWarehouse', '', 'Sélectionner un entrepôt', 'warehouse');
+        container.querySelector('.selected-text').classList.add('placeholder');
+    };
+    optionsContainer.appendChild(defaultOpt);
+
+    // Ajouter les entrepôts
+    window.achatCustomSelectData.warehouses.forEach(function(w) {
+        const opt = document.createElement('div');
+        opt.className = 'custom-select-option';
+        opt.setAttribute('data-value', w.id);
+        opt.innerHTML = '<span class="option-ref">' + (w.code || '') + '</span><span class="option-name">' + (w.name || '') + '</span>';
+        opt.onclick = function() {
+            selectAchatCustomOption('customSelectWarehouse', w.id, (w.code || '') + ' - ' + (w.name || ''), 'warehouse');
+        };
+        optionsContainer.appendChild(opt);
+    });
+}
+
+// Custom select pour Fournisseur
+function populateAchatCustomSelectFournisseurs() {
+    const container = document.getElementById('customSelectFournisseur');
+    console.log('[Achat] populateAchatCustomSelectFournisseurs - container:', container);
+    if (!container) return;
+
+    const optionsContainer = container.querySelector('.custom-select-options');
+    console.log('[Achat] populateAchatCustomSelectFournisseurs - optionsContainer:', optionsContainer, 'fournisseurs count:', window.achatCustomSelectData.fournisseurs.length);
+    optionsContainer.innerHTML = '';
+
+    // Option par défaut
+    const defaultOpt = document.createElement('div');
+    defaultOpt.className = 'custom-select-option';
+    defaultOpt.setAttribute('data-value', '');
+    defaultOpt.innerHTML = '<span class="option-name">Sélectionner un fournisseur</span>';
+    defaultOpt.onclick = function() {
+        selectAchatCustomOption('customSelectFournisseur', '', 'Sélectionner un fournisseur', 'fournisseur');
+        container.querySelector('.selected-text').classList.add('placeholder');
+    };
+    optionsContainer.appendChild(defaultOpt);
+
+    // Ajouter les fournisseurs
+    window.achatCustomSelectData.fournisseurs.forEach(function(f) {
+        const opt = document.createElement('div');
+        opt.className = 'custom-select-option';
+        opt.setAttribute('data-value', f.id);
+        const label = f.libelle || f.nom || f.name || ('Fournisseur #' + f.id);
+        opt.innerHTML = '<span style="color:#000;font-weight:500;">' + label + '</span>';
+        opt.onclick = function() {
+            selectAchatCustomOption('customSelectFournisseur', f.id, label, 'fournisseur');
+        };
+        optionsContainer.appendChild(opt);
+    });
+}
+
+// Custom select pour Produit dans section Achats
+function populateAchatCustomSelectSproduit() {
+    const container = document.getElementById('customSelectSproduit');
+    if (!container) return;
+
+    const optionsContainer = container.querySelector('.custom-select-options');
+    optionsContainer.innerHTML = '';
+
+    // Option par défaut
+    const defaultOpt = document.createElement('div');
+    defaultOpt.className = 'custom-select-option';
+    defaultOpt.setAttribute('data-value', '');
+    defaultOpt.innerHTML = '<span class="option-name">Sélectionner un produit</span>';
+    defaultOpt.onclick = function() {
+        selectAchatCustomOption('customSelectSproduit', '', 'Sélectionner un produit', 'sproduit');
+        container.querySelector('.selected-text').classList.add('placeholder');
+    };
+    optionsContainer.appendChild(defaultOpt);
+
+    // Ajouter les produits
+    window.achatCustomSelectData.products.forEach(function(p) {
+        const opt = document.createElement('div');
+        opt.className = 'custom-select-option';
+        opt.setAttribute('data-value', p.id);
+        opt.innerHTML = '<span class="option-ref">' + (p.reference || '') + '</span><span class="option-name">' + (p.designation || '') + '</span>';
+        opt.onclick = function() {
+            selectAchatCustomOption('customSelectSproduit', p.id, (p.reference || '') + ' - ' + (p.designation || ''), 'sproduit');
+        };
+        optionsContainer.appendChild(opt);
+    });
+}
+
+function initAchatCustomSelects() {
+    console.log('[Achat] initAchatCustomSelects called');
+
+    // Charger les produits
+    fetch('/API/produits/')
+        .then(response => response.json())
+        .then(data => {
+            const list = Array.isArray(data) ? data : (data && data.results ? data.results : []);
+            console.log('[Achat] Produits chargés:', list.length);
+            window.achatCustomSelectData.products = list;
+            populateAchatCustomSelectProducts();  // Pour Stock par entrepôt
+            populateAchatCustomSelectSproduit();  // Pour section Achats
+        })
+        .catch(err => console.error('[Achat] Erreur chargement produits:', err));
+
+    // Charger les entrepôts
+    fetch('/API/entrepots/')
+        .then(response => response.json())
+        .then(data => {
+            const list = Array.isArray(data) ? data : (data && data.results ? data.results : []);
+            console.log('[Achat] Entrepôts chargés:', list.length);
+            window.achatCustomSelectData.warehouses = list;
+            populateAchatCustomSelectWarehouses();  // Pour Stock par entrepôt (Tous les entrepôts)
+            populateAchatCustomSelectWarehouse();   // Pour section Achats
+        })
+        .catch(err => console.error('[Achat] Erreur chargement entrepôts:', err));
+
+    // Charger les fournisseurs
+    fetch('/API/fournisseurs/')
+        .then(response => response.json())
+        .then(data => {
+            const list = Array.isArray(data) ? data : (data && data.results ? data.results : []);
+            console.log('[Achat] Fournisseurs chargés:', list.length);
+            window.achatCustomSelectData.fournisseurs = list;
+            populateAchatCustomSelectFournisseurs();
+        })
+        .catch(err => console.error('[Achat] Erreur chargement fournisseurs:', err));
+}
+
+// Fermer les dropdowns quand on clique ailleurs
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.custom-select-container')) {
+        document.querySelectorAll('.custom-select-dropdown.open').forEach(d => {
+            d.classList.remove('open');
+            d.closest('.custom-select-container').querySelector('.custom-select-trigger').classList.remove('open');
+        });
+    }
+});
+
+// Initialiser les custom selects au chargement
+function initAchatPage() {
+    console.log('[Achat] Initializing custom selects...');
+    initAchatCustomSelects();
+}
+
+// Essayer plusieurs méthodes d'initialisation
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initAchatPage);
+} else {
+    // DOM déjà chargé, initialiser immédiatement
+    initAchatPage();
+}
+
+// Aussi écouter l'événement fragment:loaded pour le chargement dynamique
+document.addEventListener('fragment:loaded', function(e) {
+    if (e && e.detail && e.detail.name === 'achat') {
+        console.log('[Achat] Fragment loaded, reinitializing...');
+        initAchatPage();
+    }
+});
+
+// Fallback avec setTimeout si les autres méthodes échouent
+setTimeout(function() {
+    var optionsContainer = document.getElementById('iconeOptions') || document.querySelector('#customSelectFournisseur .custom-select-options');
+    if (optionsContainer && optionsContainer.children.length === 0) {
+        console.log('[Achat] Fallback initialization...');
+        initAchatPage();
+    }
+}, 500);
 </script>

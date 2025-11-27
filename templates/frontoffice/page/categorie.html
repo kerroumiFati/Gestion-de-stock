@@ -249,6 +249,157 @@
     color: #2d3748;
     font-weight: 600;
 }
+
+/* Custom Select Dropdown pour icônes */
+.custom-select-container {
+    position: relative;
+    width: 100%;
+}
+
+.custom-select-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 15px;
+    border: 1px solid #cbd5e0;
+    border-radius: 6px;
+    background: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-height: 45px;
+}
+
+.custom-select-trigger:hover {
+    border-color: #3b82f6;
+}
+
+.custom-select-trigger.open {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.custom-select-trigger .selected-text {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #2d3748;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.custom-select-trigger .selected-text.placeholder {
+    color: #6c757d;
+}
+
+.custom-select-trigger .arrow {
+    margin-left: 10px;
+    transition: transform 0.2s;
+    color: #4a5568;
+}
+
+.custom-select-trigger.open .arrow {
+    transform: rotate(180deg);
+}
+
+.custom-select-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #cbd5e0;
+    border-top: none;
+    border-radius: 0 0 6px 6px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 1050;
+    display: none;
+}
+
+.custom-select-dropdown.open {
+    display: block;
+}
+
+.custom-select-search {
+    padding: 10px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.custom-select-search input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #cbd5e0;
+    border-radius: 6px;
+    font-size: 0.9rem;
+}
+
+.custom-select-search input:focus {
+    outline: none;
+    border-color: #3b82f6;
+}
+
+.custom-select-options {
+    max-height: 250px;
+    overflow-y: auto;
+}
+
+.custom-select-options::-webkit-scrollbar {
+    width: 8px;
+}
+
+.custom-select-options::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.custom-select-options::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+
+.custom-select-options::-webkit-scrollbar-thumb:hover {
+    background: #a1a1a1;
+}
+
+.custom-select-option {
+    padding: 10px 15px;
+    cursor: pointer;
+    transition: background 0.15s;
+    border-bottom: 1px solid #f8f9fa;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.custom-select-option:hover {
+    background: #f7fafc;
+}
+
+.custom-select-option.selected {
+    background: #edf2f7;
+    font-weight: 500;
+}
+
+.custom-select-option .option-icon {
+    width: 24px;
+    text-align: center;
+    color: #3b82f6;
+    font-size: 1.1rem;
+}
+
+.custom-select-option .option-text {
+    color: #2d3748;
+    font-size: 0.95rem;
+}
+
+.custom-select-no-results {
+    padding: 15px;
+    text-align: center;
+    color: #6c757d;
+    font-style: italic;
+}
+
 </style>
 
 <div id="categoriePage" class="container-fluid page-container">
@@ -329,23 +480,30 @@
                 </div>
 
                 <div class="col-md-4 mb-3">
-                    <label class="modern-label" for="icone">
+                    <label class="modern-label">
                         <i class="fa fa-icons"></i> {% trans "Icône (Font Awesome)" %}
                     </label>
-                    <select class="form-control modern-select" id="icone">
-                        <option value="fa-cube">fa-cube ({% trans "Cube" %})</option>
-                        <option value="fa-laptop">fa-laptop ({% trans "Ordinateur" %})</option>
-                        <option value="fa-mobile-alt">fa-mobile-alt ({% trans "Mobile" %})</option>
-                        <option value="fa-tshirt">fa-tshirt ({% trans "Vêtement" %})</option>
-                        <option value="fa-book">fa-book ({% trans "Livre" %})</option>
-                        <option value="fa-car">fa-car ({% trans "Automobile" %})</option>
-                        <option value="fa-home">fa-home ({% trans "Maison" %})</option>
-                        <option value="fa-utensils">fa-utensils ({% trans "Cuisine" %})</option>
-                        <option value="fa-gamepad">fa-gamepad ({% trans "Jeux" %})</option>
-                        <option value="fa-medkit">fa-medkit ({% trans "Santé" %})</option>
-                        <option value="fa-dumbbell">fa-dumbbell ({% trans "Sport" %})</option>
-                        <option value="fa-palette">fa-palette ({% trans "Art" %})</option>
-                    </select>
+                    <!-- Custom Select pour Icône -->
+                    <div class="custom-select-container" id="customSelectIcone">
+                        <div class="custom-select-trigger" id="iconeTrigger">
+                            <span class="selected-text">
+                                <i class="fas fa-cube"></i> fa-cube (Cube)
+                            </span>
+                            <i class="fas fa-chevron-down arrow"></i>
+                        </div>
+                        <div class="custom-select-dropdown" id="iconeDropdown">
+                            <div class="custom-select-search">
+                                <input type="text" id="iconeSearchInput" placeholder="{% trans 'Rechercher une icône...' %}">
+                            </div>
+                            <div class="custom-select-options" id="iconeOptions"></div>
+                        </div>
+                        <!-- Select caché pour compatibilité -->
+                        <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
+                            <select id="icone">
+                                <option value="fa-cube">fa-cube (Cube)</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -403,22 +561,349 @@
 </div>
 
 <script>
-// Prévisualisation de la couleur et de l'icône
-document.addEventListener('DOMContentLoaded', function(){
-    const couleurInput = document.getElementById('couleur');
-    const iconeSelect = document.getElementById('icone');
-    const previewIcon = document.getElementById('preview-icon');
+(function() {
+// Liste des icônes Font Awesome disponibles
+var fontAwesomeIcons = [
+    { value: 'fa-cube', label: 'Cube', category: 'Objets' },
+    { value: 'fa-cubes', label: 'Cubes', category: 'Objets' },
+    { value: 'fa-box', label: 'Boîte', category: 'Objets' },
+    { value: 'fa-box-open', label: 'Boîte ouverte', category: 'Objets' },
+    { value: 'fa-boxes', label: 'Boîtes', category: 'Objets' },
+    { value: 'fa-archive', label: 'Archive', category: 'Objets' },
+    { value: 'fa-laptop', label: 'Ordinateur', category: 'Électronique' },
+    { value: 'fa-desktop', label: 'Bureau', category: 'Électronique' },
+    { value: 'fa-tv', label: 'Télévision', category: 'Électronique' },
+    { value: 'fa-mobile-alt', label: 'Mobile', category: 'Électronique' },
+    { value: 'fa-tablet-alt', label: 'Tablette', category: 'Électronique' },
+    { value: 'fa-phone', label: 'Téléphone', category: 'Électronique' },
+    { value: 'fa-headphones', label: 'Casque', category: 'Électronique' },
+    { value: 'fa-camera', label: 'Appareil photo', category: 'Électronique' },
+    { value: 'fa-video', label: 'Vidéo', category: 'Électronique' },
+    { value: 'fa-microphone', label: 'Microphone', category: 'Électronique' },
+    { value: 'fa-keyboard', label: 'Clavier', category: 'Électronique' },
+    { value: 'fa-mouse', label: 'Souris', category: 'Électronique' },
+    { value: 'fa-print', label: 'Imprimante', category: 'Électronique' },
+    { value: 'fa-tshirt', label: 'T-shirt', category: 'Vêtements' },
+    { value: 'fa-socks', label: 'Chaussettes', category: 'Vêtements' },
+    { value: 'fa-hat-cowboy', label: 'Chapeau', category: 'Vêtements' },
+    { value: 'fa-glasses', label: 'Lunettes', category: 'Vêtements' },
+    { value: 'fa-shoe-prints', label: 'Chaussures', category: 'Vêtements' },
+    { value: 'fa-book', label: 'Livre', category: 'Éducation' },
+    { value: 'fa-book-open', label: 'Livre ouvert', category: 'Éducation' },
+    { value: 'fa-graduation-cap', label: 'Diplôme', category: 'Éducation' },
+    { value: 'fa-pen', label: 'Stylo', category: 'Éducation' },
+    { value: 'fa-pencil-alt', label: 'Crayon', category: 'Éducation' },
+    { value: 'fa-ruler', label: 'Règle', category: 'Éducation' },
+    { value: 'fa-car', label: 'Voiture', category: 'Transport' },
+    { value: 'fa-truck', label: 'Camion', category: 'Transport' },
+    { value: 'fa-motorcycle', label: 'Moto', category: 'Transport' },
+    { value: 'fa-bicycle', label: 'Vélo', category: 'Transport' },
+    { value: 'fa-bus', label: 'Bus', category: 'Transport' },
+    { value: 'fa-plane', label: 'Avion', category: 'Transport' },
+    { value: 'fa-ship', label: 'Bateau', category: 'Transport' },
+    { value: 'fa-home', label: 'Maison', category: 'Maison' },
+    { value: 'fa-building', label: 'Bâtiment', category: 'Maison' },
+    { value: 'fa-door-open', label: 'Porte', category: 'Maison' },
+    { value: 'fa-bed', label: 'Lit', category: 'Maison' },
+    { value: 'fa-couch', label: 'Canapé', category: 'Maison' },
+    { value: 'fa-chair', label: 'Chaise', category: 'Maison' },
+    { value: 'fa-lightbulb', label: 'Ampoule', category: 'Maison' },
+    { value: 'fa-utensils', label: 'Couverts', category: 'Cuisine' },
+    { value: 'fa-coffee', label: 'Café', category: 'Cuisine' },
+    { value: 'fa-wine-glass', label: 'Vin', category: 'Cuisine' },
+    { value: 'fa-beer', label: 'Bière', category: 'Cuisine' },
+    { value: 'fa-pizza-slice', label: 'Pizza', category: 'Cuisine' },
+    { value: 'fa-hamburger', label: 'Hamburger', category: 'Cuisine' },
+    { value: 'fa-ice-cream', label: 'Glace', category: 'Cuisine' },
+    { value: 'fa-apple-alt', label: 'Pomme', category: 'Cuisine' },
+    { value: 'fa-carrot', label: 'Carotte', category: 'Cuisine' },
+    { value: 'fa-cheese', label: 'Fromage', category: 'Cuisine' },
+    { value: 'fa-bread-slice', label: 'Pain', category: 'Cuisine' },
+    { value: 'fa-gamepad', label: 'Manette', category: 'Jeux' },
+    { value: 'fa-dice', label: 'Dé', category: 'Jeux' },
+    { value: 'fa-chess', label: 'Échecs', category: 'Jeux' },
+    { value: 'fa-puzzle-piece', label: 'Puzzle', category: 'Jeux' },
+    { value: 'fa-medkit', label: 'Kit médical', category: 'Santé' },
+    { value: 'fa-pills', label: 'Pilules', category: 'Santé' },
+    { value: 'fa-syringe', label: 'Seringue', category: 'Santé' },
+    { value: 'fa-thermometer', label: 'Thermomètre', category: 'Santé' },
+    { value: 'fa-heartbeat', label: 'Battement', category: 'Santé' },
+    { value: 'fa-stethoscope', label: 'Stéthoscope', category: 'Santé' },
+    { value: 'fa-dumbbell', label: 'Haltère', category: 'Sport' },
+    { value: 'fa-football-ball', label: 'Football US', category: 'Sport' },
+    { value: 'fa-basketball-ball', label: 'Basketball', category: 'Sport' },
+    { value: 'fa-futbol', label: 'Football', category: 'Sport' },
+    { value: 'fa-golf-ball', label: 'Golf', category: 'Sport' },
+    { value: 'fa-swimming-pool', label: 'Piscine', category: 'Sport' },
+    { value: 'fa-running', label: 'Course', category: 'Sport' },
+    { value: 'fa-palette', label: 'Palette', category: 'Art' },
+    { value: 'fa-paint-brush', label: 'Pinceau', category: 'Art' },
+    { value: 'fa-music', label: 'Musique', category: 'Art' },
+    { value: 'fa-guitar', label: 'Guitare', category: 'Art' },
+    { value: 'fa-drum', label: 'Tambour', category: 'Art' },
+    { value: 'fa-film', label: 'Film', category: 'Art' },
+    { value: 'fa-theater-masks', label: 'Théâtre', category: 'Art' },
+    { value: 'fa-tools', label: 'Outils', category: 'Outils' },
+    { value: 'fa-wrench', label: 'Clé', category: 'Outils' },
+    { value: 'fa-hammer', label: 'Marteau', category: 'Outils' },
+    { value: 'fa-screwdriver', label: 'Tournevis', category: 'Outils' },
+    { value: 'fa-cog', label: 'Engrenage', category: 'Outils' },
+    { value: 'fa-cogs', label: 'Engrenages', category: 'Outils' },
+    { value: 'fa-cut', label: 'Ciseaux', category: 'Outils' },
+    { value: 'fa-shopping-cart', label: 'Panier', category: 'Commerce' },
+    { value: 'fa-shopping-bag', label: 'Sac', category: 'Commerce' },
+    { value: 'fa-shopping-basket', label: 'Panier courses', category: 'Commerce' },
+    { value: 'fa-store', label: 'Magasin', category: 'Commerce' },
+    { value: 'fa-cash-register', label: 'Caisse', category: 'Commerce' },
+    { value: 'fa-receipt', label: 'Reçu', category: 'Commerce' },
+    { value: 'fa-barcode', label: 'Code-barres', category: 'Commerce' },
+    { value: 'fa-tags', label: 'Étiquettes', category: 'Commerce' },
+    { value: 'fa-tag', label: 'Étiquette', category: 'Commerce' },
+    { value: 'fa-gift', label: 'Cadeau', category: 'Commerce' },
+    { value: 'fa-gem', label: 'Gemme', category: 'Objets' },
+    { value: 'fa-ring', label: 'Bague', category: 'Objets' },
+    { value: 'fa-crown', label: 'Couronne', category: 'Objets' },
+    { value: 'fa-star', label: 'Étoile', category: 'Symboles' },
+    { value: 'fa-heart', label: 'Cœur', category: 'Symboles' },
+    { value: 'fa-bolt', label: 'Éclair', category: 'Symboles' },
+    { value: 'fa-fire', label: 'Feu', category: 'Symboles' },
+    { value: 'fa-leaf', label: 'Feuille', category: 'Nature' },
+    { value: 'fa-tree', label: 'Arbre', category: 'Nature' },
+    { value: 'fa-seedling', label: 'Pousse', category: 'Nature' },
+    { value: 'fa-flower', label: 'Fleur', category: 'Nature' },
+    { value: 'fa-sun', label: 'Soleil', category: 'Nature' },
+    { value: 'fa-moon', label: 'Lune', category: 'Nature' },
+    { value: 'fa-cloud', label: 'Nuage', category: 'Nature' },
+    { value: 'fa-snowflake', label: 'Flocon', category: 'Nature' },
+    { value: 'fa-umbrella', label: 'Parapluie', category: 'Nature' },
+    { value: 'fa-paw', label: 'Patte', category: 'Animaux' },
+    { value: 'fa-dog', label: 'Chien', category: 'Animaux' },
+    { value: 'fa-cat', label: 'Chat', category: 'Animaux' },
+    { value: 'fa-fish', label: 'Poisson', category: 'Animaux' },
+    { value: 'fa-horse', label: 'Cheval', category: 'Animaux' },
+    { value: 'fa-spider', label: 'Araignée', category: 'Animaux' },
+    { value: 'fa-dove', label: 'Colombe', category: 'Animaux' },
+    { value: 'fa-baby', label: 'Bébé', category: 'Personnes' },
+    { value: 'fa-child', label: 'Enfant', category: 'Personnes' },
+    { value: 'fa-user', label: 'Utilisateur', category: 'Personnes' },
+    { value: 'fa-users', label: 'Utilisateurs', category: 'Personnes' },
+    { value: 'fa-user-tie', label: 'Professionnel', category: 'Personnes' },
+    { value: 'fa-briefcase', label: 'Mallette', category: 'Bureau' },
+    { value: 'fa-folder', label: 'Dossier', category: 'Bureau' },
+    { value: 'fa-file', label: 'Fichier', category: 'Bureau' },
+    { value: 'fa-paperclip', label: 'Trombone', category: 'Bureau' },
+    { value: 'fa-calculator', label: 'Calculatrice', category: 'Bureau' },
+    { value: 'fa-clock', label: 'Horloge', category: 'Bureau' },
+    { value: 'fa-calendar', label: 'Calendrier', category: 'Bureau' },
+    { value: 'fa-envelope', label: 'Enveloppe', category: 'Bureau' },
+    { value: 'fa-key', label: 'Clé', category: 'Sécurité' },
+    { value: 'fa-lock', label: 'Cadenas', category: 'Sécurité' },
+    { value: 'fa-shield-alt', label: 'Bouclier', category: 'Sécurité' },
+    { value: 'fa-eye', label: 'Œil', category: 'Sécurité' }
+];
 
-    if(couleurInput && previewIcon){
-        couleurInput.addEventListener('change', function(){
+var isDropdownOpen = false;
+
+function toggleIconeDropdown() {
+    var trigger = document.getElementById('iconeTrigger');
+    var dropdown = document.getElementById('iconeDropdown');
+    var searchInput = document.getElementById('iconeSearchInput');
+
+    if (!trigger || !dropdown) {
+        console.error('Elements not found');
+        return;
+    }
+
+    isDropdownOpen = !isDropdownOpen;
+
+    if (isDropdownOpen) {
+        dropdown.classList.add('open');
+        trigger.classList.add('open');
+        if (searchInput) {
+            searchInput.value = '';
+            searchInput.focus();
+        }
+        filterIconeOptions('');
+    } else {
+        dropdown.classList.remove('open');
+        trigger.classList.remove('open');
+    }
+}
+
+function filterIconeOptions(searchText) {
+    var optionsContainer = document.getElementById('iconeOptions');
+    if (!optionsContainer) return;
+
+    var options = optionsContainer.querySelectorAll('.custom-select-option');
+    var search = (searchText || '').toLowerCase().trim();
+    var hasVisible = false;
+
+    for (var i = 0; i < options.length; i++) {
+        var opt = options[i];
+        var text = (opt.textContent || '').toLowerCase();
+        var match = !search || text.indexOf(search) !== -1;
+        opt.style.display = match ? '' : 'none';
+        if (match) hasVisible = true;
+    }
+
+    // Message "Aucun résultat"
+    var noResults = optionsContainer.querySelector('.custom-select-no-results');
+    if (!hasVisible) {
+        if (!noResults) {
+            noResults = document.createElement('div');
+            noResults.className = 'custom-select-no-results';
+            noResults.textContent = 'Aucun résultat trouvé';
+            optionsContainer.appendChild(noResults);
+        }
+        noResults.style.display = '';
+    } else if (noResults) {
+        noResults.style.display = 'none';
+    }
+}
+
+function selectIconeOption(value, label) {
+    var trigger = document.getElementById('iconeTrigger');
+    var dropdown = document.getElementById('iconeDropdown');
+    var selectedText = trigger ? trigger.querySelector('.selected-text') : null;
+    var hiddenSelect = document.getElementById('icone');
+    var previewIcon = document.getElementById('preview-icon');
+    var optionsContainer = document.getElementById('iconeOptions');
+
+    // Mettre à jour l'affichage
+    if (selectedText) {
+        selectedText.innerHTML = '<i class="fas ' + value + '"></i> ' + value + ' (' + label + ')';
+    }
+
+    // Fermer le dropdown
+    if (dropdown) dropdown.classList.remove('open');
+    if (trigger) trigger.classList.remove('open');
+    isDropdownOpen = false;
+
+    // Mettre à jour le select caché
+    if (hiddenSelect) {
+        var option = hiddenSelect.querySelector('option[value="' + value + '"]');
+        if (!option) {
+            option = document.createElement('option');
+            option.value = value;
+            option.textContent = value + ' (' + label + ')';
+            hiddenSelect.appendChild(option);
+        }
+        hiddenSelect.value = value;
+
+        if (typeof jQuery !== 'undefined') {
+            jQuery(hiddenSelect).val(value).trigger('change');
+        }
+    }
+
+    // Mettre à jour la prévisualisation
+    if (previewIcon) {
+        previewIcon.className = 'fas ' + value;
+    }
+
+    // Marquer l'option comme sélectionnée
+    if (optionsContainer) {
+        var allOpts = optionsContainer.querySelectorAll('.custom-select-option');
+        for (var i = 0; i < allOpts.length; i++) {
+            if (allOpts[i].getAttribute('data-value') === value) {
+                allOpts[i].classList.add('selected');
+            } else {
+                allOpts[i].classList.remove('selected');
+            }
+        }
+    }
+}
+
+function populateIconeOptions() {
+    var optionsContainer = document.getElementById('iconeOptions');
+    if (!optionsContainer) {
+        console.error('iconeOptions container not found');
+        return;
+    }
+
+    optionsContainer.innerHTML = '';
+    console.log('Populating ' + fontAwesomeIcons.length + ' icons');
+
+    for (var i = 0; i < fontAwesomeIcons.length; i++) {
+        var icon = fontAwesomeIcons[i];
+        var opt = document.createElement('div');
+        opt.className = 'custom-select-option';
+        opt.setAttribute('data-value', icon.value);
+        opt.innerHTML = '<span class="option-icon"><i class="fas ' + icon.value + '"></i></span>' +
+                        '<span class="option-text">' + icon.value + ' (' + icon.label + ')</span>';
+
+        (function(iconValue, iconLabel) {
+            opt.addEventListener('click', function(e) {
+                e.stopPropagation();
+                selectIconeOption(iconValue, iconLabel);
+            });
+        })(icon.value, icon.label);
+
+        optionsContainer.appendChild(opt);
+    }
+
+    // Marquer la première option comme sélectionnée par défaut
+    var firstOpt = optionsContainer.querySelector('.custom-select-option');
+    if (firstOpt) firstOpt.classList.add('selected');
+
+    console.log('Icons populated successfully');
+}
+
+function initIconeCustomSelect() {
+    console.log('Initializing icone custom select...');
+
+    var trigger = document.getElementById('iconeTrigger');
+    var searchInput = document.getElementById('iconeSearchInput');
+    var couleurInput = document.getElementById('couleur');
+    var previewIcon = document.getElementById('preview-icon');
+
+    // Event listener pour ouvrir/fermer le dropdown
+    if (trigger) {
+        trigger.addEventListener('click', function(e) {
+            e.stopPropagation();
+            toggleIconeDropdown();
+        });
+        console.log('Trigger event listener added');
+    }
+
+    // Event listener pour la recherche
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            filterIconeOptions(this.value);
+        });
+        searchInput.addEventListener('click', function(e) {
+            e.stopPropagation();
+        });
+    }
+
+    // Prévisualisation de la couleur
+    if (couleurInput && previewIcon) {
+        couleurInput.addEventListener('change', function() {
             previewIcon.style.color = this.value;
         });
     }
 
-    if(iconeSelect && previewIcon){
-        iconeSelect.addEventListener('change', function(){
-            previewIcon.className = 'fas ' + this.value;
-        });
-    }
-});
+    // Fermer quand on clique ailleurs
+    document.addEventListener('click', function(e) {
+        var container = document.getElementById('customSelectIcone');
+        if (container && !container.contains(e.target)) {
+            var dropdown = document.getElementById('iconeDropdown');
+            var trig = document.getElementById('iconeTrigger');
+            if (dropdown) dropdown.classList.remove('open');
+            if (trig) trig.classList.remove('open');
+            isDropdownOpen = false;
+        }
+    });
+
+    // Peupler les options
+    populateIconeOptions();
+}
+
+// Initialiser au chargement du DOM
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initIconeCustomSelect);
+} else {
+    initIconeCustomSelect();
+}
+
+})();
 </script>

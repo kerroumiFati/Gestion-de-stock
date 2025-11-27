@@ -333,7 +333,11 @@ class AchatViewSet(TenantFilterMixin, viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def perform_create(self, serializer):
-        obj = serializer.save()
+        # Attacher la company de l'utilisateur
+        if hasattr(self.request, 'company') and self.request.company is not None:
+            obj = serializer.save(company=self.request.company)
+        else:
+            obj = serializer.save()
         try:
             # Optionnel: entrepôt spécifié dans la requête
             warehouse_id = self.request.data.get('warehouse') or self.request.data.get('warehouse_id')
@@ -492,7 +496,16 @@ class FactureViewSet(TenantFilterMixin, viewsets.ModelViewSet):
 
             # Créer la facture avec une date (pas datetime)
             from datetime import date
+
+            # Récupérer la company de l'utilisateur ou du BL
+            company = None
+            if hasattr(request, 'company') and request.company:
+                company = request.company
+            elif bl.company:
+                company = bl.company
+
             facture = Facture.objects.create(
+                company=company,
                 numero=numero,
                 date_emission=date.today(),  # Forcer une date, pas un datetime
                 client=bl.client,

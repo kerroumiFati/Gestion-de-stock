@@ -1,6 +1,145 @@
 {% load static %}
 {% load i18n %}
 <script src="{% static 'script/facture.js' %}" type="text/javascript"></script>
+
+<style>
+/* Custom Select Dropdown pour Factures */
+.custom-select-container {
+    position: relative;
+    width: 100%;
+}
+
+.custom-select-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    background: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-height: 38px;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+}
+
+.custom-select-trigger:hover {
+    border-color: #80bdff;
+}
+
+.custom-select-trigger.open {
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+}
+
+.custom-select-trigger .selected-text {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #495057;
+}
+
+.custom-select-trigger .selected-text.placeholder {
+    color: #6c757d;
+}
+
+.custom-select-trigger .arrow {
+    margin-left: 10px;
+    transition: transform 0.2s;
+    color: #495057;
+}
+
+.custom-select-trigger.open .arrow {
+    transform: rotate(180deg);
+}
+
+.custom-select-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #ced4da;
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 1050;
+    display: none;
+}
+
+.custom-select-dropdown.open {
+    display: block;
+}
+
+.custom-select-search {
+    padding: 8px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.custom-select-search input {
+    width: 100%;
+    padding: 6px 10px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+
+.custom-select-search input:focus {
+    outline: none;
+    border-color: #80bdff;
+}
+
+.custom-select-options {
+    max-height: 250px;
+    overflow-y: auto;
+}
+
+.custom-select-options::-webkit-scrollbar {
+    width: 8px;
+}
+
+.custom-select-options::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.custom-select-options::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+
+.custom-select-options::-webkit-scrollbar-thumb:hover {
+    background: #a1a1a1;
+}
+
+.custom-select-option {
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: background 0.15s;
+    border-bottom: 1px solid #f8f9fa;
+    color: #000;
+}
+
+.custom-select-option:hover {
+    background: #f8f9fa;
+}
+
+.custom-select-option.selected {
+    background: #e9ecef;
+    font-weight: 500;
+}
+
+.custom-select-no-results {
+    padding: 12px;
+    text-align: center;
+    color: #6c757d;
+    font-style: italic;
+}
+</style>
+
 <div class="container-fluid">
   <div class="card bg-white">
     <div class="card-header card-color">
@@ -10,11 +149,43 @@
       <div class="row">
         <div class="col-sm-4 mb-2">
           <label>{% trans "Client" %}</label>
-          <select id="fact_client" class="form-control"><option>{% trans "Choisir..." %}</option></select>
+          <!-- Custom Select pour Client -->
+          <div class="custom-select-container" id="customSelectFactClient">
+              <div class="custom-select-trigger" id="factClientTrigger">
+                  <span class="selected-text placeholder">{% trans "Choisir..." %}</span>
+                  <i class="fas fa-chevron-down arrow"></i>
+              </div>
+              <div class="custom-select-dropdown" id="factClientDropdown">
+                  <div class="custom-select-search">
+                      <input type="text" id="factClientSearch" placeholder="{% trans 'Rechercher...' %}">
+                  </div>
+                  <div class="custom-select-options" id="factClientOptions"></div>
+              </div>
+              <!-- Select caché pour compatibilité -->
+              <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
+                  <select id="fact_client"><option value="">{% trans "Choisir..." %}</option></select>
+              </div>
+          </div>
         </div>
         <div class="col-sm-4 mb-2">
           <label>{% trans "Bon de livraison" %}</label>
-          <select id="fact_bl" class="form-control"><option>{% trans "Depuis BL validé..." %}</option></select>
+          <!-- Custom Select pour BL -->
+          <div class="custom-select-container" id="customSelectFactBL">
+              <div class="custom-select-trigger" id="factBLTrigger">
+                  <span class="selected-text placeholder">{% trans "Depuis BL validé..." %}</span>
+                  <i class="fas fa-chevron-down arrow"></i>
+              </div>
+              <div class="custom-select-dropdown" id="factBLDropdown">
+                  <div class="custom-select-search">
+                      <input type="text" id="factBLSearch" placeholder="{% trans 'Rechercher...' %}">
+                  </div>
+                  <div class="custom-select-options" id="factBLOptions"></div>
+              </div>
+              <!-- Select caché pour compatibilité -->
+              <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
+                  <select id="fact_bl"><option value="">{% trans "Depuis BL validé..." %}</option></select>
+              </div>
+          </div>
         </div>
         <div class="col-sm-2 mb-2">
           <label>{% trans "TVA %" %}</label>
@@ -25,9 +196,14 @@
           <input id="fact_num" type="text" class="form-control" placeholder="{% trans 'auto' %}">
         </div>
       </div>
-      <div class="row">
+      <div class="row mb-3">
         <div class="col">
-          <button id="btn_create_from_bl" class="btn btn-outline-success">{% trans "Créer depuis BL" %}</button>
+          <button id="btn_create_from_bl" class="btn btn-outline-success">
+            <i class="fas fa-plus mr-1"></i>{% trans "Créer depuis BL" %}
+          </button>
+          <button id="btn_refresh_factures" class="btn btn-outline-primary ml-2">
+            <i class="fas fa-sync-alt mr-1"></i>{% trans "Rafraîchir" %}
+          </button>
         </div>
       </div>
       <!-- Résumé financier -->
@@ -65,7 +241,7 @@
           </div>
         </div>
       </div>
-      
+
       <div class="row table-responsive m-auto rounded mt-3">
         <table id="tfacture" class="table table-hover w-100">
           <thead>
@@ -85,3 +261,370 @@
     </div>
   </div>
 </div>
+
+<script>
+(function() {
+    var factureCustomSelectData = {
+        clients: [],
+        bls: []
+    };
+
+    function toggleFactureCustomSelect(containerId) {
+        var container = document.getElementById(containerId);
+        if (!container) return;
+
+        var trigger = container.querySelector('.custom-select-trigger');
+        var dropdown = container.querySelector('.custom-select-dropdown');
+        var isOpen = dropdown.classList.contains('open');
+
+        // Fermer tous les autres dropdowns
+        document.querySelectorAll('.custom-select-dropdown.open').forEach(function(d) {
+            d.classList.remove('open');
+            var t = d.closest('.custom-select-container');
+            if (t) t.querySelector('.custom-select-trigger').classList.remove('open');
+        });
+
+        if (!isOpen) {
+            dropdown.classList.add('open');
+            trigger.classList.add('open');
+            var searchInput = dropdown.querySelector('input');
+            if (searchInput) {
+                searchInput.value = '';
+                searchInput.focus();
+            }
+            filterFactureOptions(containerId, '');
+        }
+    }
+
+    function filterFactureOptions(containerId, searchText) {
+        var container = document.getElementById(containerId);
+        if (!container) return;
+
+        var optionsContainer = container.querySelector('.custom-select-options');
+        var options = optionsContainer.querySelectorAll('.custom-select-option');
+        var search = (searchText || '').toLowerCase().trim();
+        var hasVisible = false;
+
+        for (var i = 0; i < options.length; i++) {
+            var opt = options[i];
+            var text = (opt.textContent || '').toLowerCase();
+            var match = !search || text.indexOf(search) !== -1;
+            opt.style.display = match ? '' : 'none';
+            if (match) hasVisible = true;
+        }
+
+        // Message "Aucun résultat"
+        var noResults = optionsContainer.querySelector('.custom-select-no-results');
+        if (!hasVisible) {
+            if (!noResults) {
+                noResults = document.createElement('div');
+                noResults.className = 'custom-select-no-results';
+                noResults.textContent = 'Aucun résultat trouvé';
+                optionsContainer.appendChild(noResults);
+            }
+            noResults.style.display = '';
+        } else if (noResults) {
+            noResults.style.display = 'none';
+        }
+    }
+
+    function selectFactureOption(containerId, value, text, hiddenSelectId, callback) {
+        var container = document.getElementById(containerId);
+        if (!container) return;
+
+        var trigger = container.querySelector('.custom-select-trigger');
+        var selectedText = trigger.querySelector('.selected-text');
+        var dropdown = container.querySelector('.custom-select-dropdown');
+        var hiddenSelect = document.getElementById(hiddenSelectId);
+
+        // Mettre à jour l'affichage
+        selectedText.textContent = text;
+        selectedText.classList.toggle('placeholder', !value);
+
+        // Fermer le dropdown
+        dropdown.classList.remove('open');
+        trigger.classList.remove('open');
+
+        // Mettre à jour le select caché - IMPORTANT pour que facture.js puisse lire la valeur
+        if (hiddenSelect) {
+            // S'assurer que l'option existe
+            var option = hiddenSelect.querySelector('option[value="' + value + '"]');
+            if (!option) {
+                option = document.createElement('option');
+                option.value = value;
+                option.textContent = text;
+                hiddenSelect.appendChild(option);
+            }
+            hiddenSelect.value = value;
+
+            console.log('[Facture] Hidden select ' + hiddenSelectId + ' updated to:', value);
+
+            // Déclencher le change event pour jQuery
+            if (typeof jQuery !== 'undefined') {
+                jQuery(hiddenSelect).val(value).trigger('change');
+            }
+
+            // Aussi déclencher un événement natif
+            var event = new Event('change', { bubbles: true });
+            hiddenSelect.dispatchEvent(event);
+        }
+
+        // Marquer l'option comme sélectionnée
+        var allOpts = container.querySelectorAll('.custom-select-option');
+        for (var i = 0; i < allOpts.length; i++) {
+            if (allOpts[i].getAttribute('data-value') === String(value)) {
+                allOpts[i].classList.add('selected');
+            } else {
+                allOpts[i].classList.remove('selected');
+            }
+        }
+
+        // Callback optionnel
+        if (typeof callback === 'function') {
+            callback(value);
+        }
+    }
+
+    function populateFactureClients() {
+        var optionsContainer = document.getElementById('factClientOptions');
+        if (!optionsContainer) return;
+
+        optionsContainer.innerHTML = '';
+
+        // Option par défaut
+        var defaultOpt = document.createElement('div');
+        defaultOpt.className = 'custom-select-option';
+        defaultOpt.setAttribute('data-value', '');
+        defaultOpt.textContent = 'Choisir...';
+        defaultOpt.onclick = function() {
+            selectFactureOption('customSelectFactClient', '', 'Choisir...', 'fact_client', loadFactureBLs);
+        };
+        optionsContainer.appendChild(defaultOpt);
+
+        // Ajouter les clients
+        factureCustomSelectData.clients.forEach(function(c) {
+            var opt = document.createElement('div');
+            opt.className = 'custom-select-option';
+            opt.setAttribute('data-value', c.id);
+            var label = [(c.nom || '').trim(), (c.prenom || '').trim()].filter(Boolean).join(' ') || ('Client #' + c.id);
+            opt.textContent = label;
+            opt.onclick = function() {
+                selectFactureOption('customSelectFactClient', c.id, label, 'fact_client', loadFactureBLs);
+            };
+            optionsContainer.appendChild(opt);
+        });
+    }
+
+    function populateFactureBLs() {
+        var optionsContainer = document.getElementById('factBLOptions');
+        if (!optionsContainer) return;
+
+        optionsContainer.innerHTML = '';
+
+        // Option par défaut
+        var defaultOpt = document.createElement('div');
+        defaultOpt.className = 'custom-select-option';
+        defaultOpt.setAttribute('data-value', '');
+        defaultOpt.textContent = 'Depuis BL validé...';
+        defaultOpt.onclick = function() {
+            selectFactureOption('customSelectFactBL', '', 'Depuis BL validé...', 'fact_bl');
+        };
+        optionsContainer.appendChild(defaultOpt);
+
+        // Ajouter les BLs
+        factureCustomSelectData.bls.forEach(function(bl) {
+            var opt = document.createElement('div');
+            opt.className = 'custom-select-option';
+            opt.setAttribute('data-value', bl.id);
+            var label = (bl.numero ? bl.numero : 'BL #' + bl.id);
+            if (bl.date_creation) {
+                label += ' - ' + bl.date_creation.substring(0, 10);
+            }
+            if (bl.client_nom || bl.client_prenom) {
+                label += ' (' + [(bl.client_nom || ''), (bl.client_prenom || '')].filter(Boolean).join(' ') + ')';
+            }
+            if (bl.statut) {
+                label += ' [' + bl.statut + ']';
+            }
+            opt.textContent = label;
+            opt.onclick = function() {
+                selectFactureOption('customSelectFactBL', bl.id, label, 'fact_bl');
+            };
+            optionsContainer.appendChild(opt);
+        });
+
+        // Reset l'affichage du custom select BL
+        var trigger = document.getElementById('factBLTrigger');
+        if (trigger) {
+            var selectedText = trigger.querySelector('.selected-text');
+            if (selectedText) {
+                selectedText.textContent = 'Depuis BL validé...';
+                selectedText.classList.add('placeholder');
+            }
+        }
+    }
+
+    function loadFactureClients() {
+        console.log('[Facture] Loading clients...');
+        fetch('/API/clients/?page_size=200')
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                var list = Array.isArray(data) ? data : (data && data.results ? data.results : []);
+                console.log('[Facture] Clients loaded:', list.length);
+                factureCustomSelectData.clients = list;
+                populateFactureClients();
+            })
+            .catch(function(err) {
+                console.error('[Facture] Error loading clients:', err);
+            });
+    }
+
+    function loadFactureBLs(clientId) {
+        console.log('[Facture] Loading validated BLs for client:', clientId);
+
+        // Reset BLs
+        factureCustomSelectData.bls = [];
+        populateFactureBLs();
+
+        // Construire l'URL - charger uniquement les BLs validés
+        var url = '/API/bons/?page_size=500&statut=validated';
+        if (clientId) {
+            url += '&client=' + clientId;
+        }
+
+        fetch(url)
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                var list = Array.isArray(data) ? data : (data && data.results ? data.results : []);
+                // Filtrer côté client aussi au cas où l'API ne supporte pas le filtre statut
+                list = list.filter(function(bl) {
+                    return bl.statut === 'validated';
+                });
+                console.log('[Facture] Validated BLs loaded:', list.length);
+                factureCustomSelectData.bls = list;
+                populateFactureBLs();
+            })
+            .catch(function(err) {
+                console.error('[Facture] Error loading BLs:', err);
+            });
+    }
+
+    var factureSelectsInitialized = false;
+
+    function initFactureCustomSelects() {
+        console.log('[Facture] Initializing custom selects... initialized=' + factureSelectsInitialized);
+
+        var clientTrigger = document.getElementById('factClientTrigger');
+        var blTrigger = document.getElementById('factBLTrigger');
+
+        if (!clientTrigger || !blTrigger) {
+            console.log('[Facture] Triggers not found, retrying in 200ms...');
+            setTimeout(initFactureCustomSelects, 200);
+            return;
+        }
+
+        // Éviter la double initialisation des event listeners
+        if (!factureSelectsInitialized) {
+            factureSelectsInitialized = true;
+
+            // Event listener pour le trigger Client
+            clientTrigger.onclick = function(e) {
+                e.stopPropagation();
+                e.preventDefault();
+                console.log('[Facture] Client trigger clicked');
+                toggleFactureCustomSelect('customSelectFactClient');
+            };
+
+            // Event listener pour le trigger BL
+            blTrigger.onclick = function(e) {
+                e.stopPropagation();
+                e.preventDefault();
+                console.log('[Facture] BL trigger clicked');
+                toggleFactureCustomSelect('customSelectFactBL');
+            };
+
+            // Event listeners pour la recherche
+            var clientSearch = document.getElementById('factClientSearch');
+            if (clientSearch) {
+                clientSearch.oninput = function() {
+                    filterFactureOptions('customSelectFactClient', this.value);
+                };
+                clientSearch.onclick = function(e) { e.stopPropagation(); };
+            }
+
+            var blSearch = document.getElementById('factBLSearch');
+            if (blSearch) {
+                blSearch.oninput = function() {
+                    filterFactureOptions('customSelectFactBL', this.value);
+                };
+                blSearch.onclick = function(e) { e.stopPropagation(); };
+            }
+
+            // Fermer quand on clique ailleurs (une seule fois)
+            document.addEventListener('click', function(e) {
+                if (!e.target.closest('.custom-select-container')) {
+                    document.querySelectorAll('.custom-select-dropdown.open').forEach(function(d) {
+                        d.classList.remove('open');
+                        var t = d.closest('.custom-select-container');
+                        if (t) t.querySelector('.custom-select-trigger').classList.remove('open');
+                    });
+                }
+            });
+
+            console.log('[Facture] Event listeners attached successfully');
+        }
+
+        // Charger les clients et les BLs
+        loadFactureClients();
+        loadFactureBLs();
+    }
+
+    // Exposer une fonction pour réinitialiser le custom select BL après création de facture
+    window.resetFactureBLCustomSelect = function() {
+        var trigger = document.getElementById('factBLTrigger');
+        if (trigger) {
+            var selectedText = trigger.querySelector('.selected-text');
+            if (selectedText) {
+                selectedText.textContent = 'Depuis BL validé...';
+                selectedText.classList.add('placeholder');
+            }
+        }
+        // Recharger les BLs validés
+        loadFactureBLs();
+    };
+
+    // Initialisation multiple pour s'assurer que ça fonctionne
+    // 1. Au chargement du DOM
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initFactureCustomSelects);
+    } else {
+        initFactureCustomSelects();
+    }
+
+    // 2. Pour le chargement dynamique via fragment
+    document.addEventListener('fragment:loaded', function(e) {
+        if (e && e.detail && e.detail.name === 'facture') {
+            factureSelectsInitialized = false; // Reset pour réattacher les events
+            initFactureCustomSelects();
+        }
+    });
+
+    // 3. Fallback avec setTimeout
+    setTimeout(function() {
+        if (!factureSelectsInitialized) {
+            console.log('[Facture] Fallback initialization...');
+            initFactureCustomSelects();
+        }
+    }, 500);
+
+    // 4. Second fallback
+    setTimeout(function() {
+        var optionsContainer = document.getElementById('factClientOptions');
+        if (optionsContainer && optionsContainer.children.length === 0) {
+            console.log('[Facture] Second fallback - reloading data...');
+            loadFactureClients();
+            loadFactureBLs();
+        }
+    }, 1000);
+})();
+</script>
