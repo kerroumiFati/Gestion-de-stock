@@ -818,26 +818,50 @@ function displaySessionsTable(sessions) {
 async function openSession(sessionId, event) {
     if (event) event.stopPropagation();
 
+    console.log('[Inventaire] Ouverture session ID:', sessionId);
+
     try {
         const response = await fetch(`/API/inventaires/${sessionId}/`);
+        console.log('[Inventaire] Response status:', response.status);
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('[Inventaire] Erreur API:', response.status, errorText);
+            throw new Error(`Erreur ${response.status}: ${errorText}`);
+        }
+
         const session = await response.json();
+        console.log('[Inventaire] Session chargée:', session);
+
+        if (!session || !session.id) {
+            throw new Error('Session invalide reçue de l\'API');
+        }
 
         activeSession = session;
         sessionProducts = session.lignes || [];
 
         // Mettre à jour l'indicateur
-        document.getElementById('current_session_indicator').innerHTML = `
-            <i class="fas fa-folder-open me-1"></i>
-            <strong>${session.numero}</strong>
-        `;
+        const indicator = document.getElementById('current_session_indicator');
+        if (indicator) {
+            indicator.innerHTML = `
+                <i class="fas fa-folder-open me-1"></i>
+                <strong>${session.numero}</strong>
+            `;
+        }
 
         // Activer le bouton comptage
-        document.getElementById('btn_view_counting').disabled = false;
+        const btnCounting = document.getElementById('btn_view_counting');
+        if (btnCounting) btnCounting.disabled = false;
 
         // Charger les infos de session
-        document.getElementById('active_session_title').textContent = `Session: ${session.numero}`;
-        document.getElementById('active_session_user').textContent = session.created_by_username || 'N/A';
-        document.getElementById('active_session_date').textContent = session.date || '';
+        const titleEl = document.getElementById('active_session_title');
+        if (titleEl) titleEl.textContent = `Session: ${session.numero}`;
+
+        const userEl = document.getElementById('active_session_user');
+        if (userEl) userEl.textContent = session.created_by_username || 'N/A';
+
+        const dateEl = document.getElementById('active_session_date');
+        if (dateEl) dateEl.textContent = session.date || '';
 
         // Basculer vers vue comptage
         switchToView('counting');
@@ -846,8 +870,8 @@ async function openSession(sessionId, event) {
         displayProductsForCounting();
 
     } catch (error) {
-        console.error('Erreur ouverture session:', error);
-        alert('Erreur lors de l\'ouverture de la session');
+        console.error('[Inventaire] Erreur ouverture session:', error.message, error);
+        alert('Erreur lors de l\'ouverture de la session: ' + error.message);
     }
 }
 
@@ -1105,20 +1129,25 @@ function initCategoryCustomSelect() {
         return;
     }
 
-    // Toujours réattacher les events (au cas où le DOM a changé)
+    // Supprimer les anciens event listeners en clonant les éléments
+    var newTrigger = trigger.cloneNode(true);
+    trigger.parentNode.replaceChild(newTrigger, trigger);
+    trigger = newTrigger;
+
     console.log('[Inventaire] Custom select catégorie - attachement des events');
 
-    // Toggle dropdown
-    trigger.onclick = function(e) {
+    // Toggle dropdown - utiliser addEventListener au lieu de onclick
+    trigger.addEventListener('click', function(e) {
         e.stopPropagation();
         e.preventDefault();
         console.log('[Inventaire] Category trigger clicked');
 
-        var isOpen = dropdown.classList.contains('open');
+        var dd = document.getElementById('categoryDropdown');
+        var isOpen = dd.classList.contains('open');
 
         // Fermer tous les autres dropdowns
         document.querySelectorAll('.custom-select-dropdown.open').forEach(function(d) {
-            if (d !== dropdown) {
+            if (d !== dd) {
                 d.classList.remove('open');
                 var t = d.closest('.custom-select-container');
                 if (t) {
@@ -1129,42 +1158,53 @@ function initCategoryCustomSelect() {
         });
 
         if (!isOpen) {
-            dropdown.classList.add('open');
+            dd.classList.add('open');
             trigger.classList.add('open');
-            if (searchInput) {
-                searchInput.value = '';
-                setTimeout(function() { searchInput.focus(); }, 50);
+            var si = document.getElementById('categorySearch');
+            if (si) {
+                si.value = '';
+                setTimeout(function() { si.focus(); }, 50);
                 filterCategoryOptions('');
             }
         } else {
-            dropdown.classList.remove('open');
+            dd.classList.remove('open');
             trigger.classList.remove('open');
         }
-    };
+    });
 
     // Search filter
     if (searchInput) {
-        searchInput.oninput = function() {
+        // Cloner pour supprimer les anciens events
+        var newSearchInput = searchInput.cloneNode(true);
+        searchInput.parentNode.replaceChild(newSearchInput, searchInput);
+        searchInput = newSearchInput;
+
+        searchInput.addEventListener('input', function() {
             filterCategoryOptions(this.value);
-        };
-        searchInput.onclick = function(e) {
+        });
+        searchInput.addEventListener('click', function(e) {
             e.stopPropagation();
-        };
-        searchInput.onkeydown = function(e) {
+        });
+        searchInput.addEventListener('keydown', function(e) {
             e.stopPropagation();
-        };
+        });
     }
 
     // Option click - utiliser event delegation
     if (optionsContainer) {
-        optionsContainer.onclick = function(e) {
+        // Cloner pour supprimer les anciens events
+        var newOptionsContainer = optionsContainer.cloneNode(true);
+        optionsContainer.parentNode.replaceChild(newOptionsContainer, optionsContainer);
+        optionsContainer = newOptionsContainer;
+
+        optionsContainer.addEventListener('click', function(e) {
             e.stopPropagation();
             var option = e.target.closest('.custom-select-option');
             if (option) {
                 console.log('[Inventaire] Option selected:', option.textContent);
                 selectCategoryOption(option);
             }
-        };
+        });
     }
 
     // Close on outside click (une seule fois)
@@ -1219,13 +1259,22 @@ function selectCategoryOption(option) {
     var optionsContainer = document.getElementById('categoryOptions');
     var hiddenSelect = document.getElementById('filter_category');
 
-    var value = option.getAttribute('data-value');
+    if (!trigger || !dropdown || !optionsContainer) {
+        console.error('[Inventaire] Éléments du select introuvables');
+        return;
+    }
+
+    var value = option.getAttribute('data-value') || '';
     var text = option.textContent.trim();
+
+    console.log('[Inventaire] Sélection catégorie:', text, 'valeur:', value);
 
     // Update trigger text
     var selectedText = trigger.querySelector('.selected-text');
-    selectedText.textContent = text;
-    selectedText.classList.toggle('placeholder', value === '');
+    if (selectedText) {
+        selectedText.textContent = text;
+        selectedText.classList.toggle('placeholder', value === '');
+    }
 
     // Update hidden select
     if (hiddenSelect) {
@@ -1356,6 +1405,83 @@ function displayProductsGrid(products) {
             </div>
         `;
         grid.appendChild(col);
+    });
+}
+
+// Afficher en tableau (vue liste)
+function displayProductsTable(products) {
+    const tbody = document.getElementById('inv_table');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+    document.getElementById('products_count').textContent = products.length;
+
+    if (products.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="7" class="text-center text-muted py-4">
+                    <i class="fas fa-filter me-2"></i>Aucun produit trouvé avec ces filtres.
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    products.forEach(product => {
+        // Vérifier si déjà compté dans la session
+        const lineInSession = sessionProducts.find(l => l.produit === product.id);
+        const isCounted = lineInSession && lineInSession.counted_qty != null;
+        const countedQty = lineInSession ? lineInSession.counted_qty : null;
+        const ecart = countedQty != null ? countedQty - product.quantite : null;
+
+        // Déterminer le statut du stock
+        let stockBadge = '';
+        if (product.quantite === 0) {
+            stockBadge = '<span class="stock-badge badge-rupture">Rupture</span>';
+        } else if (product.quantite <= (product.seuil_critique || 0)) {
+            stockBadge = '<span class="stock-badge badge-critique">Critique</span>';
+        } else if (product.quantite <= (product.seuil_alerte || 0)) {
+            stockBadge = '<span class="stock-badge badge-alerte">Alerte</span>';
+        } else {
+            stockBadge = '<span class="stock-badge badge-normal">Normal</span>';
+        }
+
+        const tr = document.createElement('tr');
+        tr.className = isCounted ? 'table-success' : '';
+        tr.style.cursor = 'pointer';
+        tr.onclick = function() { selectProductForCounting(product.id); };
+
+        tr.innerHTML = `
+            <td>
+                <div class="d-flex align-items-center">
+                    ${isCounted ? '<i class="fas fa-check-circle text-success me-2"></i>' : ''}
+                    <div>
+                        <strong>${product.designation}</strong>
+                        ${product.code_barre ? `<br><small class="text-muted"><i class="fas fa-barcode me-1"></i>${product.code_barre}</small>` : ''}
+                    </div>
+                </div>
+            </td>
+            <td><span class="badge bg-light text-dark">${product.categorie_nom || 'N/A'}</span></td>
+            <td class="text-center"><strong>${product.quantite}</strong></td>
+            <td class="text-center">
+                ${countedQty != null ? `<strong class="text-primary">${countedQty}</strong>` : '<span class="text-muted">-</span>'}
+            </td>
+            <td class="text-center">
+                ${ecart != null ? `
+                    <span class="${ecart > 0 ? 'text-success' : (ecart < 0 ? 'text-danger' : 'text-muted')} fw-bold">
+                        <i class="fas fa-${ecart > 0 ? 'arrow-up' : (ecart < 0 ? 'arrow-down' : 'equals')} me-1"></i>
+                        ${ecart > 0 ? '+' : ''}${ecart}
+                    </span>
+                ` : '<span class="text-muted">-</span>'}
+            </td>
+            <td>${stockBadge}</td>
+            <td>
+                <button class="btn btn-sm ${isCounted ? 'btn-outline-primary' : 'btn-primary'}" onclick="event.stopPropagation(); selectProductForCounting(${product.id})">
+                    <i class="fas fa-${isCounted ? 'edit' : 'plus'} me-1"></i>${isCounted ? 'Modifier' : 'Compter'}
+                </button>
+            </td>
+        `;
+        tbody.appendChild(tr);
     });
 }
 

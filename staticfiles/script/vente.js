@@ -687,12 +687,12 @@
     html += '<div class="card border-success mb-3">';
     html += '<div class="card-header bg-success text-white"><i class="fa fa-money-bill-wave"></i> Montants</div>';
     html += '<div class="card-body">';
-    html += '<p class="mb-2"><strong>Total HT:</strong> <span class="float-right">'+(sale.total_ht || 0)+' '+(sale.currency_symbol || '€')+'</span></p>';
+    html += '<p class="mb-2"><strong>Total HT:</strong> <span class="float-right">'+(sale.total_ht || 0)+' '+(sale.currency_symbol || 'DA')+'</span></p>';
     if(sale.remise_percent > 0){
       html += '<p class="mb-2"><strong>Remise ('+(sale.remise_percent || 0)+'%):</strong> <span class="float-right text-danger">-'+((sale.total_ht || 0) * (sale.remise_percent || 0) / 100).toFixed(2)+' '+(sale.currency_symbol || '€')+'</span></p>';
     }
     html += '<hr class="my-2">';
-    html += '<h5 class="mb-0"><strong>Total TTC:</strong> <span class="float-right text-success">'+(sale.total_ttc || 0)+' '+(sale.currency_symbol || '€')+'</span></h5>';
+    html += '<h5 class="mb-0"><strong>Total TTC:</strong> <span class="float-right text-success">'+(sale.total_ttc || 0)+' '+(sale.currency_symbol || 'DA')+'</span></h5>';
     html += '</div></div>';
     if(sale.observations){
       html += '<div class="alert alert-info mb-0"><strong><i class="fa fa-comment"></i> Observations:</strong><br>'+(sale.observations || '')+'</div>';
@@ -721,7 +721,7 @@
         const prix = parseFloat(ligne.prixU_snapshot || 0);
         const qty = parseInt(ligne.quantite || 0, 10);
         const total = prix * qty;
-        const sym = ligne.currency_symbol || sale.currency_symbol || '€';
+        const sym = ligne.currency_symbol || sale.currency_symbol || 'DA';
         html += '<tr>';
         html += '<td><code>'+ref+'</code></td>';
         html += '<td>'+desig+'</td>';

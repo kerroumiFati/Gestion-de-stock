@@ -36,6 +36,7 @@ urlpatterns = [
     path('admindash/distribution/', login_required(views.distribution_page), name='distribution_dashboard_page'),
     path('admindash/config-clients-chauffeurs/', login_required(views.config_clients_chauffeurs_page), name='config_clients_chauffeurs_page'),
     path('admindash/commandes-mobile/', login_required(views.commandes_clients_mobile), name='commandes_clients_mobile'),
+    path('admindash/visites-clients/', login_required(views.visites_clients_page), name='visites_clients_page'),
     path('livreur/app/', login_required(views.livreur_app_page), name='livreur_app'),
     path('produits/', views.produit_all, name='produits'),
     path('caisse/', views.caisse, name='caisse'),

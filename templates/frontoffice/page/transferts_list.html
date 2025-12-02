@@ -1,6 +1,149 @@
 {% load i18n %}
 {% load static %}
 
+<style>
+/* Custom Select Styles */
+.custom-select-container {
+    position: relative;
+    width: 100%;
+}
+
+.custom-select-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    background: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-height: 38px;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+}
+
+.custom-select-trigger:hover {
+    border-color: #667eea;
+}
+
+.custom-select-trigger.open {
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+    border-radius: 4px 4px 0 0;
+}
+
+.custom-select-trigger .selected-text {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #000;
+}
+
+.custom-select-trigger .selected-text.placeholder {
+    color: #6c757d;
+}
+
+.custom-select-trigger .arrow {
+    margin-left: 10px;
+    transition: transform 0.2s;
+    color: #495057;
+}
+
+.custom-select-trigger.open .arrow {
+    transform: rotate(180deg);
+}
+
+.custom-select-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #667eea;
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 9999;
+    display: none;
+}
+
+.custom-select-dropdown.open {
+    display: block;
+}
+
+.custom-select-search {
+    padding: 8px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.custom-select-search input {
+    width: 100%;
+    padding: 6px 10px;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+
+.custom-select-search input:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+.custom-select-options {
+    max-height: 250px;
+    overflow-y: auto;
+}
+
+.custom-select-options::-webkit-scrollbar {
+    width: 6px;
+}
+
+.custom-select-options::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+.custom-select-options::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+.custom-select-options::-webkit-scrollbar-thumb:hover {
+    background: #a1a1a1;
+}
+
+.custom-select-option {
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: background 0.15s;
+    border-bottom: 1px solid #f8f9fa;
+    color: #000;
+}
+
+.custom-select-option:last-child {
+    border-bottom: none;
+}
+
+.custom-select-option:hover {
+    background: #f8f9fa;
+}
+
+.custom-select-option.selected {
+    background: #667eea;
+    color: white;
+}
+
+.custom-select-no-results {
+    padding: 12px;
+    text-align: center;
+    color: #6c757d;
+    font-style: italic;
+}
+</style>
+
 <div class="container-fluid">
     <div class="card bg-white">
         <div class="card-header card-color">
@@ -12,37 +155,87 @@
             <!-- Filtres -->
             <div class="card mb-3">
                 <div class="card-body">
-                    <form method="get" class="row">
+                    <form method="get" class="row" id="transfertFilterForm">
                         <div class="col-md-3">
-                            <label for="statut"><i class="fa fa-filter"></i> {% trans "Statut" %}:</label>
-                            <select name="statut" id="statut" class="form-control" onchange="this.form.submit()">
-                                <option value="">{% trans "Tous" %}</option>
-                                <option value="brouillon" {% if statut_filter == "brouillon" %}selected{% endif %}>{% trans "Brouillon" %}</option>
-                                <option value="valide" {% if statut_filter == "valide" %}selected{% endif %}>{% trans "Validé" %}</option>
-                                <option value="annule" {% if statut_filter == "annule" %}selected{% endif %}>{% trans "Annulé" %}</option>
-                            </select>
+                            <label><i class="fa fa-filter"></i> {% trans "Statut" %}:</label>
+                            <div class="custom-select-container" id="customSelectStatut">
+                                <div class="custom-select-trigger" id="statutTrigger">
+                                    <span class="selected-text placeholder">{% trans "Tous" %}</span>
+                                    <i class="fas fa-chevron-down arrow"></i>
+                                </div>
+                                <div class="custom-select-dropdown" id="statutDropdown">
+                                    <div class="custom-select-options" id="statutOptions">
+                                        <div class="custom-select-option {% if not statut_filter %}selected{% endif %}" data-value="">{% trans "Tous" %}</div>
+                                        <div class="custom-select-option {% if statut_filter == 'brouillon' %}selected{% endif %}" data-value="brouillon">{% trans "Brouillon" %}</div>
+                                        <div class="custom-select-option {% if statut_filter == 'valide' %}selected{% endif %}" data-value="valide">{% trans "Validé" %}</div>
+                                        <div class="custom-select-option {% if statut_filter == 'annule' %}selected{% endif %}" data-value="annule">{% trans "Annulé" %}</div>
+                                    </div>
+                                </div>
+                                <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
+                                    <select name="statut" id="statut">
+                                        <option value="">{% trans "Tous" %}</option>
+                                        <option value="brouillon" {% if statut_filter == "brouillon" %}selected{% endif %}>{% trans "Brouillon" %}</option>
+                                        <option value="valide" {% if statut_filter == "valide" %}selected{% endif %}>{% trans "Validé" %}</option>
+                                        <option value="annule" {% if statut_filter == "annule" %}selected{% endif %}>{% trans "Annulé" %}</option>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
                         <div class="col-md-3">
-                            <label for="source"><i class="fa fa-warehouse"></i> {% trans "Source" %}:</label>
-                            <select name="source" id="source" class="form-control" onchange="this.form.submit()">
-                                <option value="">{% trans "Tous" %}</option>
-                                {% for e in entrepots %}
-                                <option value="{{ e.id }}" {% if source_filter == e.id|stringformat:"s" %}selected{% endif %}>
-                                    {{ e.code }}
-                                </option>
-                                {% endfor %}
-                            </select>
+                            <label><i class="fa fa-warehouse"></i> {% trans "Source" %}:</label>
+                            <div class="custom-select-container" id="customSelectSource">
+                                <div class="custom-select-trigger" id="sourceTrigger">
+                                    <span class="selected-text placeholder">{% trans "Tous" %}</span>
+                                    <i class="fas fa-chevron-down arrow"></i>
+                                </div>
+                                <div class="custom-select-dropdown" id="sourceDropdown">
+                                    <div class="custom-select-search">
+                                        <input type="text" id="sourceSearch" placeholder="{% trans 'Rechercher...' %}">
+                                    </div>
+                                    <div class="custom-select-options" id="sourceOptions">
+                                        <div class="custom-select-option {% if not source_filter %}selected{% endif %}" data-value="">{% trans "Tous" %}</div>
+                                        {% for e in entrepots %}
+                                        <div class="custom-select-option {% if source_filter == e.id|stringformat:'s' %}selected{% endif %}" data-value="{{ e.id }}">{{ e.code }} - {{ e.name }}</div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
+                                    <select name="source" id="source">
+                                        <option value="">{% trans "Tous" %}</option>
+                                        {% for e in entrepots %}
+                                        <option value="{{ e.id }}" {% if source_filter == e.id|stringformat:"s" %}selected{% endif %}>{{ e.code }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
                         </div>
                         <div class="col-md-3">
-                            <label for="destination"><i class="fa fa-truck"></i> {% trans "Destination" %}:</label>
-                            <select name="destination" id="destination" class="form-control" onchange="this.form.submit()">
-                                <option value="">{% trans "Tous" %}</option>
-                                {% for e in entrepots %}
-                                <option value="{{ e.id }}" {% if dest_filter == e.id|stringformat:"s" %}selected{% endif %}>
-                                    {{ e.code }}
-                                </option>
-                                {% endfor %}
-                            </select>
+                            <label><i class="fa fa-truck"></i> {% trans "Destination" %}:</label>
+                            <div class="custom-select-container" id="customSelectDestination">
+                                <div class="custom-select-trigger" id="destinationTrigger">
+                                    <span class="selected-text placeholder">{% trans "Tous" %}</span>
+                                    <i class="fas fa-chevron-down arrow"></i>
+                                </div>
+                                <div class="custom-select-dropdown" id="destinationDropdown">
+                                    <div class="custom-select-search">
+                                        <input type="text" id="destinationSearch" placeholder="{% trans 'Rechercher...' %}">
+                                    </div>
+                                    <div class="custom-select-options" id="destinationOptions">
+                                        <div class="custom-select-option {% if not dest_filter %}selected{% endif %}" data-value="">{% trans "Tous" %}</div>
+                                        {% for e in entrepots %}
+                                        <div class="custom-select-option {% if dest_filter == e.id|stringformat:'s' %}selected{% endif %}" data-value="{{ e.id }}">{{ e.code }} - {{ e.name }}</div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
+                                    <select name="destination" id="destination">
+                                        <option value="">{% trans "Tous" %}</option>
+                                        {% for e in entrepots %}
+                                        <option value="{{ e.id }}" {% if dest_filter == e.id|stringformat:"s" %}selected{% endif %}>{{ e.code }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
                         </div>
                         <div class="col-md-3 d-flex align-items-end">
                             <a href="#" onclick="show('charger_van'); return false;" class="btn btn-primary btn-block">
@@ -244,17 +437,200 @@ function loadTransfertsPage(page) {
         .catch(err => console.error('Erreur de chargement:', err));
 }
 
-// Gérer les changements de filtres
-document.addEventListener('fragment:loaded', function(e) {
-    if (e.detail.name === 'transferts_list') {
-        // Les selects ont déjà onchange="this.form.submit()" - on les intercepte
-        const selects = document.querySelectorAll('select[onchange]');
-        selects.forEach(select => {
-            select.removeAttribute('onchange');
-            select.addEventListener('change', function() {
-                loadTransfertsPage(1);
-            });
+// ============================================
+// Custom Selects pour les filtres
+// ============================================
+(function() {
+    var initialized = false;
+
+    var selectConfigs = [
+        { containerId: 'customSelectStatut', triggerId: 'statutTrigger', dropdownId: 'statutDropdown', optionsId: 'statutOptions', hiddenId: 'statut', searchId: null },
+        { containerId: 'customSelectSource', triggerId: 'sourceTrigger', dropdownId: 'sourceDropdown', optionsId: 'sourceOptions', hiddenId: 'source', searchId: 'sourceSearch' },
+        { containerId: 'customSelectDestination', triggerId: 'destinationTrigger', dropdownId: 'destinationDropdown', optionsId: 'destinationOptions', hiddenId: 'destination', searchId: 'destinationSearch' }
+    ];
+
+    function initTransfertCustomSelects() {
+        if (initialized) return;
+
+        var allFound = selectConfigs.every(function(config) {
+            return document.getElementById(config.triggerId);
+        });
+
+        if (!allFound) {
+            setTimeout(initTransfertCustomSelects, 200);
+            return;
+        }
+
+        initialized = true;
+        console.log('[TransfertsList] Initializing custom selects');
+
+        selectConfigs.forEach(function(config) {
+            setupCustomSelect(config);
+        });
+
+        // Fermer tous les dropdowns quand on clique ailleurs
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.custom-select-container')) {
+                selectConfigs.forEach(function(config) {
+                    var dropdown = document.getElementById(config.dropdownId);
+                    var trigger = document.getElementById(config.triggerId);
+                    if (dropdown) dropdown.classList.remove('open');
+                    if (trigger) trigger.classList.remove('open');
+                });
+            }
+        });
+
+        // Mettre à jour le texte des triggers avec les valeurs sélectionnées
+        selectConfigs.forEach(function(config) {
+            var hiddenSelect = document.getElementById(config.hiddenId);
+            var optionsContainer = document.getElementById(config.optionsId);
+            if (hiddenSelect && hiddenSelect.value && optionsContainer) {
+                var selectedOpt = optionsContainer.querySelector('.custom-select-option.selected');
+                if (selectedOpt) {
+                    var trigger = document.getElementById(config.triggerId);
+                    var selectedText = trigger.querySelector('.selected-text');
+                    selectedText.textContent = selectedOpt.textContent.trim();
+                    selectedText.classList.remove('placeholder');
+                }
+            }
         });
     }
-});
+
+    function setupCustomSelect(config) {
+        var trigger = document.getElementById(config.triggerId);
+        var dropdown = document.getElementById(config.dropdownId);
+        var optionsContainer = document.getElementById(config.optionsId);
+        var searchInput = config.searchId ? document.getElementById(config.searchId) : null;
+
+        // Toggle dropdown
+        trigger.onclick = function(e) {
+            e.stopPropagation();
+            e.preventDefault();
+
+            var isOpen = dropdown.classList.contains('open');
+
+            // Fermer tous les autres
+            selectConfigs.forEach(function(c) {
+                if (c.containerId !== config.containerId) {
+                    var dd = document.getElementById(c.dropdownId);
+                    var tr = document.getElementById(c.triggerId);
+                    if (dd) dd.classList.remove('open');
+                    if (tr) tr.classList.remove('open');
+                }
+            });
+
+            if (!isOpen) {
+                dropdown.classList.add('open');
+                trigger.classList.add('open');
+                if (searchInput) {
+                    searchInput.value = '';
+                    setTimeout(function() { searchInput.focus(); }, 50);
+                    filterOptions(config.optionsId, '');
+                }
+            } else {
+                dropdown.classList.remove('open');
+                trigger.classList.remove('open');
+            }
+        };
+
+        // Search
+        if (searchInput) {
+            searchInput.oninput = function() {
+                filterOptions(config.optionsId, this.value);
+            };
+            searchInput.onclick = function(e) { e.stopPropagation(); };
+        }
+
+        // Option click
+        optionsContainer.onclick = function(e) {
+            e.stopPropagation();
+            var option = e.target.closest('.custom-select-option');
+            if (option) {
+                selectOption(config, option);
+            }
+        };
+    }
+
+    function filterOptions(optionsId, searchText) {
+        var optionsContainer = document.getElementById(optionsId);
+        if (!optionsContainer) return;
+
+        var options = optionsContainer.querySelectorAll('.custom-select-option');
+        var search = (searchText || '').toLowerCase().trim();
+        var hasVisible = false;
+
+        options.forEach(function(opt) {
+            var text = (opt.textContent || '').toLowerCase();
+            var match = !search || text.indexOf(search) !== -1;
+            opt.style.display = match ? '' : 'none';
+            if (match) hasVisible = true;
+        });
+
+        var noResults = optionsContainer.querySelector('.custom-select-no-results');
+        if (!hasVisible) {
+            if (!noResults) {
+                noResults = document.createElement('div');
+                noResults.className = 'custom-select-no-results';
+                noResults.textContent = 'Aucun résultat';
+                optionsContainer.appendChild(noResults);
+            }
+            noResults.style.display = '';
+        } else if (noResults) {
+            noResults.style.display = 'none';
+        }
+    }
+
+    function selectOption(config, option) {
+        var trigger = document.getElementById(config.triggerId);
+        var dropdown = document.getElementById(config.dropdownId);
+        var optionsContainer = document.getElementById(config.optionsId);
+        var hiddenSelect = document.getElementById(config.hiddenId);
+
+        var value = option.getAttribute('data-value');
+        var text = option.textContent.trim();
+
+        // Update trigger text
+        var selectedText = trigger.querySelector('.selected-text');
+        selectedText.textContent = text;
+        selectedText.classList.toggle('placeholder', value === '');
+
+        // Update hidden select
+        if (hiddenSelect) {
+            hiddenSelect.value = value;
+        }
+
+        // Update selected state
+        optionsContainer.querySelectorAll('.custom-select-option').forEach(function(opt) {
+            opt.classList.toggle('selected', opt.getAttribute('data-value') === value);
+        });
+
+        // Close dropdown
+        dropdown.classList.remove('open');
+        trigger.classList.remove('open');
+
+        // Apply filter
+        loadTransfertsPage(1);
+    }
+
+    // Initialize
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initTransfertCustomSelects);
+    } else {
+        initTransfertCustomSelects();
+    }
+
+    // For dynamic loading
+    document.addEventListener('fragment:loaded', function(e) {
+        if (e && e.detail && e.detail.name === 'transferts_list') {
+            initialized = false;
+            initTransfertCustomSelects();
+        }
+    });
+
+    setTimeout(function() {
+        if (!initialized) {
+            initTransfertCustomSelects();
+        }
+    }, 500);
+})();
 </script>

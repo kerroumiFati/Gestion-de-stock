@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
 from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
-from django.db import transaction
+from django.db import transaction, models
 from django.shortcuts import get_object_or_404, render
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
@@ -201,6 +201,56 @@ class LivreurViewSet(viewsets.ModelViewSet):
             'livreur_id': livreur.id,
             'livreur_nom': livreur.nom,
             'clients': serializer.data
+        })
+
+    @action(detail=True, methods=['get'])
+    def clients_du_jour(self, request, pk=None):
+        """
+        Récupérer les clients à visiter aujourd'hui selon le planning hebdomadaire.
+        Utilise ClientLivreurHebdo pour déterminer quels clients sont assignés
+        pour le jour de la semaine actuel.
+        """
+        from datetime import date
+        from API.models import Client
+
+        livreur = self.get_object()
+
+        # Obtenir le jour de la semaine (1=Lundi ... 7=Dimanche)
+        # Python: weekday() retourne 0=Lundi, donc on ajoute 1
+        aujourd_hui = date.today()
+        jour_semaine = aujourd_hui.weekday() + 1  # 1=Lundi, 7=Dimanche
+
+        # Récupérer les configurations actives pour ce livreur et ce jour
+        configs = ClientLivreurHebdo.objects.filter(
+            livreur=livreur,
+            jour_semaine=jour_semaine,
+            is_active=True
+        ).select_related('client').order_by('ordre_passage')
+
+        # Filtrer par période de validité si définie
+        configs = configs.filter(
+            models.Q(date_debut__isnull=True) | models.Q(date_debut__lte=aujourd_hui)
+        ).filter(
+            models.Q(date_fin__isnull=True) | models.Q(date_fin__gte=aujourd_hui)
+        )
+
+        # Extraire les clients avec leur ordre de passage
+        clients_data = []
+        for config in configs:
+            client = config.client
+            from .distribution_serializers import ClientMobileSerializer
+            client_data = ClientMobileSerializer(client).data
+            client_data['ordre_visite'] = config.ordre_passage
+            clients_data.append(client_data)
+
+        return Response({
+            'livreur_id': livreur.id,
+            'livreur_nom': livreur.nom,
+            'date': aujourd_hui.isoformat(),
+            'jour_semaine': jour_semaine,
+            'jour_nom': dict(ClientLivreurHebdo.JOURS_SEMAINE_CHOICES).get(jour_semaine, ''),
+            'clients': clients_data,
+            'nb_clients': len(clients_data)
         })
 
     @action(detail=False, methods=['post'], url_path='update-location')
@@ -1710,4 +1760,99 @@ class StatsLivreursAPIView(APIView):
             'summary': summary,
             'livreurs': livreurs_stats,
             'par_jour': par_jour,
+        })
+
+
+# ============================================
+# ENDPOINTS LIVRAISONS COMPAT MOBILE
+# ============================================
+
+from rest_framework.views import APIView
+
+
+class LivraisonConfirmerView(APIView):
+    """
+    Endpoint pour confirmer une livraison depuis l'app mobile.
+    POST /API/livraisons/confirmer/
+    {
+        "arret_id": "123",
+        "signature_base64": "...",
+        "notes": "...",
+        "ts_client": 1234567890
+    }
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        arret_id = request.data.get('arret_id')
+        signature_base64 = request.data.get('signature_base64', '')
+        notes = request.data.get('notes', '')
+        nom_receptionnaire = request.data.get('nom_receptionnaire', '')
+
+        if not arret_id:
+            return Response({'error': 'arret_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            arret = ArretTourneeMobile.objects.get(id=arret_id)
+        except ArretTourneeMobile.DoesNotExist:
+            return Response({'error': 'Arret not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        if arret.tournee.est_cloturee:
+            return Response({'error': 'La tournee est cloturee'}, status=status.HTTP_400_BAD_REQUEST)
+
+        arret.statut = 'livre'
+        arret.heure_arrivee = timezone.now()
+        arret.heure_depart = timezone.now()
+        arret.signature_base64 = signature_base64
+        arret.nom_receptionnaire = nom_receptionnaire
+        arret.notes = notes
+        arret.save()
+
+        return Response({
+            'message': 'Livraison confirmee',
+            'arret_id': arret.id,
+            'statut': arret.statut
+        })
+
+
+class LivraisonEchecView(APIView):
+    """
+    Endpoint pour marquer une livraison comme echec depuis l'app mobile.
+    POST /API/livraisons/echec/
+    {
+        "arret_id": "123",
+        "motif": "Client absent",
+        "notes": "...",
+        "ts_client": 1234567890
+    }
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        arret_id = request.data.get('arret_id')
+        motif = request.data.get('motif', '')
+        notes = request.data.get('notes', '')
+
+        if not arret_id:
+            return Response({'error': 'arret_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            arret = ArretTourneeMobile.objects.get(id=arret_id)
+        except ArretTourneeMobile.DoesNotExist:
+            return Response({'error': 'Arret not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        if arret.tournee.est_cloturee:
+            return Response({'error': 'La tournee est cloturee'}, status=status.HTTP_400_BAD_REQUEST)
+
+        arret.statut = 'echec'
+        arret.heure_arrivee = timezone.now()
+        arret.motif_echec = motif
+        arret.notes_echec = notes
+        arret.save()
+
+        return Response({
+            'message': 'Echec enregistre',
+            'arret_id': arret.id,
+            'statut': arret.statut,
+            'motif': motif
         })

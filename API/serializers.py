@@ -849,3 +849,33 @@ class TourneeListSerializer(serializers.ModelSerializer):
 
     def get_taux_reussite(self, obj):
         return obj.get_taux_reussite()
+
+
+# ==========================================
+# SERIALIZERS VISITES CLIENTS
+# ==========================================
+
+class VisiteClientSerializer(serializers.ModelSerializer):
+    """Serializer pour les visites clients"""
+    client_nom = serializers.CharField(source='client.nom', read_only=True)
+    client_adresse = serializers.CharField(source='client.adresse', read_only=True)
+    livreur_nom = serializers.CharField(source='livreur.nom', read_only=True)
+    resultat_display = serializers.CharField(source='get_resultat_display', read_only=True)
+
+    class Meta:
+        from .distribution_models import VisiteClient
+        model = VisiteClient
+        fields = [
+            'id', 'client', 'client_nom', 'client_adresse', 'livreur', 'livreur_nom', 'tournee',
+            'date_visite', 'heure_visite', 'latitude', 'longitude',
+            'resultat', 'resultat_display', 'notes', 'app_id',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+
+    def create(self, validated_data):
+        from .distribution_models import VisiteClient
+        # Assigner la company depuis le client si pas fournie
+        if 'company' not in validated_data and validated_data.get('client'):
+            validated_data['company'] = validated_data['client'].company
+        return VisiteClient.objects.create(**validated_data)

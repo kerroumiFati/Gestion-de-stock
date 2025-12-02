@@ -8,7 +8,8 @@ from . import views
 from .distribution_views import (
     LivreurViewSet as LivreurDistributionViewSet,
     TourneeViewSet as TourneeDistributionViewSet,
-    ArretTourneeViewSet as ArretTourneeDistributionViewSet
+    ArretTourneeViewSet as ArretTourneeDistributionViewSet,
+    LivraisonConfirmerView, LivraisonEchecView
 )
 
 # Try to import with error handling
@@ -162,6 +163,7 @@ router.register(r'audit-logs', views.AuditLogViewSet)
 router.register(r'livreurs', LivreurDistributionViewSet, basename='livreur-compat')
 router.register(r'tournees', TourneeDistributionViewSet, basename='tournee-compat')
 router.register(r'arrets-livraison', ArretTourneeDistributionViewSet, basename='arret-compat')
+router.register(r'visites-clients', views.VisiteClientViewSet, basename='visites-clients')
 
 # Wire up our API using automatic URL routing.
 # Additionally, we include login URLs for the browsable API.
@@ -185,6 +187,10 @@ urlpatterns = [
 
     # Module de distribution mobile (nouveau système complet)
     path('distribution/', include('API.distribution_urls')),
+
+    # Endpoints de livraison compat mobile
+    path('livraisons/confirmer/', LivraisonConfirmerView.as_view(), name='livraison-confirmer'),
+    path('livraisons/echec/', LivraisonEchecView.as_view(), name='livraison-echec'),
 
     path('', include(router.urls)),
     path('categories_raw/', views.categories_raw),

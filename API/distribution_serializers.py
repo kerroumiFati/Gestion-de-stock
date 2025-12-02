@@ -803,7 +803,7 @@ class PlanningHebdomadaireCreateSerializer(serializers.ModelSerializer):
 
 class ClientLivreurHebdoSerializer(serializers.ModelSerializer):
     """Serializer pour ClientLivreurHebdo"""
-    client_nom = serializers.CharField(source='client.nom', read_only=True)
+    client_nom = serializers.SerializerMethodField()
     client_code = serializers.CharField(source='client.code_client', read_only=True)
     client_telephone = serializers.CharField(source='client.telephone', read_only=True)
     client_adresse = serializers.CharField(source='client.adresse', read_only=True)
@@ -811,6 +811,15 @@ class ClientLivreurHebdoSerializer(serializers.ModelSerializer):
     livreur_matricule = serializers.CharField(source='livreur.matricule', read_only=True)
     jour_semaine_display = serializers.CharField(source='get_jour_semaine_display', read_only=True)
     created_by_username = serializers.CharField(source='created_by.username', read_only=True, allow_null=True)
+
+    def get_client_nom(self, obj):
+        """Retourne le nom complet du client (nom + prénom)"""
+        if obj.client:
+            nom = obj.client.nom or ''
+            prenom = obj.client.prenom or ''
+            full_name = f"{nom} {prenom}".strip()
+            return full_name if full_name else f"Client #{obj.client.id}"
+        return "Client inconnu"
 
     class Meta:
         model = ClientLivreurHebdo

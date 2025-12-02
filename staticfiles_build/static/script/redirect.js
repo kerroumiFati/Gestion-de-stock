@@ -78,7 +78,7 @@ function loadProductSection() {
                                         <td>1</td>
                                         <td>Produit Example</td>
                                         <td>Électronique</td>
-                                        <td>150.00 €</td>
+                                        <td>150.00 DA</td>
                                         <td><span class="status-badge in-stock">25</span></td>
                                         <td>
                                             <div class="action-buttons">

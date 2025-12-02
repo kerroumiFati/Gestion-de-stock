@@ -339,7 +339,208 @@ if (!window.__tournees_script_loaded__) {
 }
 
 .close:hover { opacity: 0.8; }
+
+/* Custom Select Styles */
+.custom-select-container {
+    position: relative;
+    width: 100%;
+}
+
+.custom-select-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-height: 42px;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+}
+
+.custom-select-trigger:hover {
+    border-color: #8b5cf6;
+}
+
+.custom-select-trigger.open {
+    border-color: #8b5cf6;
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+    border-radius: 6px 6px 0 0;
+}
+
+.custom-select-trigger .selected-text {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #1f2937;
+}
+
+.custom-select-trigger .selected-text.placeholder {
+    color: #9ca3af;
+}
+
+.custom-select-trigger .arrow {
+    margin-left: 10px;
+    transition: transform 0.2s;
+    color: #6b7280;
+}
+
+.custom-select-trigger.open .arrow {
+    transform: rotate(180deg);
+}
+
+.custom-select-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #8b5cf6;
+    border-top: none;
+    border-radius: 0 0 6px 6px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 9999;
+    display: none;
+}
+
+.custom-select-dropdown.open {
+    display: block;
+}
+
+.custom-select-search {
+    padding: 10px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.custom-select-search input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+
+.custom-select-search input:focus {
+    outline: none;
+    border-color: #8b5cf6;
+}
+
+.custom-select-options {
+    max-height: 250px;
+    overflow-y: auto;
+}
+
+.custom-select-options::-webkit-scrollbar {
+    width: 6px;
+}
+
+.custom-select-options::-webkit-scrollbar-track {
+    background: #f3f4f6;
+    border-radius: 3px;
+}
+
+.custom-select-options::-webkit-scrollbar-thumb {
+    background: #d1d5db;
+    border-radius: 3px;
+}
+
+.custom-select-options::-webkit-scrollbar-thumb:hover {
+    background: #9ca3af;
+}
+
+.custom-select-option {
+    padding: 10px 12px;
+    cursor: pointer;
+    transition: background 0.15s;
+    border-bottom: 1px solid #f3f4f6;
+    color: #1f2937;
+}
+
+.custom-select-option:last-child {
+    border-bottom: none;
+}
+
+.custom-select-option:hover {
+    background: #f3f4f6;
+}
+
+.custom-select-option.selected {
+    background: #8b5cf6;
+    color: white;
+}
+
+.custom-select-no-results {
+    padding: 12px;
+    text-align: center;
+    color: #9ca3af;
+    font-style: italic;
+}
+
+/* Boutons tags pour commentaires */
+.btn-tag {
+    background: #f3f4f6;
+    border: 1px solid #e5e7eb;
+    color: #374151;
+    padding: 4px 10px;
+    border-radius: 15px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-tag:hover {
+    background: #8b5cf6;
+    color: white;
+    border-color: #8b5cf6;
+}
+
+/* Amélioration textarea commentaire */
+#commentaire {
+    width: 100%;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 0.95rem;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    font-family: inherit;
+    box-sizing: border-box;
+}
+
+#commentaire:focus {
+    outline: none;
+    border-color: #8b5cf6;
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+}
+
+#commentaire::placeholder {
+    color: #9ca3af;
+    font-style: italic;
+}
 </style>
+
+<script>
+// Fonction pour ajouter un tag au commentaire
+function addCommentTag(tag) {
+    var textarea = document.getElementById('commentaire');
+    if (textarea) {
+        var currentValue = textarea.value.trim();
+        if (currentValue) {
+            // Vérifier si le tag n'est pas déjà présent
+            if (currentValue.indexOf(tag) === -1) {
+                textarea.value = currentValue + '\n' + tag;
+            }
+        } else {
+            textarea.value = tag;
+        }
+        textarea.focus();
+    }
+}
+</script>
 
 <div class="page-container">
     <div class="page-title">
@@ -461,23 +662,62 @@ if (!window.__tournees_script_loaded__) {
 
                     <div class="form-group">
                         <label for="livreur">{% trans "Livreur" %} *</label>
-                        <select id="livreur" required>
-                            <option value="">{% trans "Sélectionner un livreur..." %}</option>
-                        </select>
+                        <div class="custom-select-container" id="customSelectLivreur">
+                            <div class="custom-select-trigger" id="livreurTrigger">
+                                <span class="selected-text placeholder">{% trans "Sélectionner un livreur..." %}</span>
+                                <i class="fas fa-chevron-down arrow"></i>
+                            </div>
+                            <div class="custom-select-dropdown" id="livreurDropdown">
+                                <div class="custom-select-search">
+                                    <input type="text" id="livreurSearch" placeholder="{% trans 'Rechercher...' %}">
+                                </div>
+                                <div class="custom-select-options" id="livreurOptions"></div>
+                            </div>
+                            <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
+                                <select id="livreur" required>
+                                    <option value="">{% trans "Sélectionner un livreur..." %}</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="form-group">
                         <label for="warehouse">{% trans "Entrepôt de départ" %}</label>
-                        <select id="warehouse">
-                            <option value="">{% trans "Sélectionner..." %}</option>
-                        </select>
+                        <div class="custom-select-container" id="customSelectWarehouse">
+                            <div class="custom-select-trigger" id="warehouseTrigger">
+                                <span class="selected-text placeholder">{% trans "Sélectionner..." %}</span>
+                                <i class="fas fa-chevron-down arrow"></i>
+                            </div>
+                            <div class="custom-select-dropdown" id="warehouseDropdown">
+                                <div class="custom-select-search">
+                                    <input type="text" id="warehouseSearch" placeholder="{% trans 'Rechercher...' %}">
+                                </div>
+                                <div class="custom-select-options" id="warehouseOptions"></div>
+                            </div>
+                            <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
+                                <select id="warehouse">
+                                    <option value="">{% trans "Sélectionner..." %}</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="form-group">
                         <label for="code_prix">{% trans "Code de prix" %} *</label>
-                        <select id="code_prix" required>
-                            <option value="">{% trans "Sélectionner le code de prix..." %}</option>
-                        </select>
+                        <div class="custom-select-container" id="customSelectCodePrix">
+                            <div class="custom-select-trigger" id="codePrixTrigger">
+                                <span class="selected-text placeholder">{% trans "Sélectionner le code de prix..." %}</span>
+                                <i class="fas fa-chevron-down arrow"></i>
+                            </div>
+                            <div class="custom-select-dropdown" id="codePrixDropdown">
+                                <div class="custom-select-options" id="codePrixOptions"></div>
+                            </div>
+                            <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
+                                <select id="code_prix" required>
+                                    <option value="">{% trans "Sélectionner le code de prix..." %}</option>
+                                </select>
+                            </div>
+                        </div>
                         <small style="color: #6b7280; font-size: 0.85rem; display: block; margin-top: 4px;">
                             💰 Code promotionnel utilisé pour les ventes (STANDARD, AID, RAMADAN...)
                         </small>
@@ -508,8 +748,23 @@ if (!window.__tournees_script_loaded__) {
                     </div>
 
                     <div class="form-group full-width">
-                        <label for="commentaire">{% trans "Commentaire" %}</label>
-                        <textarea id="commentaire" rows="3"></textarea>
+                        <label for="commentaire">
+                            <i class="fas fa-comment-alt" style="color: #8b5cf6;"></i> {% trans "Commentaire / Instructions" %}
+                        </label>
+                        <textarea id="commentaire" rows="4"
+                            placeholder="Ex: Livraison urgente, appeler le client avant, attention fragile..."
+                            style="resize: vertical; min-height: 80px; max-height: 200px;"></textarea>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
+                            <small style="color: #6b7280; font-size: 0.85rem;">
+                                📝 Instructions spéciales pour le livreur
+                            </small>
+                            <div style="display: flex; gap: 5px;">
+                                <button type="button" class="btn-tag" onclick="addCommentTag('⚠️ Urgent')">Urgent</button>
+                                <button type="button" class="btn-tag" onclick="addCommentTag('📞 Appeler avant')">Appeler</button>
+                                <button type="button" class="btn-tag" onclick="addCommentTag('🔔 Fragile')">Fragile</button>
+                                <button type="button" class="btn-tag" onclick="addCommentTag('🕐 Livrer matin')">Matin</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -548,30 +803,75 @@ if (!window.__tournees_script_loaded__) {
 
                 <div class="form-group">
                     <label for="planning-livreur">{% trans "Livreur" %} *</label>
-                    <select id="planning-livreur" required>
-                        <option value="">{% trans "Sélectionner un livreur..." %}</option>
-                    </select>
+                    <div class="custom-select-container" id="customSelectPlanningLivreur">
+                        <div class="custom-select-trigger" id="planningLivreurTrigger">
+                            <span class="selected-text placeholder">{% trans "Sélectionner un livreur..." %}</span>
+                            <i class="fas fa-chevron-down arrow"></i>
+                        </div>
+                        <div class="custom-select-dropdown" id="planningLivreurDropdown">
+                            <div class="custom-select-search">
+                                <input type="text" id="planningLivreurSearch" placeholder="{% trans 'Rechercher...' %}">
+                            </div>
+                            <div class="custom-select-options" id="planningLivreurOptions"></div>
+                        </div>
+                        <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
+                            <select id="planning-livreur" required>
+                                <option value="">{% trans "Sélectionner un livreur..." %}</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="form-group">
                     <label for="planning-jour">{% trans "Jour de la semaine" %} *</label>
-                    <select id="planning-jour" required>
-                        <option value="">{% trans "Sélectionner un jour..." %}</option>
-                        <option value="1">{% trans "Lundi" %}</option>
-                        <option value="2">{% trans "Mardi" %}</option>
-                        <option value="3">{% trans "Mercredi" %}</option>
-                        <option value="4">{% trans "Jeudi" %}</option>
-                        <option value="5">{% trans "Vendredi" %}</option>
-                        <option value="6">{% trans "Samedi" %}</option>
-                        <option value="7">{% trans "Dimanche" %}</option>
-                    </select>
+                    <div class="custom-select-container" id="customSelectPlanningJour">
+                        <div class="custom-select-trigger" id="planningJourTrigger">
+                            <span class="selected-text placeholder">{% trans "Sélectionner un jour..." %}</span>
+                            <i class="fas fa-chevron-down arrow"></i>
+                        </div>
+                        <div class="custom-select-dropdown" id="planningJourDropdown">
+                            <div class="custom-select-options" id="planningJourOptions">
+                                <div class="custom-select-option" data-value="">{% trans "Sélectionner un jour..." %}</div>
+                                <div class="custom-select-option" data-value="1">{% trans "Lundi" %}</div>
+                                <div class="custom-select-option" data-value="2">{% trans "Mardi" %}</div>
+                                <div class="custom-select-option" data-value="3">{% trans "Mercredi" %}</div>
+                                <div class="custom-select-option" data-value="4">{% trans "Jeudi" %}</div>
+                                <div class="custom-select-option" data-value="5">{% trans "Vendredi" %}</div>
+                                <div class="custom-select-option" data-value="6">{% trans "Samedi" %}</div>
+                                <div class="custom-select-option" data-value="7">{% trans "Dimanche" %}</div>
+                            </div>
+                        </div>
+                        <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
+                            <select id="planning-jour" required>
+                                <option value="">{% trans "Sélectionner un jour..." %}</option>
+                                <option value="1">{% trans "Lundi" %}</option>
+                                <option value="2">{% trans "Mardi" %}</option>
+                                <option value="3">{% trans "Mercredi" %}</option>
+                                <option value="4">{% trans "Jeudi" %}</option>
+                                <option value="5">{% trans "Vendredi" %}</option>
+                                <option value="6">{% trans "Samedi" %}</option>
+                                <option value="7">{% trans "Dimanche" %}</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="form-group">
                     <label for="planning-code-prix">{% trans "Code de prix" %}</label>
-                    <select id="planning-code-prix">
-                        <option value="">{% trans "Sélectionner le code de prix..." %}</option>
-                    </select>
+                    <div class="custom-select-container" id="customSelectPlanningCodePrix">
+                        <div class="custom-select-trigger" id="planningCodePrixTrigger">
+                            <span class="selected-text placeholder">{% trans "Sélectionner le code de prix..." %}</span>
+                            <i class="fas fa-chevron-down arrow"></i>
+                        </div>
+                        <div class="custom-select-dropdown" id="planningCodePrixDropdown">
+                            <div class="custom-select-options" id="planningCodePrixOptions"></div>
+                        </div>
+                        <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
+                            <select id="planning-code-prix">
+                                <option value="">{% trans "Sélectionner le code de prix..." %}</option>
+                            </select>
+                        </div>
+                    </div>
                     <small style="color: #6b7280; font-size: 0.85rem; display: block; margin-top: 4px;">
                         💰 Code promotionnel par défaut pour les tournées (STANDARD, AID, RAMADAN...)
                     </small>

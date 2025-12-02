@@ -65,6 +65,8 @@ def page(request, name: str):
         return render(request, 'frontoffice/page/nav_test.html')
     elif name == 'stats_livreurs':
         return render(request, 'frontoffice/page/stats_livreurs.html')
+    elif name == 'visites_clients':
+        return render(request, 'frontoffice/page/visites_clients.html')
 
     # Protect currency management under paramètres: page accessible but section is guarded in template
     template_path = f'frontoffice/page/{name}.html'
@@ -563,25 +565,71 @@ def charger_van(request):
 @login_required
 def stock_dashboard(request):
     """Tableau de bord des stocks par van"""
+    from datetime import datetime, timedelta
+    from django.db.models import Sum
+    from API.models import StockMove
+
+    # Récupérer les filtres
+    selected_date = request.GET.get('date')
+    selected_van = request.GET.get('van', '')
+    selected_date_obj = None
+
+    if selected_date:
+        try:
+            selected_date_obj = datetime.strptime(selected_date, '%Y-%m-%d').date()
+        except ValueError:
+            selected_date_obj = None
+
     # Récupérer tous les vans
-    vans = Warehouse.objects.filter(
+    vans_query = Warehouse.objects.filter(
         code__istartswith='van',
         is_active=True
     ).prefetch_related('stocks__produit').order_by('code')
+
+    # Filtrer par van si spécifié
+    if selected_van:
+        vans = vans_query.filter(code__iexact=selected_van)
+    else:
+        vans = vans_query
 
     # Statistiques par van
     van_stats = []
     for van in vans:
         stocks = van.stocks.select_related('produit').all()
-        total_produits = stocks.count()
-        total_quantite = sum(s.quantity for s in stocks)
-        valeur_stock = sum(s.quantity * s.produit.prixU for s in stocks)
+
+        # Si une date est sélectionnée, calculer le stock à cette date
+        if selected_date_obj:
+            stocks_data = []
+            for stock in stocks:
+                # Calculer les mouvements après la date sélectionnée pour reconstituer le stock
+                mouvements_apres = StockMove.objects.filter(
+                    produit=stock.produit,
+                    date__date__gt=selected_date_obj
+                ).aggregate(total=Sum('delta'))['total'] or 0
+
+                # Stock à la date = stock actuel - mouvements après cette date
+                qty_at_date = stock.quantity - mouvements_apres
+
+                stocks_data.append({
+                    'produit': stock.produit,
+                    'quantity': qty_at_date,
+                    'quantity_actuel': stock.quantity
+                })
+
+            total_produits = len([s for s in stocks_data if s['quantity'] > 0])
+            total_quantite = sum(s['quantity'] for s in stocks_data if s['quantity'] > 0)
+            valeur_stock = sum(s['quantity'] * s['produit'].prixU for s in stocks_data if s['quantity'] > 0)
+            stocks_alertes = [s for s in stocks_data if s['quantity'] > 0 and s['quantity'] <= s['produit'].seuil_alerte]
+            display_stocks = stocks_data[:10]
+        else:
+            total_produits = stocks.count()
+            total_quantite = sum(s.quantity for s in stocks)
+            valeur_stock = sum(s.quantity * s.produit.prixU for s in stocks)
+            stocks_alertes = [s for s in stocks if s.quantity > 0 and s.quantity <= s.produit.seuil_alerte]
+            display_stocks = stocks[:10]
 
         # Trouver le livreur associé
         livreur = LivreurDistribution.objects.filter(entrepot=van).first()
-
-        # Stock faible
-        stocks_alertes = [s for s in stocks if s.quantity > 0 and s.quantity <= s.produit.seuil_alerte]
 
         van_stats.append({
             'van': van,
@@ -589,14 +637,32 @@ def stock_dashboard(request):
             'total_produits': total_produits,
             'total_quantite': total_quantite,
             'valeur_stock': valeur_stock,
-            'stocks': stocks[:10],  # Top 10
+            'stocks': display_stocks,
             'nb_alertes': len(stocks_alertes)
+        })
+
+    # Liste complète des vans pour le select (même si filtré)
+    all_vans = Warehouse.objects.filter(
+        code__istartswith='van',
+        is_active=True
+    ).order_by('code')
+
+    # Préparer les options du select avec les livreurs
+    van_options = []
+    for v in all_vans:
+        livreur = LivreurDistribution.objects.filter(entrepot=v).first()
+        van_options.append({
+            'van': v,
+            'livreur': livreur
         })
 
     context = {
         'van_stats': van_stats,
+        'van_options': van_options,
         'title': 'Tableau de Bord des Vans',
-        'currency': get_default_currency()
+        'currency': get_default_currency(),
+        'selected_date': selected_date_obj,
+        'selected_van': selected_van
     }
     return render(request, 'frontoffice/page/stock_dashboard.html', context)
 
@@ -605,9 +671,15 @@ def stock_dashboard(request):
 def commandes_clients_mobile(request):
     """Interface de gestion des commandes clients depuis l'application mobile"""
     from API.distribution_models import LivreurDistribution
-    
+
     context = {
         'title': 'Commandes Clients Mobile',
         'currency': get_default_currency()
     }
     return render(request, 'frontoffice/page/commandes_clients_mobile.html', context)
+
+
+@login_required
+def visites_clients_page(request):
+    """Render the master page - JavaScript will load the visites clients content based on URL"""
+    return render(request, 'frontoffice/master_page.html')

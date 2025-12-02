@@ -9,6 +9,46 @@
             </p>
         </div>
         <div class="card-body">
+            <!-- Filtres -->
+            <div class="row mb-3">
+                <div class="col-sm-3">
+                    <label>Van</label>
+                    <select id="van_filter" class="form-control">
+                        <option value="">Tous les vans</option>
+                        {% for opt in van_options %}
+                        <option value="{{ opt.van.code }}" {% if selected_van == opt.van.code %}selected{% endif %}>{{ opt.van.code }}{% if opt.livreur %} - {{ opt.livreur.nom }}{% endif %}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-sm-3">
+                    <label>Date</label>
+                    <input type="date" id="van_date_search" class="form-control"
+                           value="{{ selected_date|date:'Y-m-d'|default:'' }}">
+                </div>
+                <div class="col-sm-2 d-flex align-items-end">
+                    <button class="btn btn-outline-primary" onclick="filterVans()">
+                        <i class="fa fa-search"></i> Filtrer
+                    </button>
+                </div>
+                {% if selected_date or selected_van %}
+                <div class="col-sm-4 d-flex align-items-end">
+                    {% if selected_van %}
+                    <span class="badge badge-primary p-2 mr-2">
+                        <i class="fa fa-truck"></i> {{ selected_van }}
+                    </span>
+                    {% endif %}
+                    {% if selected_date %}
+                    <span class="badge badge-info p-2 mr-2">
+                        <i class="fa fa-calendar"></i> {{ selected_date|date:"d/m/Y" }}
+                    </span>
+                    {% endif %}
+                    <a href="#" onclick="resetVanSearch(); return false;" class="btn btn-sm btn-outline-secondary">
+                        <i class="fa fa-times"></i> Réinitialiser
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+
             {% if van_stats %}
             <div class="row">
                 {% for stat in van_stats %}
@@ -36,7 +76,7 @@
                                 </tr>
                                 <tr>
                                     <td><strong>Valeur:</strong></td>
-                                    <td class="text-right">{{ stat.valeur_stock|floatformat:0 }} {{ currency.symbol|default:"€" }}</td>
+                                    <td class="text-right">{{ stat.valeur_stock|floatformat:0 }} {{ currency.symbol|default:"DA" }}</td>
                                 </tr>
                             </table>
 
@@ -115,3 +155,26 @@
         </div>
     </div>
 </div>
+
+<script>
+function filterVans() {
+    var selectedVan = document.getElementById('van_filter').value;
+    var selectedDate = document.getElementById('van_date_search').value;
+    var params = {};
+
+    if (selectedVan) params.van = selectedVan;
+    if (selectedDate) params.date = selectedDate;
+
+    if (Object.keys(params).length > 0) {
+        show('stock_dashboard', {params: params});
+    } else {
+        show('stock_dashboard');
+    }
+}
+
+function resetVanSearch() {
+    document.getElementById('van_filter').value = '';
+    document.getElementById('van_date_search').value = '';
+    show('stock_dashboard');
+}
+</script>

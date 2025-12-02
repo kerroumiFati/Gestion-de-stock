@@ -1467,7 +1467,7 @@ let clientsParJour = {1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 7: []};
 // Charger les livreurs pour la nouvelle interface
 async function loadLivreursJour() {
     try {
-        const response = await fetch('/API/livreurs/');
+        const response = await fetch('/API/distribution/livreurs/');
         const data = await response.json();
         livreursListConfig = Array.isArray(data) ? data : (data.results || []);
 
@@ -1525,13 +1525,31 @@ async function selectLivreurJour(livreurId, livreurNom) {
     await loadConfigurationsForLivreur(livreurId);
 }
 
-// Charger tous les clients
+// Charger tous les clients (avec gestion de la pagination)
 async function loadAllClientsJour() {
     try {
-        const response = await fetch('/API/clients/');
-        const data = await response.json();
-        allClientsJour = Array.isArray(data) ? data : (data.results || []);
+        let allClients = [];
+        let nextUrl = '/API/clients/';
+
+        // Charger toutes les pages
+        while (nextUrl) {
+            const response = await fetch(nextUrl);
+            const data = await response.json();
+
+            if (Array.isArray(data)) {
+                // Pas de pagination
+                allClients = data;
+                nextUrl = null;
+            } else {
+                // Pagination DRF
+                allClients = allClients.concat(data.results || []);
+                nextUrl = data.next;
+            }
+        }
+
+        allClientsJour = allClients;
         clientsListConfig = allClientsJour; // Pour le modal aussi
+        console.log('[CONFIG] Clients chargés:', allClientsJour.length, 'Premier client:', allClientsJour[0]);
     } catch (error) {
         console.error('Erreur chargement clients:', error);
     }
@@ -1580,8 +1598,8 @@ function renderClientsDisponiblesJour() {
 
     // Filtrer les clients
     let clientsDispos = allClientsJour.filter(c => {
-        const matchSearch = `${c.nom} ${c.prenom || ''} ${c.adresse || ''}`.toLowerCase().includes(searchValue);
-        return matchSearch;
+        const fullName = `${c.nom || ''} ${c.prenom || ''} ${c.adresse || ''} ${c.telephone || ''} ${c.email || ''}`.toLowerCase();
+        return fullName.includes(searchValue);
     });
 
     document.getElementById('availableCountJour').textContent = clientsDispos.length;
@@ -1591,24 +1609,64 @@ function renderClientsDisponiblesJour() {
         return;
     }
 
-    container.innerHTML = clientsDispos.map(c => `
-        <div class="client-item-jour" draggable="true" ondragstart="dragStart(event, ${c.id}, '${(c.nom + ' ' + (c.prenom || '')).replace(/'/g, "\\'")}')">
+    container.innerHTML = clientsDispos.map(c => {
+        // Construire le nom complet avec plusieurs fallbacks
+        let displayName = '';
+
+        // Essayer nom + prenom
+        const nomPrenom = ((c.nom || '') + ' ' + (c.prenom || '')).trim();
+        if (nomPrenom) {
+            displayName = nomPrenom;
+        }
+        // Sinon essayer email
+        else if (c.email) {
+            displayName = c.email;
+        }
+        // Sinon essayer telephone
+        else if (c.telephone) {
+            displayName = 'Tél: ' + c.telephone;
+        }
+        // Sinon essayer adresse (premiers 30 chars)
+        else if (c.adresse) {
+            displayName = c.adresse.substring(0, 30);
+        }
+        // Dernier recours: ID
+        else {
+            displayName = `Client #${c.id}`;
+        }
+
+        const escapedName = displayName.replace(/'/g, "\\'").replace(/"/g, '\\"');
+
+        // Construire la ligne secondaire (adresse ou téléphone)
+        let secondLine = '';
+        if (c.adresse) {
+            secondLine = c.adresse;
+        } else if (c.telephone) {
+            secondLine = c.telephone;
+        } else if (c.email) {
+            secondLine = c.email;
+        } else {
+            secondLine = 'Aucune info';
+        }
+
+        return `
+        <div class="client-item-jour" draggable="true" ondragstart="dragStart(event, ${c.id}, '${escapedName}')">
             <div class="client-icon"><i class="fas fa-user"></i></div>
             <div class="client-details">
-                <div class="client-name-jour">${c.nom} ${c.prenom || ''}</div>
-                <div class="client-address-jour">${c.adresse || 'Pas d\'adresse'}</div>
+                <div class="client-name-jour">${displayName}</div>
+                <div class="client-address-jour">${secondLine}</div>
             </div>
             <div class="add-btns">
-                <button class="add-btn" style="background: #dbeafe; color: #1d4ed8;" onclick="addClientToJour(${c.id}, '${(c.nom + ' ' + (c.prenom || '')).replace(/'/g, "\\'")}', 1)" title="Lundi">L</button>
-                <button class="add-btn" style="background: #ede9fe; color: #6d28d9;" onclick="addClientToJour(${c.id}, '${(c.nom + ' ' + (c.prenom || '')).replace(/'/g, "\\'")}', 2)" title="Mardi">M</button>
-                <button class="add-btn" style="background: #cffafe; color: #0891b2;" onclick="addClientToJour(${c.id}, '${(c.nom + ' ' + (c.prenom || '')).replace(/'/g, "\\'")}', 3)" title="Mercredi">M</button>
-                <button class="add-btn" style="background: #d1fae5; color: #059669;" onclick="addClientToJour(${c.id}, '${(c.nom + ' ' + (c.prenom || '')).replace(/'/g, "\\'")}', 4)" title="Jeudi">J</button>
-                <button class="add-btn" style="background: #fef3c7; color: #d97706;" onclick="addClientToJour(${c.id}, '${(c.nom + ' ' + (c.prenom || '')).replace(/'/g, "\\'")}', 5)" title="Vendredi">V</button>
-                <button class="add-btn" style="background: #fee2e2; color: #dc2626;" onclick="addClientToJour(${c.id}, '${(c.nom + ' ' + (c.prenom || '')).replace(/'/g, "\\'")}', 6)" title="Samedi">S</button>
-                <button class="add-btn" style="background: #e5e7eb; color: #4b5563;" onclick="addClientToJour(${c.id}, '${(c.nom + ' ' + (c.prenom || '')).replace(/'/g, "\\'")}', 7)" title="Dimanche">D</button>
+                <button class="add-btn" style="background: #dbeafe; color: #1d4ed8;" onclick="addClientToJour(${c.id}, '${escapedName}', 1)" title="Lundi">L</button>
+                <button class="add-btn" style="background: #ede9fe; color: #6d28d9;" onclick="addClientToJour(${c.id}, '${escapedName}', 2)" title="Mardi">M</button>
+                <button class="add-btn" style="background: #cffafe; color: #0891b2;" onclick="addClientToJour(${c.id}, '${escapedName}', 3)" title="Mercredi">M</button>
+                <button class="add-btn" style="background: #d1fae5; color: #059669;" onclick="addClientToJour(${c.id}, '${escapedName}', 4)" title="Jeudi">J</button>
+                <button class="add-btn" style="background: #fef3c7; color: #d97706;" onclick="addClientToJour(${c.id}, '${escapedName}', 5)" title="Vendredi">V</button>
+                <button class="add-btn" style="background: #fee2e2; color: #dc2626;" onclick="addClientToJour(${c.id}, '${escapedName}', 6)" title="Samedi">S</button>
+                <button class="add-btn" style="background: #e5e7eb; color: #4b5563;" onclick="addClientToJour(${c.id}, '${escapedName}', 7)" title="Dimanche">D</button>
             </div>
         </div>
-    `).join('');
+    `}).join('');
 }
 
 // Afficher les cartes des jours
@@ -1674,7 +1732,7 @@ async function addClientToJour(clientId, clientNom, jour) {
         return;
     }
 
-    // Vérifier si déjà assigné pour ce jour
+    // Vérifier si déjà assigné pour ce jour (même chauffeur)
     const dejaAssigne = clientsParJour[jour].some(c => c.clientId === clientId);
     if (dejaAssigne) {
         showAlertJour('Ce client est déjà assigné pour ce jour', 'error');
@@ -1682,6 +1740,20 @@ async function addClientToJour(clientId, clientNom, jour) {
     }
 
     try {
+        // Vérifier si le client est déjà assigné à un autre chauffeur pour ce jour
+        const checkResponse = await fetch(`/API/distribution/clients-livreurs-hebdo/?client=${clientId}&jour_semaine=${jour}`);
+        const existingConfigs = await checkResponse.json();
+        const configs = Array.isArray(existingConfigs) ? existingConfigs : (existingConfigs.results || []);
+
+        // Filtrer les configs actives d'autres chauffeurs
+        const autresChauffeurs = configs.filter(c => c.livreur !== selectedLivreurJourId && c.is_active);
+
+        if (autresChauffeurs.length > 0) {
+            const autreChauffeurNom = autresChauffeurs[0].livreur_nom || 'un autre chauffeur';
+            showAlertJour(`Ce client est déjà assigné à ${autreChauffeurNom} pour le ${getJourName(jour)}`, 'error');
+            return;
+        }
+
         const response = await fetch('/API/distribution/clients-livreurs-hebdo/', {
             method: 'POST',
             headers: {
@@ -1708,7 +1780,12 @@ async function addClientToJour(clientId, clientNom, jour) {
             showAlertJour(`Client ajouté pour le ${getJourName(jour)}`, 'success');
         } else {
             const error = await response.json();
-            showAlertJour('Erreur: ' + JSON.stringify(error), 'error');
+            // Vérifier si c'est une erreur de contrainte unique
+            if (error.non_field_errors && error.non_field_errors[0] && error.non_field_errors[0].includes('unique')) {
+                showAlertJour('Ce client est déjà assigné à un chauffeur pour ce jour', 'error');
+            } else {
+                showAlertJour('Erreur: ' + JSON.stringify(error), 'error');
+            }
         }
     } catch (error) {
         console.error('Erreur ajout client:', error);
@@ -1797,14 +1874,19 @@ function renderClientOptions(clients) {
         return;
     }
 
-    optionsList.innerHTML = clients.map(c => `
+    optionsList.innerHTML = clients.map(c => {
+        const clientNom = (c.nom || '') + ' ' + (c.prenom || '');
+        const displayName = clientNom.trim() || `Client #${c.id}`;
+        const escapedName = displayName.replace(/'/g, "\\'");
+
+        return `
         <div class="custom-select-option ${c.id == selectedValue ? 'selected' : ''}"
              data-value="${c.id}"
-             onclick="selectClient(${c.id}, '${(c.nom + ' ' + (c.prenom || '')).replace(/'/g, "\\'")}')">
-            <div class="client-name">${c.nom} ${c.prenom || ''}</div>
-            <div class="client-address">${c.adresse || 'Pas d\'adresse'}</div>
+             onclick="selectClient(${c.id}, '${escapedName}')">
+            <div class="client-name">${displayName}</div>
+            <div class="client-address">${c.adresse || c.telephone || 'Pas d\'adresse'}</div>
         </div>
-    `).join('');
+    `}).join('');
 }
 
 // Toggle dropdown client
@@ -1849,7 +1931,7 @@ function selectClient(id, name) {
 function filterClients() {
     const searchValue = document.getElementById('client-search').value.toLowerCase();
     const filteredClients = clientsListConfig.filter(c => {
-        const fullName = `${c.nom} ${c.prenom || ''} ${c.adresse || ''}`.toLowerCase();
+        const fullName = `${c.nom || ''} ${c.prenom || ''} ${c.adresse || ''} ${c.telephone || ''}`.toLowerCase();
         return fullName.includes(searchValue);
     });
     renderClientOptions(filteredClients);

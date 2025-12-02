@@ -986,3 +986,95 @@ class ClientLivreurHebdo(models.Model):
 
         config = config.first()
         return config.livreur if config else None
+
+
+#####################
+# Visites Clients   #
+#####################
+
+class VisiteClient(models.Model):
+    """
+    Enregistrement d'une visite d'un client par un livreur.
+    Permet de tracker quels clients ont été visités durant une journée.
+    """
+    # Relations
+    company = models.ForeignKey('Company', on_delete=models.CASCADE, related_name='visites_clients',
+                               null=True, blank=True,
+                               help_text='Entreprise à laquelle appartient cette visite')
+    client = models.ForeignKey('Client', on_delete=models.CASCADE, related_name='visites')
+    livreur = models.ForeignKey(LivreurDistribution, on_delete=models.CASCADE, related_name='visites_effectuees')
+    tournee = models.ForeignKey(TourneeMobile, on_delete=models.SET_NULL, null=True, blank=True,
+                                related_name='visites',
+                                help_text='Tournée durant laquelle la visite a été effectuée')
+
+    # Informations de visite
+    date_visite = models.DateField('Date de visite', default=timezone.now)
+    heure_visite = models.DateTimeField('Heure de visite', default=timezone.now)
+
+    # Géolocalisation au moment de la visite
+    latitude = models.DecimalField('Latitude', max_digits=10, decimal_places=7, null=True, blank=True)
+    longitude = models.DecimalField('Longitude', max_digits=10, decimal_places=7, null=True, blank=True)
+
+    # Résultat de la visite
+    RESULTAT_CHOICES = [
+        ('vente', 'Vente effectuée'),
+        ('commande', 'Commande prise'),
+        ('absent', 'Client absent'),
+        ('ferme', 'Établissement fermé'),
+        ('refuse', 'Client a refusé'),
+        ('autre', 'Autre'),
+    ]
+    resultat = models.CharField('Résultat', max_length=20, choices=RESULTAT_CHOICES, default='vente')
+
+    # Notes
+    notes = models.TextField('Notes', blank=True)
+
+    # Synchronisation depuis l'app mobile
+    app_id = models.CharField('ID App Mobile', max_length=200, unique=True, null=True, blank=True,
+                              help_text='ID unique depuis l\'app mobile pour éviter les doublons')
+    synced_at = models.DateTimeField('Date synchronisation', null=True, blank=True)
+
+    # Métadonnées
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'distribution_visite_client'
+        verbose_name = 'Visite client'
+        verbose_name_plural = 'Visites clients'
+        ordering = ['-date_visite', '-heure_visite']
+        indexes = [
+            models.Index(fields=['company', 'date_visite']),
+            models.Index(fields=['livreur', 'date_visite']),
+            models.Index(fields=['client', 'date_visite']),
+            models.Index(fields=['app_id']),
+        ]
+
+    def __str__(self):
+        return f"Visite {self.client.nom} par {self.livreur.nom} le {self.date_visite}"
+
+    @classmethod
+    def clients_visites_aujourd_hui(cls, livreur, company=None):
+        """Retourne les clients visités aujourd'hui par un livreur"""
+        from datetime import date
+        qs = cls.objects.filter(livreur=livreur, date_visite=date.today())
+        if company:
+            qs = qs.filter(company=company)
+        return qs
+
+    @classmethod
+    def stats_visites_jour(cls, date_jour, company=None, livreur=None):
+        """Statistiques des visites pour un jour donné"""
+        qs = cls.objects.filter(date_visite=date_jour)
+        if company:
+            qs = qs.filter(company=company)
+        if livreur:
+            qs = qs.filter(livreur=livreur)
+
+        return {
+            'total_visites': qs.count(),
+            'ventes': qs.filter(resultat='vente').count(),
+            'commandes': qs.filter(resultat='commande').count(),
+            'absents': qs.filter(resultat='absent').count(),
+            'refuses': qs.filter(resultat='refuse').count(),
+        }

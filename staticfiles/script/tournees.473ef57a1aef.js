@@ -290,8 +290,7 @@ function transformTourneeData(apiData) {
         ca_total: stats.ca_total || 0,
         est_cloturee: apiData.est_cloturee || false,
         created_at: apiData.created_at,
-        updated_at: apiData.updated_at,
-        statistiques: stats  // Passer les statistiques complètes incluant arrets_visites et arrets_restants
+        updated_at: apiData.updated_at
     };
 }
 
@@ -679,35 +678,8 @@ function getStatutArretDisplay(statut) {
 // Afficher la modal des détails
 function showTourneeDetailsModal(tournee) {
     const stats = tournee.statistiques || {};
-
-    // Récupérer les arrêts depuis statistiques ou depuis la liste d'arrêts brute
-    let arretsVisites = stats.arrets_visites || [];
-    let arretsRestants = stats.arrets_restants || [];
-
-    // Si les statistiques ne contiennent pas les arrêts, les construire depuis tournee.arrets
-    if (arretsVisites.length === 0 && arretsRestants.length === 0 && tournee.arrets && tournee.arrets.length > 0) {
-        tournee.arrets.forEach(arret => {
-            const arretData = {
-                id: arret.id,
-                client_nom: arret.client_nom || 'Client inconnu',
-                client_prenom: arret.client_prenom || '',
-                adresse: arret.adresse_livraison || arret.client_adresse || '',
-                ordre: arret.ordre || arret.ordre_passage || 0,
-                heure_prevue: arret.heure_prevue || '--:--',
-                statut: arret.statut || 'en_attente',
-                heure_arrivee: arret.heure_arrivee || null,
-                nom_receptionnaire: arret.nom_receptionnaire || '',
-                motif_echec: arret.motif_echec || ''
-            };
-
-            if (arret.statut === 'livre' || arret.statut === 'echec') {
-                arretsVisites.push(arretData);
-            } else {
-                arretsRestants.push(arretData);
-            }
-        });
-    }
-
+    const arretsVisites = stats.arrets_visites || [];
+    const arretsRestants = stats.arrets_restants || [];
     const caisse = stats.caisse;
 
     // Dénominations en DA (Dinar Algérien)

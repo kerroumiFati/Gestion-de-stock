@@ -278,6 +278,42 @@ window.assignClient = async function assignClient(clientId) {
     if (!state.selectedLivreur) return;
 
     try {
+        // Vérifier d'abord si le client a déjà des configurations par jour
+        const existingConfigs = await checkExistingHebdoConfigs(clientId);
+
+        if (existingConfigs.length > 0) {
+            // Grouper par chauffeur
+            const configsByLivreur = {};
+            existingConfigs.forEach(config => {
+                const livreurNom = config.livreur_nom || `Chauffeur #${config.livreur}`;
+                if (!configsByLivreur[livreurNom]) {
+                    configsByLivreur[livreurNom] = [];
+                }
+                configsByLivreur[livreurNom].push(config.jour_semaine_display || getJourName(config.jour_semaine));
+            });
+
+            // Construire le message d'avertissement
+            let warningMessage = 'Ce client a déjà des configurations par jour :\n\n';
+            for (const [livreur, jours] of Object.entries(configsByLivreur)) {
+                warningMessage += `• ${livreur} : ${jours.join(', ')}\n`;
+            }
+            warningMessage += '\nVoulez-vous continuer ? Les configurations existantes seront remplacées.';
+
+            if (!confirm(warningMessage)) {
+                return; // L'utilisateur a annulé
+            }
+
+            // Supprimer les configurations existantes
+            for (const config of existingConfigs) {
+                await fetch(`${API_BASE}/distribution/clients-livreurs-hebdo/${config.id}/`, {
+                    method: 'DELETE',
+                    headers: {
+                        'X-CSRFToken': getCookie('csrftoken')
+                    }
+                });
+            }
+        }
+
         const response = await fetch(
             `${API_BASE}/distribution/livreurs/${state.selectedLivreur.id}/ajouter_client/`,
             {
@@ -294,6 +330,9 @@ window.assignClient = async function assignClient(clientId) {
 
         const data = await response.json();
 
+        // Créer aussi les entrées ClientLivreurHebdo pour tous les jours de la semaine
+        await createHebdoEntriesForAllDays(clientId, state.selectedLivreur.id);
+
         // Recharger les clients assignés
         await loadLivreurClients(state.selectedLivreur.id);
         await renderClientLists();
@@ -302,6 +341,64 @@ window.assignClient = async function assignClient(clientId) {
     } catch (error) {
         console.error('Erreur:', error);
         showAlert('Erreur lors de l\'assignation du client', 'error');
+    }
+}
+
+/**
+ * Vérifier si un client a des configurations hebdomadaires existantes
+ */
+async function checkExistingHebdoConfigs(clientId) {
+    try {
+        const response = await fetch(`${API_BASE}/distribution/clients-livreurs-hebdo/?client=${clientId}`);
+        const data = await response.json();
+        return Array.isArray(data) ? data : (data.results || []);
+    } catch (error) {
+        console.error('Erreur vérification configs:', error);
+        return [];
+    }
+}
+
+/**
+ * Obtenir le nom du jour
+ */
+function getJourName(jour) {
+    const jours = ['', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+    return jours[jour] || `Jour ${jour}`;
+}
+
+/**
+ * Créer les entrées ClientLivreurHebdo pour tous les jours de la semaine
+ */
+async function createHebdoEntriesForAllDays(clientId, livreurId) {
+    // Jours de la semaine : 1 (Lundi) à 7 (Dimanche)
+    for (let jour = 1; jour <= 7; jour++) {
+        try {
+            // Vérifier si une entrée existe déjà pour ce client/jour
+            const checkResponse = await fetch(
+                `${API_BASE}/distribution/clients-livreurs-hebdo/?client=${clientId}&jour_semaine=${jour}`
+            );
+            const existingData = await checkResponse.json();
+            const existingConfigs = Array.isArray(existingData) ? existingData : (existingData.results || []);
+
+            // Si pas d'entrée existante, en créer une
+            if (existingConfigs.length === 0) {
+                await fetch(`${API_BASE}/distribution/clients-livreurs-hebdo/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify({
+                        client: clientId,
+                        livreur: livreurId,
+                        jour_semaine: jour,
+                        is_active: true
+                    })
+                });
+            }
+        } catch (error) {
+            console.error(`Erreur création entrée hebdo jour ${jour}:`, error);
+        }
     }
 }
 
@@ -328,6 +425,9 @@ window.unassignClient = async function unassignClient(clientId) {
 
         const data = await response.json();
 
+        // Supprimer aussi les entrées ClientLivreurHebdo pour ce client/livreur
+        await deleteHebdoEntriesForClient(clientId, state.selectedLivreur.id);
+
         // Recharger les clients assignés
         await loadLivreurClients(state.selectedLivreur.id);
         await renderClientLists();
@@ -336,6 +436,32 @@ window.unassignClient = async function unassignClient(clientId) {
     } catch (error) {
         console.error('Erreur:', error);
         showAlert('Erreur lors du retrait du client', 'error');
+    }
+}
+
+/**
+ * Supprimer les entrées ClientLivreurHebdo pour un client/livreur
+ */
+async function deleteHebdoEntriesForClient(clientId, livreurId) {
+    try {
+        // Récupérer toutes les entrées pour ce client et ce livreur
+        const response = await fetch(
+            `${API_BASE}/distribution/clients-livreurs-hebdo/?client=${clientId}&livreur=${livreurId}`
+        );
+        const data = await response.json();
+        const configs = Array.isArray(data) ? data : (data.results || []);
+
+        // Supprimer chaque entrée
+        for (const config of configs) {
+            await fetch(`${API_BASE}/distribution/clients-livreurs-hebdo/${config.id}/`, {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            });
+        }
+    } catch (error) {
+        console.error('Erreur suppression entrées hebdo:', error);
     }
 }
 

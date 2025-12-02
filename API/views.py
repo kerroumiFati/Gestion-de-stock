@@ -1128,6 +1128,143 @@ class GroupViewSet(viewsets.ModelViewSet):
     serializer_class = GroupSerializer
     permission_classes = [IsAuthenticated, IsAdminUser]
 
+
+# ==========================================
+# VIEWSET VISITES CLIENTS
+# ==========================================
+
+class VisiteClientViewSet(viewsets.ModelViewSet):
+    """ViewSet pour les visites clients"""
+    from .distribution_models import VisiteClient
+    from .serializers import VisiteClientSerializer
+
+    queryset = VisiteClient.objects.all().select_related('client', 'livreur', 'tournee')
+    serializer_class = VisiteClientSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """Filtrer les visites par company ou par livreur connecté"""
+        from .distribution_models import VisiteClient, LivreurDistribution
+
+        queryset = VisiteClient.objects.all().select_related('client', 'livreur', 'tournee')
+
+        # Si l'utilisateur a une company, filtrer par company
+        if hasattr(self.request, 'company') and self.request.company:
+            queryset = queryset.filter(company=self.request.company)
+        else:
+            # Utilisateur mobile (livreur) - ne voir que ses propres visites
+            try:
+                livreur = LivreurDistribution.objects.get(user=self.request.user)
+                queryset = queryset.filter(livreur=livreur)
+            except LivreurDistribution.DoesNotExist:
+                return queryset.none()
+
+        # Filtres optionnels
+        date_visite = self.request.query_params.get('date')
+        client_id = self.request.query_params.get('client')
+        livreur_id = self.request.query_params.get('livreur')
+        resultat = self.request.query_params.get('resultat')
+
+        if date_visite:
+            queryset = queryset.filter(date_visite=date_visite)
+        if client_id:
+            queryset = queryset.filter(client_id=client_id)
+        if livreur_id:
+            queryset = queryset.filter(livreur_id=livreur_id)
+        if resultat:
+            queryset = queryset.filter(resultat=resultat)
+
+        return queryset.order_by('-date_visite', '-heure_visite')
+
+    def perform_create(self, serializer):
+        """Assigner automatiquement le livreur connecté"""
+        from .distribution_models import LivreurDistribution
+
+        # Récupérer le livreur connecté
+        try:
+            livreur = LivreurDistribution.objects.get(user=self.request.user)
+        except LivreurDistribution.DoesNotExist:
+            livreur = None
+
+        # Assigner la company
+        company = None
+        if hasattr(self.request, 'company') and self.request.company:
+            company = self.request.company
+        elif serializer.validated_data.get('client'):
+            company = serializer.validated_data['client'].company
+
+        serializer.save(livreur=livreur, company=company)
+
+    @action(detail=False, methods=['get'])
+    def aujourd_hui(self, request):
+        """Retourne les visites d'aujourd'hui"""
+        from datetime import date
+        visites = self.get_queryset().filter(date_visite=date.today())
+        serializer = self.get_serializer(visites, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        """Statistiques des visites"""
+        from datetime import date
+        from .distribution_models import VisiteClient
+
+        date_jour = request.query_params.get('date', date.today())
+
+        # Récupérer la company si disponible
+        company = getattr(request, 'company', None)
+
+        stats = VisiteClient.stats_visites_jour(date_jour, company=company)
+        return Response(stats)
+
+    @action(detail=False, methods=['post'])
+    def sync_batch(self, request):
+        """Synchroniser plusieurs visites en une seule requête"""
+        from .distribution_models import VisiteClient, LivreurDistribution
+        from django.utils import timezone
+
+        visites_data = request.data.get('visites', [])
+        created = []
+        errors = []
+
+        # Récupérer le livreur connecté
+        try:
+            livreur = LivreurDistribution.objects.get(user=request.user)
+        except LivreurDistribution.DoesNotExist:
+            return Response({'error': 'Livreur non trouvé'}, status=400)
+
+        for visite_data in visites_data:
+            app_id = visite_data.get('app_id')
+
+            # Vérifier si la visite existe déjà (basé sur app_id)
+            if app_id and VisiteClient.objects.filter(app_id=app_id).exists():
+                continue  # Skip, déjà synchronisée
+
+            try:
+                visite = VisiteClient.objects.create(
+                    client_id=visite_data.get('client_id'),
+                    livreur=livreur,
+                    tournee_id=visite_data.get('tournee_id'),
+                    date_visite=visite_data.get('date_visite', timezone.now().date()),
+                    heure_visite=visite_data.get('heure_visite', timezone.now()),
+                    latitude=visite_data.get('latitude'),
+                    longitude=visite_data.get('longitude'),
+                    resultat=visite_data.get('resultat', 'vente'),
+                    notes=visite_data.get('notes', ''),
+                    app_id=app_id,
+                    synced_at=timezone.now(),
+                    company=livreur.entrepot.company if livreur.entrepot else None
+                )
+                created.append(visite.id)
+            except Exception as e:
+                errors.append({'app_id': app_id, 'error': str(e)})
+
+        return Response({
+            'created': len(created),
+            'created_ids': created,
+            'errors': errors
+        })
+
 class PermissionViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Permission.objects.select_related('content_type').all().order_by('content_type__app_label', 'codename')
     serializer_class = PermissionSerializer
