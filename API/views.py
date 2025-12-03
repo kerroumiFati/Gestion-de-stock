@@ -2749,3 +2749,376 @@ class ArretLivraisonViewSet(TenantFilterMixin, viewsets.ModelViewSet):
         arrets = self.get_queryset().filter(tournee_id=tournee_id).order_by('ordre')
         serializer = self.get_serializer(arrets, many=True)
         return Response(serializer.data)
+
+
+# ==========================================
+# VIEWSETS CONDITIONNEMENT
+# ==========================================
+
+class ConditionnementViewSet(TenantFilterMixin, viewsets.ModelViewSet):
+    """ViewSet pour la gestion du conditionnement des produits"""
+    queryset = Conditionnement.objects.all()
+    serializer_class = ConditionnementSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = None
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        # Filtrer par produit si spécifié
+        produit_id = self.request.query_params.get('produit_id')
+        if produit_id:
+            qs = qs.filter(produit_id=produit_id)
+        return qs.select_related('produit')
+
+    @action(detail=False, methods=['get'])
+    def par_produit(self, request):
+        """Retourne le conditionnement d'un produit spécifique"""
+        produit_id = request.query_params.get('produit_id')
+        if not produit_id:
+            return Response({'error': 'produit_id requis'}, status=400)
+
+        conditionnement = self.get_queryset().filter(
+            produit_id=produit_id,
+            is_active=True
+        ).first()
+
+        if conditionnement:
+            serializer = self.get_serializer(conditionnement)
+            return Response(serializer.data)
+        return Response({'detail': 'Aucun conditionnement trouvé'}, status=404)
+
+
+# ==========================================
+# VIEWSETS PROMOTIONS
+# ==========================================
+
+class PromotionViewSet(TenantFilterMixin, viewsets.ModelViewSet):
+    """ViewSet complet pour la gestion des promotions"""
+    queryset = Promotion.objects.all()
+    permission_classes = [IsAuthenticated]
+    pagination_class = None
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return PromotionListSerializer
+        return PromotionSerializer
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+
+        # Filtres
+        statut = self.request.query_params.get('statut')
+        if statut:
+            qs = qs.filter(statut=statut)
+
+        type_promo = self.request.query_params.get('type_promotion')
+        if type_promo:
+            qs = qs.filter(type_promotion=type_promo)
+
+        produit_id = self.request.query_params.get('produit_id')
+        if produit_id:
+            qs = qs.filter(produit_id=produit_id)
+
+        categorie_id = self.request.query_params.get('categorie_id')
+        if categorie_id:
+            qs = qs.filter(categorie_id=categorie_id)
+
+        # Filtre par validité
+        actives_only = self.request.query_params.get('actives_only')
+        if actives_only == 'true':
+            from django.utils import timezone
+            now = timezone.now()
+            qs = qs.filter(
+                statut='active',
+                date_debut__lte=now,
+                date_fin__gte=now
+            )
+
+        return qs.select_related('produit', 'categorie', 'currency', 'created_by')
+
+    def perform_create(self, serializer):
+        obj = serializer.save(created_by=self.request.user)
+        try:
+            log_event(self.request, 'promotion.create', target=obj,
+                     metadata={'id': obj.id, 'code': obj.code})
+        except Exception:
+            pass
+
+    def perform_update(self, serializer):
+        obj = serializer.save()
+        try:
+            log_event(self.request, 'promotion.update', target=obj,
+                     metadata={'id': obj.id, 'code': obj.code})
+        except Exception:
+            pass
+
+    def perform_destroy(self, instance):
+        promo_id = instance.id
+        promo_code = instance.code
+        super().perform_destroy(instance)
+        try:
+            log_event(self.request, 'promotion.delete', target=None,
+                     metadata={'id': promo_id, 'code': promo_code})
+        except Exception:
+            pass
+
+    @action(detail=True, methods=['post'])
+    def activer(self, request, pk=None):
+        """Active une promotion"""
+        promotion = self.get_object()
+        if promotion.statut == 'brouillon':
+            promotion.statut = 'active'
+            promotion.save()
+            return Response({'status': 'Promotion activée', 'statut': promotion.statut})
+        return Response({'error': 'Seules les promotions en brouillon peuvent être activées'}, status=400)
+
+    @action(detail=True, methods=['post'])
+    def suspendre(self, request, pk=None):
+        """Suspend une promotion active"""
+        promotion = self.get_object()
+        if promotion.statut == 'active':
+            promotion.statut = 'suspendue'
+            promotion.save()
+            return Response({'status': 'Promotion suspendue', 'statut': promotion.statut})
+        return Response({'error': 'Seules les promotions actives peuvent être suspendues'}, status=400)
+
+    @action(detail=True, methods=['post'])
+    def reprendre(self, request, pk=None):
+        """Reprend une promotion suspendue"""
+        promotion = self.get_object()
+        if promotion.statut == 'suspendue':
+            promotion.statut = 'active'
+            promotion.save()
+            return Response({'status': 'Promotion reprise', 'statut': promotion.statut})
+        return Response({'error': 'Seules les promotions suspendues peuvent être reprises'}, status=400)
+
+    @action(detail=True, methods=['post'])
+    def dupliquer(self, request, pk=None):
+        """Duplique une promotion existante"""
+        promotion = self.get_object()
+
+        # Créer une copie
+        nouveau_code = f"{promotion.code}-COPIE"
+        counter = 1
+        while Promotion.objects.filter(code=nouveau_code).exists():
+            nouveau_code = f"{promotion.code}-COPIE-{counter}"
+            counter += 1
+
+        nouvelle_promo = Promotion.objects.create(
+            company=promotion.company,
+            code=nouveau_code,
+            nom=f"Copie de {promotion.nom}",
+            description=promotion.description,
+            type_promotion=promotion.type_promotion,
+            valeur_pourcentage=promotion.valeur_pourcentage,
+            valeur_fixe=promotion.valeur_fixe,
+            prix_special=promotion.prix_special,
+            quantite_achat=promotion.quantite_achat,
+            quantite_offerte=promotion.quantite_offerte,
+            unite_application=promotion.unite_application,
+            currency=promotion.currency,
+            produit=promotion.produit,
+            categorie=promotion.categorie,
+            date_debut=promotion.date_debut,
+            date_fin=promotion.date_fin,
+            quantite_minimum=promotion.quantite_minimum,
+            quantite_maximum=promotion.quantite_maximum,
+            conditionnement_minimum=promotion.conditionnement_minimum,
+            carton_complet_requis=promotion.carton_complet_requis,
+            est_cumulable=promotion.est_cumulable,
+            priorite=promotion.priorite,
+            usage_maximum=promotion.usage_maximum,
+            usage_par_client=promotion.usage_par_client,
+            statut='brouillon',
+            created_by=request.user
+        )
+
+        # Copier les types de prix éligibles
+        nouvelle_promo.types_prix_eligibles.set(promotion.types_prix_eligibles.all())
+
+        serializer = PromotionSerializer(nouvelle_promo)
+        return Response(serializer.data, status=201)
+
+    @action(detail=False, methods=['post'])
+    def simuler(self, request):
+        """Simule l'application d'une promotion"""
+        serializer = PromotionSimulationSerializer(data=request.data)
+        if serializer.is_valid():
+            result = serializer.get_simulation_result()
+            return Response(result)
+        return Response(serializer.errors, status=400)
+
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        """Statistiques des promotions"""
+        from django.utils import timezone
+        from django.db.models import Count, Sum
+
+        now = timezone.now()
+        qs = self.get_queryset()
+
+        stats = {
+            'total': qs.count(),
+            'par_statut': {},
+            'par_type': {},
+            'actives_actuellement': qs.filter(
+                statut='active',
+                date_debut__lte=now,
+                date_fin__gte=now
+            ).count(),
+            'expirees_ce_mois': qs.filter(
+                date_fin__year=now.year,
+                date_fin__month=now.month,
+                statut='expiree'
+            ).count(),
+            'usages_total': qs.aggregate(total=Sum('usage_actuel'))['total'] or 0
+        }
+
+        # Stats par statut
+        for statut, label in Promotion.STATUT_CHOICES:
+            stats['par_statut'][statut] = qs.filter(statut=statut).count()
+
+        # Stats par type
+        for type_promo, label in Promotion.TYPE_PROMOTION:
+            stats['par_type'][type_promo] = qs.filter(type_promotion=type_promo).count()
+
+        return Response(stats)
+
+    @action(detail=False, methods=['get'])
+    def applicables(self, request):
+        """Retourne les promotions applicables à un produit donné"""
+        produit_id = request.query_params.get('produit_id')
+        if not produit_id:
+            return Response({'error': 'produit_id requis'}, status=400)
+
+        try:
+            produit = Produit.objects.get(id=produit_id)
+        except Produit.DoesNotExist:
+            return Response({'error': 'Produit non trouvé'}, status=404)
+
+        from django.utils import timezone
+        now = timezone.now()
+
+        promotions_applicables = []
+        promotions = self.get_queryset().filter(
+            statut='active',
+            date_debut__lte=now,
+            date_fin__gte=now
+        )
+
+        for promo in promotions:
+            if promo.is_applicable_to_product(produit):
+                promotions_applicables.append(promo)
+
+        serializer = PromotionListSerializer(promotions_applicables, many=True)
+        return Response(serializer.data)
+
+
+class PromotionUsageViewSet(viewsets.ReadOnlyModelViewSet):
+    """ViewSet pour consulter l'historique d'utilisation des promotions"""
+    queryset = PromotionUsage.objects.all()
+    serializer_class = PromotionUsageSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+
+        promotion_id = self.request.query_params.get('promotion_id')
+        if promotion_id:
+            qs = qs.filter(promotion_id=promotion_id)
+
+        client_id = self.request.query_params.get('client_id')
+        if client_id:
+            qs = qs.filter(client_id=client_id)
+
+        return qs.select_related('promotion', 'client', 'vente').order_by('-date_utilisation')
+
+    @action(detail=False, methods=['get'])
+    def par_promotion(self, request):
+        """Retourne les statistiques d'usage par promotion"""
+        from django.db.models import Count, Sum
+
+        stats = self.get_queryset().values(
+            'promotion__id', 'promotion__code', 'promotion__nom'
+        ).annotate(
+            nombre_usages=Count('id'),
+            economie_totale=Sum('montant_economise')
+        ).order_by('-nombre_usages')
+
+        return Response(list(stats))
+
+    @action(detail=False, methods=['get'])
+    def par_client(self, request):
+        """Retourne les statistiques d'usage par client"""
+        from django.db.models import Count, Sum
+
+        stats = self.get_queryset().values(
+            'client__id', 'client__nom', 'client__prenom'
+        ).annotate(
+            nombre_usages=Count('id'),
+            economie_totale=Sum('montant_economise')
+        ).order_by('-economie_totale')
+
+        return Response(list(stats))
+
+
+# ==========================================
+# VIEWSETS SECTEURS
+# ==========================================
+
+class SecteurViewSet(TenantFilterMixin, viewsets.ModelViewSet):
+    """ViewSet pour la gestion des secteurs géographiques/commerciaux"""
+    queryset = Secteur.objects.all().order_by('nom')
+    serializer_class = SecteurSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = None
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+
+        # Filtre par statut actif
+        is_active = self.request.query_params.get('is_active')
+        if is_active is not None:
+            qs = qs.filter(is_active=is_active.lower() == 'true')
+
+        return qs
+
+    def perform_create(self, serializer):
+        # Associer automatiquement la company de l'utilisateur
+        company = getattr(self.request, 'company', None)
+        obj = serializer.save(company=company)
+        try:
+            log_event(self.request, 'secteur.create', target=obj,
+                     metadata={'id': obj.id, 'code': obj.code, 'nom': obj.nom})
+        except Exception:
+            pass
+
+    def perform_update(self, serializer):
+        obj = serializer.save()
+        try:
+            log_event(self.request, 'secteur.update', target=obj,
+                     metadata={'id': obj.id, 'code': obj.code, 'nom': obj.nom})
+        except Exception:
+            pass
+
+    def perform_destroy(self, instance):
+        secteur_id = instance.id
+        secteur_code = instance.code
+        secteur_nom = instance.nom
+        super().perform_destroy(instance)
+        try:
+            log_event(self.request, 'secteur.delete', target=None,
+                     metadata={'id': secteur_id, 'code': secteur_code, 'nom': secteur_nom})
+        except Exception:
+            pass
+
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        """Statistiques des secteurs"""
+        qs = self.get_queryset()
+        stats = {
+            'total': qs.count(),
+            'actifs': qs.filter(is_active=True).count(),
+            'inactifs': qs.filter(is_active=False).count(),
+        }
+        return Response(stats)

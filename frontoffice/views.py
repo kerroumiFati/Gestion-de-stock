@@ -683,3 +683,10 @@ def commandes_clients_mobile(request):
 def visites_clients_page(request):
     """Render the master page - JavaScript will load the visites clients content based on URL"""
     return render(request, 'frontoffice/master_page.html')
+
+
+@login_required
+def promotions_page(request):
+    """Page de gestion des promotions"""
+    # Render the master page - JavaScript will load the promotions content based on URL
+    return render(request, 'frontoffice/master_page.html')

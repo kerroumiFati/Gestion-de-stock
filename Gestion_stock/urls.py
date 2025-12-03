@@ -17,13 +17,14 @@ from django.urls import re_path
 from django.contrib import admin
 from django.contrib.auth.decorators import login_required
 from django.urls import path, include
-from django.views.generic import TemplateView
+from django.views.generic import TemplateView, RedirectView
 from frontoffice.create_admin import create_first_admin
 from frontoffice.check_admin import check_existing_admins
 from frontoffice.views_company import create_company_view, list_companies_view, delete_company_view
 from API.map_view import livreurs_map_view
 
 urlpatterns = [
+    path('favicon.ico', RedirectView.as_view(url='/static/img/favicon.ico', permanent=True)),
     path('admin/', admin.site.urls),
     path('API/', include('API.urls')),
     path('', include('frontoffice.urls')),

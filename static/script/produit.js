@@ -92,14 +92,24 @@
   }
 
   function renderProduitsWithPrices(){
+    const table = el('#tproduit');
     const tbody = el('#tproduit tbody#table-content') || el('#tproduit tbody');
     console.log('[Produit] renderProduitsWithPrices: tbody trouvé?', !!tbody);
+    console.log('[Produit] jQuery disponible?', typeof window.$ !== 'undefined');
+    console.log('[Produit] DataTable disponible?', typeof window.$ !== 'undefined' && $.fn && typeof $.fn.DataTable !== 'undefined');
+
     if(!tbody){
       console.warn('[Produit] tbody #table-content introuvable!');
       return;
     }
 
-    const selectedPriceType = $('#display_price_type').val();
+    // Détruire DataTable s'il existe pour pouvoir mettre à jour les données
+    if(window.$ && $.fn && $.fn.DataTable && $.fn.dataTable.isDataTable('#tproduit')){
+      console.log('[Produit] Destruction du DataTable existant');
+      $('#tproduit').DataTable().destroy();
+    }
+
+    const selectedPriceType = window.$ ? $('#display_price_type').val() : '';
     console.log('[Produit] Type de prix sélectionné:', selectedPriceType);
 
     tbody.innerHTML = __cacheProduits.map(p=>{
@@ -138,6 +148,99 @@
         </td>
       </tr>`;
     }).join('');
+
+    // Réinitialiser DataTable après avoir mis à jour les données
+    initDataTableWithRetry();
+  }
+
+  // Fonction pour initialiser DataTable avec retry
+  function initDataTableWithRetry(retryCount){
+    retryCount = retryCount || 0;
+    const maxRetries = 5;
+
+    console.log('[Produit] Tentative initialisation DataTable #' + (retryCount + 1));
+
+    if(window.jQuery && jQuery.fn && jQuery.fn.DataTable){
+      try{
+        // S'assurer que DataTable n'est pas déjà initialisé
+        if(jQuery.fn.dataTable.isDataTable('#tproduit')){
+          console.log('[Produit] DataTable déjà initialisé, destruction...');
+          jQuery('#tproduit').DataTable().destroy();
+        }
+
+        jQuery('#tproduit').DataTable({
+          language: {
+            search: "Rechercher:",
+            lengthMenu: "Afficher _MENU_ éléments",
+            info: "Affichage de _START_ à _END_ sur _TOTAL_ éléments",
+            infoEmpty: "Aucun élément à afficher",
+            infoFiltered: "(filtré de _MAX_ éléments au total)",
+            zeroRecords: "Aucun élément correspondant trouvé",
+            paginate: {
+              first: "Premier",
+              last: "Dernier",
+              next: "Suivant",
+              previous: "Précédent"
+            }
+          },
+          pageLength: 25,
+          order: [[1, 'asc']], // Trier par référence par défaut
+          destroy: true // Permettre la réinitialisation
+        });
+        console.log('[Produit] DataTable initialisé avec succès!');
+      }catch(e){
+        console.warn('[Produit] Erreur initialisation DataTable:', e);
+        addManualSearch();
+      }
+    } else if(retryCount < maxRetries) {
+      // Réessayer après un délai (jQuery/DataTable peut ne pas être encore chargé)
+      console.log('[Produit] jQuery/DataTable non disponible, retry dans 200ms...');
+      setTimeout(function(){
+        initDataTableWithRetry(retryCount + 1);
+      }, 200);
+    } else {
+      console.warn('[Produit] jQuery ou DataTable non disponible après ' + maxRetries + ' tentatives, ajout recherche manuelle');
+      addManualSearch();
+    }
+  }
+
+  // Fonction de recherche manuelle si DataTable n'est pas disponible
+  function addManualSearch(){
+    // Vérifier si le champ de recherche existe déjà
+    if(el('#produit-search-manual')) return;
+
+    const tableSection = el('#liste-produits') || el('#tproduit')?.parentElement;
+    if(!tableSection) return;
+
+    // Créer le champ de recherche
+    const searchDiv = document.createElement('div');
+    searchDiv.className = 'mb-3';
+    searchDiv.innerHTML = `
+      <label class="form-label-product"><i class="fa fa-search"></i> Rechercher:</label>
+      <input type="text" id="produit-search-manual" class="form-control form-control-product"
+             placeholder="Rechercher par référence, code-barres, désignation..." style="max-width: 400px;">
+    `;
+
+    // Insérer avant le tableau
+    const tableWrapper = el('.table-responsive') || el('#tproduit')?.parentElement;
+    if(tableWrapper && tableWrapper.parentElement){
+      tableWrapper.parentElement.insertBefore(searchDiv, tableWrapper);
+    }
+
+    // Ajouter l'événement de recherche
+    const searchInput = el('#produit-search-manual');
+    if(searchInput){
+      searchInput.addEventListener('input', function(){
+        const searchTerm = this.value.toLowerCase().trim();
+        const rows = document.querySelectorAll('#tproduit tbody tr');
+
+        rows.forEach(function(row){
+          const text = row.textContent.toLowerCase();
+          row.style.display = text.includes(searchTerm) ? '' : 'none';
+        });
+      });
+      console.log('[Produit] Recherche manuelle ajoutée');
+    }
   }
 
   function collectForm(){

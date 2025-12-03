@@ -253,10 +253,15 @@ class ProduitSerializer(serializers.ModelSerializer):
         return obj.prix_multiples.filter(is_active=True).count()
 
 class ClientSerializer(serializers.ModelSerializer):
-    produits = ProduitSerializer(many=True,read_only=True)
+    produits = ProduitSerializer(many=True, read_only=True)
+    secteur_nom = serializers.CharField(source='secteur.nom', read_only=True, allow_null=True)
+    secteur_code = serializers.CharField(source='secteur.code', read_only=True, allow_null=True)
+    secteur_couleur = serializers.CharField(source='secteur.couleur', read_only=True, allow_null=True)
+
     class Meta:
         model = Client
-        fields = ('id','nom', 'prenom','email','telephone','adresse','lat','lng','produits')
+        fields = ('id', 'nom', 'prenom', 'email', 'telephone', 'adresse', 'lat', 'lng',
+                  'secteur', 'secteur_nom', 'secteur_code', 'secteur_couleur', 'produits')
 
 class AchatSerializer(serializers.ModelSerializer):
     fournisseur_nom = serializers.CharField(source='fournisseur.libelle', read_only=True)
@@ -879,3 +884,359 @@ class VisiteClientSerializer(serializers.ModelSerializer):
         if 'company' not in validated_data and validated_data.get('client'):
             validated_data['company'] = validated_data['client'].company
         return VisiteClient.objects.create(**validated_data)
+
+
+# ==========================================
+# SERIALIZERS CONDITIONNEMENT
+# ==========================================
+
+class ConditionnementSerializer(serializers.ModelSerializer):
+    """Serializer pour le conditionnement des produits"""
+    produit_reference = serializers.CharField(source='produit.reference', read_only=True)
+    produit_designation = serializers.CharField(source='produit.designation', read_only=True)
+    produit_prix_unitaire = serializers.DecimalField(
+        source='produit.prixU', max_digits=10, decimal_places=2, read_only=True
+    )
+    prix_carton_calcule = serializers.SerializerMethodField()
+    prix_colis_calcule = serializers.SerializerMethodField()
+    unites_par_colis = serializers.SerializerMethodField()
+    unites_par_palette = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Conditionnement
+        fields = [
+            'id', 'produit', 'produit_reference', 'produit_designation', 'produit_prix_unitaire',
+            'unites_par_carton', 'prix_carton', 'prix_carton_calcule',
+            'cartons_par_colis', 'prix_colis', 'prix_colis_calcule', 'unites_par_colis',
+            'colis_par_palette', 'prix_palette', 'unites_par_palette',
+            'prix_demunerisation',
+            'poids_carton', 'dimensions_carton',
+            'is_active', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+
+    def get_prix_carton_calcule(self, obj):
+        return obj.get_prix_carton_calcule()
+
+    def get_prix_colis_calcule(self, obj):
+        return obj.get_prix_colis_calcule()
+
+    def get_unites_par_colis(self, obj):
+        return obj.get_unites_par_colis()
+
+    def get_unites_par_palette(self, obj):
+        return obj.get_unites_par_palette()
+
+
+# ==========================================
+# SERIALIZERS PROMOTIONS
+# ==========================================
+
+class PromotionSerializer(serializers.ModelSerializer):
+    """Serializer complet pour les promotions"""
+    produit_reference = serializers.CharField(source='produit.reference', read_only=True, allow_null=True)
+    produit_designation = serializers.CharField(source='produit.designation', read_only=True, allow_null=True)
+    produit_prix = serializers.DecimalField(
+        source='produit.prixU', max_digits=10, decimal_places=2, read_only=True, allow_null=True
+    )
+    categorie_nom = serializers.CharField(source='categorie.nom', read_only=True, allow_null=True)
+    currency_code = serializers.CharField(source='currency.code', read_only=True, allow_null=True)
+    currency_symbol = serializers.CharField(source='currency.symbol', read_only=True, allow_null=True)
+    type_promotion_display = serializers.CharField(source='get_type_promotion_display', read_only=True)
+    unite_application_display = serializers.CharField(source='get_unite_application_display', read_only=True)
+    conditionnement_minimum_display = serializers.CharField(source='get_conditionnement_minimum_display', read_only=True)
+    statut_display = serializers.CharField(source='get_statut_display', read_only=True)
+    created_by_username = serializers.CharField(source='created_by.username', read_only=True, allow_null=True)
+    types_prix_eligibles_list = serializers.SerializerMethodField()
+    is_valid = serializers.SerializerMethodField()
+    usage_restant = serializers.SerializerMethodField()
+    jours_restants = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Promotion
+        fields = [
+            'id', 'code', 'nom', 'description',
+            'type_promotion', 'type_promotion_display',
+            'valeur_pourcentage', 'valeur_fixe', 'prix_special',
+            'quantite_achat', 'quantite_offerte',
+            'unite_application', 'unite_application_display',
+            'currency', 'currency_code', 'currency_symbol',
+            'produit', 'produit_reference', 'produit_designation', 'produit_prix',
+            'categorie', 'categorie_nom',
+            'date_debut', 'date_fin', 'jours_restants',
+            'quantite_minimum', 'quantite_maximum',
+            'conditionnement_minimum', 'conditionnement_minimum_display',
+            'carton_complet_requis',
+            'est_cumulable', 'priorite',
+            'usage_maximum', 'usage_par_client', 'usage_actuel', 'usage_restant',
+            'types_prix_eligibles', 'types_prix_eligibles_list',
+            'statut', 'statut_display', 'is_valid',
+            'created_by', 'created_by_username',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['usage_actuel', 'created_at', 'updated_at']
+
+    def get_types_prix_eligibles_list(self, obj):
+        return [{'id': tp.id, 'code': tp.code, 'libelle': tp.libelle}
+                for tp in obj.types_prix_eligibles.all()]
+
+    def get_is_valid(self, obj):
+        return obj.is_valid()
+
+    def get_usage_restant(self, obj):
+        if obj.usage_maximum:
+            return max(0, obj.usage_maximum - obj.usage_actuel)
+        return None
+
+    def get_jours_restants(self, obj):
+        from django.utils import timezone
+        now = timezone.now()
+        if obj.date_fin > now:
+            delta = obj.date_fin - now
+            return delta.days
+        return 0
+
+    def validate(self, data):
+        """Validation personnalisée pour les promotions"""
+        type_promo = data.get('type_promotion')
+
+        # Validation selon le type de promotion
+        if type_promo == 'pourcentage':
+            if not data.get('valeur_pourcentage'):
+                raise serializers.ValidationError({
+                    'valeur_pourcentage': 'Le pourcentage est requis pour ce type de promotion.'
+                })
+            if data.get('valeur_pourcentage', 0) <= 0 or data.get('valeur_pourcentage', 0) > 100:
+                raise serializers.ValidationError({
+                    'valeur_pourcentage': 'Le pourcentage doit être entre 0 et 100.'
+                })
+
+        elif type_promo == 'valeur_fixe':
+            if not data.get('valeur_fixe'):
+                raise serializers.ValidationError({
+                    'valeur_fixe': 'La valeur fixe est requise pour ce type de promotion.'
+                })
+
+        elif type_promo == 'prix_special':
+            if not data.get('prix_special'):
+                raise serializers.ValidationError({
+                    'prix_special': 'Le prix spécial est requis pour ce type de promotion.'
+                })
+
+        elif type_promo in ['achetez_x_payez_y', 'achetez_x_offert_y']:
+            if not data.get('quantite_achat'):
+                raise serializers.ValidationError({
+                    'quantite_achat': 'La quantité à acheter est requise pour ce type de promotion.'
+                })
+            if not data.get('quantite_offerte'):
+                raise serializers.ValidationError({
+                    'quantite_offerte': 'La quantité offerte/payée est requise pour ce type de promotion.'
+                })
+
+        # Vérifier qu'au moins un produit ou une catégorie est sélectionné
+        if not data.get('produit') and not data.get('categorie'):
+            raise serializers.ValidationError({
+                'produit': 'Veuillez sélectionner un produit ou une catégorie.',
+                'categorie': 'Veuillez sélectionner un produit ou une catégorie.'
+            })
+
+        # Vérifier les dates
+        date_debut = data.get('date_debut')
+        date_fin = data.get('date_fin')
+        if date_debut and date_fin and date_fin <= date_debut:
+            raise serializers.ValidationError({
+                'date_fin': 'La date de fin doit être postérieure à la date de début.'
+            })
+
+        return data
+
+    def create(self, validated_data):
+        types_prix = validated_data.pop('types_prix_eligibles', [])
+        promotion = Promotion.objects.create(**validated_data)
+        if types_prix:
+            promotion.types_prix_eligibles.set(types_prix)
+        return promotion
+
+    def update(self, instance, validated_data):
+        types_prix = validated_data.pop('types_prix_eligibles', None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        if types_prix is not None:
+            instance.types_prix_eligibles.set(types_prix)
+        return instance
+
+
+class PromotionListSerializer(serializers.ModelSerializer):
+    """Serializer simplifié pour la liste des promotions"""
+    produit_designation = serializers.CharField(source='produit.designation', read_only=True, allow_null=True)
+    categorie_nom = serializers.CharField(source='categorie.nom', read_only=True, allow_null=True)
+    type_promotion_display = serializers.CharField(source='get_type_promotion_display', read_only=True)
+    statut_display = serializers.CharField(source='get_statut_display', read_only=True)
+    is_valid = serializers.SerializerMethodField()
+    resume = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Promotion
+        fields = [
+            'id', 'code', 'nom', 'type_promotion', 'type_promotion_display',
+            'produit', 'produit_designation', 'categorie', 'categorie_nom',
+            'date_debut', 'date_fin',
+            'statut', 'statut_display', 'is_valid',
+            'usage_actuel', 'usage_maximum',
+            'priorite', 'resume'
+        ]
+
+    def get_is_valid(self, obj):
+        return obj.is_valid()
+
+    def get_resume(self, obj):
+        """Génère un résumé textuel de la promotion"""
+        if obj.type_promotion == 'pourcentage':
+            return f"-{obj.valeur_pourcentage}%"
+        elif obj.type_promotion == 'valeur_fixe':
+            symbol = obj.currency.symbol if obj.currency else '€'
+            return f"-{obj.valeur_fixe} {symbol}"
+        elif obj.type_promotion == 'prix_special':
+            symbol = obj.currency.symbol if obj.currency else '€'
+            return f"{obj.prix_special} {symbol}"
+        elif obj.type_promotion == 'achetez_x_payez_y':
+            return f"Achetez {obj.quantite_achat}, payez {obj.quantite_offerte}"
+        elif obj.type_promotion == 'achetez_x_offert_y':
+            return f"Achetez {obj.quantite_achat}, {obj.quantite_offerte} offert(s)"
+        return obj.nom
+
+
+class PromotionUsageSerializer(serializers.ModelSerializer):
+    """Serializer pour le suivi d'utilisation des promotions"""
+    promotion_code = serializers.CharField(source='promotion.code', read_only=True)
+    promotion_nom = serializers.CharField(source='promotion.nom', read_only=True)
+    client_nom = serializers.CharField(source='client.nom', read_only=True)
+    vente_numero = serializers.CharField(source='vente.numero', read_only=True, allow_null=True)
+
+    class Meta:
+        model = PromotionUsage
+        fields = [
+            'id', 'promotion', 'promotion_code', 'promotion_nom',
+            'client', 'client_nom',
+            'vente', 'vente_numero',
+            'date_utilisation', 'montant_economise'
+        ]
+        read_only_fields = ['date_utilisation']
+
+
+class PromotionSimulationSerializer(serializers.Serializer):
+    """Serializer pour simuler l'application d'une promotion"""
+    promotion_id = serializers.IntegerField()
+    produit_id = serializers.IntegerField()
+    quantite = serializers.IntegerField(min_value=1)
+    type_conditionnement = serializers.ChoiceField(
+        choices=['unite', 'carton', 'colis', 'palette'],
+        default='unite'
+    )
+    type_prix_id = serializers.IntegerField(required=False, allow_null=True)
+
+    def validate(self, data):
+        # Vérifier que la promotion existe
+        try:
+            promotion = Promotion.objects.get(id=data['promotion_id'])
+            data['promotion'] = promotion
+        except Promotion.DoesNotExist:
+            raise serializers.ValidationError({'promotion_id': 'Promotion non trouvée.'})
+
+        # Vérifier que le produit existe
+        try:
+            produit = Produit.objects.get(id=data['produit_id'])
+            data['produit'] = produit
+        except Produit.DoesNotExist:
+            raise serializers.ValidationError({'produit_id': 'Produit non trouvé.'})
+
+        # Vérifier que la promotion s'applique au produit
+        if not promotion.is_applicable_to_product(produit):
+            raise serializers.ValidationError({
+                'promotion_id': 'Cette promotion ne s\'applique pas à ce produit.'
+            })
+
+        return data
+
+    def get_simulation_result(self):
+        """Calcule le résultat de la simulation"""
+        data = self.validated_data
+        promotion = data['promotion']
+        produit = data['produit']
+        quantite = data['quantite']
+        type_conditionnement = data['type_conditionnement']
+
+        # Récupérer le prix selon le conditionnement
+        prix_unitaire = produit.prixU
+        conditionnement = produit.conditionnements.filter(is_active=True).first()
+
+        if type_conditionnement == 'carton' and conditionnement:
+            quantite_unites = quantite * conditionnement.unites_par_carton
+            prix_base = conditionnement.get_prix_carton_calcule()
+        elif type_conditionnement == 'colis' and conditionnement:
+            quantite_unites = quantite * conditionnement.get_unites_par_colis()
+            prix_base = conditionnement.get_prix_colis_calcule()
+        else:
+            quantite_unites = quantite
+            prix_base = prix_unitaire
+
+        # Prix sans promotion
+        prix_total_sans_promo = prix_base * quantite
+
+        # Prix avec promotion
+        prix_total_avec_promo = promotion.calculer_prix_promotion(prix_base, quantite)
+
+        # Calcul pour offres spéciales
+        offre_speciale = promotion.calculer_offre_speciale(quantite)
+
+        # Économie
+        economie = promotion.get_economie(prix_base, quantite)
+
+        return {
+            'produit': {
+                'id': produit.id,
+                'reference': produit.reference,
+                'designation': produit.designation,
+                'prix_unitaire': float(prix_unitaire)
+            },
+            'promotion': {
+                'id': promotion.id,
+                'code': promotion.code,
+                'nom': promotion.nom,
+                'type': promotion.type_promotion
+            },
+            'conditionnement': type_conditionnement,
+            'quantite_demandee': quantite,
+            'quantite_en_unites': quantite_unites,
+            'prix_unitaire_base': float(prix_base),
+            'prix_total_sans_promotion': float(prix_total_sans_promo),
+            'prix_total_avec_promotion': float(prix_total_avec_promo),
+            'economie_montant': float(economie['montant']),
+            'economie_pourcentage': float(economie['pourcentage']),
+            'offre_speciale': {
+                'quantite_a_payer': offre_speciale['quantite_a_payer'],
+                'quantite_gratuite': offre_speciale['quantite_gratuite'],
+                'quantite_totale': offre_speciale['quantite_totale']
+            }
+        }
+
+
+# ==========================================
+# SERIALIZERS SECTEURS
+# ==========================================
+
+class SecteurSerializer(serializers.ModelSerializer):
+    """Serializer pour les secteurs géographiques/commerciaux"""
+    clients_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Secteur
+        fields = [
+            'id', 'company', 'code', 'nom', 'description', 'couleur',
+            'is_active', 'clients_count', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+
+    def get_clients_count(self, obj):
+        return obj.get_clients_count()

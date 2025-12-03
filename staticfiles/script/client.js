@@ -1,6 +1,7 @@
 // Client page simple CRUD list + add
 (function($){
   const API_BASE = '/API/clients/';
+  const API_SECTEURS = '/API/secteurs/';
   const DEBUG = true; function dbg(...a){ if(DEBUG) try{ console.log('[Client]', ...a);}catch(e){} }
 
   function getCookie(name){
@@ -28,14 +29,23 @@
       $email: $('#email'),
       $adresse: $('#adresse'),
       $telephone: $('#telephone'),
+      $secteur: $('#secteur'),
       $btn: $('#btnClient'),
       $tableBody: $('#table-content')
     };
   }
 
   function resetForm(){
-    const { $id, $nom, $prenom, $email, $adresse, $telephone } = els();
-    $id.val(''); $nom.val(''); $prenom.val(''); $email.val(''); $adresse.val(''); $telephone.val('');
+    const { $id, $nom, $prenom, $email, $adresse, $telephone, $secteur, $btn } = els();
+    $id.val('');
+    $nom.val('');
+    $prenom.val('');
+    $email.val('');
+    $adresse.val('');
+    $telephone.val('');
+    // Reset secteur select to first option (empty value)
+    $secteur.prop('selectedIndex', 0);
+    $btn.html('<i class="fa fa-plus"></i> Ajouter');
   }
 
   function asList(data){
@@ -43,6 +53,24 @@
     if(data && Array.isArray(data.results)) return data.results;
     if(data && typeof data === 'object') return Object.values(data);
     return [];
+  }
+
+  // Load secteurs into select
+  function loadSecteurs(){
+    return $.ajax({ url: API_SECTEURS + '?is_active=true', method: 'GET', dataType: 'json' })
+      .done(function(data){
+        const list = asList(data);
+        dbg('loadSecteurs: list size =', list.length);
+        const $secteur = $('#secteur');
+        $secteur.find('option:not(:first)').remove();
+        list.forEach(function(s){
+          const colorDot = s.couleur ? `<span style="display:inline-block;width:10px;height:10px;background:${s.couleur};border-radius:50%;margin-right:5px;"></span>` : '';
+          $secteur.append(`<option value="${s.id}" data-couleur="${s.couleur || ''}">${s.code} - ${s.nom}</option>`);
+        });
+      })
+      .fail(function(xhr){
+        dbg('loadSecteurs: fail', xhr.status);
+      });
   }
 
   function loadClients(){
@@ -64,8 +92,15 @@
           $tr.append(`<td>${c.email || ''}</td>`);
           $tr.append(`<td>${c.telephone || ''}</td>`);
           $tr.append(`<td>${c.adresse || ''}</td>`);
-          $tr.append(`<td><button type="button" class="btn btn-sm btn-outline-danger btn-delete" data-id="${c.id}"><i class="fas fa-trash"></i></button></td>`);
-          $tr.append(`<td><button type="button" class="btn btn-sm btn-outline-primary btn-edit" data-id="${c.id}"><i class="fas fa-edit"></i></button></td>`);
+          // Secteur avec badge coloré
+          const secteurHtml = c.secteur_nom
+            ? `<span class="badge" style="background-color: ${c.secteur_couleur || '#6c757d'}; color: white;">${c.secteur_code || ''} - ${c.secteur_nom}</span>`
+            : '<span class="text-muted">-</span>';
+          $tr.append(`<td>${secteurHtml}</td>`);
+          $tr.append(`<td>
+            <button type="button" class="action-btn action-btn-edit btn-edit" data-id="${c.id}"><i class="fas fa-edit"></i></button>
+            <button type="button" class="action-btn action-btn-delete btn-delete" data-id="${c.id}"><i class="fas fa-trash"></i></button>
+          </td>`);
           $tableBody.append($tr);
         });
       })
@@ -77,13 +112,15 @@
   }
 
   function payloadFromForm(){
-    const { $nom, $prenom, $email, $adresse, $telephone } = els();
+    const { $nom, $prenom, $email, $adresse, $telephone, $secteur } = els();
+    const secteurVal = $secteur.val();
     return {
       nom: ($nom.val()||'').trim(),
       prenom: ($prenom.val()||'').trim(),
       email: ($email.val()||'').trim(),
       adresse: ($adresse.val()||'').trim(),
-      telephone: ($telephone.val()||'').trim()
+      telephone: ($telephone.val()||'').trim(),
+      secteur: secteurVal ? parseInt(secteurVal, 10) : null
     };
   }
 
@@ -113,6 +150,44 @@
       });
   }
 
+  function updateClient(id){
+    const data = payloadFromForm();
+    if(!validate(data)) return;
+    dbg('updateClient payload', id, data);
+    $.ajax({ url: API_BASE + id + '/', method: 'PATCH', contentType: 'application/json', data: JSON.stringify(data) })
+      .done(function(resp){ dbg('updateClient success', resp); resetForm(); loadClients(); })
+      .fail(function(xhr){
+        dbg('updateClient fail', xhr.status, xhr.responseText || xhr.statusText, xhr.responseJSON);
+        let msg = 'Erreur lors de la modification du client';
+        const j = xhr.responseJSON; if(j){
+          if(j.detail) msg = j.detail; else if(j.error) msg = j.error;
+        }
+        alert(msg);
+      });
+  }
+
+  function editClient(id){
+    $.ajax({ url: API_BASE + id + '/', method: 'GET', dataType: 'json' })
+      .done(function(c){
+        dbg('editClient loaded', c);
+        const { $id, $nom, $prenom, $email, $adresse, $telephone, $secteur, $btn } = els();
+        $id.val(c.id);
+        $nom.val(c.nom || '');
+        $prenom.val(c.prenom || '');
+        $email.val(c.email || '');
+        $adresse.val(c.adresse || '');
+        $telephone.val(c.telephone || '');
+        $secteur.val(c.secteur || '');
+        $btn.html('<i class="fa fa-save"></i> Modifier');
+        // Scroll to form
+        $('html, body').animate({ scrollTop: $('#nom').offset().top - 100 }, 300);
+      })
+      .fail(function(xhr){
+        dbg('editClient fail', xhr.status);
+        alert('Impossible de charger le client');
+      });
+  }
+
   function deleteClient(id){
     if(!confirm('Supprimer ce client ?')) return;
     $.ajax({ url: API_BASE + id + '/', method: 'DELETE' })
@@ -124,18 +199,28 @@
   }
 
   function bind(){
-    $(document).off('click', '#btnClient').on('click', '#btnClient', function(){ createClient(); });
+    $(document).off('click', '#btnClient').on('click', '#btnClient', function(){
+      const { $id } = els();
+      const id = $id.val();
+      if(id){
+        updateClient(id);
+      } else {
+        createClient();
+      }
+    });
     $(document).off('click', '#table-content .btn-delete').on('click', '#table-content .btn-delete', function(){
       const id = $(this).data('id'); deleteClient(id);
+    });
+    $(document).off('click', '#table-content .btn-edit').on('click', '#table-content .btn-edit', function(){
+      const id = $(this).data('id'); editClient(id);
     });
   }
 
   function init(){
     if(!document.getElementById('tclient')){ dbg('init client: table not found, skip'); return; }
     bind();
+    loadSecteurs();
     loadClients();
-    // Safe delegated handler for add/update if needed later
-    $(document).off('click', '#tclient .btn-edit');
   }
 
   $(document).ready(init);

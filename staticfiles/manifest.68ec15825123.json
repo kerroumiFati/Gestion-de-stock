@@ -1,0 +1,21 @@
+{
+    "name": "Market - Gestion de Stock",
+    "short_name": "Market",
+    "description": "Système moderne de gestion de stock",
+    "start_url": "/admindash/",
+    "display": "standalone",
+    "background_color": "#1f2937",
+    "theme_color": "#6366f1",
+    "icons": [
+        {
+            "src": "/static/img/icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "/static/img/icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ]
+}

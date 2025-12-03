@@ -272,11 +272,20 @@ if (!window.__client_script_loaded__) {
             </div>
 
             <div class="row">
-                <div class="col-md-12 mb-3">
+                <div class="col-md-8 mb-3">
                     <label class="modern-label" for="adresse">
                         <i class="fa fa-map-marker-alt"></i> {% trans "Adresse" %}
                     </label>
                     <input class="form-control modern-input" type="text" id="adresse" required>
+                </div>
+
+                <div class="col-md-4 mb-3">
+                    <label class="modern-label" for="secteur">
+                        <i class="fa fa-map-marked-alt"></i> {% trans "Secteur" %}
+                    </label>
+                    <select class="form-control modern-input" id="secteur">
+                        <option value="">-- Sélectionner un secteur --</option>
+                    </select>
                 </div>
             </div>
 
@@ -310,12 +319,13 @@ if (!window.__client_script_loaded__) {
                         <th>{% trans "Email" %}</th>
                         <th>{% trans "Téléphone" %}</th>
                         <th>{% trans "Adresse" %}</th>
+                        <th>{% trans "Secteur" %}</th>
                         <th>{% trans "Actions" %}</th>
                     </tr>
                 </thead>
                 <tbody id="table-content">
                     <tr>
-                        <td colspan="7" class="text-center text-muted">{% trans "Chargement..." %}</td>
+                        <td colspan="8" class="text-center text-muted">{% trans "Chargement..." %}</td>
                     </tr>
                 </tbody>
             </table>
@@ -331,6 +341,7 @@ function resetForm(){
     document.getElementById('email').value = '';
     document.getElementById('telephone').value = '';
     document.getElementById('adresse').value = '';
-    document.getElementById('btnClient').textContent = 'Ajouter';
+    document.getElementById('secteur').selectedIndex = 0;
+    document.getElementById('btnClient').innerHTML = '<i class="fa fa-plus"></i> Ajouter';
 }
 </script>

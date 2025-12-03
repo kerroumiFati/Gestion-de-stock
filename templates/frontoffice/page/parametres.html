@@ -275,6 +275,13 @@
                 <i class="fas fa-key"></i> Mot de passe
             </button>
         </li>
+        {% if user.is_staff %}
+        <li class="nav-item">
+            <button class="settings-tab" data-tab="secteurs">
+                <i class="fas fa-map-marker-alt"></i> Secteurs
+            </button>
+        </li>
+        {% endif %}
     </ul>
 
     <!-- Sections de contenu -->
@@ -607,6 +614,81 @@
                 </div>
             </div>
         </div>
+
+        {% if user.is_staff %}
+        <!-- Section Secteurs -->
+        <div id="section-secteurs" class="settings-section">
+            <div class="section-card">
+                <h5 class="section-header">
+                    <i class="fas fa-map-marker-alt"></i> Gestion des Secteurs
+                </h5>
+
+                <div class="info-alert mb-4">
+                    <i class="fas fa-info-circle"></i> <strong>Secteurs :</strong>
+                    Définissez les secteurs géographiques ou commerciaux pour organiser vos clients et tournées
+                </div>
+
+                <!-- Formulaire d'ajout de secteur -->
+                <div class="row mb-4">
+                    <div class="col-md-2 mb-2">
+                        <label class="form-label-modern">Code</label>
+                        <input id="secteur_code" type="text" class="form-control form-control-sm form-control-modern" placeholder="SEC001" maxlength="20">
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <label class="form-label-modern">Nom</label>
+                        <input id="secteur_nom" type="text" class="form-control form-control-sm form-control-modern" placeholder="Nom du secteur">
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <label class="form-label-modern">Description</label>
+                        <input id="secteur_description" type="text" class="form-control form-control-sm form-control-modern" placeholder="Description (optionnel)">
+                    </div>
+                    <div class="col-md-2 mb-2">
+                        <label class="form-label-modern">Couleur</label>
+                        <input id="secteur_couleur" type="color" class="form-control form-control-sm form-control-modern" value="#3498db" style="height: 38px; padding: 2px;">
+                    </div>
+                    <div class="col-md-2 mb-2">
+                        <label class="form-label-modern">&nbsp;</label>
+                        <button id="add_secteur" class="btn btn-modern-success btn-sm w-100" style="height: 38px;">
+                            <i class="fa fa-plus"></i> Ajouter
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Statistiques -->
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <span id="secteurs_stats" class="text-muted"></span>
+                    </div>
+                </div>
+
+                <!-- Tableau des secteurs -->
+                <div class="table-responsive">
+                    <table class="table table-sm table-modern">
+                        <thead>
+                            <tr>
+                                <th>Couleur</th>
+                                <th>Code</th>
+                                <th>Nom</th>
+                                <th>Description</th>
+                                <th>Clients</th>
+                                <th>Statut</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="secteurs_body">
+                            <tr>
+                                <td colspan="7" class="text-center text-muted">
+                                    <i class="fas fa-spinner fa-spin"></i> Chargement...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <span id="secteurs_status" class="ml-3"></span>
+            </div>
+        </div>
+        {% endif %}
     </div>
 </div>
 
@@ -896,6 +978,152 @@
       }, 100);
     } catch(e) {
       console.warn('init devises from paramètres failed', e);
+    }
+
+    // ==========================================
+    // GESTION DES SECTEURS
+    // ==========================================
+    const API_SECTEURS = '/API/secteurs/';
+
+    function loadSecteurs() {
+      $.getJSON(API_SECTEURS).done(function(data) {
+        const list = Array.isArray(data) ? data : (data && data.results ? data.results : []);
+        renderSecteurs(list);
+        updateSecteursStats(list);
+      }).fail(function() {
+        $('#secteurs_body').html('<tr><td colspan="7" class="text-center text-danger">Erreur de chargement</td></tr>');
+      });
+    }
+
+    function renderSecteurs(list) {
+      const $tbody = $('#secteurs_body');
+      $tbody.empty();
+
+      if (!list || list.length === 0) {
+        $tbody.append('<tr><td colspan="7" class="text-center text-muted">Aucun secteur défini</td></tr>');
+        return;
+      }
+
+      list.forEach(function(s) {
+        const statusBadge = s.is_active
+          ? '<span class="badge badge-success">Actif</span>'
+          : '<span class="badge badge-secondary">Inactif</span>';
+
+        const row = `
+          <tr data-id="${s.id}">
+            <td>
+              <div style="width: 25px; height: 25px; border-radius: 4px; background-color: ${s.couleur || '#3498db'}; border: 1px solid #ddd;"></div>
+            </td>
+            <td><strong>${s.code || ''}</strong></td>
+            <td>${s.nom || ''}</td>
+            <td><small class="text-muted">${s.description || '-'}</small></td>
+            <td><span class="badge badge-info">${s.clients_count || 0}</span></td>
+            <td>${statusBadge}</td>
+            <td>
+              <button class="btn btn-sm btn-outline-secondary btn-toggle-secteur" data-id="${s.id}" data-active="${s.is_active}" title="${s.is_active ? 'Désactiver' : 'Activer'}">
+                <i class="fas fa-${s.is_active ? 'eye-slash' : 'eye'}"></i>
+              </button>
+              <button class="btn btn-sm btn-outline-danger btn-delete-secteur" data-id="${s.id}" title="Supprimer">
+                <i class="fas fa-trash"></i>
+              </button>
+            </td>
+          </tr>
+        `;
+        $tbody.append(row);
+      });
+    }
+
+    function updateSecteursStats(list) {
+      const total = list.length;
+      const actifs = list.filter(s => s.is_active).length;
+      $('#secteurs_stats').html(`<i class="fas fa-chart-bar"></i> ${total} secteur(s) au total, ${actifs} actif(s)`);
+    }
+
+    function setSecteurStatus(msg, isErr) {
+      $('#secteurs_status').html(isErr
+        ? `<i class="fas fa-exclamation-circle text-danger"></i> <span class="text-danger">${msg}</span>`
+        : `<i class="fas fa-check-circle text-success"></i> <span class="text-success">${msg}</span>`
+      );
+      setTimeout(function() { $('#secteurs_status').html(''); }, 3000);
+    }
+
+    // Ajouter un secteur
+    $('#add_secteur').on('click', function() {
+      const code = ($('#secteur_code').val() || '').trim().toUpperCase();
+      const nom = ($('#secteur_nom').val() || '').trim();
+      const description = ($('#secteur_description').val() || '').trim();
+      const couleur = $('#secteur_couleur').val() || '#3498db';
+
+      if (!code || !nom) {
+        setSecteurStatus('Le code et le nom sont obligatoires', true);
+        return;
+      }
+
+      const csrftoken = getCookie('csrftoken');
+      $.ajax({
+        url: API_SECTEURS,
+        method: 'POST',
+        contentType: 'application/json',
+        headers: csrftoken ? { 'X-CSRFToken': csrftoken } : {},
+        data: JSON.stringify({
+          code: code,
+          nom: nom,
+          description: description,
+          couleur: couleur,
+          is_active: true
+        })
+      }).done(function() {
+        setSecteurStatus('Secteur ajouté avec succès', false);
+        $('#secteur_code, #secteur_nom, #secteur_description').val('');
+        $('#secteur_couleur').val('#3498db');
+        loadSecteurs();
+      }).fail(function(xhr) {
+        const msg = (xhr.responseJSON && (xhr.responseJSON.detail || xhr.responseJSON.code || JSON.stringify(xhr.responseJSON))) || 'Erreur lors de la création';
+        setSecteurStatus(msg, true);
+      });
+    });
+
+    // Toggle actif/inactif
+    $(document).on('click', '.btn-toggle-secteur', function() {
+      const id = $(this).data('id');
+      const isActive = $(this).data('active');
+      const csrftoken = getCookie('csrftoken');
+
+      $.ajax({
+        url: API_SECTEURS + id + '/',
+        method: 'PATCH',
+        contentType: 'application/json',
+        headers: csrftoken ? { 'X-CSRFToken': csrftoken } : {},
+        data: JSON.stringify({ is_active: !isActive })
+      }).done(function() {
+        setSecteurStatus(isActive ? 'Secteur désactivé' : 'Secteur activé', false);
+        loadSecteurs();
+      }).fail(function() {
+        setSecteurStatus('Erreur lors de la modification', true);
+      });
+    });
+
+    // Supprimer un secteur
+    $(document).on('click', '.btn-delete-secteur', function() {
+      const id = $(this).data('id');
+      if (!confirm('Êtes-vous sûr de vouloir supprimer ce secteur ?')) return;
+
+      const csrftoken = getCookie('csrftoken');
+      $.ajax({
+        url: API_SECTEURS + id + '/',
+        method: 'DELETE',
+        headers: csrftoken ? { 'X-CSRFToken': csrftoken } : {}
+      }).done(function() {
+        setSecteurStatus('Secteur supprimé', false);
+        loadSecteurs();
+      }).fail(function() {
+        setSecteurStatus('Erreur lors de la suppression', true);
+      });
+    });
+
+    // Charger les secteurs au démarrage si la section existe
+    if ($('#section-secteurs').length) {
+      loadSecteurs();
     }
   });
 })();

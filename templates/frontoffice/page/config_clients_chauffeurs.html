@@ -669,9 +669,8 @@ if (!window.__config_clients_chauffeurs_script_loaded__) {
     font-weight: 500;
     color: #1f2937;
     font-size: 0.85rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    word-wrap: break-word;
+    white-space: normal;
 }
 
 .client-item-jour .client-address-jour {
@@ -702,6 +701,29 @@ if (!window.__config_clients_chauffeurs_script_loaded__) {
 
 .client-item-jour .add-btn:hover {
     transform: scale(1.1);
+}
+
+/* Boutons avec noms complets des jours */
+.client-item-jour .add-btns-full {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 8px;
+}
+
+.client-item-jour .add-btn-full {
+    padding: 4px 8px;
+    border: none;
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-weight: 500;
+}
+
+.client-item-jour .add-btn-full:hover {
+    transform: scale(1.05);
+    opacity: 0.9;
 }
 
 .badge-count-jour {
@@ -736,6 +758,12 @@ if (!window.__config_clients_chauffeurs_script_loaded__) {
     color: white;
     font-weight: 600;
     font-size: 0.85rem;
+}
+
+.jour-date {
+    font-weight: 400;
+    opacity: 0.9;
+    margin-left: 4px;
 }
 
 .jour-lundi { background: linear-gradient(135deg, #3b82f6, #2563eb); }
@@ -1142,6 +1170,223 @@ if (!window.__config_clients_chauffeurs_script_loaded__) {
         grid-template-columns: 1fr;
     }
 }
+
+/* Week Navigation Buttons */
+.btn-week-nav {
+    background: #f3f4f6;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: #374151;
+}
+
+.btn-week-nav:hover {
+    background: #e5e7eb;
+    border-color: #9ca3af;
+}
+
+/* Excel Import/Export Styles */
+.excel-sections {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 25px;
+    margin-bottom: 25px;
+}
+
+.excel-box {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 25px;
+}
+
+.excel-box h4 {
+    color: #1f2937;
+    margin: 0 0 12px 0;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.excel-box h4 i {
+    color: #3b82f6;
+}
+
+.excel-desc {
+    color: #6b7280;
+    font-size: 0.9rem;
+    margin-bottom: 20px;
+}
+
+.export-options, .import-options {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.export-row, .import-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.export-row label, .import-row label {
+    min-width: 120px;
+    font-weight: 500;
+    color: #374151;
+}
+
+.btn-excel {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s;
+}
+
+.btn-export {
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: white;
+}
+
+.btn-export:hover {
+    background: linear-gradient(135deg, #059669, #047857);
+}
+
+.btn-import {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: white;
+}
+
+.btn-import:hover {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+}
+
+.btn-template {
+    background: #6b7280;
+    color: white;
+}
+
+.btn-template:hover {
+    background: #4b5563;
+}
+
+.btn-cancel {
+    background: #ef4444;
+    color: white;
+}
+
+.btn-cancel:hover {
+    background: #dc2626;
+}
+
+.btn-confirm {
+    background: #10b981;
+    color: white;
+}
+
+.btn-confirm:hover {
+    background: #059669;
+}
+
+.import-buttons {
+    display: flex;
+    gap: 12px;
+}
+
+.import-preview {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 25px;
+    margin-bottom: 25px;
+}
+
+.import-preview h4 {
+    margin: 0 0 15px 0;
+    color: #1f2937;
+}
+
+.preview-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.preview-table th, .preview-table td {
+    padding: 10px;
+    border: 1px solid #e5e7eb;
+    text-align: left;
+    font-size: 0.85rem;
+}
+
+.preview-table th {
+    background: #f3f4f6;
+    font-weight: 600;
+    color: #374151;
+}
+
+.preview-actions {
+    margin-top: 20px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+.excel-format-info {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 10px;
+    padding: 20px;
+}
+
+.excel-format-info h4 {
+    color: #1e40af;
+    margin: 0 0 12px 0;
+}
+
+.excel-format-info p {
+    color: #3b82f6;
+    margin-bottom: 15px;
+}
+
+.format-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.format-table th, .format-table td {
+    padding: 10px 15px;
+    border: 1px solid #e5e7eb;
+    text-align: left;
+    font-size: 0.85rem;
+}
+
+.format-table th {
+    background: #3b82f6;
+    color: white;
+    font-weight: 500;
+}
+
+.format-table td:last-child {
+    text-align: center;
+}
+
+@media (max-width: 900px) {
+    .excel-sections {
+        grid-template-columns: 1fr;
+    }
+}
 </style>
 
 <div class="page-container">
@@ -1157,6 +1402,9 @@ if (!window.__config_clients_chauffeurs_script_loaded__) {
         </button>
         <button class="config-tab" data-tab="config-jour" onclick="switchConfigTab('config-jour')">
             <i class="fas fa-calendar-week"></i> Configuration par Jour
+        </button>
+        <button class="config-tab" data-tab="import-export" onclick="switchConfigTab('import-export')">
+            <i class="fas fa-file-excel"></i> Import/Export Excel
         </button>
     </div>
 
@@ -1229,8 +1477,20 @@ if (!window.__config_clients_chauffeurs_script_loaded__) {
 
     <!-- Section Configuration Clients/Livreurs par Jour -->
     <div id="config-jour-section" class="config-jour-section" style="display: none;">
-        <div class="section-header">
-            <i class="fas fa-calendar-alt"></i> Configuration des clients par jour de la semaine
+        <div class="section-header" style="display: flex; justify-content: space-between; align-items: center;">
+            <span><i class="fas fa-calendar-alt"></i> Configuration des clients par jour de la semaine</span>
+            <div class="week-selector" style="display: flex; align-items: center; gap: 15px;">
+                <button class="btn-week-nav" onclick="changeWeek(-1)" title="Semaine précédente">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                <div style="text-align: center;">
+                    <input type="week" id="weekSelector" onchange="onWeekChange()" style="padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.95rem;">
+                    <div id="weekDateRange" style="font-size: 0.8rem; color: #6b7280; margin-top: 4px;"></div>
+                </div>
+                <button class="btn-week-nav" onclick="changeWeek(1)" title="Semaine suivante">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
         </div>
 
         <div id="alert-container-jour"></div>
@@ -1282,7 +1542,7 @@ if (!window.__config_clients_chauffeurs_script_loaded__) {
                         <div class="jours-cards-container">
                             <div class="jour-card" data-jour="1">
                                 <div class="jour-card-header jour-lundi">
-                                    <span class="jour-name">Lundi</span>
+                                    <span class="jour-name">Lundi <span class="jour-date" id="date-jour-1"></span></span>
                                     <span class="jour-count" id="count-jour-1">0</span>
                                 </div>
                                 <div class="jour-card-body" id="clients-jour-1" ondrop="dropClient(event, 1)" ondragover="allowDrop(event)">
@@ -1292,7 +1552,7 @@ if (!window.__config_clients_chauffeurs_script_loaded__) {
 
                             <div class="jour-card" data-jour="2">
                                 <div class="jour-card-header jour-mardi">
-                                    <span class="jour-name">Mardi</span>
+                                    <span class="jour-name">Mardi <span class="jour-date" id="date-jour-2"></span></span>
                                     <span class="jour-count" id="count-jour-2">0</span>
                                 </div>
                                 <div class="jour-card-body" id="clients-jour-2" ondrop="dropClient(event, 2)" ondragover="allowDrop(event)">
@@ -1302,7 +1562,7 @@ if (!window.__config_clients_chauffeurs_script_loaded__) {
 
                             <div class="jour-card" data-jour="3">
                                 <div class="jour-card-header jour-mercredi">
-                                    <span class="jour-name">Mercredi</span>
+                                    <span class="jour-name">Mercredi <span class="jour-date" id="date-jour-3"></span></span>
                                     <span class="jour-count" id="count-jour-3">0</span>
                                 </div>
                                 <div class="jour-card-body" id="clients-jour-3" ondrop="dropClient(event, 3)" ondragover="allowDrop(event)">
@@ -1312,7 +1572,7 @@ if (!window.__config_clients_chauffeurs_script_loaded__) {
 
                             <div class="jour-card" data-jour="4">
                                 <div class="jour-card-header jour-jeudi">
-                                    <span class="jour-name">Jeudi</span>
+                                    <span class="jour-name">Jeudi <span class="jour-date" id="date-jour-4"></span></span>
                                     <span class="jour-count" id="count-jour-4">0</span>
                                 </div>
                                 <div class="jour-card-body" id="clients-jour-4" ondrop="dropClient(event, 4)" ondragover="allowDrop(event)">
@@ -1322,7 +1582,7 @@ if (!window.__config_clients_chauffeurs_script_loaded__) {
 
                             <div class="jour-card" data-jour="5">
                                 <div class="jour-card-header jour-vendredi">
-                                    <span class="jour-name">Vendredi</span>
+                                    <span class="jour-name">Vendredi <span class="jour-date" id="date-jour-5"></span></span>
                                     <span class="jour-count" id="count-jour-5">0</span>
                                 </div>
                                 <div class="jour-card-body" id="clients-jour-5" ondrop="dropClient(event, 5)" ondragover="allowDrop(event)">
@@ -1332,7 +1592,7 @@ if (!window.__config_clients_chauffeurs_script_loaded__) {
 
                             <div class="jour-card" data-jour="6">
                                 <div class="jour-card-header jour-samedi">
-                                    <span class="jour-name">Samedi</span>
+                                    <span class="jour-name">Samedi <span class="jour-date" id="date-jour-6"></span></span>
                                     <span class="jour-count" id="count-jour-6">0</span>
                                 </div>
                                 <div class="jour-card-body" id="clients-jour-6" ondrop="dropClient(event, 6)" ondragover="allowDrop(event)">
@@ -1342,7 +1602,7 @@ if (!window.__config_clients_chauffeurs_script_loaded__) {
 
                             <div class="jour-card" data-jour="7">
                                 <div class="jour-card-header jour-dimanche">
-                                    <span class="jour-name">Dimanche</span>
+                                    <span class="jour-name">Dimanche <span class="jour-date" id="date-jour-7"></span></span>
                                     <span class="jour-count" id="count-jour-7">0</span>
                                 </div>
                                 <div class="jour-card-body" id="clients-jour-7" ondrop="dropClient(event, 7)" ondragover="allowDrop(event)">
@@ -1353,6 +1613,116 @@ if (!window.__config_clients_chauffeurs_script_loaded__) {
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Section Import/Export Excel -->
+    <div id="import-export-section" class="config-jour-section" style="display: none;">
+        <div class="section-header">
+            <i class="fas fa-file-excel"></i> Import / Export Excel - Planning Clients par Chauffeur
+        </div>
+
+        <div id="alert-container-excel"></div>
+
+        <div class="excel-sections">
+            <!-- Export Section -->
+            <div class="excel-box">
+                <h4><i class="fas fa-download"></i> Exporter le planning</h4>
+                <p class="excel-desc">Téléchargez le planning des clients par chauffeur au format Excel. Vous pouvez filtrer par semaine ou exporter tout le planning.</p>
+
+                <div class="export-options">
+                    <div class="export-row">
+                        <label>Semaine:</label>
+                        <input type="week" id="exportWeek" style="padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px;">
+                        <span style="color: #6b7280; font-size: 0.85rem;">ou laisser vide pour tout exporter</span>
+                    </div>
+                    <div class="export-row">
+                        <label>Chauffeur:</label>
+                        <select id="exportLivreur" style="padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 200px;">
+                            <option value="">Tous les chauffeurs</option>
+                        </select>
+                    </div>
+                </div>
+
+                <button class="btn-excel btn-export" onclick="exportExcel()">
+                    <i class="fas fa-file-download"></i> Télécharger Excel
+                </button>
+            </div>
+
+            <!-- Import Section -->
+            <div class="excel-box">
+                <h4><i class="fas fa-upload"></i> Importer un planning</h4>
+                <p class="excel-desc">Importez un fichier Excel pour mettre à jour le planning des clients par chauffeur. Le fichier doit respecter le format du template.</p>
+
+                <div class="import-options">
+                    <div class="import-row">
+                        <label>Semaine cible:</label>
+                        <input type="week" id="importWeek" required style="padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px;">
+                    </div>
+                    <div class="import-row">
+                        <label>Mode d'import:</label>
+                        <select id="importMode" style="padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px;">
+                            <option value="merge">Fusionner (ajouter aux existants)</option>
+                            <option value="replace">Remplacer (supprimer et recréer)</option>
+                        </select>
+                    </div>
+                    <div class="import-row">
+                        <label>Fichier Excel:</label>
+                        <input type="file" id="importFile" accept=".xlsx,.xls" style="padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; background: white;">
+                    </div>
+                </div>
+
+                <div class="import-buttons">
+                    <button class="btn-excel btn-template" onclick="downloadTemplate()">
+                        <i class="fas fa-file-alt"></i> Télécharger le template
+                    </button>
+                    <button class="btn-excel btn-import" onclick="importExcel()">
+                        <i class="fas fa-file-upload"></i> Importer
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Preview des données à importer -->
+        <div id="importPreview" class="import-preview" style="display: none;">
+            <h4><i class="fas fa-eye"></i> Aperçu des données à importer</h4>
+            <div class="table-responsive">
+                <table class="preview-table">
+                    <thead id="previewHeader"></thead>
+                    <tbody id="previewBody"></tbody>
+                </table>
+            </div>
+            <div class="preview-actions">
+                <button class="btn-excel btn-cancel" onclick="cancelImport()">
+                    <i class="fas fa-times"></i> Annuler
+                </button>
+                <button class="btn-excel btn-confirm" onclick="confirmImport()">
+                    <i class="fas fa-check"></i> Confirmer l'import
+                </button>
+            </div>
+        </div>
+
+        <!-- Format du fichier Excel -->
+        <div class="excel-format-info">
+            <h4><i class="fas fa-info-circle"></i> Format du fichier Excel</h4>
+            <p>Le fichier Excel doit contenir les colonnes suivantes:</p>
+            <table class="format-table">
+                <thead>
+                    <tr>
+                        <th>Colonne</th>
+                        <th>Description</th>
+                        <th>Obligatoire</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>client_id</td><td>ID du client dans le système</td><td>Oui</td></tr>
+                    <tr><td>client_nom</td><td>Nom du client (informatif)</td><td>Non</td></tr>
+                    <tr><td>livreur_id</td><td>ID du chauffeur</td><td>Oui</td></tr>
+                    <tr><td>livreur_nom</td><td>Nom du chauffeur (informatif)</td><td>Non</td></tr>
+                    <tr><td>jour_semaine</td><td>Jour (1=Lundi, 2=Mardi... 7=Dimanche)</td><td>Oui</td></tr>
+                    <tr><td>ordre_passage</td><td>Ordre de visite (1, 2, 3...)</td><td>Non</td></tr>
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
@@ -1433,6 +1803,11 @@ if (!window.__config_clients_chauffeurs_script_loaded__) {
 </div>
 
 <script>
+// Variables globales pour la semaine sélectionnée
+let selectedWeekStart = null;
+let selectedWeekEnd = null;
+let importDataToConfirm = [];
+
 // Fonction pour changer d'onglet
 function switchConfigTab(tabName) {
     // Mettre à jour les classes des onglets
@@ -1446,11 +1821,346 @@ function switchConfigTab(tabName) {
     // Afficher/masquer les sections
     document.getElementById('assignation-section').style.display = tabName === 'assignation' ? 'block' : 'none';
     document.getElementById('config-jour-section').style.display = tabName === 'config-jour' ? 'block' : 'none';
+    document.getElementById('import-export-section').style.display = tabName === 'import-export' ? 'block' : 'none';
 
     // Charger les données si nécessaire
     if (tabName === 'config-jour') {
+        initWeekSelector();
         loadLivreursJour();
         loadAllClientsJour();
+    } else if (tabName === 'import-export') {
+        initExportSection();
+    }
+}
+
+// ========== WEEK SELECTOR ==========
+function initWeekSelector() {
+    const weekInput = document.getElementById('weekSelector');
+    if (!weekInput.value) {
+        // Set to current week
+        const now = new Date();
+        const year = now.getFullYear();
+        const weekNum = getWeekNumber(now);
+        weekInput.value = `${year}-W${weekNum.toString().padStart(2, '0')}`;
+    }
+    updateWeekDateRange();
+}
+
+function getWeekNumber(d) {
+    d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+    return weekNo;
+}
+
+function getWeekDates(weekValue) {
+    // weekValue format: "2024-W01"
+    const [year, weekStr] = weekValue.split('-W');
+    const week = parseInt(weekStr);
+
+    // Calculate the first day of the year
+    const firstDayOfYear = new Date(year, 0, 1);
+
+    // Find the first Monday of the year
+    const daysUntilMonday = (8 - firstDayOfYear.getDay()) % 7;
+    const firstMonday = new Date(year, 0, 1 + daysUntilMonday);
+
+    // If week 1 is before first monday, adjust
+    if (firstDayOfYear.getDay() <= 4 && firstDayOfYear.getDay() !== 0) {
+        firstMonday.setDate(firstMonday.getDate() - 7);
+    }
+
+    // Calculate start of selected week
+    const weekStart = new Date(firstMonday);
+    weekStart.setDate(weekStart.getDate() + (week - 1) * 7);
+
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 6);
+
+    return { start: weekStart, end: weekEnd };
+}
+
+function formatDate(date) {
+    return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function updateWeekDateRange() {
+    const weekInput = document.getElementById('weekSelector');
+    const rangeDiv = document.getElementById('weekDateRange');
+
+    if (weekInput.value) {
+        const dates = getWeekDates(weekInput.value);
+        selectedWeekStart = dates.start;
+        selectedWeekEnd = dates.end;
+        rangeDiv.textContent = `Du ${formatDate(dates.start)} au ${formatDate(dates.end)}`;
+
+        // Mettre à jour les dates sur les cartes des jours
+        updateJourCardsDates(dates.start);
+    }
+}
+
+function updateJourCardsDates(weekStart) {
+    // weekStart est le lundi de la semaine
+    for (let i = 1; i <= 7; i++) {
+        const dateEl = document.getElementById(`date-jour-${i}`);
+        if (dateEl) {
+            const jourDate = new Date(weekStart);
+            jourDate.setDate(weekStart.getDate() + (i - 1)); // i-1 car Lundi=1
+            const day = jourDate.getDate().toString().padStart(2, '0');
+            const month = (jourDate.getMonth() + 1).toString().padStart(2, '0');
+            dateEl.textContent = `${day}/${month}`;
+        }
+    }
+}
+
+function onWeekChange() {
+    updateWeekDateRange();
+    // Reload data for selected week if a livreur is selected
+    if (selectedLivreurJourId) {
+        loadConfigurationsForLivreur(selectedLivreurJourId);
+    }
+}
+
+function changeWeek(delta) {
+    const weekInput = document.getElementById('weekSelector');
+    if (!weekInput.value) {
+        initWeekSelector();
+        return;
+    }
+
+    const [year, weekStr] = weekInput.value.split('-W');
+    let week = parseInt(weekStr) + delta;
+    let newYear = parseInt(year);
+
+    if (week < 1) {
+        newYear--;
+        week = 52;
+    } else if (week > 52) {
+        newYear++;
+        week = 1;
+    }
+
+    weekInput.value = `${newYear}-W${week.toString().padStart(2, '0')}`;
+    onWeekChange();
+}
+
+// ========== IMPORT/EXPORT EXCEL ==========
+function initExportSection() {
+    // Set current week for import
+    const importWeek = document.getElementById('importWeek');
+    if (!importWeek.value) {
+        const now = new Date();
+        const year = now.getFullYear();
+        const weekNum = getWeekNumber(now);
+        importWeek.value = `${year}-W${weekNum.toString().padStart(2, '0')}`;
+    }
+
+    // Load livreurs for export dropdown
+    loadLivreursForExport();
+}
+
+async function loadLivreursForExport() {
+    try {
+        const response = await fetch('/API/distribution/livreurs/');
+        const data = await response.json();
+        const livreurs = Array.isArray(data) ? data : (data.results || []);
+
+        const select = document.getElementById('exportLivreur');
+        select.innerHTML = '<option value="">Tous les chauffeurs</option>';
+        livreurs.forEach(l => {
+            select.innerHTML += `<option value="${l.id}">${l.nom || l.username}</option>`;
+        });
+    } catch (error) {
+        console.error('Error loading livreurs:', error);
+    }
+}
+
+async function exportExcel() {
+    const weekValue = document.getElementById('exportWeek').value;
+    const livreurId = document.getElementById('exportLivreur').value;
+
+    let url = '/API/distribution/clients-livreurs-hebdo/export-excel/?';
+    const params = new URLSearchParams();
+
+    if (weekValue) {
+        const dates = getWeekDates(weekValue);
+        params.append('date_debut', dates.start.toISOString().split('T')[0]);
+        params.append('date_fin', dates.end.toISOString().split('T')[0]);
+    }
+    if (livreurId) {
+        params.append('livreur', livreurId);
+    }
+
+    url += params.toString();
+
+    try {
+        showAlertExcel('Génération du fichier en cours...', 'info');
+        const response = await fetch(url, {
+            headers: { 'X-CSRFToken': getCookie('csrftoken') }
+        });
+
+        if (response.ok) {
+            const blob = await response.blob();
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = downloadUrl;
+            a.download = `planning_clients_chauffeurs_${weekValue || 'all'}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(downloadUrl);
+            showAlertExcel('Export réussi!', 'success');
+        } else {
+            const error = await response.json();
+            showAlertExcel('Erreur: ' + (error.detail || error.error || 'Export échoué'), 'error');
+        }
+    } catch (error) {
+        console.error('Export error:', error);
+        showAlertExcel('Erreur lors de l\'export', 'error');
+    }
+}
+
+function downloadTemplate() {
+    window.location.href = '/API/distribution/clients-livreurs-hebdo/template-excel/';
+}
+
+async function importExcel() {
+    const weekValue = document.getElementById('importWeek').value;
+    const mode = document.getElementById('importMode').value;
+    const fileInput = document.getElementById('importFile');
+
+    if (!weekValue) {
+        showAlertExcel('Veuillez sélectionner une semaine cible', 'error');
+        return;
+    }
+
+    if (!fileInput.files || !fileInput.files[0]) {
+        showAlertExcel('Veuillez sélectionner un fichier Excel', 'error');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+    formData.append('week', weekValue);
+    formData.append('mode', mode);
+
+    try {
+        showAlertExcel('Analyse du fichier en cours...', 'info');
+
+        const response = await fetch('/API/distribution/clients-livreurs-hebdo/preview-import/', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            body: formData
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            importDataToConfirm = data.data || [];
+            showImportPreview(data);
+        } else {
+            const error = await response.json();
+            showAlertExcel('Erreur: ' + (error.detail || error.error || 'Fichier invalide'), 'error');
+        }
+    } catch (error) {
+        console.error('Import preview error:', error);
+        showAlertExcel('Erreur lors de l\'analyse du fichier', 'error');
+    }
+}
+
+function showImportPreview(data) {
+    const previewDiv = document.getElementById('importPreview');
+    const headerEl = document.getElementById('previewHeader');
+    const bodyEl = document.getElementById('previewBody');
+
+    // Build header
+    headerEl.innerHTML = `
+        <tr>
+            <th>Client</th>
+            <th>Chauffeur</th>
+            <th>Jour</th>
+            <th>Ordre</th>
+            <th>Statut</th>
+        </tr>
+    `;
+
+    // Build body
+    const jours = ['', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+    bodyEl.innerHTML = data.data.map(row => {
+        const statusClass = row.status === 'new' ? 'badge-actif' : 'badge-jour';
+        return `
+            <tr>
+                <td>${row.client_nom || row.client_id}</td>
+                <td>${row.livreur_nom || row.livreur_id}</td>
+                <td>${jours[row.jour_semaine] || row.jour_semaine}</td>
+                <td>${row.ordre_passage || '-'}</td>
+                <td><span class="${statusClass}">${row.status === 'new' ? 'Nouveau' : 'Existant'}</span></td>
+            </tr>
+        `;
+    }).join('');
+
+    previewDiv.style.display = 'block';
+    showAlertExcel(`${data.data.length} lignes détectées - ${data.new_count || 0} nouvelles`, 'success');
+}
+
+function cancelImport() {
+    document.getElementById('importPreview').style.display = 'none';
+    importDataToConfirm = [];
+    document.getElementById('importFile').value = '';
+}
+
+async function confirmImport() {
+    const weekValue = document.getElementById('importWeek').value;
+    const mode = document.getElementById('importMode').value;
+    const fileInput = document.getElementById('importFile');
+
+    if (!fileInput.files || !fileInput.files[0]) {
+        showAlertExcel('Fichier non trouvé, veuillez le resélectionner', 'error');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+    // Mode 'replace' = replace_existing=true, 'add' = replace_existing=false
+    formData.append('replace_existing', mode === 'replace' ? 'true' : 'false');
+
+    try {
+        showAlertExcel('Import en cours...', 'info');
+
+        const response = await fetch('/API/distribution/clients-livreurs-hebdo/import-excel/', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            body: formData
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            showAlertExcel(`Import réussi! ${data.created || 0} créés, ${data.updated || 0} mis à jour, ${data.skipped || 0} ignorés`, 'success');
+            cancelImport();
+        } else {
+            const error = await response.json();
+            showAlertExcel('Erreur: ' + (error.detail || error.error || 'Import échoué'), 'error');
+        }
+    } catch (error) {
+        console.error('Import error:', error);
+        showAlertExcel('Erreur lors de l\'import', 'error');
+    }
+}
+
+function showAlertExcel(message, type) {
+    const container = document.getElementById('alert-container-excel');
+    const iconMap = { success: 'check-circle', error: 'exclamation-circle', info: 'info-circle' };
+    const classMap = { success: 'alert-success', error: 'alert-error', info: 'alert-success' };
+
+    container.innerHTML = `
+        <div class="alert ${classMap[type] || 'alert-success'}">
+            <i class="fas fa-${iconMap[type] || 'info-circle'}"></i>
+            ${message}
+        </div>
+    `;
+
+    if (type !== 'info') {
+        setTimeout(() => { container.innerHTML = ''; }, 5000);
     }
 }
 
@@ -1656,14 +2366,14 @@ function renderClientsDisponiblesJour() {
                 <div class="client-name-jour">${displayName}</div>
                 <div class="client-address-jour">${secondLine}</div>
             </div>
-            <div class="add-btns">
-                <button class="add-btn" style="background: #dbeafe; color: #1d4ed8;" onclick="addClientToJour(${c.id}, '${escapedName}', 1)" title="Lundi">L</button>
-                <button class="add-btn" style="background: #ede9fe; color: #6d28d9;" onclick="addClientToJour(${c.id}, '${escapedName}', 2)" title="Mardi">M</button>
-                <button class="add-btn" style="background: #cffafe; color: #0891b2;" onclick="addClientToJour(${c.id}, '${escapedName}', 3)" title="Mercredi">M</button>
-                <button class="add-btn" style="background: #d1fae5; color: #059669;" onclick="addClientToJour(${c.id}, '${escapedName}', 4)" title="Jeudi">J</button>
-                <button class="add-btn" style="background: #fef3c7; color: #d97706;" onclick="addClientToJour(${c.id}, '${escapedName}', 5)" title="Vendredi">V</button>
-                <button class="add-btn" style="background: #fee2e2; color: #dc2626;" onclick="addClientToJour(${c.id}, '${escapedName}', 6)" title="Samedi">S</button>
-                <button class="add-btn" style="background: #e5e7eb; color: #4b5563;" onclick="addClientToJour(${c.id}, '${escapedName}', 7)" title="Dimanche">D</button>
+            <div class="add-btns-full">
+                <button class="add-btn-full" style="background: #dbeafe; color: #1d4ed8;" onclick="addClientToJour(${c.id}, '${escapedName}', 1)">Lundi</button>
+                <button class="add-btn-full" style="background: #ede9fe; color: #6d28d9;" onclick="addClientToJour(${c.id}, '${escapedName}', 2)">Mardi</button>
+                <button class="add-btn-full" style="background: #cffafe; color: #0891b2;" onclick="addClientToJour(${c.id}, '${escapedName}', 3)">Mercredi</button>
+                <button class="add-btn-full" style="background: #d1fae5; color: #059669;" onclick="addClientToJour(${c.id}, '${escapedName}', 4)">Jeudi</button>
+                <button class="add-btn-full" style="background: #fef3c7; color: #d97706;" onclick="addClientToJour(${c.id}, '${escapedName}', 5)">Vendredi</button>
+                <button class="add-btn-full" style="background: #fee2e2; color: #dc2626;" onclick="addClientToJour(${c.id}, '${escapedName}', 6)">Samedi</button>
+                <button class="add-btn-full" style="background: #e5e7eb; color: #4b5563;" onclick="addClientToJour(${c.id}, '${escapedName}', 7)">Dimanche</button>
             </div>
         </div>
     `}).join('');

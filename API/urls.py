@@ -165,6 +165,14 @@ router.register(r'tournees', TourneeDistributionViewSet, basename='tournee-compa
 router.register(r'arrets-livraison', ArretTourneeDistributionViewSet, basename='arret-compat')
 router.register(r'visites-clients', views.VisiteClientViewSet, basename='visites-clients')
 
+# Module Promotions et Conditionnement
+router.register(r'conditionnements', views.ConditionnementViewSet, basename='conditionnements')
+router.register(r'promotions', views.PromotionViewSet, basename='promotions')
+router.register(r'promotions-usage', views.PromotionUsageViewSet, basename='promotions-usage')
+
+# Module Secteurs
+router.register(r'secteurs', views.SecteurViewSet, basename='secteurs')
+
 # Wire up our API using automatic URL routing.
 # Additionally, we include login URLs for the browsable API.
 urlpatterns = [

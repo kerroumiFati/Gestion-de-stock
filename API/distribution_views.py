@@ -601,8 +601,10 @@ class TourneeViewSet(viewsets.ModelViewSet):
         # Filtres
         livreur_id = self.request.query_params.get('livreur')
         assigned_to = self.request.query_params.get('assigned_to')
-        date_tournee = self.request.query_params.get('date')
+        date_tournee = self.request.query_params.get('date_tournee') or self.request.query_params.get('date')
         statut = self.request.query_params.get('statut')
+        # Nouveau paramètre: inclure les tournées actives (non terminées)
+        actives_only = self.request.query_params.get('actives_only', 'false').lower() == 'true'
 
         # Filtre spécial pour l'app mobile : assigned_to='me'
         if assigned_to == 'me':
@@ -620,12 +622,18 @@ class TourneeViewSet(viewsets.ModelViewSet):
         elif livreur_id:
             queryset = queryset.filter(livreur_id=livreur_id)
 
-        if date_tournee:
+        # Si actives_only=true, retourner toutes les tournées non terminées/clôturées
+        # Sinon, filtrer par date si spécifiée
+        if actives_only:
+            # Retourner les tournées planifiées ou en cours (pas terminées, annulées ou clôturées)
+            queryset = queryset.filter(statut__in=['planifiee', 'en_cours'])
+        elif date_tournee:
             queryset = queryset.filter(date_tournee=date_tournee)
+
         if statut:
             queryset = queryset.filter(statut=statut)
 
-        return queryset.select_related('livreur').prefetch_related('arrets', 'arrets__client')
+        return queryset.select_related('livreur').prefetch_related('arrets', 'arrets__client').order_by('-date_tournee', 'numero_tournee')
 
     @action(detail=True, methods=['post'])
     def cloturer(self, request, pk=None):
@@ -1366,6 +1374,533 @@ class ClientLivreurHebdoViewSet(viewsets.ModelViewSet):
             'message': f'{count} assignation(s) désactivée(s)',
             'count': count
         })
+
+    @action(detail=False, methods=['get'], url_path='export-excel')
+    def export_excel(self, request):
+        """
+        Exporter les configurations clients-livreurs en Excel pour une semaine donnée.
+        GET /API/distribution/clients-livreurs-hebdo/export-excel/?date_debut=2024-12-02&date_fin=2024-12-08
+        """
+        from django.http import HttpResponse
+        import io
+        try:
+            import openpyxl
+            from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        except ImportError:
+            return Response(
+                {'error': 'openpyxl est requis. Installez-le avec: pip install openpyxl'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        date_debut_str = request.query_params.get('date_debut')
+        date_fin_str = request.query_params.get('date_fin')
+
+        if not date_debut_str or not date_fin_str:
+            return Response(
+                {'error': 'date_debut et date_fin sont requis (format YYYY-MM-DD)'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            date_debut = datetime.strptime(date_debut_str, '%Y-%m-%d').date()
+            date_fin = datetime.strptime(date_fin_str, '%Y-%m-%d').date()
+        except ValueError:
+            return Response(
+                {'error': 'Format de date invalide. Utilisez YYYY-MM-DD'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Récupérer les configurations actives pour la période
+        company = request.user.company if hasattr(request.user, 'company') else None
+        configs = self.get_queryset().filter(
+            is_active=True
+        ).filter(
+            models.Q(date_debut__isnull=True) | models.Q(date_debut__lte=date_fin)
+        ).filter(
+            models.Q(date_fin__isnull=True) | models.Q(date_fin__gte=date_debut)
+        ).select_related('client', 'livreur').order_by('livreur__nom', 'jour_semaine', 'ordre_passage')
+
+        # Créer le workbook Excel
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Planning Semaine"
+
+        # Styles
+        header_font = Font(bold=True, color="FFFFFF")
+        header_fill = PatternFill(start_color="3B82F6", end_color="3B82F6", fill_type="solid")
+        border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+
+        # En-têtes
+        jours_noms = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche']
+        headers = ['Livreur', 'Client ID', 'Client Nom', 'Client Prénom', 'Téléphone', 'Adresse']
+        headers.extend(jours_noms)
+
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal='center')
+            cell.border = border
+
+        # Regrouper les configs par client
+        clients_configs = {}
+        for config in configs:
+            key = (config.livreur_id, config.client_id)
+            if key not in clients_configs:
+                clients_configs[key] = {
+                    'livreur': config.livreur.nom if config.livreur else '',
+                    'client_id': config.client.id if config.client else '',
+                    'client_nom': config.client.nom if config.client else '',
+                    'client_prenom': config.client.prenom if config.client else '',
+                    'telephone': config.client.telephone if config.client else '',
+                    'adresse': config.client.adresse if config.client else '',
+                    'jours': {}
+                }
+            clients_configs[key]['jours'][config.jour_semaine] = config.ordre_passage or 'X'
+
+        # Écrire les données
+        row = 2
+        for (livreur_id, client_id), data in clients_configs.items():
+            ws.cell(row=row, column=1, value=data['livreur']).border = border
+            ws.cell(row=row, column=2, value=data['client_id']).border = border
+            ws.cell(row=row, column=3, value=data['client_nom']).border = border
+            ws.cell(row=row, column=4, value=data['client_prenom']).border = border
+            ws.cell(row=row, column=5, value=data['telephone']).border = border
+            ws.cell(row=row, column=6, value=data['adresse']).border = border
+
+            # Jours de la semaine (1=Lundi ... 7=Dimanche)
+            for jour in range(1, 8):
+                cell = ws.cell(row=row, column=6 + jour)
+                if jour in data['jours']:
+                    cell.value = data['jours'][jour]
+                    cell.fill = PatternFill(start_color="D1FAE5", end_color="D1FAE5", fill_type="solid")
+                cell.border = border
+                cell.alignment = Alignment(horizontal='center')
+
+            row += 1
+
+        # Ajuster la largeur des colonnes
+        ws.column_dimensions['A'].width = 20
+        ws.column_dimensions['B'].width = 10
+        ws.column_dimensions['C'].width = 20
+        ws.column_dimensions['D'].width = 15
+        ws.column_dimensions['E'].width = 15
+        ws.column_dimensions['F'].width = 30
+        for col in ['G', 'H', 'I', 'J', 'K', 'L', 'M']:
+            ws.column_dimensions[col].width = 12
+
+        # Créer la réponse HTTP
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+
+        response = HttpResponse(
+            output.read(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = f'attachment; filename=planning_semaine_{date_debut_str}_{date_fin_str}.xlsx'
+        return response
+
+    @action(detail=False, methods=['get'], url_path='template-excel')
+    def template_excel(self, request):
+        """
+        Télécharger un template Excel vierge pour l'import.
+        GET /API/distribution/clients-livreurs-hebdo/template-excel/
+        """
+        from django.http import HttpResponse
+        import io
+        try:
+            import openpyxl
+            from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+            from openpyxl.utils.dataframe import dataframe_to_rows
+        except ImportError:
+            return Response(
+                {'error': 'openpyxl est requis. Installez-le avec: pip install openpyxl'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        # Créer le workbook
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Template Import"
+
+        # Styles
+        header_font = Font(bold=True, color="FFFFFF")
+        header_fill = PatternFill(start_color="3B82F6", end_color="3B82F6", fill_type="solid")
+        required_fill = PatternFill(start_color="FEE2E2", end_color="FEE2E2", fill_type="solid")
+        border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+
+        # En-têtes
+        headers = [
+            'Livreur ID*', 'Client ID*',
+            'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche',
+            'Date Début', 'Date Fin'
+        ]
+
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal='center')
+            cell.border = border
+
+        # Ajouter une feuille d'instructions
+        ws_help = wb.create_sheet(title="Instructions")
+        instructions = [
+            "Instructions pour l'import du planning clients-livreurs",
+            "",
+            "Colonnes obligatoires (*) :",
+            "- Livreur ID : ID du livreur dans le système",
+            "- Client ID : ID du client dans le système",
+            "",
+            "Colonnes jours (Lundi à Dimanche) :",
+            "- Mettre 'X' ou un numéro d'ordre pour assigner le client ce jour-là",
+            "- Laisser vide pour ne pas assigner ce jour",
+            "- Le numéro d'ordre définit l'ordre de passage (1 = premier client)",
+            "",
+            "Colonnes optionnelles :",
+            "- Date Début : Date de début de validité (format YYYY-MM-DD)",
+            "- Date Fin : Date de fin de validité (format YYYY-MM-DD)",
+            "",
+            "Exemple :",
+            "Livreur ID | Client ID | Lundi | Mardi | Mercredi | Jeudi | Vendredi | Samedi | Dimanche",
+            "    1      |    101    |   1   |       |     2    |   1   |          |        |",
+            "    1      |    102    |   2   |   1   |          |   2   |     1    |        |",
+        ]
+        for row, text in enumerate(instructions, 1):
+            ws_help.cell(row=row, column=1, value=text)
+
+        # Ajouter une feuille avec les livreurs disponibles
+        ws_livreurs = wb.create_sheet(title="Livreurs")
+        ws_livreurs.cell(row=1, column=1, value="ID").font = header_font
+        ws_livreurs.cell(row=1, column=1).fill = header_fill
+        ws_livreurs.cell(row=1, column=2, value="Nom").font = header_font
+        ws_livreurs.cell(row=1, column=2).fill = header_fill
+        ws_livreurs.cell(row=1, column=3, value="Matricule").font = header_font
+        ws_livreurs.cell(row=1, column=3).fill = header_fill
+
+        company = request.user.company if hasattr(request.user, 'company') else None
+        livreurs = LivreurDistribution.objects.all()
+        if company:
+            livreurs = livreurs.filter(company=company)
+
+        for row, livreur in enumerate(livreurs, 2):
+            ws_livreurs.cell(row=row, column=1, value=livreur.id)
+            ws_livreurs.cell(row=row, column=2, value=livreur.nom)
+            ws_livreurs.cell(row=row, column=3, value=livreur.matricule)
+
+        # Ajouter une feuille avec les clients disponibles
+        ws_clients = wb.create_sheet(title="Clients")
+        ws_clients.cell(row=1, column=1, value="ID").font = header_font
+        ws_clients.cell(row=1, column=1).fill = header_fill
+        ws_clients.cell(row=1, column=2, value="Nom").font = header_font
+        ws_clients.cell(row=1, column=2).fill = header_fill
+        ws_clients.cell(row=1, column=3, value="Prénom").font = header_font
+        ws_clients.cell(row=1, column=3).fill = header_fill
+        ws_clients.cell(row=1, column=4, value="Téléphone").font = header_font
+        ws_clients.cell(row=1, column=4).fill = header_fill
+
+        from .models import Client
+        clients = Client.objects.all()
+        if company:
+            clients = clients.filter(company=company)
+
+        for row, client in enumerate(clients[:500], 2):  # Limiter à 500 pour éviter fichier trop gros
+            ws_clients.cell(row=row, column=1, value=client.id)
+            ws_clients.cell(row=row, column=2, value=client.nom)
+            ws_clients.cell(row=row, column=3, value=client.prenom)
+            ws_clients.cell(row=row, column=4, value=client.telephone)
+
+        # Ajuster les largeurs de colonnes
+        ws.column_dimensions['A'].width = 12
+        ws.column_dimensions['B'].width = 12
+        for col in ['C', 'D', 'E', 'F', 'G', 'H', 'I']:
+            ws.column_dimensions[col].width = 10
+        ws.column_dimensions['J'].width = 12
+        ws.column_dimensions['K'].width = 12
+
+        # Créer la réponse
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+
+        response = HttpResponse(
+            output.read(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = 'attachment; filename=template_planning_import.xlsx'
+        return response
+
+    @action(detail=False, methods=['post'], url_path='preview-import')
+    def preview_import(self, request):
+        """
+        Prévisualiser un fichier Excel avant import.
+        POST /API/distribution/clients-livreurs-hebdo/preview-import/
+        Body: FormData avec fichier 'file'
+        """
+        try:
+            import openpyxl
+        except ImportError:
+            return Response(
+                {'error': 'openpyxl est requis. Installez-le avec: pip install openpyxl'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        if 'file' not in request.FILES:
+            return Response(
+                {'error': 'Aucun fichier fourni'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        file = request.FILES['file']
+
+        if not file.name.endswith(('.xlsx', '.xls')):
+            return Response(
+                {'error': 'Le fichier doit être au format Excel (.xlsx ou .xls)'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            wb = openpyxl.load_workbook(file, data_only=True)
+            ws = wb.active
+
+            preview_data = []
+            errors = []
+            valid_count = 0
+
+            company = request.user.company if hasattr(request.user, 'company') else None
+
+            # Sauter la première ligne (en-têtes)
+            for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), 2):
+                if not row or not any(row):
+                    continue
+
+                livreur_id = row[0]
+                client_id = row[1]
+
+                # Validation
+                row_errors = []
+
+                if not livreur_id:
+                    row_errors.append('Livreur ID manquant')
+                else:
+                    try:
+                        livreur = LivreurDistribution.objects.get(id=int(livreur_id))
+                    except (LivreurDistribution.DoesNotExist, ValueError):
+                        row_errors.append(f'Livreur ID {livreur_id} invalide')
+
+                if not client_id:
+                    row_errors.append('Client ID manquant')
+                else:
+                    try:
+                        from .models import Client
+                        client = Client.objects.get(id=int(client_id))
+                    except (Client.DoesNotExist, ValueError):
+                        row_errors.append(f'Client ID {client_id} invalide')
+
+                # Jours (colonnes 2 à 8, index 2-8)
+                jours_assignes = []
+                for jour_idx, col_idx in enumerate(range(2, 9), 1):
+                    if len(row) > col_idx and row[col_idx]:
+                        val = row[col_idx]
+                        if isinstance(val, str) and val.upper() == 'X':
+                            jours_assignes.append(jour_idx)
+                        elif isinstance(val, (int, float)):
+                            jours_assignes.append(jour_idx)
+
+                # Dates optionnelles (colonnes 9 et 10)
+                date_debut = row[9] if len(row) > 9 else None
+                date_fin = row[10] if len(row) > 10 else None
+
+                row_data = {
+                    'row': row_idx,
+                    'livreur_id': livreur_id,
+                    'client_id': client_id,
+                    'jours': jours_assignes,
+                    'date_debut': str(date_debut) if date_debut else None,
+                    'date_fin': str(date_fin) if date_fin else None,
+                    'errors': row_errors,
+                    'valid': len(row_errors) == 0
+                }
+
+                preview_data.append(row_data)
+
+                if row_data['valid']:
+                    valid_count += 1
+                else:
+                    errors.extend([f"Ligne {row_idx}: {e}" for e in row_errors])
+
+            return Response({
+                'total_rows': len(preview_data),
+                'valid_rows': valid_count,
+                'error_rows': len(preview_data) - valid_count,
+                'preview': preview_data[:20],  # Limiter la preview
+                'errors': errors[:50],  # Limiter les erreurs
+                'can_import': valid_count > 0
+            })
+
+        except Exception as e:
+            return Response(
+                {'error': f'Erreur lors de la lecture du fichier: {str(e)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    @action(detail=False, methods=['post'], url_path='import-excel')
+    def import_excel(self, request):
+        """
+        Importer les configurations depuis un fichier Excel.
+        POST /API/distribution/clients-livreurs-hebdo/import-excel/
+        Body: FormData avec fichier 'file'
+        """
+        try:
+            import openpyxl
+        except ImportError:
+            return Response(
+                {'error': 'openpyxl est requis. Installez-le avec: pip install openpyxl'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        if 'file' not in request.FILES:
+            return Response(
+                {'error': 'Aucun fichier fourni'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        file = request.FILES['file']
+
+        if not file.name.endswith(('.xlsx', '.xls')):
+            return Response(
+                {'error': 'Le fichier doit être au format Excel (.xlsx ou .xls)'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        company = request.user.company if hasattr(request.user, 'company') else None
+        replace_existing = request.data.get('replace_existing', 'false').lower() == 'true'
+
+        try:
+            wb = openpyxl.load_workbook(file, data_only=True)
+            ws = wb.active
+
+            created_count = 0
+            updated_count = 0
+            skipped_count = 0
+            errors = []
+
+            with transaction.atomic():
+                for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), 2):
+                    if not row or not any(row):
+                        continue
+
+                    livreur_id = row[0]
+                    client_id = row[1]
+
+                    # Validation
+                    try:
+                        livreur = LivreurDistribution.objects.get(id=int(livreur_id))
+                    except (LivreurDistribution.DoesNotExist, ValueError, TypeError):
+                        errors.append(f'Ligne {row_idx}: Livreur ID {livreur_id} invalide')
+                        skipped_count += 1
+                        continue
+
+                    try:
+                        from .models import Client
+                        client = Client.objects.get(id=int(client_id))
+                    except (Client.DoesNotExist, ValueError, TypeError):
+                        errors.append(f'Ligne {row_idx}: Client ID {client_id} invalide')
+                        skipped_count += 1
+                        continue
+
+                    # Dates optionnelles
+                    date_debut = None
+                    date_fin = None
+                    if len(row) > 9 and row[9]:
+                        try:
+                            if isinstance(row[9], datetime):
+                                date_debut = row[9].date()
+                            else:
+                                date_debut = datetime.strptime(str(row[9]), '%Y-%m-%d').date()
+                        except:
+                            pass
+
+                    if len(row) > 10 and row[10]:
+                        try:
+                            if isinstance(row[10], datetime):
+                                date_fin = row[10].date()
+                            else:
+                                date_fin = datetime.strptime(str(row[10]), '%Y-%m-%d').date()
+                        except:
+                            pass
+
+                    # Traiter les jours (colonnes 2 à 8)
+                    for jour_idx, col_idx in enumerate(range(2, 9), 1):
+                        if len(row) > col_idx and row[col_idx]:
+                            val = row[col_idx]
+                            ordre_passage = None
+
+                            if isinstance(val, str) and val.upper() == 'X':
+                                ordre_passage = 0
+                            elif isinstance(val, (int, float)):
+                                ordre_passage = int(val)
+                            else:
+                                continue
+
+                            # Chercher une configuration existante
+                            existing = ClientLivreurHebdo.objects.filter(
+                                client=client,
+                                jour_semaine=jour_idx,
+                                company=company
+                            ).first()
+
+                            if existing:
+                                if replace_existing:
+                                    existing.livreur = livreur
+                                    existing.ordre_passage = ordre_passage
+                                    existing.date_debut = date_debut
+                                    existing.date_fin = date_fin
+                                    existing.is_active = True
+                                    existing.updated_by = request.user
+                                    existing.save()
+                                    updated_count += 1
+                                else:
+                                    skipped_count += 1
+                            else:
+                                ClientLivreurHebdo.objects.create(
+                                    client=client,
+                                    livreur=livreur,
+                                    jour_semaine=jour_idx,
+                                    ordre_passage=ordre_passage,
+                                    date_debut=date_debut,
+                                    date_fin=date_fin,
+                                    company=company,
+                                    created_by=request.user,
+                                    is_active=True
+                                )
+                                created_count += 1
+
+            return Response({
+                'success': True,
+                'message': f'Import terminé: {created_count} créé(s), {updated_count} mis à jour, {skipped_count} ignoré(s)',
+                'created': created_count,
+                'updated': updated_count,
+                'skipped': skipped_count,
+                'errors': errors[:20]
+            })
+
+        except Exception as e:
+            return Response(
+                {'error': f'Erreur lors de l\'import: {str(e)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 
 class SyncViewSet(viewsets.ViewSet):

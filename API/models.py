@@ -541,6 +541,14 @@ class Client(models.Model):
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='clients',
                                null=True, blank=True,
                                help_text="Entreprise propriétaire de ce client")
+    secteur = models.ForeignKey(
+        'Secteur',
+        on_delete=models.SET_NULL,
+        related_name='clients',
+        null=True,
+        blank=True,
+        help_text="Secteur géographique/commercial du client"
+    )
     nom = models.CharField(max_length=50)
     prenom = models.CharField(max_length=50)
     email = models.EmailField(max_length=50)
@@ -1546,4 +1554,593 @@ class PagePermission(models.Model):
             ('view_admin', 'Peut voir l\'administration'),
             ('manage_users', 'Peut gérer les utilisateurs'),
             ('manage_roles', 'Peut gérer les rôles'),
+
+            # Promotions
+            ('view_promotions', 'Peut voir les promotions'),
+            ('manage_promotions', 'Peut gérer les promotions'),
         ]
+
+
+#####################
+# Conditionnement   #
+#####################
+class Conditionnement(models.Model):
+    """
+    Définition du conditionnement d'un produit (unités par carton, cartons par colis, etc.)
+    """
+    TYPE_CONDITIONNEMENT = (
+        ('unite', 'Unité'),
+        ('carton', 'Carton'),
+        ('colis', 'Colis'),
+        ('palette', 'Palette'),
+    )
+
+    produit = models.ForeignKey(
+        Produit,
+        on_delete=models.CASCADE,
+        related_name='conditionnements',
+        help_text="Produit concerné"
+    )
+
+    # Configuration du carton
+    unites_par_carton = models.PositiveIntegerField(
+        "Unités par carton",
+        default=1,
+        help_text="Nombre d'unités dans un carton"
+    )
+    prix_carton = models.DecimalField(
+        "Prix du carton",
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Prix du carton complet (optionnel, sinon calculé automatiquement)"
+    )
+
+    # Configuration du colis (groupement de cartons)
+    cartons_par_colis = models.PositiveIntegerField(
+        "Cartons par colis",
+        default=1,
+        help_text="Nombre de cartons dans un colis"
+    )
+    prix_colis = models.DecimalField(
+        "Prix du colis",
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Prix du colis complet (optionnel)"
+    )
+
+    # Configuration de la palette (optionnel)
+    colis_par_palette = models.PositiveIntegerField(
+        "Colis par palette",
+        null=True,
+        blank=True,
+        help_text="Nombre de colis dans une palette (optionnel)"
+    )
+    prix_palette = models.DecimalField(
+        "Prix de la palette",
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Prix de la palette complète (optionnel)"
+    )
+
+    # Prix de démunération (vente à l'unité depuis un carton ouvert)
+    prix_demunerisation = models.DecimalField(
+        "Prix de démunération",
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Prix spécial pour vente à l'unité depuis carton ouvert"
+    )
+
+    # Poids et dimensions du carton
+    poids_carton = models.DecimalField(
+        "Poids du carton (kg)",
+        max_digits=8,
+        decimal_places=3,
+        null=True,
+        blank=True
+    )
+    dimensions_carton = models.CharField(
+        "Dimensions carton (LxlxH cm)",
+        max_length=50,
+        blank=True
+    )
+
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['produit__designation']
+        verbose_name = "Conditionnement"
+        verbose_name_plural = "Conditionnements"
+
+    def __str__(self):
+        return f"{self.produit.designation} - {self.unites_par_carton} u/carton"
+
+    def get_prix_carton_calcule(self):
+        """Retourne le prix du carton (configuré ou calculé)"""
+        if self.prix_carton:
+            return self.prix_carton
+        return self.produit.prixU * self.unites_par_carton
+
+    def get_prix_colis_calcule(self):
+        """Retourne le prix du colis (configuré ou calculé)"""
+        if self.prix_colis:
+            return self.prix_colis
+        return self.get_prix_carton_calcule() * self.cartons_par_colis
+
+    def get_unites_par_colis(self):
+        """Retourne le nombre total d'unités par colis"""
+        return self.unites_par_carton * self.cartons_par_colis
+
+    def get_unites_par_palette(self):
+        """Retourne le nombre total d'unités par palette"""
+        if self.colis_par_palette:
+            return self.get_unites_par_colis() * self.colis_par_palette
+        return None
+
+
+#####################
+#    Promotions     #
+#####################
+class Promotion(models.Model):
+    """
+    Configuration complète d'une promotion sur un produit
+    """
+    TYPE_PROMOTION = (
+        ('pourcentage', 'Réduction en pourcentage'),
+        ('valeur_fixe', 'Réduction valeur fixe'),
+        ('prix_special', 'Prix spécial'),
+        ('achetez_x_payez_y', 'Achetez X, payez Y'),
+        ('achetez_x_offert_y', 'Achetez X, Y offert(s)'),
+        ('lot', 'Promotion lot'),
+        ('demunerisation', 'Prix de démunération'),
+        ('quantite', 'Réduction par quantité'),
+    )
+
+    UNITE_APPLICATION = (
+        ('unite', 'Par unité'),
+        ('carton', 'Par carton'),
+        ('colis', 'Par colis'),
+        ('palette', 'Par palette'),
+    )
+
+    STATUT_CHOICES = (
+        ('brouillon', 'Brouillon'),
+        ('active', 'Active'),
+        ('planifiee', 'Planifiée'),
+        ('expiree', 'Expirée'),
+        ('suspendue', 'Suspendue'),
+    )
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='promotions',
+        null=True,
+        blank=True,
+        help_text="Entreprise propriétaire de cette promotion"
+    )
+
+    # Identification
+    code = models.CharField(
+        "Code promotion",
+        max_length=50,
+        unique=True,
+        help_text="Code unique de la promotion (ex: PROMO-NOEL-2024)"
+    )
+    nom = models.CharField(
+        "Nom de la promotion",
+        max_length=200,
+        help_text="Nom descriptif de la promotion"
+    )
+    description = models.TextField(
+        "Description",
+        blank=True,
+        help_text="Description détaillée de la promotion"
+    )
+
+    # Type et configuration
+    type_promotion = models.CharField(
+        "Type de promotion",
+        max_length=30,
+        choices=TYPE_PROMOTION,
+        default='pourcentage'
+    )
+
+    # Valeurs de la promotion selon le type
+    valeur_pourcentage = models.DecimalField(
+        "Pourcentage de réduction",
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Pourcentage de réduction (ex: 10 pour 10%)"
+    )
+    valeur_fixe = models.DecimalField(
+        "Montant de réduction fixe",
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Montant fixe de réduction (ex: 2.00 €)"
+    )
+    prix_special = models.DecimalField(
+        "Prix spécial",
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Prix spécial fixe à appliquer"
+    )
+
+    # Configuration "Achetez X, payez Y" ou "Achetez X, Y offert"
+    quantite_achat = models.PositiveIntegerField(
+        "Quantité à acheter",
+        null=True,
+        blank=True,
+        help_text="Nombre de produits à acheter pour déclencher l'offre"
+    )
+    quantite_offerte = models.PositiveIntegerField(
+        "Quantité offerte/payée",
+        null=True,
+        blank=True,
+        help_text="Nombre de produits offerts ou nombre à payer"
+    )
+
+    # Unité d'application
+    unite_application = models.CharField(
+        "S'applique sur",
+        max_length=20,
+        choices=UNITE_APPLICATION,
+        default='unite',
+        help_text="Unité sur laquelle la promotion s'applique"
+    )
+
+    # Devise pour les montants fixes
+    currency = models.ForeignKey(
+        Currency,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        help_text="Devise pour les montants de la promotion"
+    )
+
+    # Produit(s) concerné(s)
+    produit = models.ForeignKey(
+        Produit,
+        on_delete=models.CASCADE,
+        related_name='promotions',
+        null=True,
+        blank=True,
+        help_text="Produit spécifique (optionnel si catégorie sélectionnée)"
+    )
+    categorie = models.ForeignKey(
+        Categorie,
+        on_delete=models.CASCADE,
+        related_name='promotions',
+        null=True,
+        blank=True,
+        help_text="Catégorie de produits (optionnel si produit sélectionné)"
+    )
+
+    # Validité temporelle
+    date_debut = models.DateTimeField(
+        "Date de début",
+        help_text="Date et heure de début de la promotion"
+    )
+    date_fin = models.DateTimeField(
+        "Date de fin",
+        help_text="Date et heure de fin de la promotion"
+    )
+
+    # Conditions d'application
+    quantite_minimum = models.PositiveIntegerField(
+        "Quantité minimum",
+        default=1,
+        help_text="Quantité minimum pour activer la promotion"
+    )
+    quantite_maximum = models.PositiveIntegerField(
+        "Quantité maximum",
+        null=True,
+        blank=True,
+        help_text="Quantité maximum bénéficiant de la promotion (optionnel)"
+    )
+
+    # Conditionnement requis
+    conditionnement_minimum = models.CharField(
+        "Conditionnement minimum",
+        max_length=20,
+        choices=UNITE_APPLICATION,
+        default='unite',
+        help_text="Conditionnement minimum requis pour la promotion"
+    )
+    carton_complet_requis = models.BooleanField(
+        "Carton complet requis",
+        default=False,
+        help_text="La promotion nécessite l'achat de cartons complets"
+    )
+
+    # Cumul et priorité
+    est_cumulable = models.BooleanField(
+        "Cumulable avec autres promotions",
+        default=False,
+        help_text="Peut être cumulée avec d'autres promotions"
+    )
+    priorite = models.IntegerField(
+        "Priorité",
+        default=0,
+        help_text="Priorité d'application (plus élevé = prioritaire)"
+    )
+
+    # Limitation d'usage
+    usage_maximum = models.PositiveIntegerField(
+        "Usage maximum",
+        null=True,
+        blank=True,
+        help_text="Nombre maximum d'utilisations (optionnel)"
+    )
+    usage_par_client = models.PositiveIntegerField(
+        "Usage par client",
+        null=True,
+        blank=True,
+        help_text="Nombre maximum d'utilisations par client (optionnel)"
+    )
+    usage_actuel = models.PositiveIntegerField(
+        "Utilisations actuelles",
+        default=0,
+        help_text="Nombre d'utilisations de cette promotion"
+    )
+
+    # Types de clients éligibles
+    types_prix_eligibles = models.ManyToManyField(
+        TypePrix,
+        related_name='promotions',
+        blank=True,
+        help_text="Types de clients éligibles (vide = tous)"
+    )
+
+    # Statut
+    statut = models.CharField(
+        "Statut",
+        max_length=20,
+        choices=STATUT_CHOICES,
+        default='brouillon'
+    )
+
+    # Métadonnées
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='promotions_creees'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-priorite', '-created_at']
+        verbose_name = "Promotion"
+        verbose_name_plural = "Promotions"
+        unique_together = ['company', 'code']
+
+    def __str__(self):
+        return f"{self.code} - {self.nom} ({self.get_type_promotion_display()})"
+
+    def save(self, *args, **kwargs):
+        # Mise à jour automatique du statut basé sur les dates
+        self.update_statut()
+        super().save(*args, **kwargs)
+
+    def update_statut(self):
+        """Met à jour le statut basé sur les dates"""
+        if self.statut in ['brouillon', 'suspendue']:
+            return  # Ne pas modifier ces statuts automatiquement
+
+        now = timezone.now()
+        if now < self.date_debut:
+            self.statut = 'planifiee'
+        elif now > self.date_fin:
+            self.statut = 'expiree'
+        else:
+            self.statut = 'active'
+
+    def is_valid(self):
+        """Vérifie si la promotion est valide actuellement"""
+        now = timezone.now()
+        if self.statut not in ['active', 'planifiee']:
+            return False
+        if now < self.date_debut or now > self.date_fin:
+            return False
+        if self.usage_maximum and self.usage_actuel >= self.usage_maximum:
+            return False
+        return True
+
+    def is_applicable_to_product(self, produit):
+        """Vérifie si la promotion s'applique à un produit"""
+        if self.produit and self.produit.id == produit.id:
+            return True
+        if self.categorie:
+            # Vérifier si le produit est dans la catégorie ou ses sous-catégories
+            cat = produit.categorie
+            while cat:
+                if cat.id == self.categorie.id:
+                    return True
+                cat = cat.parent
+        return False
+
+    def is_applicable_to_client_type(self, type_prix):
+        """Vérifie si la promotion s'applique à un type de client"""
+        if not self.types_prix_eligibles.exists():
+            return True  # Si aucun type spécifié, tous sont éligibles
+        return self.types_prix_eligibles.filter(id=type_prix.id).exists()
+
+    def calculer_prix_promotion(self, prix_original, quantite=1):
+        """Calcule le prix après application de la promotion"""
+        if not self.is_valid():
+            return prix_original
+
+        if quantite < self.quantite_minimum:
+            return prix_original
+
+        if self.quantite_maximum and quantite > self.quantite_maximum:
+            quantite_promo = self.quantite_maximum
+            quantite_normale = quantite - self.quantite_maximum
+            prix_promo = self._calculer_prix_unitaire(prix_original)
+            return (prix_promo * quantite_promo) + (prix_original * quantite_normale)
+
+        return self._calculer_prix_unitaire(prix_original) * quantite
+
+    def _calculer_prix_unitaire(self, prix_original):
+        """Calcule le prix unitaire après promotion"""
+        if self.type_promotion == 'pourcentage' and self.valeur_pourcentage:
+            reduction = prix_original * (self.valeur_pourcentage / Decimal('100'))
+            return prix_original - reduction
+
+        elif self.type_promotion == 'valeur_fixe' and self.valeur_fixe:
+            return max(Decimal('0'), prix_original - self.valeur_fixe)
+
+        elif self.type_promotion == 'prix_special' and self.prix_special:
+            return self.prix_special
+
+        return prix_original
+
+    def calculer_offre_speciale(self, quantite):
+        """Calcule pour les offres 'Achetez X, payez Y' ou 'Achetez X, Y offert'"""
+        if self.type_promotion == 'achetez_x_payez_y':
+            if quantite >= self.quantite_achat:
+                lots = quantite // self.quantite_achat
+                reste = quantite % self.quantite_achat
+                return {
+                    'quantite_a_payer': (lots * self.quantite_offerte) + reste,
+                    'quantite_gratuite': lots * (self.quantite_achat - self.quantite_offerte),
+                    'quantite_totale': quantite
+                }
+
+        elif self.type_promotion == 'achetez_x_offert_y':
+            if quantite >= self.quantite_achat:
+                lots = quantite // self.quantite_achat
+                return {
+                    'quantite_a_payer': quantite,
+                    'quantite_gratuite': lots * self.quantite_offerte,
+                    'quantite_totale': quantite + (lots * self.quantite_offerte)
+                }
+
+        return {
+            'quantite_a_payer': quantite,
+            'quantite_gratuite': 0,
+            'quantite_totale': quantite
+        }
+
+    def get_economie(self, prix_original, quantite=1):
+        """Calcule l'économie réalisée avec la promotion"""
+        prix_sans_promo = prix_original * quantite
+        prix_avec_promo = self.calculer_prix_promotion(prix_original, quantite)
+        economie = prix_sans_promo - prix_avec_promo
+        pourcentage = (economie / prix_sans_promo * 100) if prix_sans_promo > 0 else 0
+        return {
+            'montant': economie,
+            'pourcentage': pourcentage
+        }
+
+    def incrementer_usage(self):
+        """Incrémente le compteur d'utilisation"""
+        self.usage_actuel += 1
+        self.save(update_fields=['usage_actuel'])
+
+
+class PromotionUsage(models.Model):
+    """Suivi de l'utilisation des promotions par client"""
+    promotion = models.ForeignKey(
+        Promotion,
+        on_delete=models.CASCADE,
+        related_name='usages'
+    )
+    client = models.ForeignKey(
+        Client,
+        on_delete=models.CASCADE,
+        related_name='promotions_utilisees'
+    )
+    vente = models.ForeignKey(
+        Vente,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='promotions_appliquees'
+    )
+    date_utilisation = models.DateTimeField(auto_now_add=True)
+    montant_economise = models.DecimalField(
+        "Économie réalisée",
+        max_digits=10,
+        decimal_places=2,
+        default=0
+    )
+
+    class Meta:
+        ordering = ['-date_utilisation']
+        verbose_name = "Utilisation promotion"
+        verbose_name_plural = "Utilisations promotions"
+
+    def __str__(self):
+        return f"{self.promotion.code} - {self.client} - {self.date_utilisation.date()}"
+
+
+#####################
+#      Secteurs     #
+#####################
+
+class Secteur(models.Model):
+    """Modèle pour gérer les secteurs géographiques/commerciaux"""
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='secteurs',
+        null=True,
+        blank=True,
+        help_text="Entreprise propriétaire de ce secteur"
+    )
+    code = models.CharField(
+        max_length=20,
+        help_text="Code unique du secteur (ex: SEC001)"
+    )
+    nom = models.CharField(
+        max_length=100,
+        help_text="Nom du secteur"
+    )
+    description = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Description du secteur"
+    )
+    couleur = models.CharField(
+        max_length=7,
+        default='#3498db',
+        help_text="Couleur d'affichage (hex)"
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Secteur actif ou non"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['nom']
+        verbose_name = "Secteur"
+        verbose_name_plural = "Secteurs"
+        unique_together = ['company', 'code']
+
+    def __str__(self):
+        return f"{self.code} - {self.nom}"
+
+    def get_clients_count(self):
+        """Retourne le nombre de clients dans ce secteur"""
+        return self.clients.count() if hasattr(self, 'clients') else 0

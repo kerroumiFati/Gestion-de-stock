@@ -18,6 +18,7 @@
       case 'distribution_dashboard': return '/admindash/distribution';
       case 'config_clients_chauffeurs': return '/admindash/config-clients-chauffeurs';
       case 'livreur_mobile': return '/livreur/app';
+      case 'promotions': return '/admindash/promotions';
       default: return null;
     }
   }
@@ -27,6 +28,7 @@
     if(path.startsWith('/admindash/tournees')) return 'tournees';
     if(path.startsWith('/admindash/config-clients-chauffeurs')) return 'config_clients_chauffeurs';
     if(path.startsWith('/admindash/distribution')) return 'distribution_dashboard';
+    if(path.startsWith('/admindash/promotions')) return 'promotions';
     if(path.startsWith('/livreur/app')) return 'livreur_mobile';
     const hash = (location.hash||'').replace('#','');
     return hash || null;

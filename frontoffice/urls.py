@@ -71,4 +71,7 @@ urlpatterns = [
     path('stock/transferts/', login_required(views.transferts_list), name='transferts_list'),
     path('stock/charger-van/', login_required(views.charger_van), name='charger_van'),
     path('stock/dashboard-vans/', login_required(views.stock_dashboard), name='stock_dashboard'),
+
+    # Promotions - Interface de gestion
+    path('admindash/promotions/', login_required(views.promotions_page), name='promotions_page'),
 ]

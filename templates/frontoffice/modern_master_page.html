@@ -1,23 +1,24 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="fr" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    
+
     <title>{% block title %}Market - Gestion de Stock Moderne{% endblock %}</title>
-    
+
     <!-- Preload critical resources -->
     <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" as="style">
     <link rel="preload" href="{% static 'style/modern-theme.css' %}" as="style">
-    
+
     <!-- Meta tags for PWA -->
     <meta name="description" content="Système moderne de gestion de stock avec interface responsive et fonctionnalités avancées">
     <meta name="theme-color" content="#6366f1">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Market">
-    
+
     <!-- PWA Manifest -->
     <link rel="manifest" href="{% static 'manifest.json' %}">
 
@@ -26,8 +27,6 @@
     <link rel="icon" type="image/png" sizes="32x32" href="{% static 'img/favicon-32x32.png' %}">
     <link rel="icon" type="image/png" sizes="16x16" href="{% static 'img/favicon-16x16.png' %}">
     <link rel="apple-touch-icon" sizes="180x180" href="{% static 'img/apple-touch-icon.png' %}">
-    
-    {% load static %}
     
     <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -209,8 +208,15 @@
                     </div>
                     <span class="sidebar-nav-text">Factures</span>
                 </button>
+
+                <button class="sidebar-nav-item" onclick="window.location='/admindash/promotions/'" data-page="promotions">
+                    <div class="sidebar-nav-icon">
+                        <i class="fas fa-percent"></i>
+                    </div>
+                    <span class="sidebar-nav-text">Promotions</span>
+                </button>
             </div>
-            
+
             <div class="sidebar-nav-section">
                 <div class="sidebar-nav-title">Inventaire</div>
                 
@@ -528,7 +534,8 @@
                 'rapports': 'Exports de Rapports'
             };
             
-            document.getElementById('page-title').textContent = titles[page] || 'Tableau de Bord';
+            const pageTitle = document.getElementById('page-title');
+            if (pageTitle) pageTitle.textContent = titles[page] || 'Tableau de Bord';
             
             // Call existing show function
             if (typeof show === 'function') {
@@ -573,10 +580,15 @@
             // This would integrate with your existing API calls
             // For now, using placeholder data
             setTimeout(() => {
-                document.getElementById('total-products').textContent = '150';
-                document.getElementById('total-clients').textContent = '45';
-                document.getElementById('total-sales').textContent = '230';
-                document.getElementById('low-stock').textContent = '8';
+                const elProducts = document.getElementById('total-products');
+                const elClients = document.getElementById('total-clients');
+                const elSales = document.getElementById('total-sales');
+                const elLowStock = document.getElementById('low-stock');
+
+                if (elProducts) elProducts.textContent = '150';
+                if (elClients) elClients.textContent = '45';
+                if (elSales) elSales.textContent = '230';
+                if (elLowStock) elLowStock.textContent = '8';
             }, 500);
         }
         
