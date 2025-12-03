@@ -630,8 +630,9 @@ if (!window.__config_clients_chauffeurs_script_loaded__) {
     cursor: grab;
     transition: all 0.2s;
     display: flex;
-    align-items: center;
-    gap: 10px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
 }
 
 .client-item-jour:hover {
@@ -658,6 +659,12 @@ if (!window.__config_clients_chauffeurs_script_loaded__) {
     justify-content: center;
     color: #4f46e5;
     font-size: 12px;
+}
+
+.client-item-jour .client-info-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 
 .client-item-jour .client-details {
@@ -1533,6 +1540,12 @@ if (!window.__config_clients_chauffeurs_script_loaded__) {
                                 <i class="fas fa-users"></i> Clients disponibles
                                 <span class="badge-count-jour" id="availableCountJour">0</span>
                             </div>
+                            <!-- Filtre par secteur -->
+                            <div class="secteur-filter-jour" style="padding: 10px;">
+                                <select id="secteurFilterJour" class="form-control form-control-sm" onchange="filterClientsJour()">
+                                    <option value="">Tous les secteurs</option>
+                                </select>
+                            </div>
                             <div id="availableClientsListJour" class="clients-list-jour">
                                 <!-- Clients chargés dynamiquement -->
                             </div>
@@ -2076,31 +2089,64 @@ function showImportPreview(data) {
     // Build header
     headerEl.innerHTML = `
         <tr>
-            <th>Client</th>
             <th>Chauffeur</th>
-            <th>Jour</th>
-            <th>Ordre</th>
+            <th>Client</th>
+            <th>Jours assignés</th>
             <th>Statut</th>
         </tr>
     `;
 
-    // Build body
-    const jours = ['', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
-    bodyEl.innerHTML = data.data.map(row => {
-        const statusClass = row.status === 'new' ? 'badge-actif' : 'badge-jour';
-        return `
+    // Build body - utiliser data.preview (pas data.data)
+    const joursNoms = ['', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+    const previewData = data.preview || [];
+
+    if (previewData.length === 0) {
+        bodyEl.innerHTML = `
             <tr>
-                <td>${row.client_nom || row.client_id}</td>
-                <td>${row.livreur_nom || row.livreur_id}</td>
-                <td>${jours[row.jour_semaine] || row.jour_semaine}</td>
-                <td>${row.ordre_passage || '-'}</td>
-                <td><span class="${statusClass}">${row.status === 'new' ? 'Nouveau' : 'Existant'}</span></td>
+                <td colspan="4" style="text-align: center; color: #6b7280;">
+                    Aucune ligne à importer (ajoutez des numéros ou 'X' dans les colonnes des jours)
+                </td>
             </tr>
         `;
-    }).join('');
+    } else {
+        bodyEl.innerHTML = previewData.map(row => {
+            const statusClass = row.valid ? 'badge-actif' : 'badge-inactif';
+            const statusText = row.valid ? 'Valide' : 'Erreur';
+
+            // Formater les jours avec leurs ordres
+            const joursFormates = row.jours.map(j => {
+                const ordre = row.ordres && row.ordres[j] ? ` (${row.ordres[j]})` : '';
+                return joursNoms[j] + ordre;
+            }).join(', ');
+
+            return `
+                <tr style="${!row.valid ? 'background-color: #fef2f2;' : ''}">
+                    <td>${row.livreur_nom || row.livreur_id}</td>
+                    <td>${row.client_nom || row.client_id}</td>
+                    <td>${joursFormates || '-'}</td>
+                    <td>
+                        <span class="${statusClass}">${statusText}</span>
+                        ${row.errors && row.errors.length > 0 ? `<br><small style="color: #dc2626;">${row.errors.join(', ')}</small>` : ''}
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
 
     previewDiv.style.display = 'block';
-    showAlertExcel(`${data.data.length} lignes détectées - ${data.new_count || 0} nouvelles`, 'success');
+
+    // Message de résumé
+    const validCount = data.valid_rows || 0;
+    const errorCount = data.error_rows || 0;
+    const totalCount = data.total_rows || 0;
+
+    if (errorCount > 0) {
+        showAlertExcel(`${totalCount} lignes détectées: ${validCount} valides, ${errorCount} avec erreurs`, 'error');
+    } else if (validCount > 0) {
+        showAlertExcel(`${validCount} lignes prêtes à être importées`, 'success');
+    } else {
+        showAlertExcel('Aucune ligne à importer. Ajoutez des valeurs dans les colonnes des jours.', 'info');
+    }
 }
 
 function cancelImport() {
@@ -2135,8 +2181,39 @@ async function confirmImport() {
 
         if (response.ok) {
             const data = await response.json();
-            showAlertExcel(`Import réussi! ${data.created || 0} créés, ${data.updated || 0} mis à jour, ${data.skipped || 0} ignorés`, 'success');
+            const totalChanges = (data.created || 0) + (data.updated || 0);
+
+            // Fermer le modal d'import
             cancelImport();
+
+            // Afficher un message de succès
+            let successMessage = `Import réussi! ${data.created || 0} créés, ${data.updated || 0} mis à jour, ${data.skipped || 0} ignorés.`;
+
+            // Basculer vers l'onglet "Configuration par jour" pour voir les changements
+            if (totalChanges > 0) {
+                switchConfigTab('config-jour');
+
+                // Rafraîchir la liste des livreurs au cas où de nouvelles configurations ont été créées
+                await loadLivreursJour();
+
+                // Rafraîchir les données de la page "Configuration par jour"
+                if (selectedLivreurJourId) {
+                    // Recharger les configurations pour le livreur sélectionné
+                    await loadConfigurationsForLivreur(selectedLivreurJourId);
+                    successMessage += ' Les données ont été mises à jour.';
+                } else {
+                    successMessage += ' Sélectionnez un chauffeur pour voir les changements.';
+                }
+            }
+
+            // Afficher l'alerte dans la section "Configuration par jour"
+            showAlertJour(successMessage, 'success');
+
+            // Rafraîchir aussi la liste des clients assignés si un livreur est sélectionné dans l'autre section
+            if (typeof state !== 'undefined' && state.selectedLivreur) {
+                await loadLivreurClients(state.selectedLivreur.id);
+                await renderClientLists();
+            }
         } else {
             const error = await response.json();
             showAlertExcel('Erreur: ' + (error.detail || error.error || 'Import échoué'), 'error');
@@ -2260,8 +2337,53 @@ async function loadAllClientsJour() {
         allClientsJour = allClients;
         clientsListConfig = allClientsJour; // Pour le modal aussi
         console.log('[CONFIG] Clients chargés:', allClientsJour.length, 'Premier client:', allClientsJour[0]);
+
+        // Charger et remplir les secteurs
+        await loadSecteursJour();
     } catch (error) {
         console.error('Erreur chargement clients:', error);
+    }
+}
+
+// Charger les secteurs et remplir le select
+async function loadSecteursJour() {
+    try {
+        console.log('[CONFIG] Chargement des secteurs...');
+        const response = await fetch('/API/secteurs/');
+        console.log('[CONFIG] Réponse secteurs:', response.status);
+        const data = await response.json();
+        console.log('[CONFIG] Data secteurs:', data);
+        const secteurs = Array.isArray(data) ? data : (data.results || []);
+
+        const select = document.getElementById('secteurFilterJour');
+        if (select) {
+            // Garder l'option "Tous les secteurs"
+            if (secteurs.length === 0) {
+                select.innerHTML = '<option value="">Aucun secteur configuré</option>';
+            } else {
+                select.innerHTML = '<option value="">Tous les secteurs</option>';
+
+                // Ajouter les secteurs
+                secteurs.forEach(s => {
+                    const option = document.createElement('option');
+                    option.value = s.id;
+                    option.textContent = s.nom || s.code || `Secteur #${s.id}`;
+                    if (s.couleur) {
+                        option.style.backgroundColor = s.couleur + '20';
+                        option.style.borderLeft = `4px solid ${s.couleur}`;
+                    }
+                    select.appendChild(option);
+                });
+            }
+
+            console.log('[CONFIG] Secteurs chargés:', secteurs.length);
+        }
+    } catch (error) {
+        console.error('Erreur chargement secteurs:', error);
+        const select = document.getElementById('secteurFilterJour');
+        if (select) {
+            select.innerHTML = '<option value="">Erreur chargement secteurs</option>';
+        }
     }
 }
 
@@ -2299,6 +2421,7 @@ async function loadConfigurationsForLivreur(livreurId) {
 function renderClientsDisponiblesJour() {
     const container = document.getElementById('availableClientsListJour');
     const searchValue = document.getElementById('searchClientJour')?.value.toLowerCase() || '';
+    const selectedSecteur = document.getElementById('secteurFilterJour')?.value || '';
 
     // Clients déjà assignés à au moins un jour
     const clientsAssignes = new Set();
@@ -2306,10 +2429,16 @@ function renderClientsDisponiblesJour() {
         jour.forEach(c => clientsAssignes.add(c.clientId));
     });
 
-    // Filtrer les clients
+    // Filtrer les clients par recherche et secteur
     let clientsDispos = allClientsJour.filter(c => {
+        // Filtre par texte
         const fullName = `${c.nom || ''} ${c.prenom || ''} ${c.adresse || ''} ${c.telephone || ''} ${c.email || ''}`.toLowerCase();
-        return fullName.includes(searchValue);
+        const matchSearch = fullName.includes(searchValue);
+
+        // Filtre par secteur
+        const matchSecteur = !selectedSecteur || (c.secteur && c.secteur.toString() === selectedSecteur);
+
+        return matchSearch && matchSecteur;
     });
 
     document.getElementById('availableCountJour').textContent = clientsDispos.length;
@@ -2359,12 +2488,21 @@ function renderClientsDisponiblesJour() {
             secondLine = 'Aucune info';
         }
 
+        // Badge secteur
+        let secteurBadge = '';
+        if (c.secteur_nom) {
+            const couleur = c.secteur_couleur || '#6b7280';
+            secteurBadge = `<span class="secteur-badge" style="background: ${couleur}; color: white; padding: 2px 6px; border-radius: 3px; font-size: 10px; margin-left: 8px;">${c.secteur_nom}</span>`;
+        }
+
         return `
         <div class="client-item-jour" draggable="true" ondragstart="dragStart(event, ${c.id}, '${escapedName}')">
-            <div class="client-icon"><i class="fas fa-user"></i></div>
-            <div class="client-details">
-                <div class="client-name-jour">${displayName}</div>
-                <div class="client-address-jour">${secondLine}</div>
+            <div class="client-info-row">
+                <div class="client-icon"><i class="fas fa-user"></i></div>
+                <div class="client-details">
+                    <div class="client-name-jour">${displayName}${secteurBadge}</div>
+                    <div class="client-address-jour">${secondLine}</div>
+                </div>
             </div>
             <div class="add-btns-full">
                 <button class="add-btn-full" style="background: #dbeafe; color: #1d4ed8;" onclick="addClientToJour(${c.id}, '${escapedName}', 1)">Lundi</button>

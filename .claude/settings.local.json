@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(copy /Y \"C:\\Users\\KB\\Documents\\autre\\GestionStock-django-master\\GestionStock-django-master\\static\\script\\redirect.js\" \"C:\\Users\\KB\\Documents\\autre\\GestionStock-django-master\\GestionStock-django-master\\staticfiles\\script\\redirect.js\")",
-      "Bash(copy /Y \"C:\\Users\\KB\\Documents\\autre\\GestionStock-django-master\\GestionStock-django-master\\static\\script\\client.js\" \"C:\\Users\\KB\\Documents\\autre\\GestionStock-django-master\\GestionStock-django-master\\staticfiles\\script\\client.js\")"
+      "Bash(copy /Y \"C:\\Users\\KB\\Documents\\autre\\GestionStock-django-master\\GestionStock-django-master\\static\\script\\client.js\" \"C:\\Users\\KB\\Documents\\autre\\GestionStock-django-master\\GestionStock-django-master\\staticfiles\\script\\client.js\")",
+      "Bash(cmd /c copy:*)",
+      "mcp__gestion-stock__list_categories"
     ],
     "deny": [],
     "ask": []

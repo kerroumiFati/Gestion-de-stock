@@ -206,19 +206,31 @@ class LivreurViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'])
     def clients_du_jour(self, request, pk=None):
         """
-        Récupérer les clients à visiter aujourd'hui selon le planning hebdomadaire.
+        Récupérer les clients à visiter selon le planning hebdomadaire.
         Utilise ClientLivreurHebdo pour déterminer quels clients sont assignés
-        pour le jour de la semaine actuel.
+        pour le jour de la semaine.
+
+        Paramètres optionnels:
+        - date: Date spécifique (format YYYY-MM-DD). Si non fourni, utilise aujourd'hui.
         """
-        from datetime import date
+        from datetime import date, datetime
         from API.models import Client
 
         livreur = self.get_object()
 
+        # Obtenir la date (paramètre ou aujourd'hui)
+        date_param = request.query_params.get('date', None)
+        if date_param:
+            try:
+                target_date = datetime.strptime(date_param, '%Y-%m-%d').date()
+            except ValueError:
+                target_date = date.today()
+        else:
+            target_date = date.today()
+
         # Obtenir le jour de la semaine (1=Lundi ... 7=Dimanche)
         # Python: weekday() retourne 0=Lundi, donc on ajoute 1
-        aujourd_hui = date.today()
-        jour_semaine = aujourd_hui.weekday() + 1  # 1=Lundi, 7=Dimanche
+        jour_semaine = target_date.weekday() + 1  # 1=Lundi, 7=Dimanche
 
         # Récupérer les configurations actives pour ce livreur et ce jour
         configs = ClientLivreurHebdo.objects.filter(
@@ -229,9 +241,9 @@ class LivreurViewSet(viewsets.ModelViewSet):
 
         # Filtrer par période de validité si définie
         configs = configs.filter(
-            models.Q(date_debut__isnull=True) | models.Q(date_debut__lte=aujourd_hui)
+            models.Q(date_debut__isnull=True) | models.Q(date_debut__lte=target_date)
         ).filter(
-            models.Q(date_fin__isnull=True) | models.Q(date_fin__gte=aujourd_hui)
+            models.Q(date_fin__isnull=True) | models.Q(date_fin__gte=target_date)
         )
 
         # Extraire les clients avec leur ordre de passage
@@ -246,7 +258,7 @@ class LivreurViewSet(viewsets.ModelViewSet):
         return Response({
             'livreur_id': livreur.id,
             'livreur_nom': livreur.nom,
-            'date': aujourd_hui.isoformat(),
+            'date': target_date.isoformat(),
             'jour_semaine': jour_semaine,
             'jour_nom': dict(ClientLivreurHebdo.JOURS_SEMAINE_CHOICES).get(jour_semaine, ''),
             'clients': clients_data,
@@ -606,6 +618,9 @@ class TourneeViewSet(viewsets.ModelViewSet):
         # Nouveau paramètre: inclure les tournées actives (non terminées)
         actives_only = self.request.query_params.get('actives_only', 'false').lower() == 'true'
 
+        print(f"[TourneeViewSet] Params: livreur={livreur_id}, assigned_to={assigned_to}, actives_only={actives_only}")
+        print(f"[TourneeViewSet] Initial queryset count: {queryset.count()}")
+
         # Filtre spécial pour l'app mobile : assigned_to='me'
         if assigned_to == 'me':
             # Récupérer le livreur depuis l'utilisateur connecté
@@ -613,14 +628,18 @@ class TourneeViewSet(viewsets.ModelViewSet):
                 try:
                     livreur = LivreurDistribution.objects.get(user=self.request.user)
                     queryset = queryset.filter(livreur=livreur)
+                    print(f"[TourneeViewSet] Filtered by user's livreur: {livreur.id}")
                 except LivreurDistribution.DoesNotExist:
                     # Si pas de livreur lié, retourner queryset vide
                     queryset = queryset.none()
+                    print("[TourneeViewSet] No livreur found for user, returning empty")
             else:
                 # Si pas authentifié, retourner queryset vide
                 queryset = queryset.none()
+                print("[TourneeViewSet] User not authenticated, returning empty")
         elif livreur_id:
             queryset = queryset.filter(livreur_id=livreur_id)
+            print(f"[TourneeViewSet] Filtered by livreur_id={livreur_id}, count: {queryset.count()}")
 
         # Si actives_only=true, retourner toutes les tournées non terminées/clôturées
         # Sinon, filtrer par date si spécifiée
@@ -695,6 +714,121 @@ class TourneeViewSet(viewsets.ModelViewSet):
         return Response({
             'message': 'Tournée terminée',
             'tournee': TourneeSerializer(tournee).data
+        })
+
+    @action(detail=True, methods=['post'])
+    def sync_arrets(self, request, pk=None):
+        """Synchroniser les arrêts d'une tournée avec les clients assignés"""
+        tournee = self.get_object()
+
+        # Vérifier que la tournée n'est pas terminée ou clôturée
+        if tournee.statut in ['terminee', 'cloturee', 'annulee']:
+            return Response(
+                {'error': 'Impossible de synchroniser une tournée terminée ou clôturée'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Obtenir le jour de la semaine de la tournée
+        date_tournee = tournee.date_tournee
+        jour_semaine = date_tournee.weekday() + 1  # Python: 0=Lundi, donc +1 pour avoir 1=Lundi
+
+        # Récupérer les clients assignés au livreur pour ce jour
+        from .distribution_models import ClientLivreurHebdo
+        configs = ClientLivreurHebdo.objects.filter(
+            livreur=tournee.livreur,
+            jour_semaine=jour_semaine,
+            is_active=True
+        ).select_related('client').order_by('ordre_passage')
+
+        # Récupérer les arrêts existants
+        arrets_existants = {arret.client_id: arret for arret in tournee.arrets.all()}
+        clients_config = {config.client_id for config in configs}
+
+        arrets_ajoutes = 0
+        arrets_supprimes = 0
+
+        # Supprimer les arrêts qui ne sont plus dans la config (sauf s'ils sont déjà livrés)
+        for client_id, arret in arrets_existants.items():
+            if client_id not in clients_config and arret.statut == 'en_attente':
+                arret.delete()
+                arrets_supprimes += 1
+
+        # Ajouter les nouveaux clients
+        for config in configs:
+            if config.client_id not in arrets_existants:
+                ArretTourneeMobile.objects.create(
+                    tournee=tournee,
+                    client=config.client,
+                    ordre=config.ordre_passage or 0,
+                    adresse_livraison=config.client.adresse or '',
+                    latitude=config.client.lat,
+                    longitude=config.client.lng,
+                    statut='en_attente',
+                    notes=config.notes or ''
+                )
+                arrets_ajoutes += 1
+
+        return Response({
+            'message': 'Synchronisation terminée',
+            'arrets_ajoutes': arrets_ajoutes,
+            'arrets_supprimes': arrets_supprimes,
+            'total_arrets': tournee.arrets.count(),
+            'tournee': TourneeSerializer(tournee).data
+        })
+
+    @action(detail=False, methods=['post'])
+    def sync_all_en_cours(self, request):
+        """Synchroniser toutes les tournées en cours avec les clients assignés"""
+        tournees_en_cours = TourneeMobile.objects.filter(statut__in=['planifiee', 'en_cours'])
+
+        tournees_synced = 0
+        errors = []
+
+        for tournee in tournees_en_cours:
+            try:
+                # Obtenir le jour de la semaine de la tournée
+                date_tournee = tournee.date_tournee
+                jour_semaine = date_tournee.weekday() + 1
+
+                # Récupérer les clients assignés au livreur pour ce jour
+                from .distribution_models import ClientLivreurHebdo
+                configs = ClientLivreurHebdo.objects.filter(
+                    livreur=tournee.livreur,
+                    jour_semaine=jour_semaine,
+                    is_active=True
+                ).select_related('client').order_by('ordre_passage')
+
+                # Récupérer les arrêts existants
+                arrets_existants = {arret.client_id: arret for arret in tournee.arrets.all()}
+                clients_config = {config.client_id for config in configs}
+
+                # Supprimer les arrêts qui ne sont plus dans la config (sauf livrés)
+                for client_id, arret in arrets_existants.items():
+                    if client_id not in clients_config and arret.statut == 'en_attente':
+                        arret.delete()
+
+                # Ajouter les nouveaux clients
+                for config in configs:
+                    if config.client_id not in arrets_existants:
+                        ArretTourneeMobile.objects.create(
+                            tournee=tournee,
+                            client=config.client,
+                            ordre=config.ordre_passage or 0,
+                            adresse_livraison=config.client.adresse or '',
+                            latitude=config.client.lat,
+                            longitude=config.client.lng,
+                            statut='en_attente',
+                            notes=config.notes or ''
+                        )
+
+                tournees_synced += 1
+            except Exception as e:
+                errors.append({'tournee_id': tournee.id, 'error': str(e)})
+
+        return Response({
+            'message': f'{tournees_synced} tournée(s) synchronisée(s)',
+            'tournees_synced': tournees_synced,
+            'errors': errors if errors else None
         })
 
 
@@ -1509,7 +1643,7 @@ class ClientLivreurHebdoViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='template-excel')
     def template_excel(self, request):
         """
-        Télécharger un template Excel vierge pour l'import.
+        Télécharger un template Excel avec les configurations existantes.
         GET /API/distribution/clients-livreurs-hebdo/template-excel/
         """
         from django.http import HttpResponse
@@ -1524,15 +1658,16 @@ class ClientLivreurHebdoViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+        from .models import Client
+
         # Créer le workbook
         wb = openpyxl.Workbook()
         ws = wb.active
-        ws.title = "Template Import"
+        ws.title = "Planning Import"
 
         # Styles
         header_font = Font(bold=True, color="FFFFFF")
         header_fill = PatternFill(start_color="3B82F6", end_color="3B82F6", fill_type="solid")
-        required_fill = PatternFill(start_color="FEE2E2", end_color="FEE2E2", fill_type="solid")
         border = Border(
             left=Side(style='thin'),
             right=Side(style='thin'),
@@ -1540,11 +1675,10 @@ class ClientLivreurHebdoViewSet(viewsets.ModelViewSet):
             bottom=Side(style='thin')
         )
 
-        # En-têtes
+        # En-têtes avec noms complets
         headers = [
-            'Livreur ID*', 'Client ID*',
-            'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche',
-            'Date Début', 'Date Fin'
+            'Livreur ID*', 'Livreur Nom', 'Client ID*', 'Client Nom Complet', 'Secteur',
+            'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'
         ]
 
         for col, header in enumerate(headers, 1):
@@ -1554,80 +1688,213 @@ class ClientLivreurHebdoViewSet(viewsets.ModelViewSet):
             cell.alignment = Alignment(horizontal='center')
             cell.border = border
 
-        # Ajouter une feuille d'instructions
+        # Récupérer les données
+        company = getattr(request.user, 'company', None)
+
+        # Récupérer tous les livreurs
+        livreurs = list(LivreurDistribution.objects.all().order_by('nom'))
+
+        # Récupérer tous les clients
+        clients_qs = Client.objects.all().order_by('nom', 'prenom')
+        if company:
+            clients_qs = clients_qs.filter(company=company)
+        clients = list(clients_qs)
+
+        # Récupérer toutes les configurations existantes
+        configs_existantes = ClientLivreurHebdo.objects.filter(is_active=True).select_related('livreur', 'client')
+
+        # Regrouper les configurations par (livreur_id, client_id)
+        configs_dict = {}
+        for config in configs_existantes:
+            key = (config.livreur_id, config.client_id)
+            if key not in configs_dict:
+                configs_dict[key] = {}
+            configs_dict[key][config.jour_semaine] = config.ordre_passage or 'X'
+
+        # Styles supplémentaires
+        existing_fill = PatternFill(start_color="DBEAFE", end_color="DBEAFE", fill_type="solid")  # Bleu clair - config existante
+        new_fill = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")  # Blanc - nouvelle ligne
+        livreur_header_fill = PatternFill(start_color="FEF3C7", end_color="FEF3C7", fill_type="solid")  # Jaune - en-tête livreur
+
+        current_row = 2
+
+        # Pour chaque livreur, afficher TOUS les clients
+        for livreur in livreurs:
+            # Ajouter une ligne d'en-tête pour ce livreur
+            header_cell = ws.cell(row=current_row, column=1, value=f"▶ {livreur.nom} (ID: {livreur.id}) - {livreur.matricule or 'Sans matricule'}")
+            header_cell.font = Font(bold=True, color="92400E")
+            header_cell.fill = livreur_header_fill
+            ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=12)
+            for col in range(1, 13):
+                ws.cell(row=current_row, column=col).border = border
+                ws.cell(row=current_row, column=col).fill = livreur_header_fill
+            current_row += 1
+
+            # Afficher tous les clients pour ce livreur
+            for client in clients:
+                key = (livreur.id, client.id)
+                jours_config = configs_dict.get(key, {})
+                has_config = len(jours_config) > 0
+
+                # Choisir le style selon si config existante ou non
+                fill_style = existing_fill if has_config else new_fill
+
+                # Livreur ID
+                ws.cell(row=current_row, column=1, value=livreur.id).fill = fill_style
+                ws.cell(row=current_row, column=1).border = border
+                # Livreur Nom
+                ws.cell(row=current_row, column=2, value=livreur.nom).fill = fill_style
+                ws.cell(row=current_row, column=2).border = border
+                # Client ID
+                ws.cell(row=current_row, column=3, value=client.id).fill = fill_style
+                ws.cell(row=current_row, column=3).border = border
+                # Client Nom Complet
+                client_nom = f"{client.nom} {client.prenom}".strip()
+                ws.cell(row=current_row, column=4, value=client_nom).fill = fill_style
+                ws.cell(row=current_row, column=4).border = border
+
+                # Jours (1=Lundi ... 7=Dimanche) -> colonnes 5 à 11
+                for jour in range(1, 8):
+                    cell = ws.cell(row=current_row, column=4 + jour)
+                    cell.value = jours_config.get(jour, '')
+                    cell.fill = fill_style
+                    cell.border = border
+                    cell.alignment = Alignment(horizontal='center')
+
+                current_row += 1
+
+            # Ligne vide entre les livreurs
+            current_row += 1
+
+        # ========== FEUILLE LIVREURS ==========
+        ws_livreurs = wb.create_sheet(title="Liste Livreurs")
+
+        # En-têtes livreurs
+        livreurs_headers = ['ID', 'Nom Complet', 'Matricule', 'Téléphone', 'Statut', 'Nb Clients Assignés']
+        for col, header in enumerate(livreurs_headers, 1):
+            cell = ws_livreurs.cell(row=1, column=col, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.border = border
+
+        # Données livreurs
+        for row, livreur in enumerate(livreurs, 2):
+            nb_clients = livreur.clients_assignes.count()
+            ws_livreurs.cell(row=row, column=1, value=livreur.id).border = border
+            ws_livreurs.cell(row=row, column=2, value=livreur.nom).border = border
+            ws_livreurs.cell(row=row, column=3, value=livreur.matricule or '').border = border
+            ws_livreurs.cell(row=row, column=4, value=livreur.telephone or '').border = border
+            ws_livreurs.cell(row=row, column=5, value=livreur.statut or 'actif').border = border
+            ws_livreurs.cell(row=row, column=6, value=nb_clients).border = border
+
+        # Ajuster largeurs colonnes livreurs
+        ws_livreurs.column_dimensions['A'].width = 8
+        ws_livreurs.column_dimensions['B'].width = 25
+        ws_livreurs.column_dimensions['C'].width = 15
+        ws_livreurs.column_dimensions['D'].width = 15
+        ws_livreurs.column_dimensions['E'].width = 12
+        ws_livreurs.column_dimensions['F'].width = 18
+
+        # ========== FEUILLE CLIENTS ==========
+        ws_clients = wb.create_sheet(title="Liste Clients")
+
+        # En-têtes clients
+        clients_headers = ['ID', 'Nom', 'Prénom', 'Nom Complet', 'Téléphone', 'Email', 'Adresse', 'Secteur']
+        for col, header in enumerate(clients_headers, 1):
+            cell = ws_clients.cell(row=1, column=col, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.border = border
+
+        # Données clients
+        for row, client in enumerate(clients, 2):
+            nom_complet = f"{client.nom} {client.prenom}".strip()
+            secteur_nom = client.secteur.nom if client.secteur else ''
+
+            ws_clients.cell(row=row, column=1, value=client.id).border = border
+            ws_clients.cell(row=row, column=2, value=client.nom).border = border
+            ws_clients.cell(row=row, column=3, value=client.prenom or '').border = border
+            ws_clients.cell(row=row, column=4, value=nom_complet).border = border
+            ws_clients.cell(row=row, column=5, value=client.telephone or '').border = border
+            ws_clients.cell(row=row, column=6, value=client.email or '').border = border
+            ws_clients.cell(row=row, column=7, value=client.adresse or '').border = border
+            ws_clients.cell(row=row, column=8, value=secteur_nom).border = border
+
+        # Ajuster largeurs colonnes clients
+        ws_clients.column_dimensions['A'].width = 8
+        ws_clients.column_dimensions['B'].width = 20
+        ws_clients.column_dimensions['C'].width = 15
+        ws_clients.column_dimensions['D'].width = 30
+        ws_clients.column_dimensions['E'].width = 15
+        ws_clients.column_dimensions['F'].width = 25
+        ws_clients.column_dimensions['G'].width = 30
+        ws_clients.column_dimensions['H'].width = 15
+
+        # ========== FEUILLE INSTRUCTIONS ==========
         ws_help = wb.create_sheet(title="Instructions")
         instructions = [
-            "Instructions pour l'import du planning clients-livreurs",
+            "═══════════════════════════════════════════════════════════════",
+            "           INSTRUCTIONS POUR L'IMPORT DU PLANNING",
+            "═══════════════════════════════════════════════════════════════",
             "",
-            "Colonnes obligatoires (*) :",
-            "- Livreur ID : ID du livreur dans le système",
-            "- Client ID : ID du client dans le système",
+            "STRUCTURE DU FICHIER :",
+            "  • Chaque livreur a une section avec TOUS les clients listés",
+            "  • Les en-têtes jaunes indiquent le nom du livreur",
+            "  • Modifiez les jours directement dans les cellules",
             "",
-            "Colonnes jours (Lundi à Dimanche) :",
-            "- Mettre 'X' ou un numéro d'ordre pour assigner le client ce jour-là",
-            "- Laisser vide pour ne pas assigner ce jour",
-            "- Le numéro d'ordre définit l'ordre de passage (1 = premier client)",
+            "COLONNES JOURS (Lundi à Dimanche) :",
+            "  • Mettre un numéro (1, 2, 3...) pour définir l'ordre de passage",
+            "  • Mettre 'X' pour assigner sans ordre spécifique",
+            "  • Laisser vide = pas de visite ce jour-là",
             "",
-            "Colonnes optionnelles :",
-            "- Date Début : Date de début de validité (format YYYY-MM-DD)",
-            "- Date Fin : Date de fin de validité (format YYYY-MM-DD)",
+            "LÉGENDE COULEURS :",
+            "  • 🟡 Jaune : En-tête du livreur (ne pas modifier)",
+            "  • 🔵 Bleu clair : Configuration existante (déjà enregistrée)",
+            "  • ⚪ Blanc : Pas encore configuré (ajoutez les jours souhaités)",
             "",
-            "Exemple :",
-            "Livreur ID | Client ID | Lundi | Mardi | Mercredi | Jeudi | Vendredi | Samedi | Dimanche",
-            "    1      |    101    |   1   |       |     2    |   1   |          |        |",
-            "    1      |    102    |   2   |   1   |          |   2   |     1    |        |",
+            "COMMENT UTILISER :",
+            "  1. Repérez le livreur souhaité (en-tête jaune)",
+            "  2. Trouvez le client dans la liste en dessous",
+            "  3. Remplissez les colonnes des jours (1, 2, 3... ou X)",
+            "  4. Sauvegardez le fichier Excel",
+            "  5. Importez-le via le bouton 'Importer'",
+            "",
+            "EXEMPLE :",
+            "┌──────────┬─────────────┬───────────┬────────────────┬───────┬───────┬──────────┐",
+            "│Livreur ID│ Livreur Nom │ Client ID │ Client Nom     │ Lundi │ Mardi │ Mercredi │",
+            "├──────────┼─────────────┼───────────┼────────────────┼───────┼───────┼──────────┤",
+            "│    1     │ Ahmed Ben   │    101    │ Mohamed Ali    │   1   │       │    1     │",
+            "│    1     │ Ahmed Ben   │    102    │ Karim Salah    │   2   │   1   │          │",
+            "│    1     │ Ahmed Ben   │    103    │ Fatima Zahra   │       │       │          │",
+            "└──────────┴─────────────┴───────────┴────────────────┴───────┴───────┴──────────┘",
+            "",
+            "  → Client 101 : visité Lundi (1er) et Mercredi (1er)",
+            "  → Client 102 : visité Lundi (2ème) et Mardi (1er)",
+            "  → Client 103 : pas de visite programmée",
+            "",
+            "NOTES :",
+            "  • Les colonnes 'Livreur Nom' et 'Client Nom' sont informatives",
+            "  • Seuls les IDs et les jours sont utilisés lors de l'import",
+            "  • Supprimez les lignes inutiles pour alléger le fichier si besoin",
         ]
+
         for row, text in enumerate(instructions, 1):
-            ws_help.cell(row=row, column=1, value=text)
+            cell = ws_help.cell(row=row, column=1, value=text)
+            if row <= 3:
+                cell.font = Font(bold=True, size=12)
+            elif text.startswith("COLONNES") or text.startswith("EXEMPLES") or text.startswith("LÉGENDE") or text.startswith("IMPORTANT"):
+                cell.font = Font(bold=True, color="1D4ED8")
 
-        # Ajouter une feuille avec les livreurs disponibles
-        ws_livreurs = wb.create_sheet(title="Livreurs")
-        ws_livreurs.cell(row=1, column=1, value="ID").font = header_font
-        ws_livreurs.cell(row=1, column=1).fill = header_fill
-        ws_livreurs.cell(row=1, column=2, value="Nom").font = header_font
-        ws_livreurs.cell(row=1, column=2).fill = header_fill
-        ws_livreurs.cell(row=1, column=3, value="Matricule").font = header_font
-        ws_livreurs.cell(row=1, column=3).fill = header_fill
+        ws_help.column_dimensions['A'].width = 80
 
-        company = request.user.company if hasattr(request.user, 'company') else None
-        livreurs = LivreurDistribution.objects.all()
-        if company:
-            livreurs = livreurs.filter(company=company)
-
-        for row, livreur in enumerate(livreurs, 2):
-            ws_livreurs.cell(row=row, column=1, value=livreur.id)
-            ws_livreurs.cell(row=row, column=2, value=livreur.nom)
-            ws_livreurs.cell(row=row, column=3, value=livreur.matricule)
-
-        # Ajouter une feuille avec les clients disponibles
-        ws_clients = wb.create_sheet(title="Clients")
-        ws_clients.cell(row=1, column=1, value="ID").font = header_font
-        ws_clients.cell(row=1, column=1).fill = header_fill
-        ws_clients.cell(row=1, column=2, value="Nom").font = header_font
-        ws_clients.cell(row=1, column=2).fill = header_fill
-        ws_clients.cell(row=1, column=3, value="Prénom").font = header_font
-        ws_clients.cell(row=1, column=3).fill = header_fill
-        ws_clients.cell(row=1, column=4, value="Téléphone").font = header_font
-        ws_clients.cell(row=1, column=4).fill = header_fill
-
-        from .models import Client
-        clients = Client.objects.all()
-        if company:
-            clients = clients.filter(company=company)
-
-        for row, client in enumerate(clients[:500], 2):  # Limiter à 500 pour éviter fichier trop gros
-            ws_clients.cell(row=row, column=1, value=client.id)
-            ws_clients.cell(row=row, column=2, value=client.nom)
-            ws_clients.cell(row=row, column=3, value=client.prenom)
-            ws_clients.cell(row=row, column=4, value=client.telephone)
-
-        # Ajuster les largeurs de colonnes
-        ws.column_dimensions['A'].width = 12
-        ws.column_dimensions['B'].width = 12
-        for col in ['C', 'D', 'E', 'F', 'G', 'H', 'I']:
+        # Ajuster les largeurs de colonnes de la feuille principale
+        ws.column_dimensions['A'].width = 12  # Livreur ID
+        ws.column_dimensions['B'].width = 22  # Livreur Nom
+        ws.column_dimensions['C'].width = 12  # Client ID
+        ws.column_dimensions['D'].width = 25  # Client Nom Complet
+        # Jours de la semaine (colonnes E à K)
+        for col in ['E', 'F', 'G', 'H', 'I', 'J', 'K']:
             ws.column_dimensions[col].width = 10
-        ws.column_dimensions['J'].width = 12
-        ws.column_dimensions['K'].width = 12
 
         # Créer la réponse
         output = io.BytesIO()
@@ -1638,7 +1905,7 @@ class ClientLivreurHebdoViewSet(viewsets.ModelViewSet):
             output.read(),
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
-        response['Content-Disposition'] = 'attachment; filename=template_planning_import.xlsx'
+        response['Content-Disposition'] = 'attachment; filename=template_planning_clients_chauffeurs.xlsx'
         return response
 
     @action(detail=False, methods=['post'], url_path='preview-import')
@@ -1680,19 +1947,34 @@ class ClientLivreurHebdoViewSet(viewsets.ModelViewSet):
 
             company = request.user.company if hasattr(request.user, 'company') else None
 
+            from .models import Client
+
+            # Nouveau format du template:
+            # Col 0: Livreur ID, Col 1: Livreur Nom, Col 2: Client ID, Col 3: Client Nom
+            # Col 4-10: Lundi à Dimanche
+
             # Sauter la première ligne (en-têtes)
             for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), 2):
                 if not row or not any(row):
                     continue
 
+                # Ignorer les lignes d'en-tête de livreur (commençant par ▶)
+                first_cell = str(row[0]) if row[0] else ''
+                if first_cell.startswith('▶') or first_cell.startswith('==='):
+                    continue
+
                 livreur_id = row[0]
-                client_id = row[1]
+                # Col 1 est le nom du livreur (ignoré)
+                client_id = row[2]
+                # Col 3 est le nom du client (ignoré)
 
                 # Validation
                 row_errors = []
+                livreur = None
+                client = None
 
                 if not livreur_id:
-                    row_errors.append('Livreur ID manquant')
+                    continue  # Ligne vide, on passe
                 else:
                     try:
                         livreur = LivreurDistribution.objects.get(id=int(livreur_id))
@@ -1700,35 +1982,39 @@ class ClientLivreurHebdoViewSet(viewsets.ModelViewSet):
                         row_errors.append(f'Livreur ID {livreur_id} invalide')
 
                 if not client_id:
-                    row_errors.append('Client ID manquant')
+                    continue  # Ligne vide, on passe
                 else:
                     try:
-                        from .models import Client
                         client = Client.objects.get(id=int(client_id))
                     except (Client.DoesNotExist, ValueError):
                         row_errors.append(f'Client ID {client_id} invalide')
 
-                # Jours (colonnes 2 à 8, index 2-8)
+                # Jours (colonnes 4 à 10, index 4-10) -> Lundi=1 à Dimanche=7
                 jours_assignes = []
-                for jour_idx, col_idx in enumerate(range(2, 9), 1):
+                ordres = {}
+                for jour_idx in range(1, 8):  # 1=Lundi ... 7=Dimanche
+                    col_idx = 3 + jour_idx  # Col 4=Lundi, Col 5=Mardi, etc.
                     if len(row) > col_idx and row[col_idx]:
                         val = row[col_idx]
                         if isinstance(val, str) and val.upper() == 'X':
                             jours_assignes.append(jour_idx)
-                        elif isinstance(val, (int, float)):
+                            ordres[jour_idx] = None
+                        elif isinstance(val, (int, float)) and val > 0:
                             jours_assignes.append(jour_idx)
+                            ordres[jour_idx] = int(val)
 
-                # Dates optionnelles (colonnes 9 et 10)
-                date_debut = row[9] if len(row) > 9 else None
-                date_fin = row[10] if len(row) > 10 else None
+                # Si aucun jour n'est assigné, ignorer cette ligne
+                if not jours_assignes:
+                    continue
 
                 row_data = {
                     'row': row_idx,
-                    'livreur_id': livreur_id,
-                    'client_id': client_id,
+                    'livreur_id': int(livreur_id) if livreur_id else None,
+                    'livreur_nom': livreur.nom if livreur else str(livreur_id),
+                    'client_id': int(client_id) if client_id else None,
+                    'client_nom': f"{client.nom} {client.prenom}".strip() if client else str(client_id),
                     'jours': jours_assignes,
-                    'date_debut': str(date_debut) if date_debut else None,
-                    'date_fin': str(date_fin) if date_fin else None,
+                    'ordres': ordres,
                     'errors': row_errors,
                     'valid': len(row_errors) == 0
                 }
@@ -1788,6 +2074,8 @@ class ClientLivreurHebdoViewSet(viewsets.ModelViewSet):
         replace_existing = request.data.get('replace_existing', 'false').lower() == 'true'
 
         try:
+            from .models import Client
+
             wb = openpyxl.load_workbook(file, data_only=True)
             ws = wb.active
 
@@ -1796,13 +2084,27 @@ class ClientLivreurHebdoViewSet(viewsets.ModelViewSet):
             skipped_count = 0
             errors = []
 
+            # Nouveau format du template:
+            # Col 0: Livreur ID, Col 1: Livreur Nom, Col 2: Client ID, Col 3: Client Nom
+            # Col 4-10: Lundi à Dimanche
+
             with transaction.atomic():
                 for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), 2):
                     if not row or not any(row):
                         continue
 
+                    # Ignorer les lignes d'en-tête de livreur (commençant par ▶ ou ===)
+                    first_cell = str(row[0]) if row[0] else ''
+                    if first_cell.startswith('▶') or first_cell.startswith('==='):
+                        continue
+
                     livreur_id = row[0]
-                    client_id = row[1]
+                    # Col 1 est le nom du livreur (ignoré)
+                    client_id = row[2] if len(row) > 2 else None
+                    # Col 3 est le nom du client (ignoré)
+
+                    if not livreur_id or not client_id:
+                        continue  # Ligne vide
 
                     # Validation
                     try:
@@ -1813,44 +2115,27 @@ class ClientLivreurHebdoViewSet(viewsets.ModelViewSet):
                         continue
 
                     try:
-                        from .models import Client
                         client = Client.objects.get(id=int(client_id))
                     except (Client.DoesNotExist, ValueError, TypeError):
                         errors.append(f'Ligne {row_idx}: Client ID {client_id} invalide')
                         skipped_count += 1
                         continue
 
-                    # Dates optionnelles
-                    date_debut = None
-                    date_fin = None
-                    if len(row) > 9 and row[9]:
-                        try:
-                            if isinstance(row[9], datetime):
-                                date_debut = row[9].date()
-                            else:
-                                date_debut = datetime.strptime(str(row[9]), '%Y-%m-%d').date()
-                        except:
-                            pass
+                    # Traiter les jours (colonnes 4 à 10) -> Lundi=1 à Dimanche=7
+                    has_any_day = False
+                    for jour_idx in range(1, 8):  # 1=Lundi ... 7=Dimanche
+                        col_idx = 3 + jour_idx  # Col 4=Lundi, Col 5=Mardi, etc.
 
-                    if len(row) > 10 and row[10]:
-                        try:
-                            if isinstance(row[10], datetime):
-                                date_fin = row[10].date()
-                            else:
-                                date_fin = datetime.strptime(str(row[10]), '%Y-%m-%d').date()
-                        except:
-                            pass
-
-                    # Traiter les jours (colonnes 2 à 8)
-                    for jour_idx, col_idx in enumerate(range(2, 9), 1):
                         if len(row) > col_idx and row[col_idx]:
                             val = row[col_idx]
                             ordre_passage = None
 
                             if isinstance(val, str) and val.upper() == 'X':
                                 ordre_passage = 0
-                            elif isinstance(val, (int, float)):
+                                has_any_day = True
+                            elif isinstance(val, (int, float)) and val > 0:
                                 ordre_passage = int(val)
+                                has_any_day = True
                             else:
                                 continue
 
@@ -1865,27 +2150,31 @@ class ClientLivreurHebdoViewSet(viewsets.ModelViewSet):
                                 if replace_existing:
                                     existing.livreur = livreur
                                     existing.ordre_passage = ordre_passage
-                                    existing.date_debut = date_debut
-                                    existing.date_fin = date_fin
                                     existing.is_active = True
-                                    existing.updated_by = request.user
                                     existing.save()
                                     updated_count += 1
                                 else:
-                                    skipped_count += 1
+                                    # Mise à jour seulement si même livreur
+                                    if existing.livreur_id == livreur.id:
+                                        existing.ordre_passage = ordre_passage
+                                        existing.is_active = True
+                                        existing.save()
+                                        updated_count += 1
+                                    else:
+                                        skipped_count += 1
                             else:
                                 ClientLivreurHebdo.objects.create(
                                     client=client,
                                     livreur=livreur,
                                     jour_semaine=jour_idx,
                                     ordre_passage=ordre_passage,
-                                    date_debut=date_debut,
-                                    date_fin=date_fin,
                                     company=company,
-                                    created_by=request.user,
                                     is_active=True
                                 )
                                 created_count += 1
+
+                    if not has_any_day:
+                        skipped_count += 1
 
             return Response({
                 'success': True,
@@ -1897,6 +2186,8 @@ class ClientLivreurHebdoViewSet(viewsets.ModelViewSet):
             })
 
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             return Response(
                 {'error': f'Erreur lors de l\'import: {str(e)}'},
                 status=status.HTTP_400_BAD_REQUEST

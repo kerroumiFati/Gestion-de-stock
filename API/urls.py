@@ -78,29 +78,113 @@ def download_template_view(request):
             columns = ['reference', 'code_barre', 'designation', 'description', 'prixU',
                       'categorie', 'fournisseur', 'quantite', 'stock_min', 'stock_max', 'unite_mesure']
             filename = 'template_produits'
-            example_data = [{
-                'reference': 'PROD-001',
-                'code_barre': '1234567890123',
-                'designation': 'Exemple Produit 1',
-                'description': 'Description du produit',
-                'prixU': '99.99',
-                'categorie': 'Électronique',
-                'fournisseur': 'Fournisseur A',
-                'quantite': '100',
-                'stock_min': '10',
-                'stock_max': '500',
-                'unite_mesure': 'unité'
-            }]
+            example_data = [
+                {
+                    'reference': 'PROD-001',
+                    'code_barre': '6111234567890',
+                    'designation': 'Coca-Cola 1.5L',
+                    'description': 'Boisson gazeuse Coca-Cola bouteille 1.5 litres',
+                    'prixU': '150',
+                    'categorie': 'Boissons',
+                    'fournisseur': 'Coca-Cola Company',
+                    'quantite': '500',
+                    'stock_min': '50',
+                    'stock_max': '1000',
+                    'unite_mesure': 'bouteille'
+                },
+                {
+                    'reference': 'PROD-002',
+                    'code_barre': '6111234567891',
+                    'designation': 'Pepsi 2L',
+                    'description': 'Boisson gazeuse Pepsi bouteille 2 litres',
+                    'prixU': '180',
+                    'categorie': 'Boissons',
+                    'fournisseur': 'PepsiCo',
+                    'quantite': '300',
+                    'stock_min': '30',
+                    'stock_max': '800',
+                    'unite_mesure': 'bouteille'
+                },
+                {
+                    'reference': 'PROD-003',
+                    'code_barre': '6111234567892',
+                    'designation': 'Eau Ifri 1.5L',
+                    'description': 'Eau minérale naturelle Ifri',
+                    'prixU': '50',
+                    'categorie': 'Boissons',
+                    'fournisseur': 'Ifri',
+                    'quantite': '1000',
+                    'stock_min': '100',
+                    'stock_max': '2000',
+                    'unite_mesure': 'bouteille'
+                },
+                {
+                    'reference': 'PROD-004',
+                    'code_barre': '6111234567893',
+                    'designation': 'Chips Bingo 100g',
+                    'description': 'Chips nature sachet 100g',
+                    'prixU': '80',
+                    'categorie': 'Snacks',
+                    'fournisseur': 'Bingo',
+                    'quantite': '200',
+                    'stock_min': '20',
+                    'stock_max': '500',
+                    'unite_mesure': 'sachet'
+                },
+                {
+                    'reference': 'PROD-005',
+                    'code_barre': '6111234567894',
+                    'designation': 'Biscuit Bimo 200g',
+                    'description': 'Biscuits au chocolat paquet 200g',
+                    'prixU': '120',
+                    'categorie': 'Biscuits',
+                    'fournisseur': 'Bimo',
+                    'quantite': '150',
+                    'stock_min': '15',
+                    'stock_max': '400',
+                    'unite_mesure': 'paquet'
+                }
+            ]
         else:  # categories
             columns = ['nom', 'parent', 'description', 'couleur', 'icone']
             filename = 'template_categories'
-            example_data = [{
-                'nom': 'Électronique',
-                'parent': '',
-                'description': 'Produits électroniques',
-                'couleur': '#3B82F6',
-                'icone': 'fas fa-laptop'
-            }]
+            example_data = [
+                {
+                    'nom': 'Boissons',
+                    'parent': '',
+                    'description': 'Toutes les boissons (eau, jus, sodas)',
+                    'couleur': '#3B82F6',
+                    'icone': 'fas fa-glass-water'
+                },
+                {
+                    'nom': 'Sodas',
+                    'parent': 'Boissons',
+                    'description': 'Boissons gazeuses sucrées',
+                    'couleur': '#EF4444',
+                    'icone': 'fas fa-bottle-water'
+                },
+                {
+                    'nom': 'Eaux',
+                    'parent': 'Boissons',
+                    'description': 'Eaux minérales et de source',
+                    'couleur': '#06B6D4',
+                    'icone': 'fas fa-droplet'
+                },
+                {
+                    'nom': 'Snacks',
+                    'parent': '',
+                    'description': 'Chips, cacahuètes et autres snacks',
+                    'couleur': '#F59E0B',
+                    'icone': 'fas fa-cookie'
+                },
+                {
+                    'nom': 'Biscuits',
+                    'parent': '',
+                    'description': 'Biscuits sucrés et salés',
+                    'couleur': '#8B5CF6',
+                    'icone': 'fas fa-cookie-bite'
+                }
+            ]
 
         df = pd.DataFrame(example_data, columns=columns)
 

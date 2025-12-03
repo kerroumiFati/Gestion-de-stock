@@ -65,19 +65,25 @@
           var loadedSrc = window.__loadedDynamicScripts = window.__loadedDynamicScripts || new Set();
           var scripts = Array.from(root.querySelectorAll('script'));
           scripts.forEach(function(oldScript){
-            var newScript = document.createElement('script');
-            // Copy attributes
-            Array.from(oldScript.attributes).forEach(function(attr){
-              newScript.setAttribute(attr.name, attr.value);
-            });
             if (oldScript.src) {
+              // External script - only load once
               if (!loadedSrc.has(oldScript.src)) {
                 loadedSrc.add(oldScript.src);
+                var newScript = document.createElement('script');
+                Array.from(oldScript.attributes).forEach(function(attr){
+                  newScript.setAttribute(attr.name, attr.value);
+                });
                 document.body.appendChild(newScript);
               }
             } else {
-              newScript.text = oldScript.textContent;
-              document.body.appendChild(newScript);
+              // Inline script - execute via indirect eval to preserve global scope
+              try {
+                var scriptContent = oldScript.textContent;
+                // Use indirect eval (0, eval) to execute in global scope
+                (0, eval)(scriptContent);
+              } catch(e) {
+                console.warn('Inline script execution error:', e.message);
+              }
             }
           });
         })(container);

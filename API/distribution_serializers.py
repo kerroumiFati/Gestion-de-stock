@@ -71,11 +71,15 @@ class ClientMobileSerializer(serializers.ModelSerializer):
         )
 
     def get_lat(self, obj):
-        """Coordonnée GPS latitude - à implémenter si disponible"""
+        """Coordonnée GPS latitude"""
+        if obj.lat is not None:
+            return float(obj.lat)
         return None
 
     def get_lng(self, obj):
-        """Coordonnée GPS longitude - à implémenter si disponible"""
+        """Coordonnée GPS longitude"""
+        if obj.lng is not None:
+            return float(obj.lng)
         return None
 
     def get_visite(self, obj):
@@ -807,6 +811,8 @@ class ClientLivreurHebdoSerializer(serializers.ModelSerializer):
     client_code = serializers.CharField(source='client.code_client', read_only=True)
     client_telephone = serializers.CharField(source='client.telephone', read_only=True)
     client_adresse = serializers.CharField(source='client.adresse', read_only=True)
+    client_lat = serializers.DecimalField(source='client.lat', max_digits=10, decimal_places=7, read_only=True, allow_null=True)
+    client_lng = serializers.DecimalField(source='client.lng', max_digits=10, decimal_places=7, read_only=True, allow_null=True)
     livreur_nom = serializers.CharField(source='livreur.nom', read_only=True)
     livreur_matricule = serializers.CharField(source='livreur.matricule', read_only=True)
     jour_semaine_display = serializers.CharField(source='get_jour_semaine_display', read_only=True)
@@ -825,7 +831,7 @@ class ClientLivreurHebdoSerializer(serializers.ModelSerializer):
         model = ClientLivreurHebdo
         fields = [
             'id', 'company', 'client', 'client_nom', 'client_code',
-            'client_telephone', 'client_adresse',
+            'client_telephone', 'client_adresse', 'client_lat', 'client_lng',
             'livreur', 'livreur_nom', 'livreur_matricule',
             'jour_semaine', 'jour_semaine_display', 'ordre_passage',
             'is_active', 'date_debut', 'date_fin', 'notes',

@@ -581,9 +581,14 @@ function addCommentTag(tag) {
     <div id="tournees-section" class="modern-section">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
             <h3>{% trans "Liste des Tournées" %}</h3>
-            <button class="btn-primary" onclick="openTourneeModal()">
-                <i class="fas fa-plus"></i> {% trans "Nouvelle Tournée" %}
-            </button>
+            <div style="display: flex; gap: 10px;">
+                <button class="btn-warning" onclick="syncAllTourneesEnCours()" title="Synchroniser toutes les tournées en cours avec les clients assignés">
+                    <i class="fas fa-sync-alt"></i> {% trans "Synchroniser toutes" %}
+                </button>
+                <button class="btn-primary" onclick="openTourneeModal()">
+                    <i class="fas fa-plus"></i> {% trans "Nouvelle Tournée" %}
+                </button>
+            </div>
         </div>
 
         <div id="tournees-container">
@@ -733,19 +738,6 @@ function addCommentTag(tag) {
                         <input type="time" id="heure_retour_prevue">
                     </div>
 
-                    <div class="form-group">
-                        <label for="distance_km">{% trans "Distance (km)" %}</label>
-                        <input type="number" id="distance_km" step="0.1">
-                    </div>
-
-                    <div class="form-group">
-                        <label for="argent_depart">{% trans "Argent de départ" %} (MAD)</label>
-                        <input type="number" id="argent_depart" step="0.01" value="0" min="0"
-                               placeholder="Ex: 5000.00">
-                        <small style="color: #6b7280; font-size: 0.85rem; display: block; margin-top: 4px;">
-                            💡 Montant prédéfini donné au chauffeur
-                        </small>
-                    </div>
 
                     <div class="form-group full-width">
                         <label for="commentaire">
@@ -770,10 +762,18 @@ function addCommentTag(tag) {
 
                 <!-- Section Arrêts -->
                 <div class="arrets-section">
-                    <h3>{% trans "Arrêts de Livraison" %}</h3>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h3 style="margin: 0;">{% trans "Arrêts de Livraison" %}</h3>
+                        <button type="button" class="btn-success" onclick="autoFillArretsFromConfig()" style="padding: 8px 16px;">
+                            <i class="fas fa-magic"></i> {% trans "Charger clients assignés" %}
+                        </button>
+                    </div>
+                    <p style="color: #6b7280; font-size: 0.85rem; margin-bottom: 15px;">
+                        <i class="fas fa-info-circle"></i> {% trans "Sélectionnez un livreur et une date, puis cliquez sur 'Charger clients assignés' pour remplir automatiquement les arrêts." %}
+                    </p>
                     <div id="arrets-container"></div>
                     <button type="button" class="btn-add" onclick="addArretForm()">
-                        <i class="fas fa-plus"></i> {% trans "Ajouter un arrêt" %}
+                        <i class="fas fa-plus"></i> {% trans "Ajouter un arrêt manuellement" %}
                     </button>
                 </div>
 

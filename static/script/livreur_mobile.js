@@ -2,6 +2,7 @@
 let currentTournee = null;
 let allArrets = [];
 let signaturePad = null;
+let tourneeVerrouillee = false;  // Indique si une tournée est en cours (verrouillée)
 
 // Fonction d'initialisation
 function initLivreurMobilePage() {
@@ -109,25 +110,318 @@ function getSignatureData() {
 
 async function loadLivreurData() {
     try {
-        // Charger toutes les tournées et trouver celle du livreur connecté
-        const response = await fetch('/API/tournees/');
-        const tournees = await response.json();
+        const joursNoms = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 
-        // Trouver la tournée active du livreur (statut = en_cours ou planifiee)
-        // Note: Dans une vraie app, il faudrait authentifier le livreur
-        // Pour l'instant, on prend la première tournée en cours ou planifiée
-        currentTournee = tournees.find(t => t.statut === 'en_cours' || t.statut === 'planifiee');
+        // 1. D'abord vérifier s'il y a une tournée en cours (verrouillée)
+        const tourneeResponse = await fetch('/API/distribution/tournees/?statut=en_cours');
+        const tourneeData = await tourneeResponse.json();
+        const tourneesEnCours = Array.isArray(tourneeData) ? tourneeData : (tourneeData.results || []);
 
-        if (currentTournee) {
-            displayTourneeInfo(currentTournee);
-            await loadArrets(currentTournee.id);
+        console.log('[LIVREUR_MOBILE] Tournées en cours:', tourneesEnCours.length);
+
+        if (tourneesEnCours.length > 0) {
+            // Une tournée est en cours - VERROUILLÉE
+            currentTournee = tourneesEnCours[0];
+            tourneeVerrouillee = true;
+
+            // Utiliser la date de la tournée (pas la date actuelle)
+            const dateTournee = new Date(currentTournee.date_tournee);
+            const jourSemaineTournee = dateTournee.getDay(); // 0=Dimanche
+            const jourSemaineAPI = jourSemaineTournee === 0 ? 7 : jourSemaineTournee; // 1=Lundi, 7=Dimanche
+            const jourNom = joursNoms[jourSemaineTournee];
+
+            console.log('[LIVREUR_MOBILE] Tournée verrouillée - Date:', currentTournee.date_tournee, 'Jour:', jourNom);
+
+            // Charger les clients assignés au livreur pour le jour de la tournée
+            const livreurId = currentTournee.livreur;
+            const configResponse = await fetch(`/API/distribution/clients-livreurs-hebdo/?livreur=${livreurId}&jour_semaine=${jourSemaineAPI}&is_active=true`);
+            const configData = await configResponse.json();
+            const configs = Array.isArray(configData) ? configData : (configData.results || []);
+
+            console.log('[LIVREUR_MOBILE] Clients pour cette tournée:', configs.length);
+
+            // Afficher avec info de verrouillage
+            displayTourneeVerrouilleeInfo(currentTournee, configs.length);
+            displayClientsJourAvecActions(configs, currentTournee.id);
+
         } else {
-            showEmptyState('Aucune tournée assignée');
+            // Pas de tournée en cours - vérifier s'il y en a une planifiée ou afficher les clients du jour
+            tourneeVerrouillee = false;
+
+            const today = new Date();
+            const dayOfWeek = today.getDay();
+            const jourSemaine = dayOfWeek === 0 ? 7 : dayOfWeek;
+            const jourNom = joursNoms[dayOfWeek];
+
+            console.log('[LIVREUR_MOBILE] Pas de tournée en cours - Jour actuel:', jourNom);
+
+            // Charger les clients du jour actuel
+            const configResponse = await fetch(`/API/distribution/clients-livreurs-hebdo/?jour_semaine=${jourSemaine}&is_active=true`);
+            const configData = await configResponse.json();
+            const configs = Array.isArray(configData) ? configData : (configData.results || []);
+
+            if (configs.length > 0) {
+                displayJourInfoAvecDemarrage(jourNom, configs);
+            } else {
+                showEmptyState(`Aucun client assigné pour ${jourNom}`);
+            }
         }
     } catch (error) {
         console.error('Erreur chargement données:', error);
         showEmptyState('Erreur de chargement');
     }
+}
+
+// Afficher les infos d'une tournée verrouillée (en cours)
+function displayTourneeVerrouilleeInfo(tournee, nbClients) {
+    const dateTournee = new Date(tournee.date_tournee);
+    const dateStr = dateTournee.toLocaleDateString('fr-FR', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+    });
+
+    document.getElementById('livreur-name').textContent = tournee.livreur_nom || 'Livreur';
+    document.getElementById('tournee-status').innerHTML = '<span style="color: #f59e0b;"><i class="fas fa-lock"></i> Tournée en cours</span>';
+    document.getElementById('tournee-numero').textContent = tournee.numero_tournee || '-';
+    document.getElementById('tournee-date').textContent = dateStr;
+    document.getElementById('tournee-heure').textContent = tournee.heure_debut || '-';
+    document.getElementById('tournee-arrets').textContent = nbClients;
+
+    document.getElementById('tournee-info').style.display = 'block';
+    document.getElementById('progress-bar').style.display = 'block';
+}
+
+// Afficher les clients avec possibilité de démarrer une tournée
+function displayJourInfoAvecDemarrage(jourNom, configs) {
+    const today = new Date();
+    const dateStr = today.toLocaleDateString('fr-FR', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+    });
+
+    document.getElementById('livreur-name').textContent = 'Mes clients du jour';
+    document.getElementById('tournee-status').textContent = jourNom;
+    document.getElementById('tournee-numero').textContent = '-';
+    document.getElementById('tournee-date').textContent = dateStr;
+    document.getElementById('tournee-heure').textContent = '-';
+    document.getElementById('tournee-arrets').textContent = configs.length;
+
+    document.getElementById('tournee-info').style.display = 'block';
+    document.getElementById('progress-bar').style.display = 'none';
+
+    // Afficher les clients avec bouton démarrer
+    displayClientsAvecBoutonDemarrer(configs);
+}
+
+// Afficher les clients avec bouton pour démarrer la tournée
+function displayClientsAvecBoutonDemarrer(configs) {
+    const container = document.getElementById('arrets-container');
+
+    if (configs.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-inbox"></i>
+                <p>Aucun client assigné pour aujourd'hui</p>
+            </div>
+        `;
+        return;
+    }
+
+    // Bouton pour démarrer la tournée
+    let html = `
+        <div style="background: linear-gradient(135deg, #10b981, #059669); color: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; text-align: center;">
+            <h4 style="margin: 0 0 10px 0;"><i class="fas fa-play-circle"></i> Prêt à démarrer ?</h4>
+            <p style="margin: 0 0 15px 0; opacity: 0.9;">${configs.length} client(s) à visiter aujourd'hui</p>
+            <button onclick="demarrerTournee()" class="btn" style="background: white; color: #059669; padding: 12px 30px; font-weight: bold; border-radius: 8px;">
+                <i class="fas fa-rocket"></i> Démarrer la tournée
+            </button>
+        </div>
+    `;
+
+    // Liste des clients (preview)
+    configs.sort((a, b) => (a.ordre_passage || 0) - (b.ordre_passage || 0));
+
+    html += configs.map((config, index) => `
+        <div class="arret-card" style="opacity: 0.7;">
+            <div class="arret-header" style="background: #9ca3af;">
+                <span class="arret-number">Client #${index + 1}</span>
+                <span class="badge badge-en_attente">En attente</span>
+            </div>
+            <div class="arret-body">
+                <div class="client-name">${config.client_nom || 'Client'}</div>
+                ${config.client_adresse ? `
+                    <div class="arret-detail">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <span>${config.client_adresse}</span>
+                    </div>
+                ` : ''}
+            </div>
+        </div>
+    `).join('');
+
+    container.innerHTML = html;
+}
+
+// Démarrer une nouvelle tournée
+async function demarrerTournee() {
+    if (!confirm('Voulez-vous démarrer la tournée maintenant ?')) return;
+
+    try {
+        const today = new Date();
+        const dateStr = today.toISOString().split('T')[0]; // Format YYYY-MM-DD
+        const heureDebut = today.toTimeString().split(' ')[0]; // Format HH:MM:SS
+
+        // Créer une nouvelle tournée
+        const response = await fetch('/API/distribution/tournees/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                date_tournee: dateStr,
+                statut: 'en_cours',
+                heure_debut: heureDebut
+            })
+        });
+
+        if (response.ok) {
+            const tournee = await response.json();
+            currentTournee = tournee;
+            tourneeVerrouillee = true;
+            showNotification('Tournée démarrée !', 'success');
+
+            // Recharger les données
+            await loadLivreurData();
+        } else {
+            const error = await response.json();
+            showNotification(error.error || error.detail || 'Erreur lors du démarrage', 'error');
+        }
+    } catch (error) {
+        console.error('Erreur démarrage tournée:', error);
+        showNotification('Erreur de connexion', 'error');
+    }
+}
+
+// Terminer la tournée en cours
+async function terminerTournee() {
+    if (!currentTournee) return;
+
+    if (!confirm('Voulez-vous terminer cette tournée ?')) return;
+
+    try {
+        const heureFin = new Date().toTimeString().split(' ')[0];
+
+        const response = await fetch(`/API/distribution/tournees/${currentTournee.id}/`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                statut: 'terminee',
+                heure_fin: heureFin
+            })
+        });
+
+        if (response.ok) {
+            tourneeVerrouillee = false;
+            currentTournee = null;
+            showNotification('Tournée terminée !', 'success');
+
+            // Recharger les données
+            await loadLivreurData();
+        } else {
+            const error = await response.json();
+            showNotification(error.error || 'Erreur lors de la terminaison', 'error');
+        }
+    } catch (error) {
+        console.error('Erreur terminaison tournée:', error);
+        showNotification('Erreur de connexion', 'error');
+    }
+}
+
+// Afficher les clients pour une tournée en cours (avec actions)
+function displayClientsJourAvecActions(configs, tourneeId) {
+    const container = document.getElementById('arrets-container');
+
+    if (configs.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-inbox"></i>
+                <p>Aucun client pour cette tournée</p>
+            </div>
+        `;
+        return;
+    }
+
+    // Bouton pour terminer la tournée
+    let html = `
+        <div style="background: linear-gradient(135deg, #ef4444, #dc2626); color: white; padding: 15px; border-radius: 10px; margin-bottom: 20px; text-align: center;">
+            <button onclick="terminerTournee()" class="btn" style="background: white; color: #dc2626; padding: 10px 25px; font-weight: bold; border-radius: 8px;">
+                <i class="fas fa-flag-checkered"></i> Terminer la tournée
+            </button>
+        </div>
+    `;
+
+    // Trier par ordre de passage
+    configs.sort((a, b) => (a.ordre_passage || 0) - (b.ordre_passage || 0));
+
+    html += configs.map((config, index) => `
+        <div class="arret-card">
+            <div class="arret-header">
+                <span class="arret-number">Client #${index + 1}</span>
+                <span class="badge badge-en_attente">À visiter</span>
+            </div>
+            <div class="arret-body">
+                <div class="client-name">${config.client_nom || 'Client'}</div>
+
+                ${config.client_adresse ? `
+                    <div class="arret-detail">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <span>${config.client_adresse}</span>
+                    </div>
+                ` : ''}
+
+                ${config.client_telephone ? `
+                    <div class="arret-detail">
+                        <i class="fas fa-phone"></i>
+                        <span>${config.client_telephone}</span>
+                    </div>
+                ` : ''}
+
+                ${config.notes ? `
+                    <div class="arret-detail">
+                        <i class="fas fa-info-circle"></i>
+                        <span>${config.notes}</span>
+                    </div>
+                ` : ''}
+
+                <div class="btn-group">
+                    ${config.client_adresse ? `
+                        <button class="btn btn-navigate" onclick="navigateToAddress('${encodeURIComponent(config.client_adresse)}')">
+                            <i class="fas fa-directions"></i> Naviguer
+                        </button>
+                    ` : ''}
+                    ${config.client_telephone ? `
+                        <button class="btn btn-success" onclick="callClient('${config.client_telephone}')" style="grid-column: auto;">
+                            <i class="fas fa-phone"></i> Appeler
+                        </button>
+                    ` : ''}
+                </div>
+            </div>
+        </div>
+    `).join('');
+
+    container.innerHTML = html;
+}
+
+function callClient(telephone) {
+    window.location.href = 'tel:' + telephone;
 }
 
 function displayTourneeInfo(tournee) {
