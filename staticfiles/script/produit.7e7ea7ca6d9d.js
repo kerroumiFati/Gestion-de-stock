@@ -739,7 +739,7 @@
       // Type de prix (Détail, Supérette, Gros)
       tr.append('<td><strong>'+p.type_prix_libelle+'</strong></td>');
       // Prix avec symbole de devise
-      tr.append('<td class="text-right"><strong>'+p.prix+'</strong> '+(p.currency_symbol || 'DA')+'</td>');
+      tr.append('<td class="text-right"><strong>'+p.prix+'</strong> '+(p.currency_symbol || '€')+'</td>');
       tr.append('<td class="text-center">'+p.quantite_min+'</td>');
       const statusBadge = p.is_active ? '<span class="badge badge-success">Actif</span>' : '<span class="badge badge-warning">Inactif</span>';
       tr.append('<td>'+statusBadge+'</td>');

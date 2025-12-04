@@ -146,7 +146,7 @@ function loadStatsSection() {
             </div>
             <div class="stats-card">
                 <div class="stats-icon"><i class="zmdi zmdi-money"></i></div>
-                <div class="stats-number">12,450€</div>
+                <div class="stats-number">12,450DA</div>
                 <div class="stats-label">Ventes du Mois</div>
             </div>
             <div class="stats-card">

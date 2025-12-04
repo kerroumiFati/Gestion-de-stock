@@ -289,6 +289,45 @@ if (!window.__client_script_loaded__) {
                 </div>
             </div>
 
+            <!-- Informations fiscales (optionnelles) -->
+            <div class="row mt-3">
+                <div class="col-12 mb-2">
+                    <h6 class="text-muted" style="font-size: 0.95rem; font-weight: 600;">
+                        <i class="fa fa-file-invoice"></i> {% trans "Informations Fiscales (Optionnel)" %}
+                    </h6>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-3 mb-3">
+                    <label class="modern-label" for="nif">
+                        <i class="fa fa-id-card"></i> {% trans "NIF" %}
+                    </label>
+                    <input class="form-control modern-input" type="text" id="nif" placeholder="Numéro d'Identification Fiscale">
+                </div>
+
+                <div class="col-md-3 mb-3">
+                    <label class="modern-label" for="nis">
+                        <i class="fa fa-id-card"></i> {% trans "NIS" %}
+                    </label>
+                    <input class="form-control modern-input" type="text" id="nis" placeholder="Numéro d'Identification Statistique">
+                </div>
+
+                <div class="col-md-3 mb-3">
+                    <label class="modern-label" for="ai">
+                        <i class="fa fa-id-card"></i> {% trans "AI" %}
+                    </label>
+                    <input class="form-control modern-input" type="text" id="ai" placeholder="Article d'Imposition">
+                </div>
+
+                <div class="col-md-3 mb-3">
+                    <label class="modern-label" for="rc">
+                        <i class="fa fa-id-card"></i> {% trans "RC" %}
+                    </label>
+                    <input class="form-control modern-input" type="text" id="rc" placeholder="Registre de Commerce">
+                </div>
+            </div>
+
             <div class="row">
                 <div class="col">
                     <button type="button" class="modern-btn modern-btn-primary" id="btnClient">
@@ -320,12 +359,16 @@ if (!window.__client_script_loaded__) {
                         <th>{% trans "Téléphone" %}</th>
                         <th>{% trans "Adresse" %}</th>
                         <th>{% trans "Secteur" %}</th>
+                        <th>{% trans "NIF" %}</th>
+                        <th>{% trans "NIS" %}</th>
+                        <th>{% trans "AI" %}</th>
+                        <th>{% trans "RC" %}</th>
                         <th>{% trans "Actions" %}</th>
                     </tr>
                 </thead>
                 <tbody id="table-content">
                     <tr>
-                        <td colspan="8" class="text-center text-muted">{% trans "Chargement..." %}</td>
+                        <td colspan="12" class="text-center text-muted">{% trans "Chargement..." %}</td>
                     </tr>
                 </tbody>
             </table>
@@ -342,6 +385,10 @@ function resetForm(){
     document.getElementById('telephone').value = '';
     document.getElementById('adresse').value = '';
     document.getElementById('secteur').selectedIndex = 0;
+    document.getElementById('nif').value = '';
+    document.getElementById('nis').value = '';
+    document.getElementById('ai').value = '';
+    document.getElementById('rc').value = '';
     document.getElementById('btnClient').innerHTML = '<i class="fa fa-plus"></i> Ajouter';
 }
 </script>

@@ -30,13 +30,17 @@
       $adresse: $('#adresse'),
       $telephone: $('#telephone'),
       $secteur: $('#secteur'),
+      $nif: $('#nif'),
+      $nis: $('#nis'),
+      $ai: $('#ai'),
+      $rc: $('#rc'),
       $btn: $('#btnClient'),
       $tableBody: $('#table-content')
     };
   }
 
   function resetForm(){
-    const { $id, $nom, $prenom, $email, $adresse, $telephone, $secteur, $btn } = els();
+    const { $id, $nom, $prenom, $email, $adresse, $telephone, $secteur, $nif, $nis, $ai, $rc, $btn } = els();
     $id.val('');
     $nom.val('');
     $prenom.val('');
@@ -45,6 +49,10 @@
     $telephone.val('');
     // Reset secteur select to first option (empty value)
     $secteur.prop('selectedIndex', 0);
+    $nif.val('');
+    $nis.val('');
+    $ai.val('');
+    $rc.val('');
     $btn.html('<i class="fa fa-plus"></i> Ajouter');
   }
 
@@ -81,7 +89,7 @@
         const { $tableBody } = els();
         $tableBody.empty();
         if(!list || !list.length){
-          $tableBody.append('<tr><td colspan="8" class="text-center text-muted">Aucun client</td></tr>');
+          $tableBody.append('<tr><td colspan="12" class="text-center text-muted">Aucun client</td></tr>');
           return;
         }
         list.forEach(function(c){
@@ -97,6 +105,11 @@
             ? `<span class="badge" style="background-color: ${c.secteur_couleur || '#6c757d'}; color: white;">${c.secteur_code || ''} - ${c.secteur_nom}</span>`
             : '<span class="text-muted">-</span>';
           $tr.append(`<td>${secteurHtml}</td>`);
+          // Champs fiscaux
+          $tr.append(`<td>${c.nif || '<span class="text-muted">-</span>'}</td>`);
+          $tr.append(`<td>${c.nis || '<span class="text-muted">-</span>'}</td>`);
+          $tr.append(`<td>${c.ai || '<span class="text-muted">-</span>'}</td>`);
+          $tr.append(`<td>${c.rc || '<span class="text-muted">-</span>'}</td>`);
           $tr.append(`<td>
             <button type="button" class="action-btn action-btn-edit btn-edit" data-id="${c.id}"><i class="fas fa-edit"></i></button>
             <button type="button" class="action-btn action-btn-delete btn-delete" data-id="${c.id}"><i class="fas fa-trash"></i></button>
@@ -106,13 +119,13 @@
       })
       .fail(function(xhr){
         const { $tableBody } = els();
-        $tableBody.empty().append('<tr><td colspan="8" class="text-center text-danger">Erreur de chargement</td></tr>');
+        $tableBody.empty().append('<tr><td colspan="12" class="text-center text-danger">Erreur de chargement</td></tr>');
         dbg('loadClients: fail', xhr.status, xhr.responseText || xhr.statusText);
       });
   }
 
   function payloadFromForm(){
-    const { $nom, $prenom, $email, $adresse, $telephone, $secteur } = els();
+    const { $nom, $prenom, $email, $adresse, $telephone, $secteur, $nif, $nis, $ai, $rc } = els();
     const secteurVal = $secteur.val();
     return {
       nom: ($nom.val()||'').trim(),
@@ -120,7 +133,11 @@
       email: ($email.val()||'').trim(),
       adresse: ($adresse.val()||'').trim(),
       telephone: ($telephone.val()||'').trim(),
-      secteur: secteurVal ? parseInt(secteurVal, 10) : null
+      secteur: secteurVal ? parseInt(secteurVal, 10) : null,
+      nif: ($nif.val()||'').trim(),
+      nis: ($nis.val()||'').trim(),
+      ai: ($ai.val()||'').trim(),
+      rc: ($rc.val()||'').trim()
     };
   }
 
@@ -167,18 +184,68 @@
   }
 
   function editClient(id){
+    // Load client data
     $.ajax({ url: API_BASE + id + '/', method: 'GET', dataType: 'json' })
       .done(function(c){
-        dbg('editClient loaded', c);
-        const { $id, $nom, $prenom, $email, $adresse, $telephone, $secteur, $btn } = els();
+        dbg('editClient loaded - FULL CLIENT DATA:', JSON.stringify(c, null, 2));
+        dbg('Client secteur value:', c.secteur, 'Type:', typeof c.secteur);
+
+        const { $id, $nom, $prenom, $email, $adresse, $telephone, $secteur, $nif, $nis, $ai, $rc, $btn } = els();
+
+        // Log all select options
+        dbg('Available secteur options in select:');
+        $secteur.find('option').each(function(){
+          dbg('  Option value:', $(this).val(), 'text:', $(this).text());
+        });
+
+        // Fill basic fields
         $id.val(c.id);
         $nom.val(c.nom || '');
         $prenom.val(c.prenom || '');
         $email.val(c.email || '');
         $adresse.val(c.adresse || '');
         $telephone.val(c.telephone || '');
-        $secteur.val(c.secteur || '');
+        $nif.val(c.nif || '');
+        $nis.val(c.nis || '');
+        $ai.val(c.ai || '');
+        $rc.val(c.rc || '');
         $btn.html('<i class="fa fa-save"></i> Modifier');
+
+        // Set secteur value
+        dbg('Attempting to set secteur to:', c.secteur);
+        if(c.secteur){
+          // Try setting the value directly first
+          $secteur.val(c.secteur);
+          dbg('After first attempt, secteur value is:', $secteur.val());
+
+          // If value is still empty or null, the option might not exist
+          if(!$secteur.val() || $secteur.val() === ''){
+            dbg('Value did not set, checking if option exists...');
+            const optionExists = $secteur.find('option[value="' + c.secteur + '"]').length > 0;
+            dbg('Option exists:', optionExists);
+
+            if(!optionExists){
+              dbg('Option does not exist, reloading secteurs...');
+              loadSecteurs().done(function(){
+                dbg('Secteurs reloaded, trying to set value again...');
+                $secteur.val(c.secteur);
+                dbg('Final secteur value:', $secteur.val());
+              });
+            } else {
+              dbg('Option exists but value not setting, trying again...');
+              setTimeout(function(){
+                $secteur.val(c.secteur);
+                dbg('After timeout, secteur value:', $secteur.val());
+              }, 200);
+            }
+          } else {
+            dbg('Secteur value set successfully to:', $secteur.val());
+          }
+        } else {
+          dbg('Client has no secteur, resetting to empty');
+          $secteur.prop('selectedIndex', 0);
+        }
+
         // Scroll to form
         $('html, body').animate({ scrollTop: $('#nom').offset().top - 100 }, 300);
       })

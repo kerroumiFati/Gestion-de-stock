@@ -65,7 +65,7 @@
         const { $tableBody } = els();
         $tableBody.empty();
         if(!list || !list.length){
-          $tableBody.append('<tr><td colspan="10" class="text-center text-muted">Aucun fournisseur</td></tr>');
+          $tableBody.append('<tr><td colspan="7" class="text-center text-muted">Aucun fournisseur</td></tr>');
           return;
         }
         list.forEach(function(f){
@@ -75,11 +75,6 @@
           $tr.append(`<td>${f.email || ''}</td>`);
           $tr.append(`<td>${f.telephone || ''}</td>`);
           $tr.append(`<td>${f.adresse || ''}</td>`);
-          // Champs fiscaux
-          $tr.append(`<td>${f.nif || '<span class="text-muted">-</span>'}</td>`);
-          $tr.append(`<td>${f.nis || '<span class="text-muted">-</span>'}</td>`);
-          $tr.append(`<td>${f.ai || '<span class="text-muted">-</span>'}</td>`);
-          $tr.append(`<td>${f.rc || '<span class="text-muted">-</span>'}</td>`);
           $tr.append(`<td><button type="button" class="btn btn-sm btn-outline-danger btn-delete" data-id="${f.id}"><i class="fas fa-trash"></i></button></td>`);
           $tr.append(`<td><button type="button" class="btn btn-sm btn-outline-primary btn-edit" data-id="${f.id}"><i class="fas fa-edit"></i></button></td>`);
           $tableBody.append($tr);
@@ -87,7 +82,7 @@
       })
       .fail(function(xhr){
         const { $tableBody } = els();
-        $tableBody.empty().append('<tr><td colspan="10" class="text-center text-danger">Erreur de chargement</td></tr>');
+        $tableBody.empty().append('<tr><td colspan="7" class="text-center text-danger">Erreur de chargement</td></tr>');
         dbg('loadFournisseurs: fail', xhr.status, xhr.responseText || xhr.statusText);
       });
   }

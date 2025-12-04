@@ -235,7 +235,7 @@ document.addEventListener('fragment:loaded', function(e) {
 
 // Charger les tournées
 function loadTournees() {
-    fetch('/API/distribution/tournees/', {
+    fetch('/API/tournees/', {
         credentials: 'same-origin',
         headers: { 'Accept': 'application/json' }
     })
@@ -277,8 +277,6 @@ function transformTourneeData(apiData) {
         heure_fin: apiData.heure_fin,
         heure_depart_prevue: apiData.heure_debut || '--:--',
         heure_retour_prevue: apiData.heure_fin || '--:--',
-        distance_km: apiData.distance_km || 0,
-        argent_depart: apiData.argent_depart || 0,
         commentaire: apiData.notes || '',
         warehouse: apiData.warehouse,
         arrets: apiData.arrets || [],
@@ -540,23 +538,29 @@ function getTourneeActions(tournee) {
 
     if (tournee.statut === 'planifiee') {
         actions += `
-            <button class="btn-success" onclick="demarrerTournee(${tournee.id})">
+            <button class="btn-success" onclick="demarrerTournee(${tournee.id})" title="Démarrer la tournée">
                 <i class="fas fa-play"></i> Démarrer
             </button>
-            <button class="btn-warning" onclick="editTournee(${tournee.id})">
+            <button class="btn-primary" onclick="syncTourneeArrets(${tournee.id})" title="Synchroniser avec les clients assignés">
+                <i class="fas fa-sync-alt"></i>
+            </button>
+            <button class="btn-warning" onclick="editTournee(${tournee.id})" title="Modifier">
                 <i class="fas fa-edit"></i>
             </button>
-            <button class="btn-danger" onclick="annulerTournee(${tournee.id})">
+            <button class="btn-danger" onclick="annulerTournee(${tournee.id})" title="Annuler">
                 <i class="fas fa-times"></i>
             </button>
         `;
     } else if (tournee.statut === 'en_cours') {
         actions += `
-            <button class="btn-success" onclick="terminerTournee(${tournee.id})">
+            <button class="btn-primary" onclick="syncTourneeArrets(${tournee.id})" title="Synchroniser avec les clients assignés">
+                <i class="fas fa-sync-alt"></i> Sync
+            </button>
+            <button class="btn-success" onclick="terminerTournee(${tournee.id})" title="Terminer la tournée">
                 <i class="fas fa-check"></i> Terminer
             </button>
-            <button class="btn-danger" onclick="annulerTournee(${tournee.id})">
-                <i class="fas fa-times"></i> Annuler
+            <button class="btn-danger" onclick="annulerTournee(${tournee.id})" title="Annuler">
+                <i class="fas fa-times"></i>
             </button>
         `;
     } else if (tournee.statut === 'terminee') {
@@ -627,7 +631,7 @@ function filterTournees(status) {
 
 // Voir les détails d'une tournée
 function viewTourneeDetails(id) {
-    fetch(`/API/distribution/tournees/${id}/`, {
+    fetch(`/API/tournees/${id}/`, {
         credentials: 'same-origin',
         headers: {
             'Accept': 'application/json'
@@ -757,7 +761,6 @@ function showTourneeDetailsModal(tournee) {
                 <div><strong>Départ prévu:</strong> ${tournee.heure_debut || tournee.heure_depart_prevue || '-'}</div>
                 <div><strong>Retour prévu:</strong> ${tournee.heure_fin || tournee.heure_retour_prevue || '-'}</div>
                 <div><strong>Statut:</strong> <span class="badge badge-${tournee.statut}">${tournee.statut_display || getStatutDisplay(tournee.statut)}</span></div>
-                <div><strong>Distance:</strong> ${tournee.distance_km || '-'} km</div>
             </div>
 
             ${caisse ? `
@@ -884,7 +887,7 @@ function closeDetailsModal() {
 function demarrerTournee(id) {
     if (!confirm('Démarrer cette tournée ?')) return;
 
-    fetch(`/API/distribution/tournees/${id}/demarrer/`, {
+    fetch(`/API/tournees/${id}/demarrer/`, {
         method: 'POST',
         headers: {
             'X-CSRFToken': getCookie('csrftoken')
@@ -905,7 +908,7 @@ function demarrerTournee(id) {
 function terminerTournee(id) {
     if (!confirm('Terminer cette tournée ?')) return;
 
-    fetch(`/API/distribution/tournees/${id}/terminer/`, {
+    fetch(`/API/tournees/${id}/terminer/`, {
         method: 'POST',
         headers: {
             'X-CSRFToken': getCookie('csrftoken')
@@ -926,7 +929,7 @@ function terminerTournee(id) {
 function annulerTournee(id) {
     if (!confirm('Annuler cette tournée ?')) return;
 
-    fetch(`/API/distribution/tournees/${id}/`, {
+    fetch(`/API/tournees/${id}/`, {
         method: 'PATCH',
         headers: {
             'Content-Type': 'application/json',
@@ -1096,7 +1099,7 @@ function addArretForm() {
 }
 
 // Fonction interne pour ajouter le formulaire d'arrêt
-function addArretFormInternal() {
+function addArretFormInternal(clientData = null) {
     window.arretCounter++;
     const counter = window.arretCounter;
     const container = document.getElementById('arrets-container');
@@ -1111,11 +1114,21 @@ function addArretFormInternal() {
 
     console.log('Ajout arrêt - clients disponibles:', window.clients_tournees ? window.clients_tournees.length : 0);
 
+    // Info client si fourni
+    const clientInfo = clientData ? `
+        <div style="background: #f0fdf4; padding: 10px; border-radius: 6px; margin-bottom: 15px; border-left: 4px solid #10b981;">
+            <div style="font-weight: 600; color: #166534;">${clientData.client_nom || 'Client'}</div>
+            ${clientData.client_adresse ? `<div style="font-size: 0.85rem; color: #4b5563;"><i class="fas fa-map-marker-alt"></i> ${clientData.client_adresse}</div>` : ''}
+            ${clientData.client_telephone ? `<div style="font-size: 0.85rem; color: #4b5563;"><i class="fas fa-phone"></i> ${clientData.client_telephone}</div>` : ''}
+        </div>
+    ` : '';
+
     arretDiv.innerHTML = `
         <button type="button" class="remove-arret" onclick="removeArret(${counter})">×</button>
         <h4 style="margin-bottom: 15px;">Arrêt #${counter}</h4>
+        ${clientInfo}
         <div class="form-grid">
-            <div class="form-group">
+            <div class="form-group full-width">
                 <label>Client *</label>
                 <div class="custom-select-container" id="customSelectArretClient${counter}">
                     <div class="custom-select-trigger" id="arretClientTrigger${counter}">
@@ -1129,20 +1142,12 @@ function addArretFormInternal() {
                         <div class="custom-select-options" id="arretClientOptions${counter}"></div>
                     </div>
                     <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
-                        <select class="arret-client" id="arretClient${counter}" required>
+                        <select class="arret-client" id="arretClient${counter}" required data-lat="${clientData?.client_lat || ''}" data-lng="${clientData?.client_lng || ''}">
                             <option value="">Sélectionner...</option>
                             ${clientsOptions}
                         </select>
                     </div>
                 </div>
-            </div>
-            <div class="form-group">
-                <label>Heure prévue *</label>
-                <input type="time" class="arret-heure" required>
-            </div>
-            <div class="form-group full-width">
-                <label>Adresse de livraison *</label>
-                <input type="text" class="arret-adresse" required>
             </div>
         </div>
     `;
@@ -1163,7 +1168,158 @@ function addArretFormInternal() {
             'arretClientOptions' + counter,
             'arretClient' + counter
         );
+
+        // Si un client est fourni, le sélectionner automatiquement
+        if (clientData && clientData.client) {
+            const selectEl = document.getElementById('arretClient' + counter);
+            if (selectEl) {
+                selectEl.value = clientData.client;
+                // Mettre à jour l'affichage du custom select
+                const trigger = document.getElementById('arretClientTrigger' + counter);
+                if (trigger) {
+                    const textSpan = trigger.querySelector('.selected-text');
+                    if (textSpan) {
+                        textSpan.textContent = clientData.client_nom || 'Client';
+                        textSpan.classList.remove('placeholder');
+                    }
+                }
+            }
+        }
     }, 50);
+}
+
+// Charger les clients assignés au livreur pour un jour donné
+async function loadClientsAssignesJour(livreurId, date) {
+    if (!livreurId || !date) return [];
+
+    try {
+        // Convertir la date en jour de la semaine (1=Lundi, 7=Dimanche)
+        const dateObj = new Date(date);
+        const dayOfWeek = dateObj.getDay();
+        const jourSemaine = dayOfWeek === 0 ? 7 : dayOfWeek;
+
+        console.log('[TOURNEES] Chargement clients assignés - Livreur:', livreurId, 'Date:', date, 'Jour:', jourSemaine);
+
+        const response = await fetch(`/API/distribution/clients-livreurs-hebdo/?livreur=${livreurId}&jour_semaine=${jourSemaine}&is_active=true`);
+        const data = await response.json();
+        const configs = Array.isArray(data) ? data : (data.results || []);
+
+        console.log('[TOURNEES] Clients assignés trouvés:', configs.length);
+        return configs;
+    } catch (error) {
+        console.error('[TOURNEES] Erreur chargement clients assignés:', error);
+        return [];
+    }
+}
+
+// Auto-remplir les arrêts avec les clients assignés
+async function autoFillArretsFromConfig() {
+    const livreurId = document.getElementById('livreur').value;
+    const date = document.getElementById('date').value;
+
+    if (!livreurId || !date) {
+        showMessage('Veuillez sélectionner un livreur et une date', 'warning');
+        return;
+    }
+
+    // Vider les arrêts existants
+    const container = document.getElementById('arrets-container');
+    container.innerHTML = '<div style="text-align: center; padding: 20px;"><i class="fas fa-spinner fa-spin"></i> Chargement des clients assignés...</div>';
+
+    // Charger les clients assignés
+    const configs = await loadClientsAssignesJour(livreurId, date);
+
+    container.innerHTML = '';
+    window.arretCounter = 0;
+
+    if (configs.length === 0) {
+        container.innerHTML = `
+            <div style="background: #fef3c7; padding: 15px; border-radius: 8px; text-align: center; color: #92400e;">
+                <i class="fas fa-info-circle"></i> Aucun client assigné à ce livreur pour ce jour.
+                <br><small>Vous pouvez ajouter des arrêts manuellement.</small>
+            </div>
+        `;
+        return;
+    }
+
+    // Ajouter les clients comme arrêts
+    configs.sort((a, b) => (a.ordre_passage || 0) - (b.ordre_passage || 0));
+
+    for (const config of configs) {
+        addArretFormInternal(config);
+    }
+
+    showMessage(`${configs.length} client(s) assigné(s) chargé(s) automatiquement`, 'success');
+}
+
+// Synchroniser les arrêts d'une tournée avec les clients assignés
+async function syncTourneeArrets(tourneeId) {
+    if (!tourneeId) {
+        showMessage('Aucune tournée sélectionnée', 'error');
+        return;
+    }
+
+    if (!confirm('Voulez-vous synchroniser les arrêts de cette tournée avec la configuration actuelle des clients assignés ?\n\nCela va mettre à jour les arrêts en fonction de la configuration "Clients / Chauffeurs".')) {
+        return;
+    }
+
+    try {
+        showMessage('Synchronisation en cours...', 'info');
+
+        const response = await fetch(`/API/tournees/${tourneeId}/sync_arrets/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            credentials: 'same-origin'
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            showMessage(`Synchronisation réussie ! ${data.arrets_ajoutes || 0} arrêt(s) ajouté(s), ${data.arrets_supprimes || 0} supprimé(s)`, 'success');
+            // Recharger les tournées pour voir les changements
+            loadTournees();
+        } else {
+            showMessage(data.error || data.detail || 'Erreur lors de la synchronisation', 'error');
+        }
+    } catch (error) {
+        console.error('Erreur synchronisation:', error);
+        showMessage('Erreur de connexion lors de la synchronisation', 'error');
+    }
+}
+
+// Synchroniser toutes les tournées en cours
+async function syncAllTourneesEnCours() {
+    if (!confirm('Voulez-vous synchroniser TOUTES les tournées en cours avec la configuration actuelle des clients assignés ?')) {
+        return;
+    }
+
+    try {
+        showMessage('Synchronisation de toutes les tournées en cours...', 'info');
+
+        const response = await fetch('/API/tournees/sync_all_en_cours/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            credentials: 'same-origin'
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            showMessage(`Synchronisation terminée ! ${data.tournees_synced || 0} tournée(s) mise(s) à jour`, 'success');
+            loadTournees();
+        } else {
+            showMessage(data.error || 'Erreur lors de la synchronisation', 'error');
+        }
+    } catch (error) {
+        console.error('Erreur synchronisation globale:', error);
+        showMessage('Erreur de connexion', 'error');
+    }
 }
 
 function removeArret(id) {
@@ -1226,7 +1382,7 @@ function setupFormHandlers() {
 
 // Vérifier si une tournée existe déjà pour ce livreur et cette date
 function checkExistingTournee(livreurId, date) {
-    return fetch(`/API/distribution/tournees/?livreur=${livreurId}&date_tournee=${date}`, {
+    return fetch(`/API/tournees/?livreur=${livreurId}&date_tournee=${date}`, {
         credentials: 'same-origin',
         headers: { 'Accept': 'application/json' }
     })
@@ -1272,7 +1428,6 @@ function submitTourneeForm(id, dateValue, livreurValue, warehouseValue, codePrix
         code_prix: codePrixValue ? parseInt(codePrixValue) : null,
         heure_debut: document.getElementById('heure_depart_prevue').value || null,
         heure_fin: document.getElementById('heure_retour_prevue').value || null,
-        distance_km: document.getElementById('distance_km').value ? parseFloat(document.getElementById('distance_km').value) : null,
         notes: document.getElementById('commentaire').value || '',
         statut: 'planifiee'
     };
@@ -1284,7 +1439,7 @@ function submitTourneeForm(id, dateValue, livreurValue, warehouseValue, codePrix
 
     console.log('[TOURNEES] Données à envoyer:', data);
 
-    const url = id ? `/API/distribution/tournees/${id}/` : '/API/distribution/tournees/';
+    const url = id ? `/API/tournees/${id}/` : '/API/tournees/';
     const method = id ? 'PUT' : 'POST';
 
     fetch(url, {
@@ -1349,16 +1504,28 @@ function collectArrets() {
     const arretForms = container.querySelectorAll('.arret-form-item');
 
     arretForms.forEach((form, index) => {
-        const client = form.querySelector('.arret-client').value;
-        const heure = form.querySelector('.arret-heure').value;
-        const adresse = form.querySelector('.arret-adresse').value;
+        const clientSelect = form.querySelector('.arret-client');
+        const client = clientSelect ? clientSelect.value : null;
 
-        if (client && heure && adresse) {
+        if (client) {
+            // Récupérer les coordonnées GPS du client si disponibles
+            const lat = clientSelect.dataset.lat || null;
+            const lng = clientSelect.dataset.lng || null;
+
+            // Récupérer l'adresse du client depuis la liste des clients
+            let adresse = '';
+            if (window.clients_tournees && Array.isArray(window.clients_tournees)) {
+                const clientData = window.clients_tournees.find(c => c.id == client);
+                if (clientData) {
+                    adresse = clientData.adresse || '';
+                }
+            }
+
             arrets.push({
-                client: client,
-                heure_prevue: heure,
-                adresse_livraison: adresse,
-                ordre: index + 1
+                client: parseInt(client),
+                ordre_passage: index + 1,
+                latitude: lat,
+                longitude: lng
             });
         }
     });
@@ -1368,19 +1535,38 @@ function collectArrets() {
 
 // Créer les arrêts
 async function createArrets(tourneeId, arrets) {
-    const promises = arrets.map(arret => {
-        arret.tournee = tourneeId;
-        return fetch('/API/distribution/arrets/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken')
-            },
-            body: JSON.stringify(arret)
-        });
-    });
+    console.log('[TOURNEES] Création des arrêts pour tournée:', tourneeId);
+    console.log('[TOURNEES] Arrêts à créer:', arrets);
 
-    return Promise.all(promises);
+    const results = [];
+    for (const arret of arrets) {
+        arret.tournee = tourneeId;
+        console.log('[TOURNEES] Envoi arrêt:', JSON.stringify(arret));
+
+        try {
+            const response = await fetch('/API/distribution/arrets/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify(arret)
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                console.error('[TOURNEES] Erreur création arrêt:', errorData);
+            } else {
+                const data = await response.json();
+                console.log('[TOURNEES] Arrêt créé:', data);
+                results.push(response);
+            }
+        } catch (error) {
+            console.error('[TOURNEES] Exception création arrêt:', error);
+        }
+    }
+
+    return results;
 }
 
 // Modifier une tournée
@@ -1396,7 +1582,7 @@ function loadTourneeData(id) {
         : Promise.resolve();
 
     ensureClientsLoaded
-        .then(() => fetch(`/API/distribution/tournees/${id}/`))
+        .then(() => fetch(`/API/tournees/${id}/`))
         .then(response => response.json())
         .then(tournee => {
             console.log('[TOURNEES] Données chargées:', tournee);
@@ -1440,13 +1626,6 @@ function loadTourneeData(id) {
             // Stocker le numero_tournee pour la modification
             window.currentTourneeNumero = tournee.numero_tournee;
             document.getElementById('commentaire').value = tournee.notes || '';
-
-            // Les champs distance_km et argent_depart peuvent ne pas exister dans TourneeMobile
-            var distanceField = document.getElementById('distance_km');
-            if (distanceField) distanceField.value = tournee.distance_km || '';
-
-            var argentField = document.getElementById('argent_depart');
-            if (argentField) argentField.value = tournee.argent_depart || 0;
 
             // Charger les arrêts existants si disponibles
             if (tournee.arrets && tournee.arrets.length > 0) {

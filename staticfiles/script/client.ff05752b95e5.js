@@ -184,68 +184,31 @@
   }
 
   function editClient(id){
-    // Load client data
     $.ajax({ url: API_BASE + id + '/', method: 'GET', dataType: 'json' })
       .done(function(c){
-        dbg('editClient loaded - FULL CLIENT DATA:', JSON.stringify(c, null, 2));
-        dbg('Client secteur value:', c.secteur, 'Type:', typeof c.secteur);
-
+        dbg('editClient loaded', c);
         const { $id, $nom, $prenom, $email, $adresse, $telephone, $secteur, $nif, $nis, $ai, $rc, $btn } = els();
-
-        // Log all select options
-        dbg('Available secteur options in select:');
-        $secteur.find('option').each(function(){
-          dbg('  Option value:', $(this).val(), 'text:', $(this).text());
-        });
-
-        // Fill basic fields
         $id.val(c.id);
         $nom.val(c.nom || '');
         $prenom.val(c.prenom || '');
         $email.val(c.email || '');
         $adresse.val(c.adresse || '');
         $telephone.val(c.telephone || '');
+        // Set secteur value - use the ID from the client object
+        if(c.secteur){
+          $secteur.val(c.secteur);
+          // If the value didn't set (option doesn't exist yet), wait a bit and try again
+          if(!$secteur.val()){
+            setTimeout(function(){ $secteur.val(c.secteur); }, 100);
+          }
+        } else {
+          $secteur.prop('selectedIndex', 0);
+        }
         $nif.val(c.nif || '');
         $nis.val(c.nis || '');
         $ai.val(c.ai || '');
         $rc.val(c.rc || '');
         $btn.html('<i class="fa fa-save"></i> Modifier');
-
-        // Set secteur value
-        dbg('Attempting to set secteur to:', c.secteur);
-        if(c.secteur){
-          // Try setting the value directly first
-          $secteur.val(c.secteur);
-          dbg('After first attempt, secteur value is:', $secteur.val());
-
-          // If value is still empty or null, the option might not exist
-          if(!$secteur.val() || $secteur.val() === ''){
-            dbg('Value did not set, checking if option exists...');
-            const optionExists = $secteur.find('option[value="' + c.secteur + '"]').length > 0;
-            dbg('Option exists:', optionExists);
-
-            if(!optionExists){
-              dbg('Option does not exist, reloading secteurs...');
-              loadSecteurs().done(function(){
-                dbg('Secteurs reloaded, trying to set value again...');
-                $secteur.val(c.secteur);
-                dbg('Final secteur value:', $secteur.val());
-              });
-            } else {
-              dbg('Option exists but value not setting, trying again...');
-              setTimeout(function(){
-                $secteur.val(c.secteur);
-                dbg('After timeout, secteur value:', $secteur.val());
-              }, 200);
-            }
-          } else {
-            dbg('Secteur value set successfully to:', $secteur.val());
-          }
-        } else {
-          dbg('Client has no secteur, resetting to empty');
-          $secteur.prop('selectedIndex', 0);
-        }
-
         // Scroll to form
         $('html, body').animate({ scrollTop: $('#nom').offset().top - 100 }, 300);
       })

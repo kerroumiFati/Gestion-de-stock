@@ -1571,7 +1571,7 @@ class ClientLivreurHebdoViewSet(viewsets.ModelViewSet):
 
         # En-têtes
         jours_noms = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche']
-        headers = ['Livreur', 'Client ID', 'Client Nom', 'Client Prénom', 'Téléphone', 'Adresse']
+        headers = ['Livreur', 'Client ID', 'Client Nom', 'Client Prénom', 'Téléphone', 'Adresse', 'Secteur']
         headers.extend(jours_noms)
 
         for col, header in enumerate(headers, 1):
@@ -1593,6 +1593,7 @@ class ClientLivreurHebdoViewSet(viewsets.ModelViewSet):
                     'client_prenom': config.client.prenom if config.client else '',
                     'telephone': config.client.telephone if config.client else '',
                     'adresse': config.client.adresse if config.client else '',
+                    'secteur': config.client.secteur.nom if config.client and config.client.secteur else '',
                     'jours': {}
                 }
             clients_configs[key]['jours'][config.jour_semaine] = config.ordre_passage or 'X'
@@ -1606,10 +1607,11 @@ class ClientLivreurHebdoViewSet(viewsets.ModelViewSet):
             ws.cell(row=row, column=4, value=data['client_prenom']).border = border
             ws.cell(row=row, column=5, value=data['telephone']).border = border
             ws.cell(row=row, column=6, value=data['adresse']).border = border
+            ws.cell(row=row, column=7, value=data['secteur']).border = border
 
             # Jours de la semaine (1=Lundi ... 7=Dimanche)
             for jour in range(1, 8):
-                cell = ws.cell(row=row, column=6 + jour)
+                cell = ws.cell(row=row, column=7 + jour)
                 if jour in data['jours']:
                     cell.value = data['jours'][jour]
                     cell.fill = PatternFill(start_color="D1FAE5", end_color="D1FAE5", fill_type="solid")
@@ -1619,13 +1621,14 @@ class ClientLivreurHebdoViewSet(viewsets.ModelViewSet):
             row += 1
 
         # Ajuster la largeur des colonnes
-        ws.column_dimensions['A'].width = 20
-        ws.column_dimensions['B'].width = 10
-        ws.column_dimensions['C'].width = 20
-        ws.column_dimensions['D'].width = 15
-        ws.column_dimensions['E'].width = 15
-        ws.column_dimensions['F'].width = 30
-        for col in ['G', 'H', 'I', 'J', 'K', 'L', 'M']:
+        ws.column_dimensions['A'].width = 20  # Livreur
+        ws.column_dimensions['B'].width = 10  # Client ID
+        ws.column_dimensions['C'].width = 20  # Client Nom
+        ws.column_dimensions['D'].width = 15  # Client Prénom
+        ws.column_dimensions['E'].width = 15  # Téléphone
+        ws.column_dimensions['F'].width = 30  # Adresse
+        ws.column_dimensions['G'].width = 15  # Secteur
+        for col in ['H', 'I', 'J', 'K', 'L', 'M', 'N']:  # Jours de la semaine
             ws.column_dimensions[col].width = 12
 
         # Créer la réponse HTTP
@@ -1752,10 +1755,14 @@ class ClientLivreurHebdoViewSet(viewsets.ModelViewSet):
                 client_nom = f"{client.nom} {client.prenom}".strip()
                 ws.cell(row=current_row, column=4, value=client_nom).fill = fill_style
                 ws.cell(row=current_row, column=4).border = border
+                # Secteur
+                secteur_nom = client.secteur.nom if client.secteur else ''
+                ws.cell(row=current_row, column=5, value=secteur_nom).fill = fill_style
+                ws.cell(row=current_row, column=5).border = border
 
-                # Jours (1=Lundi ... 7=Dimanche) -> colonnes 5 à 11
+                # Jours (1=Lundi ... 7=Dimanche) -> colonnes 6 à 12
                 for jour in range(1, 8):
-                    cell = ws.cell(row=current_row, column=4 + jour)
+                    cell = ws.cell(row=current_row, column=5 + jour)
                     cell.value = jours_config.get(jour, '')
                     cell.fill = fill_style
                     cell.border = border
@@ -1892,8 +1899,9 @@ class ClientLivreurHebdoViewSet(viewsets.ModelViewSet):
         ws.column_dimensions['B'].width = 22  # Livreur Nom
         ws.column_dimensions['C'].width = 12  # Client ID
         ws.column_dimensions['D'].width = 25  # Client Nom Complet
-        # Jours de la semaine (colonnes E à K)
-        for col in ['E', 'F', 'G', 'H', 'I', 'J', 'K']:
+        ws.column_dimensions['E'].width = 15  # Secteur
+        # Jours de la semaine (colonnes F à L)
+        for col in ['F', 'G', 'H', 'I', 'J', 'K', 'L']:
             ws.column_dimensions[col].width = 10
 
         # Créer la réponse

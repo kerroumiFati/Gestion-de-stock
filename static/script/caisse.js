@@ -272,7 +272,7 @@
             const total = quantite * prixU;
             totalArticles += quantite;
 
-            const currSymbol = currencyData ? currencyData.symbol : '€';
+            const currSymbol = currencyData ? currencyData.symbol : 'DA';
             $tbody.append(`
                 <tr>
                     <td>

@@ -3,6 +3,99 @@
 <script src="{% static 'script/vente.js' %}" type="text/javascript"></script>
 
 <style>
+/* ==================== AMÉLIORATIONS PROFESSIONNELLES ==================== */
+
+/* Gradient moderne pour le header */
+.bg-gradient-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+}
+
+/* Animations douces */
+.card {
+    transition: all 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+}
+
+/* Badges et compteurs */
+.badge {
+    padding: 0.4em 0.8em;
+    font-size: 0.85rem;
+}
+
+/* Boutons améliorés */
+.btn {
+    border-radius: 6px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.btn-lg {
+    padding: 12px 30px;
+    font-size: 1.1rem;
+}
+
+/* Labels professionnels */
+label {
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+}
+
+/* Inputs avec focus amélioré */
+.form-control:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+}
+
+/* Tableau amélioré */
+#tbl_vente tbody tr {
+    transition: background-color 0.2s ease;
+}
+
+#tbl_vente tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+/* Résumé financier */
+.bg-gradient-primary.text-white td {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+/* Horloge en temps réel */
+#current_date, #current_time {
+    font-family: 'Courier New', monospace;
+    font-size: 0.85rem;
+}
+
+/* Compteur de panier */
+#cart_count {
+    transition: all 0.3s ease;
+}
+
+.animate-pulse {
+    animation: pulse-once 0.5s ease-out;
+}
+
+@keyframes pulse-once {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.3); background-color: #28a745; }
+    100% { transform: scale(1); }
+}
+
+/* Ombre portée subtile */
+.shadow-sm {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08) !important;
+}
+
 /* Custom Select Dropdown pour Ventes */
 .custom-select-container {
     position: relative;
@@ -160,15 +253,29 @@
   <div class="tab-content" id="venteTabContent">
     <!-- Onglet Nouvelle Vente -->
     <div class="tab-pane fade show active" id="nouvelle-vente" role="tabpanel">
-      <div class="card bg-white mt-3">
-        <div class="card-header card-color">
-          <p class="h4 text-center text-uppercase font-weight-bold pt-2">
-            <i class="fa fa-shopping-cart"></i> {% trans "Nouvelle Vente" %}
-          </p>
+      <div class="card bg-white mt-3 shadow-sm border-0">
+        <div class="card-header bg-gradient-primary text-white border-0" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+          <div class="d-flex justify-content-between align-items-center">
+            <h4 class="mb-0 font-weight-bold">
+              <i class="fas fa-cash-register"></i> {% trans "Nouvelle Vente" %}
+            </h4>
+            <div class="text-right">
+              <small class="d-block"><i class="far fa-calendar-alt"></i> <span id="current_date"></span></small>
+              <small class="d-block"><i class="far fa-clock"></i> <span id="current_time"></span></small>
+            </div>
+          </div>
         </div>
-        <div class="card-body container-fluid">
-          <!-- Informations de la vente -->
-          <div class="row">
+        <div class="card-body container-fluid" style="background: #f8f9fa;">
+
+          <!-- Section 1: Informations Client et Configuration -->
+          <div class="card mb-3 border-0 shadow-sm">
+            <div class="card-header bg-white border-bottom">
+              <h6 class="mb-0 text-primary font-weight-bold">
+                <i class="fas fa-info-circle"></i> {% trans "Informations de la vente" %}
+              </h6>
+            </div>
+            <div class="card-body bg-white">
+              <div class="row">
             <div class="col-sm-3 mb-2">
               <label>{% trans "Client" %} *</label>
               <!-- Custom Select pour Client -->
@@ -237,18 +344,25 @@
               <label>{% trans "Numéro" %} ({% trans "optionnel" %})</label>
               <input id="vente_num" type="text" class="form-control" placeholder="{% trans 'Auto-généré' %}">
             </div>
-          </div>
+              </div>
 
-          <div class="row">
-            <div class="col-sm-12 mb-2">
-              <label>{% trans "Observations" %}</label>
-              <textarea id="vente_obs" class="form-control" rows="2" placeholder="{% trans 'Commentaires sur la vente...' %}"></textarea>
+              <div class="row">
+                <div class="col-sm-12 mb-2">
+                  <label class="font-weight-bold"><i class="fas fa-comment"></i> {% trans "Observations" %}</label>
+                  <textarea id="vente_obs" class="form-control" rows="2" placeholder="{% trans 'Commentaires ou notes sur la vente...' %}" style="resize: vertical;"></textarea>
+                </div>
+              </div>
             </div>
           </div>
 
-          <!-- Recherche de produits -->
-          <hr>
-          <h5><i class="fa fa-search"></i> {% trans "Ajouter des produits" %}</h5>
+          <!-- Section 2: Recherche et Ajout de Produits -->
+          <div class="card mb-3 border-0 shadow-sm">
+            <div class="card-header bg-white border-bottom">
+              <h6 class="mb-0 text-success font-weight-bold">
+                <i class="fas fa-box-open"></i> {% trans "Ajouter des produits" %}
+              </h6>
+            </div>
+            <div class="card-body bg-white">
           <div class="row">
             <div class="col-sm-3 mb-2">
               <label>{% trans "Référence" %}</label>
@@ -282,61 +396,87 @@
               <input id="vente_qte" type="number" class="form-control" min="1" value="1">
             </div>
           </div>
-          <div class="row">
-            <div class="col">
-              <button id="vente_add_line" class="btn btn-success">
-                <i class="fa fa-plus"></i> {% trans "Ajouter à la vente" %}
-              </button>
+              <div class="row">
+                <div class="col-12 text-center mt-2">
+                  <button id="vente_add_line" class="btn btn-success btn-lg shadow-sm">
+                    <i class="fas fa-plus-circle"></i> {% trans "Ajouter à la vente" %}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
-          <!-- Tableau des lignes de vente -->
-          <div class="row table-responsive m-auto rounded mt-3">
-            <table id="tbl_vente" class="table table-hover w-100">
-              <thead>
-                <tr class="text-uppercase bg-light">
-                  <th>{% trans "Référence" %}</th>
-                  <th>{% trans "Désignation" %}</th>
-                  <th>{% trans "Prix unitaire" %}</th>
-                  <th>{% trans "Quantité" %}</th>
-                  <th>{% trans "Total ligne" %}</th>
-                  <th>{% trans "Actions" %}</th>
-                </tr>
-              </thead>
-              <tbody id="vente_body"></tbody>
-              <tfoot>
-                <tr class="bg-light font-weight-bold">
-                  <td colspan="4" class="text-right">{% trans "Total HT" %}:</td>
-                  <td id="vente_total_ht">0.00</td>
-                  <td></td>
-                </tr>
-                <tr class="bg-light font-weight-bold">
-                  <td colspan="4" class="text-right">{% trans "Remise" %}:</td>
-                  <td id="vente_remise_montant">0.00</td>
-                  <td></td>
-                </tr>
-                <tr class="bg-primary text-white font-weight-bold">
-                  <td colspan="4" class="text-right">{% trans "Total TTC" %}:</td>
-                  <td id="vente_total_ttc">0.00</td>
-                  <td></td>
-                </tr>
-              </tfoot>
-            </table>
+          <!-- Section 3: Panier - Produits Ajoutés -->
+          <div class="card mb-3 border-0 shadow-sm">
+            <div class="card-header bg-white border-bottom">
+              <div class="d-flex justify-content-between align-items-center">
+                <h6 class="mb-0 text-info font-weight-bold">
+                  <i class="fas fa-shopping-cart"></i> {% trans "Panier" %} <span class="badge badge-info" id="cart_count">0</span>
+                </h6>
+                <button id="vente_clear" class="btn btn-sm btn-outline-danger">
+                  <i class="fas fa-trash"></i> {% trans "Vider le panier" %}
+                </button>
+              </div>
+            </div>
+            <div class="card-body bg-white p-0">
+              <div class="table-responsive">
+                <table id="tbl_vente" class="table table-hover mb-0">
+                  <thead class="thead-light">
+                    <tr>
+                      <th width="15%">{% trans "Référence" %}</th>
+                      <th width="35%">{% trans "Désignation" %}</th>
+                      <th width="15%" class="text-right">{% trans "Prix unitaire" %}</th>
+                      <th width="10%" class="text-center">{% trans "Quantité" %}</th>
+                      <th width="15%" class="text-right">{% trans "Total ligne" %}</th>
+                      <th width="10%" class="text-center">{% trans "Actions" %}</th>
+                    </tr>
+                  </thead>
+                  <tbody id="vente_body"></tbody>
+                </table>
+              </div>
+
+              <!-- Résumé Financier -->
+              <div class="border-top bg-light p-3">
+                <div class="row">
+                  <div class="col-md-6 offset-md-6">
+                    <table class="table table-sm mb-0">
+                      <tr>
+                        <td class="border-0 text-right font-weight-bold">{% trans "Total HT" %}:</td>
+                        <td class="border-0 text-right"><span id="vente_total_ht" class="h6 mb-0">0.00 DA</span></td>
+                      </tr>
+                      <tr>
+                        <td class="border-0 text-right font-weight-bold text-danger">{% trans "Remise" %}:</td>
+                        <td class="border-0 text-right text-danger"><span id="vente_remise_montant" class="h6 mb-0">0.00 DA</span></td>
+                      </tr>
+                      <tr class="bg-gradient-primary text-white">
+                        <td class="border-0 text-right font-weight-bold h5 mb-0 py-2">{% trans "Total TTC" %}:</td>
+                        <td class="border-0 text-right h4 mb-0 py-2"><span id="vente_total_ttc">0.00 DA</span></td>
+                      </tr>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- Actions de la vente -->
-          <div class="row mt-3">
-            <div class="col">
-              <button id="vente_save_draft" class="btn btn-outline-primary">
-                <i class="fa fa-save"></i> {% trans "Enregistrer (Brouillon)" %}
-              </button>
-              <button id="vente_complete" class="btn btn-success ml-2">
-                <i class="fa fa-check"></i> {% trans "Finaliser la vente" %}
-              </button>
-              <button id="vente_clear" class="btn btn-outline-secondary ml-2">
-                <i class="fa fa-trash"></i> {% trans "Vider" %}
-              </button>
-              <span id="vente_status" class="ml-3 font-weight-bold"></span>
+          <div class="card border-0 shadow-sm">
+            <div class="card-body bg-white">
+              <div class="row">
+                <div class="col-md-8">
+                  <div class="btn-group btn-group-lg" role="group">
+                    <button id="vente_save_draft" class="btn btn-outline-primary shadow-sm">
+                      <i class="fas fa-save"></i> {% trans "Enregistrer (Brouillon)" %}
+                    </button>
+                    <button id="vente_complete" class="btn btn-success shadow-sm">
+                      <i class="fas fa-check-circle"></i> {% trans "Finaliser la vente" %}
+                    </button>
+                  </div>
+                </div>
+                <div class="col-md-4 text-right">
+                  <span id="vente_status" class="font-weight-bold"></span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -370,8 +510,9 @@
                   <th>{% trans "Date" %}</th>
                   <th>{% trans "Client" %}</th>
                   <th>{% trans "Statut" %}</th>
-                  <th>{% trans "Paiement" %}</th>
                   <th>{% trans "Total TTC" %}</th>
+                  <th>{% trans "Payé" %}</th>
+                  <th>{% trans "Reste à payer" %}</th>
                   <th>{% trans "Actions" %}</th>
                 </tr>
               </thead>
@@ -494,6 +635,59 @@
       </div>
     </div>
 
+  </div>
+</div>
+
+<!-- Modal Ajouter un Paiement -->
+<div class="modal fade" id="addPaymentModal" tabindex="-1" role="dialog" aria-labelledby="addPaymentModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title" id="addPaymentModalLabel">Ajouter un paiement</h5>
+        <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="addPaymentForm">
+          <input type="hidden" id="payment_vente_id">
+          <div class="form-group">
+            <label>Vente</label>
+            <input type="text" id="payment_vente_numero" class="form-control" readonly>
+          </div>
+          <div class="form-group">
+            <label>Reste à payer</label>
+            <input type="text" id="payment_reste" class="form-control font-weight-bold text-danger" readonly>
+          </div>
+          <div class="form-group">
+            <label for="payment_montant">Montant du paiement <span class="text-danger">*</span></label>
+            <input type="number" step="0.01" class="form-control" id="payment_montant" required>
+          </div>
+          <div class="form-group">
+            <label for="payment_moyen">Moyen de paiement <span class="text-danger">*</span></label>
+            <select class="form-control" id="payment_moyen" required>
+              <option value="cash">Espèces</option>
+              <option value="card">Carte bancaire</option>
+              <option value="check">Chèque</option>
+              <option value="transfer">Virement</option>
+              <option value="other">Autre</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="payment_reference">Référence (N° chèque, virement, etc.)</label>
+            <input type="text" class="form-control" id="payment_reference">
+          </div>
+          <div class="form-group">
+            <label for="payment_notes">Notes</label>
+            <textarea class="form-control" id="payment_notes" rows="2"></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Annuler</button>
+        <button type="button" class="btn btn-primary" id="savePaymentBtn">Enregistrer le paiement</button>
+      </div>
+    </div>
   </div>
 </div>
 

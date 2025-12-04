@@ -117,9 +117,9 @@
       totalTVA += parseFloat(f.total_tva || 0) || 0;
       totalTTC += parseFloat(f.total_ttc || 0) || 0;
     });
-    $('#total-ht-display').text((totalHT).toFixed(2) + ' €');
-    $('#total-tva-display').text((totalTVA).toFixed(2) + ' €');
-    $('#total-ttc-display').text((totalTTC).toFixed(2) + ' €');
+    $('#total-ht-display').text((totalHT).toFixed(2) + ' DA');
+    $('#total-tva-display').text((totalTVA).toFixed(2) + ' DA');
+    $('#total-ttc-display').text((totalTTC).toFixed(2) + ' DA');
     $('#total-factures-count').text(rows.length);
   }
 

@@ -9,7 +9,7 @@
   const API_TYPES_PRIX = '/API/types-prix/';
 
   // Variable globale pour stocker le symbole de devise par défaut
-  let DEFAULT_CURRENCY_SYMBOL = '€'; // Valeur par défaut si non configurée
+  let DEFAULT_CURRENCY_SYMBOL = 'DA'; // Valeur par défaut si non configurée
   function asListSafe(data){
     if (Array.isArray(data)) return data;
     if (data && Array.isArray(data.results)) return data.results;
@@ -316,14 +316,27 @@
         const tr = $('<tr>');
         tr.append('<td>'+ref+'</td>');
         tr.append('<td>'+designation+'</td>');
-        tr.append('<td>'+price.toFixed(2)+' '+sym+'</td>');
-        tr.append('<td>'+qty+'</td>');
-        tr.append('<td>'+(total.toFixed(2))+' '+sym+'</td>');
-        tr.append('<td><button class="btn btn-sm btn-outline-danger" data-action="rm" data-idx="'+idx+'">Supprimer</button></td>');
+        tr.append('<td class="text-right">'+price.toFixed(2)+' '+sym+'</td>');
+        tr.append('<td class="text-center">'+qty+'</td>');
+        tr.append('<td class="text-right"><strong>'+(total.toFixed(2))+' '+sym+'</strong></td>');
+        tr.append('<td class="text-center"><button class="btn btn-sm btn-outline-danger" data-action="rm" data-idx="'+idx+'"><i class="fa fa-trash"></i></button></td>');
         $tbody.append(tr);
       });
     }
+    // Mettre à jour le compteur de panier
+    updateCartCount();
     recalcTotals();
+  }
+
+  function updateCartCount(){
+    const count = LINES.length;
+    const $badge = $('#cart_count');
+    if($badge.length){
+      $badge.text(count);
+      // Animation visuelle lors du changement
+      $badge.addClass('animate-pulse');
+      setTimeout(function(){ $badge.removeClass('animate-pulse'); }, 500);
+    }
   }
 
   function recalcTotals(){
@@ -546,7 +559,7 @@
 
     $tbody.empty();
     const list = asList(rows);
-    if(!list.length){ $tbody.append('<tr><td colspan="7" class="text-center text-muted">Aucune vente</td></tr>'); }
+    if(!list.length){ $tbody.append('<tr><td colspan="8" class="text-center text-muted">Aucune vente</td></tr>'); }
     else {
       list.forEach(function(v){
         const tr = $('<tr>').css('cursor', 'pointer').addClass('sale-row');
@@ -555,13 +568,21 @@
         tr.append('<td>'+(v.date_vente || '').toString().replace('T',' ').slice(0,16)+'</td>');
         tr.append('<td>'+(v.client_nom || '')+' '+(v.client_prenom || '')+'</td>');
         tr.append('<td>'+ (v.statut || '') +'</td>');
-        tr.append('<td>'+ (v.type_paiement || '') +'</td>');
-        tr.append('<td>'+ (typeof v.total_ttc!=="undefined" ? v.total_ttc : '') +'</td>');
+        const totalTtc = parseFloat(v.total_ttc) || 0;
+        const montantPaye = parseFloat(v.montant_paye) || 0;
+        const reste = typeof v.reste_a_payer !== "undefined" ? parseFloat(v.reste_a_payer) : totalTtc;
+        tr.append('<td>'+ totalTtc.toFixed(2) +' DA</td>');
+        tr.append('<td>'+ montantPaye.toFixed(2) +' DA</td>');
+        const resteClass = reste <= 0 ? 'text-success' : (reste < totalTtc ? 'text-warning' : 'text-danger');
+        tr.append('<td class="'+resteClass+'"><strong>'+ reste.toFixed(2) +' DA</strong></td>');
         var actions = '';
         if((v.statut||'') === 'draft'){
           actions += '<button class="btn btn-sm btn-success finalize-sale" data-id="'+v.id+'"><i class="fa fa-check"></i> Finaliser</button> ';
         }
-        actions += '<button class="btn btn-sm btn-info view-sale-details" data-id="'+v.id+'"><i class="fa fa-eye"></i> Détails</button>';
+        actions += '<button class="btn btn-sm btn-info view-sale-details" data-id="'+v.id+'"><i class="fa fa-eye"></i> Détails</button> ';
+        if(reste > 0) {
+          actions += '<button class="btn btn-sm btn-primary add-payment" data-id="'+v.id+'" data-reste="'+reste+'"><i class="fa fa-money"></i> Payer</button>';
+        }
         tr.append('<td>'+ (actions || '') +'</td>');
         $tbody.append(tr);
       });
@@ -677,8 +698,9 @@
     html += '<div class="card-body">';
     html += '<p class="mb-2"><strong><i class="fa fa-calendar"></i> Date:</strong> '+(sale.date_vente || '').toString().replace('T',' ').slice(0,16)+'</p>';
     html += '<p class="mb-2"><strong><i class="fa fa-user"></i> Client:</strong> '+(sale.client_nom || '')+' '+(sale.client_prenom || '')+'</p>';
-    html += '<p class="mb-2"><strong><i class="fa fa-tag"></i> Statut:</strong> <span class="badge badge-'+(sale.statut==='completed'?'success':'warning')+'">'+(sale.statut || '')+'</span></p>';
-    html += '<p class="mb-2"><strong><i class="fa fa-credit-card"></i> Paiement:</strong> '+(sale.type_paiement || '')+'</p>';
+    const statutVente = sale.statut === 'completed' ? 'Finalisée' : (sale.statut === 'draft' ? 'Brouillon' : sale.statut);
+    html += '<p class="mb-2"><strong><i class="fa fa-file-alt"></i> Statut de la vente:</strong> <span class="badge badge-'+(sale.statut==='completed'?'success':'warning')+'">'+statutVente+'</span></p>';
+    html += '<p class="mb-2"><strong><i class="fa fa-credit-card"></i> Mode de paiement:</strong> '+(sale.type_paiement_display || sale.type_paiement || '')+'</p>';
     html += '<p class="mb-0"><strong><i class="fa fa-warehouse"></i> Entrepôt:</strong> '+(sale.warehouse_name || sale.warehouse || 'N/A')+'</p>';
     html += '</div></div>';
     html += '</div>';
@@ -687,12 +709,46 @@
     html += '<div class="card border-success mb-3">';
     html += '<div class="card-header bg-success text-white"><i class="fa fa-money-bill-wave"></i> Montants</div>';
     html += '<div class="card-body">';
-    html += '<p class="mb-2"><strong>Total HT:</strong> <span class="float-right">'+(sale.total_ht || 0)+' '+(sale.currency_symbol || '€')+'</span></p>';
+    html += '<p class="mb-2"><strong>Total HT:</strong> <span class="float-right">'+(sale.total_ht || 0)+' '+(sale.currency_symbol || 'DA')+'</span></p>';
     if(sale.remise_percent > 0){
-      html += '<p class="mb-2"><strong>Remise ('+(sale.remise_percent || 0)+'%):</strong> <span class="float-right text-danger">-'+((sale.total_ht || 0) * (sale.remise_percent || 0) / 100).toFixed(2)+' '+(sale.currency_symbol || '€')+'</span></p>';
+      html += '<p class="mb-2"><strong>Remise ('+(sale.remise_percent || 0)+'%):</strong> <span class="float-right text-danger">-'+((sale.total_ht || 0) * (sale.remise_percent || 0) / 100).toFixed(2)+' '+(sale.currency_symbol || 'DA')+'</span></p>';
     }
     html += '<hr class="my-2">';
-    html += '<h5 class="mb-0"><strong>Total TTC:</strong> <span class="float-right text-success">'+(sale.total_ttc || 0)+' '+(sale.currency_symbol || '€')+'</span></h5>';
+    html += '<h5 class="mb-0"><strong>Total TTC:</strong> <span class="float-right text-success">'+(sale.total_ttc || 0)+' '+(sale.currency_symbol || 'DA')+'</span></h5>';
+    html += '</div></div>';
+
+    // Section Paiement
+    const totalTtc = parseFloat(sale.total_ttc) || 0;
+    const montantPaye = parseFloat(sale.montant_paye) || 0;
+    // Si reste_a_payer n'est pas défini, calculer : total - payé
+    const resteAPayer = (typeof sale.reste_a_payer !== 'undefined') ? parseFloat(sale.reste_a_payer) : (totalTtc - montantPaye);
+    const isPaye = resteAPayer <= 0;
+    const isPartiel = montantPaye > 0 && resteAPayer > 0;
+
+    // Déterminer le statut et les couleurs
+    let statutPaiement = 'NON PAYÉ';
+    let badgeClass = 'danger';
+    let borderClass = 'danger';
+    if(isPaye) {
+      statutPaiement = 'PAYÉ';
+      badgeClass = 'success';
+      borderClass = 'success';
+    } else if(isPartiel) {
+      statutPaiement = 'PARTIELLEMENT PAYÉ';
+      badgeClass = 'warning';
+      borderClass = 'warning';
+    }
+
+    html += '<div class="card border-'+borderClass+' mb-3">';
+    html += '<div class="card-header bg-'+borderClass+' text-white"><i class="fa fa-wallet"></i> État du paiement</div>';
+    html += '<div class="card-body">';
+    html += '<p class="mb-2"><strong>Montant payé:</strong> <span class="float-right text-success">'+(montantPaye.toFixed(2))+' '+(sale.currency_symbol || 'DA')+'</span></p>';
+    html += '<p class="mb-2"><strong>Reste à payer:</strong> <span class="float-right '+(isPaye ? 'text-success' : 'text-danger')+'"><strong>'+(resteAPayer.toFixed(2))+' '+(sale.currency_symbol || 'DA')+'</strong></span></p>';
+    html += '<hr class="my-2">';
+    html += '<p class="mb-0"><strong>Statut paiement:</strong> <span class="badge badge-'+badgeClass+'">'+statutPaiement+'</span></p>';
+    if(!isPaye) {
+      html += '<button class="btn btn-primary btn-block mt-3 add-payment" data-id="'+sale.id+'" data-reste="'+resteAPayer+'"><i class="fa fa-money"></i> Ajouter un paiement</button>';
+    }
     html += '</div></div>';
     if(sale.observations){
       html += '<div class="alert alert-info mb-0"><strong><i class="fa fa-comment"></i> Observations:</strong><br>'+(sale.observations || '')+'</div>';
@@ -721,7 +777,7 @@
         const prix = parseFloat(ligne.prixU_snapshot || 0);
         const qty = parseInt(ligne.quantite || 0, 10);
         const total = prix * qty;
-        const sym = ligne.currency_symbol || sale.currency_symbol || '€';
+        const sym = ligne.currency_symbol || sale.currency_symbol || 'DA';
         html += '<tr>';
         html += '<td><code>'+ref+'</code></td>';
         html += '<td>'+desig+'</td>';
@@ -736,9 +792,138 @@
     }
     html += '</div>';
     html += '</div>';
+
+    // Section Historique des paiements
+    const paiements = sale.paiements || [];
+    if(paiements.length > 0) {
+      html += '<div class="row mt-4">';
+      html += '<div class="col-12">';
+      html += '<h5 class="mb-3"><i class="fa fa-history"></i> Historique des paiements <span class="badge badge-info">'+paiements.length+'</span></h5>';
+      html += '<div class="table-responsive">';
+      html += '<table class="table table-sm table-bordered table-hover">';
+      html += '<thead class="thead-light">';
+      html += '<tr><th>Date</th><th>Montant</th><th>Moyen</th><th>Référence</th><th>Notes</th><th>Par</th></tr>';
+      html += '</thead>';
+      html += '<tbody>';
+      paiements.forEach(function(p){
+        const date = (p.date_paiement || '').toString().replace('T',' ').slice(0,16);
+        const montant = parseFloat(p.montant || 0).toFixed(2);
+        const moyen = p.moyen_paiement_display || p.moyen_paiement || '';
+        const ref = p.reference || '-';
+        const notes = p.notes || '-';
+        const user = p.created_by_username || 'N/A';
+        html += '<tr>';
+        html += '<td><small>'+date+'</small></td>';
+        html += '<td class="text-right"><strong class="text-success">'+montant+' '+(sale.currency_symbol || 'DA')+'</strong></td>';
+        html += '<td>'+moyen+'</td>';
+        html += '<td><small>'+ref+'</small></td>';
+        html += '<td><small>'+notes+'</small></td>';
+        html += '<td><small>'+user+'</small></td>';
+        html += '</tr>';
+      });
+      html += '</tbody>';
+      html += '</table>';
+      html += '</div>';
+      html += '</div>';
+      html += '</div>';
+    }
+
     html += '</div>';
 
     $container.html(html);
+  }
+
+  // ==================== GESTION DES PAIEMENTS ====================
+  function openAddPaymentModal(venteId, reste) {
+    // Récupérer les informations de la vente
+    const vente = SALES_LIST.find(v => v.id == venteId);
+    if(!vente) {
+      alert('Vente introuvable');
+      return;
+    }
+
+    $('#payment_vente_id').val(venteId);
+    $('#payment_vente_numero').val(vente.numero || venteId);
+    $('#payment_reste').val(reste.toFixed(2) + ' DA');
+    $('#payment_montant').val(reste.toFixed(2));
+    $('#payment_moyen').val('cash');
+    $('#payment_reference').val('');
+    $('#payment_notes').val('');
+
+    $('#addPaymentModal').modal('show');
+  }
+
+  function savePayment() {
+    const venteId = $('#payment_vente_id').val();
+    const montant = parseFloat($('#payment_montant').val());
+    const moyen = $('#payment_moyen').val();
+    const reference = $('#payment_reference').val();
+    const notes = $('#payment_notes').val();
+
+    if(!montant || montant <= 0) {
+      alert('Veuillez saisir un montant valide');
+      return;
+    }
+
+    const data = {
+      vente: venteId,
+      montant: montant,
+      moyen_paiement: moyen,
+      reference: reference,
+      notes: notes
+    };
+
+    $.ajax({
+      url: '/API/paiements-vente/',
+      method: 'POST',
+      contentType: 'application/json',
+      headers: { 'X-CSRFToken': getCSRFToken() },
+      data: JSON.stringify(data),
+      dataType: 'json'
+    }).done(function(response){
+      dbg('[Payment] Saved:', response);
+      $('#addPaymentModal').modal('hide');
+      alert('Paiement enregistré avec succès!');
+      loadSalesList(); // Rafraîchir la liste
+
+      // Si la modal de détails est ouverte, la rafraîchir aussi
+      if($('#saleDetailsModal').hasClass('show')) {
+        showSaleDetailsModal(venteId);
+      }
+    }).fail(function(xhr){
+      dbg('[Payment] Save failed:', xhr.status, xhr.responseText);
+      alert('Erreur lors de l\'enregistrement du paiement: ' + (xhr.responseJSON?.detail || xhr.statusText));
+    });
+  }
+
+  // Fonction pour afficher l'horloge en temps réel
+  function updateClock(){
+    const now = new Date();
+
+    // Format de la date: JJ/MM/AAAA
+    const day = String(now.getDate()).padStart(2, '0');
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const year = now.getFullYear();
+    const dateStr = day + '/' + month + '/' + year;
+
+    // Format de l'heure: HH:MM:SS
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+    const timeStr = hours + ':' + minutes + ':' + seconds;
+
+    // Mettre à jour les éléments
+    const $date = $('#current_date');
+    const $time = $('#current_time');
+    if($date.length) $date.text(dateStr);
+    if($time.length) $time.text(timeStr);
+  }
+
+  function startClock(){
+    // Mettre à jour immédiatement
+    updateClock();
+    // Mettre à jour toutes les secondes
+    setInterval(updateClock, 1000);
   }
 
   function init(){
@@ -747,6 +932,9 @@
       return; // not on vente page
     }
     LINES = []; // reset
+
+    // Démarrer l'horloge
+    startClock();
 
     // Charger la configuration système en premier pour obtenir la devise
     loadSystemConfig().always(function(){
@@ -819,6 +1007,15 @@
     $(document).off('click', '#add_currency').on('click', '#add_currency', function(e){ e.preventDefault(); addCurrency(); });
     $(document).off('click', '#add_rate').on('click', '#add_rate', function(e){ e.preventDefault(); addRate(); });
     $(document).off('click', '#convert_btn').on('click', '#convert_btn', function(e){ e.preventDefault(); convertAmount(); });
+
+    // payment buttons
+    $(document).off('click', '.add-payment').on('click', '.add-payment', function(e){
+      e.stopPropagation();
+      const venteId = $(this).data('id');
+      const reste = parseFloat($(this).data('reste'));
+      openAddPaymentModal(venteId, reste);
+    });
+    $(document).off('click', '#savePaymentBtn').on('click', '#savePaymentBtn', function(e){ e.preventDefault(); savePayment(); });
 
     // when opening the Devises tab, refresh lists
     $('a[data-toggle="tab"][href="#devises"]').on('shown.bs.tab', function(){ loadCurrencies(); loadRates(); });

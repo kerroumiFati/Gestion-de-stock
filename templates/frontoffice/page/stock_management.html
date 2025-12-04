@@ -16,6 +16,9 @@
     box-shadow: 0 4px 20px rgba(0,0,0,0.08);
     transition: transform 0.3s ease, box-shadow 0.3s ease;
     border: none;
+    min-height: 120px;
+    display: flex;
+    align-items: center;
 }
 
 .stat-card:hover {
@@ -41,10 +44,12 @@
 .stat-icon.info { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
 
 .stat-value {
-    font-size: 2rem;
+    font-size: 1.5rem;
     font-weight: 700;
     color: #2d3748;
     margin: 0;
+    line-height: 1.2;
+    word-wrap: break-word;
 }
 
 .stat-label {
@@ -1419,9 +1424,6 @@
                         <button class="action-btn history" title="Historique" onclick="showHistory(${p.id})">
                             <i class="fas fa-history"></i>
                         </button>
-                        <button class="action-btn edit" title="Modifier" onclick="editProduct(${p.id})">
-                            <i class="fas fa-pen"></i>
-                        </button>
                     </td>
                 </tr>
             `;
@@ -1516,12 +1518,6 @@
             .catch(err => {
                 content.innerHTML = '<div class="text-center py-4 text-danger"><i class="fas fa-exclamation-circle fa-3x mb-3"></i><p>Erreur de chargement</p></div>';
             });
-    };
-
-    window.editProduct = function(productId) {
-        // Rediriger vers la page de modification du produit
-        window.show && show('produits');
-        // Ou ouvrir un modal d'édition
     };
 
     window.submitAdjustment = function() {

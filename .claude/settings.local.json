@@ -4,7 +4,10 @@
       "Bash(copy /Y \"C:\\Users\\KB\\Documents\\autre\\GestionStock-django-master\\GestionStock-django-master\\static\\script\\redirect.js\" \"C:\\Users\\KB\\Documents\\autre\\GestionStock-django-master\\GestionStock-django-master\\staticfiles\\script\\redirect.js\")",
       "Bash(copy /Y \"C:\\Users\\KB\\Documents\\autre\\GestionStock-django-master\\GestionStock-django-master\\static\\script\\client.js\" \"C:\\Users\\KB\\Documents\\autre\\GestionStock-django-master\\GestionStock-django-master\\staticfiles\\script\\client.js\")",
       "Bash(cmd /c copy:*)",
-      "mcp__gestion-stock__list_categories"
+      "mcp__gestion-stock__list_categories",
+      "Bash(python:*)",
+      "Bash(copy /Y \"static\\script\\vente.js\" \"staticfiles\\script\\vente.js\")",
+      "Bash(copy /Y \"C:\\Users\\KB\\Documents\\autre\\GestionStock-django-master\\GestionStock-django-master\\static\\script\\vente.js\" \"C:\\Users\\KB\\Documents\\autre\\GestionStock-django-master\\GestionStock-django-master\\staticfiles\\script\\vente.js\")"
     ],
     "deny": [],
     "ask": []

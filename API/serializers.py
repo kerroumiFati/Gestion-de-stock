@@ -189,7 +189,7 @@ class PrixProduitSerializer(serializers.ModelSerializer):
 
     def get_prix_formatted(self, obj):
         currency = obj.get_effective_currency()
-        symbol = currency.symbol if currency else '€'
+        symbol = currency.symbol if currency else 'DA'
         return f"{obj.prix} {symbol}"
 
     def get_is_valid(self, obj):
@@ -198,7 +198,7 @@ class PrixProduitSerializer(serializers.ModelSerializer):
 class FournisseurSerializer(serializers.ModelSerializer):
     class Meta:
         model = Fournisseur
-        fields = ('id','libelle', 'telephone','email','adresse')
+        fields = ('id','libelle', 'telephone','email','adresse', 'nif', 'nis', 'ai', 'rc')
 class ProduitSerializer(serializers.ModelSerializer):
     stock_mouvements = serializers.SerializerMethodField()
     currency_code = serializers.CharField(source='currency.code', read_only=True)
@@ -243,7 +243,7 @@ class ProduitSerializer(serializers.ModelSerializer):
     
     def get_prix_formatted(self, obj):
         currency = obj.currency or Currency.get_default()
-        symbol = currency.symbol if currency else '€'
+        symbol = currency.symbol if currency else 'DA'
         return f"{obj.prixU} {symbol}"
     
     def get_stock_status(self, obj):
@@ -261,7 +261,8 @@ class ClientSerializer(serializers.ModelSerializer):
     class Meta:
         model = Client
         fields = ('id', 'nom', 'prenom', 'email', 'telephone', 'adresse', 'lat', 'lng',
-                  'secteur', 'secteur_nom', 'secteur_code', 'secteur_couleur', 'produits')
+                  'secteur', 'secteur_nom', 'secteur_code', 'secteur_couleur', 'produits',
+                  'nif', 'nis', 'ai', 'rc')
 
 class AchatSerializer(serializers.ModelSerializer):
     fournisseur_nom = serializers.CharField(source='fournisseur.libelle', read_only=True)
@@ -541,11 +542,23 @@ class LigneVenteSerializer(serializers.ModelSerializer):
     
     def get_prix_formatted(self, obj):
         currency = obj.currency or obj.vente.get_sale_currency()
-        symbol = currency.symbol if currency else '€'
+        symbol = currency.symbol if currency else 'DA'
         return f"{obj.prixU_snapshot} {symbol}"
+
+class PaiementVenteSerializer(serializers.ModelSerializer):
+    moyen_paiement_display = serializers.CharField(source='get_moyen_paiement_display', read_only=True)
+    created_by_username = serializers.CharField(source='created_by.username', read_only=True)
+
+    class Meta:
+        model = PaiementVente
+        fields = ['id', 'vente', 'date_paiement', 'montant', 'moyen_paiement',
+                 'moyen_paiement_display', 'reference', 'notes', 'created_by',
+                 'created_by_username', 'created_at']
+        read_only_fields = ['created_by', 'created_at']
 
 class VenteSerializer(serializers.ModelSerializer):
     lignes = LigneVenteSerializer(many=True, read_only=True)
+    paiements = PaiementVenteSerializer(many=True, read_only=True)
     client_nom = serializers.CharField(source='client.nom', read_only=True)
     client_prenom = serializers.CharField(source='client.prenom', read_only=True)
     statut_display = serializers.CharField(source='get_statut_display', read_only=True)
@@ -556,7 +569,10 @@ class VenteSerializer(serializers.ModelSerializer):
     warehouse_name = serializers.CharField(source='warehouse.name', read_only=True)
     nombre_articles = serializers.SerializerMethodField()
     total_formatted = serializers.SerializerMethodField()
-    
+    montant_paye = serializers.SerializerMethodField()
+    reste_a_payer = serializers.SerializerMethodField()
+    is_paye = serializers.SerializerMethodField()
+
     class Meta:
         model = Vente
         fields = ['id', 'numero', 'date_vente', 'client', 'client_nom', 'client_prenom',
@@ -564,16 +580,26 @@ class VenteSerializer(serializers.ModelSerializer):
                  'warehouse', 'warehouse_code', 'warehouse_name',
                  'currency', 'currency_code', 'currency_symbol', 'exchange_rate_snapshot',
                  'total_ht', 'total_ttc', 'total_formatted', 'remise_percent', 'observations',
-                 'bon_livraison', 'facture', 'lignes', 'nombre_articles']
+                 'bon_livraison', 'facture', 'lignes', 'paiements', 'nombre_articles',
+                 'montant_paye', 'reste_a_payer', 'is_paye']
         read_only_fields = ['total_ht', 'total_ttc']
     
     def get_nombre_articles(self, obj):
         return obj.lignes.count()
-    
+
     def get_total_formatted(self, obj):
         currency = obj.get_sale_currency()
-        symbol = currency.symbol if currency else '€'
+        symbol = currency.symbol if currency else 'DA'
         return f"{obj.total_ttc} {symbol}"
+
+    def get_montant_paye(self, obj):
+        return float(obj.get_montant_paye())
+
+    def get_reste_a_payer(self, obj):
+        return float(obj.get_reste_a_payer())
+
+    def get_is_paye(self, obj):
+        return obj.is_paye()
 
 class VenteCreateSerializer(serializers.ModelSerializer):
     lignes = LigneVenteSerializer(many=True)
@@ -1095,10 +1121,10 @@ class PromotionListSerializer(serializers.ModelSerializer):
         if obj.type_promotion == 'pourcentage':
             return f"-{obj.valeur_pourcentage}%"
         elif obj.type_promotion == 'valeur_fixe':
-            symbol = obj.currency.symbol if obj.currency else '€'
+            symbol = obj.currency.symbol if obj.currency else 'DA'
             return f"-{obj.valeur_fixe} {symbol}"
         elif obj.type_promotion == 'prix_special':
-            symbol = obj.currency.symbol if obj.currency else '€'
+            symbol = obj.currency.symbol if obj.currency else 'DA'
             return f"{obj.prix_special} {symbol}"
         elif obj.type_promotion == 'achetez_x_payez_y':
             return f"Achetez {obj.quantite_achat}, payez {obj.quantite_offerte}"

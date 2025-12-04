@@ -1270,6 +1270,42 @@ class PermissionViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = PermissionSerializer
     permission_classes = [IsAuthenticated, IsAdminUser]
 
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def my_permissions(request):
+    """
+    Retourne les permissions de l'utilisateur connecté.
+    Utilisé par le frontend pour afficher/cacher des éléments UI.
+    """
+    user = request.user
+
+    # Récupérer toutes les permissions de l'utilisateur
+    # (via ses groupes + permissions directes)
+    if user.is_superuser:
+        # Les superusers ont toutes les permissions
+        all_perms = Permission.objects.all()
+        perm_codenames = list(all_perms.values_list('codename', flat=True))
+    else:
+        # Permissions via groupes
+        group_perms = Permission.objects.filter(group__user=user)
+        # Permissions directes
+        user_perms = user.user_permissions.all()
+        # Combiner
+        all_perms = (group_perms | user_perms).distinct()
+        perm_codenames = list(all_perms.values_list('codename', flat=True))
+
+    # Retourner aussi quelques infos utiles sur l'utilisateur
+    return Response({
+        'user_id': user.id,
+        'username': user.username,
+        'is_staff': user.is_staff,
+        'is_superuser': user.is_superuser,
+        'permissions': perm_codenames,
+        'groups': list(user.groups.values_list('name', flat=True))
+    })
+
+
 from .models import AuditLog
 from .serializers import AuditLogSerializer
 
@@ -1988,6 +2024,27 @@ class ProductStockViewSet(WarehouseRelatedTenantMixin, viewsets.ModelViewSet):
 class LigneVenteViewSet(viewsets.ModelViewSet):
     queryset = LigneVente.objects.all()
     serializer_class = LigneVenteSerializer
+
+class PaiementVenteViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet pour gérer les paiements des ventes.
+    Permet de créer, lister, modifier et supprimer des paiements.
+    """
+    queryset = PaiementVente.objects.all()
+    serializer_class = PaiementVenteSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        """Filtrer les paiements par vente si le paramètre est fourni"""
+        queryset = super().get_queryset()
+        vente_id = self.request.query_params.get('vente', None)
+        if vente_id:
+            queryset = queryset.filter(vente_id=vente_id)
+        return queryset.select_related('vente', 'created_by')
+
+    def perform_create(self, serializer):
+        """Associer l'utilisateur actuel au paiement"""
+        serializer.save(created_by=self.request.user)
 
 # API pour les Devises et Taux de Change
 class SystemConfigView(APIView):

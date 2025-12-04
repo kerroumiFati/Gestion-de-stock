@@ -86,7 +86,7 @@ from django.utils.formats import localize
 class Currency(models.Model):
     code = models.CharField(max_length=3, unique=True, help_text="Code ISO 4217 (ex: USD, EUR, MAD)")
     name = models.CharField(max_length=50, help_text="Nom de la devise")
-    symbol = models.CharField(max_length=5, help_text="Symbole (ex: $, €, DH)")
+    symbol = models.CharField(max_length=5, help_text="Symbole (ex: $, DA, DH)")
     is_default = models.BooleanField(default=False, help_text="Devise par défaut du système")
     is_active = models.BooleanField(default=True)
     
@@ -216,6 +216,16 @@ class Fournisseur(models.Model):
     telephone = models.CharField("Téléphone", max_length=20)
     email = models.EmailField("E-Mail", blank=True)
     adresse = models.CharField(max_length=200)
+
+    # Informations fiscales (optionnelles)
+    nif = models.CharField("NIF (Numéro d'Identification Fiscale)", max_length=20, blank=True,
+                          help_text="Numéro d'Identification Fiscale")
+    nis = models.CharField("NIS (Numéro d'Identification Statistique)", max_length=20, blank=True,
+                          help_text="Numéro d'Identification Statistique")
+    ai = models.CharField("AI (Article d'Imposition)", max_length=20, blank=True,
+                         help_text="Article d'Imposition")
+    rc = models.CharField("RC (Registre de Commerce)", max_length=20, blank=True,
+                         help_text="Numéro du Registre de Commerce")
 
     class Meta:
         ordering = ["libelle",]
@@ -403,7 +413,7 @@ class Produit(models.Model):
         ]
     
     def __str__(self):
-        currency_symbol = self.currency.symbol if self.currency else Currency.get_default().symbol if Currency.get_default() else '€'
+        currency_symbol = self.currency.symbol if self.currency else Currency.get_default().symbol if Currency.get_default() else 'DA'
         stock_status = self.get_stock_status_display()
         return f'{self.reference} - {self.designation} ({self.quantite} {self.get_unite_mesure_display()}) {stock_status}'
     
@@ -558,6 +568,16 @@ class Client(models.Model):
                              help_text="Latitude GPS")
     lng = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True,
                              help_text="Longitude GPS")
+
+    # Informations fiscales (optionnelles)
+    nif = models.CharField("NIF (Numéro d'Identification Fiscale)", max_length=20, blank=True,
+                          help_text="Numéro d'Identification Fiscale")
+    nis = models.CharField("NIS (Numéro d'Identification Statistique)", max_length=20, blank=True,
+                          help_text="Numéro d'Identification Statistique")
+    ai = models.CharField("AI (Article d'Imposition)", max_length=20, blank=True,
+                         help_text="Article d'Imposition")
+    rc = models.CharField("RC (Registre de Commerce)", max_length=20, blank=True,
+                         help_text="Numéro du Registre de Commerce")
 
     def __str__(self):
         return '{} {}'.format(self.nom, self.prenom)
@@ -939,7 +959,7 @@ class Vente(models.Model):
         unique_together = ['company', 'numero']
 
     def __str__(self):
-        currency_symbol = self.currency.symbol if self.currency else Currency.get_default().symbol if Currency.get_default() else '€'
+        currency_symbol = self.currency.symbol if self.currency else Currency.get_default().symbol if Currency.get_default() else 'DA'
         return f"Vente {self.numero} - {self.client} ({self.total_ttc} {currency_symbol}) ({self.statut})"
 
     def get_sale_currency(self):
@@ -985,6 +1005,18 @@ class Vente(models.Model):
         )
         return converted_amount if converted_amount is not None else self.total_ttc
 
+    def get_montant_paye(self):
+        """Calculer le montant total payé pour cette vente"""
+        return self.paiements.aggregate(total=models.Sum('montant'))['total'] or Decimal('0')
+
+    def get_reste_a_payer(self):
+        """Calculer le reste à payer"""
+        return self.total_ttc - self.get_montant_paye()
+
+    def is_paye(self):
+        """Vérifier si la vente est entièrement payée"""
+        return self.get_reste_a_payer() <= 0
+
 class LigneVente(models.Model):
     vente = models.ForeignKey(Vente, on_delete=models.CASCADE, related_name='lignes')
     produit = models.ForeignKey(Produit, on_delete=models.PROTECT)
@@ -1010,6 +1042,37 @@ class LigneVente(models.Model):
                 return converted_price * self.quantite
 
         return self.prixU_snapshot * self.quantite
+
+
+class PaiementVente(models.Model):
+    """
+    Paiements effectués pour une vente.
+    Permet de gérer les paiements partiels et multiples pour une même vente.
+    """
+    MOYENS_PAIEMENT = (
+        ('cash', 'Espèces'),
+        ('card', 'Carte bancaire'),
+        ('check', 'Chèque'),
+        ('transfer', 'Virement'),
+        ('other', 'Autre'),
+    )
+
+    vente = models.ForeignKey(Vente, on_delete=models.CASCADE, related_name='paiements')
+    date_paiement = models.DateTimeField(default=timezone.now, help_text="Date du paiement")
+    montant = models.DecimalField(max_digits=12, decimal_places=2, help_text="Montant payé")
+    moyen_paiement = models.CharField(max_length=10, choices=MOYENS_PAIEMENT, default='cash')
+    reference = models.CharField(max_length=100, blank=True, help_text="Numéro de chèque, référence de virement, etc.")
+    notes = models.TextField(blank=True, help_text="Notes additionnelles sur le paiement")
+    created_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='paiements_crees')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-date_paiement']
+        verbose_name = "Paiement de vente"
+        verbose_name_plural = "Paiements de ventes"
+
+    def __str__(self):
+        return f"Paiement {self.montant} DA pour {self.vente.numero} - {self.date_paiement.strftime('%d/%m/%Y')}"
 
 
 # ==========================================
@@ -1534,6 +1597,8 @@ class PagePermission(models.Model):
             ('view_distribution_dashboard', 'Peut voir le tableau de bord distribution'),
             ('view_config_clients_chauffeurs', 'Peut voir la config clients/chauffeurs'),
             ('manage_config_clients_chauffeurs', 'Peut gérer la config clients/chauffeurs'),
+            ('view_assignation_clients', 'Peut voir l\'onglet Assignation Clients'),
+            ('view_config_par_jour', 'Peut voir l\'onglet Configuration par Jour'),
             ('view_stats_livreurs', 'Peut voir les statistiques livreurs'),
             ('view_app_mobile_livreurs', 'Peut accéder à l\'app mobile livreurs'),
             ('view_carte_gps_livreurs', 'Peut voir la carte GPS livreurs'),
@@ -1770,7 +1835,7 @@ class Promotion(models.Model):
         decimal_places=2,
         null=True,
         blank=True,
-        help_text="Montant fixe de réduction (ex: 2.00 €)"
+        help_text="Montant fixe de réduction (ex: 2.00 DA)"
     )
     prix_special = models.DecimalField(
         "Prix spécial",

@@ -231,6 +231,7 @@ router.register(r'stocks', views.ProductStockViewSet)
 router.register(r'inventaires', views.InventorySessionViewSet)
 router.register(r'ventes', views.VenteViewSet)
 router.register(r'lignes-vente', views.LigneVenteViewSet)
+router.register(r'paiements-vente', views.PaiementVenteViewSet)
 router.register(r'currencies', views.CurrencyViewSet)
 router.register(r'exchange-rates', views.ExchangeRateViewSet)
 router.register(r'codes-prix', views.CodePrixViewSet)
@@ -288,6 +289,7 @@ urlpatterns = [
     path('categories_raw/', views.categories_raw),
     path('api-auth/', include('rest_framework.urls', namespace='rest_framework')),
     path('system-config/', views.SystemConfigView.as_view(), name='system-config'),
+    path('my-permissions/', views.my_permissions, name='my-permissions'),
     #path('clients/<int:pk>/', views.ClientDetail.as_view())
     re_path(r'^prod/count/$', views.CountViewSet.as_view(), name='produits-count'),
     re_path(r'^statistics/charts/$', views.StatisticsChartsViewSet.as_view(), name='statistics-charts'),
