@@ -7,7 +7,6 @@
   const API_EXCHANGE_RATES = '/API/exchange-rates/';
   const API_WAREHOUSES = '/API/entrepots/';
   const API_TYPES_PRIX = '/API/types-prix/';
-  const API_PROMOTIONS = '/API/promotions/';
 
   // Variable globale pour stocker le symbole de devise par défaut
   let DEFAULT_CURRENCY_SYMBOL = 'DA'; // Valeur par défaut si non configurée
@@ -293,62 +292,6 @@
   // Cache produits par id pour récupérer prix et devise
   const PRODUCTS_CACHE = {};
 
-  // Cache des promotions applicables par produit
-  const PROMOTIONS_CACHE = {};
-
-  // Fonction pour charger les promotions applicables à un produit
-  function loadPromotionsForProduct(produitId){
-    return $.ajax({
-      url: API_PROMOTIONS + 'applicables/?produit_id=' + produitId,
-      method: 'GET',
-      dataType: 'json'
-    }).done(function(data){
-      PROMOTIONS_CACHE[produitId] = asList(data);
-      dbg('Promotions chargées pour produit', produitId, ':', PROMOTIONS_CACHE[produitId]);
-    }).fail(function(xhr){
-      dbg('loadPromotionsForProduct fail', xhr.status);
-      PROMOTIONS_CACHE[produitId] = [];
-    });
-  }
-
-  // Fonction pour calculer le prix avec promotion
-  function calculatePriceWithPromotion(produitId, quantite, prixOriginal){
-    return $.ajax({
-      url: API_PROMOTIONS + 'calculer_prix/',
-      method: 'POST',
-      contentType: 'application/json',
-      headers: { 'X-CSRFToken': getCSRFToken() },
-      data: JSON.stringify({
-        produit_id: produitId,
-        quantite: quantite
-      }),
-      dataType: 'json'
-    });
-  }
-
-  // Afficher les promotions disponibles pour un produit sélectionné
-  function displayAvailablePromotions(produitId){
-    const $promoContainer = $('#promo_info');
-    if(!$promoContainer.length) return;
-
-    const promos = PROMOTIONS_CACHE[produitId] || [];
-    if(promos.length === 0){
-      $promoContainer.hide().empty();
-      return;
-    }
-
-    let html = '<div class="alert alert-success mb-2 py-2"><small><i class="fa fa-tag"></i> <strong>Promotions disponibles:</strong><br>';
-    promos.forEach(function(p){
-      let desc = p.nom + ' (' + (p.type_promotion_display || p.type_promotion) + ')';
-      if(p.valeur_pourcentage) desc += ' -' + p.valeur_pourcentage + '%';
-      if(p.valeur_fixe) desc += ' -' + p.valeur_fixe + ' DA';
-      if(p.prix_special) desc += ' Prix: ' + p.prix_special + ' DA';
-      html += '<span class="badge badge-success mr-1">' + desc + '</span>';
-    });
-    html += '</small></div>';
-    $promoContainer.html(html).show();
-  }
-
   function getCSRFToken(){
     var m = document.cookie.match(/(^| )csrftoken=([^;]+)/); return m ? decodeURIComponent(m[2]) : '';
   }
@@ -369,36 +312,13 @@
         const price = Number(l.prixU_snapshot || p.prixU || 0);
         const qty = Number(l.quantite || 0);
         const total = price * qty;
-        const sym = (p.currency_symbol || p.currency && p.currency.symbol) || 'DA';
+        const sym = (p.currency_symbol || p.currency && p.currency.symbol) || '';
         const tr = $('<tr>');
         tr.append('<td>'+ref+'</td>');
-
-        // Désignation avec badge promo si applicable
-        let designationHtml = designation;
-        if(l.promotion_code){
-          designationHtml += ' <span class="badge badge-success" title="'+l.promotion_nom+'"><i class="fa fa-tag"></i> '+l.promotion_code+'</span>';
-          if(l.quantite_offerte > 0){
-            designationHtml += ' <span class="badge badge-info">+'+l.quantite_offerte+' offert(s)</span>';
-          }
-        }
-        tr.append('<td>'+designationHtml+'</td>');
-
-        // Prix avec indication de promo
-        let prixHtml = price.toFixed(2)+' '+sym;
-        if(l.promotion && l.prix_original && l.prix_original > price){
-          prixHtml = '<del class="text-muted">'+l.prix_original.toFixed(2)+'</del> <span class="text-success">'+price.toFixed(2)+'</span> '+sym;
-        }
-        tr.append('<td class="text-right">'+prixHtml+'</td>');
-
+        tr.append('<td>'+designation+'</td>');
+        tr.append('<td class="text-right">'+price.toFixed(2)+' '+sym+'</td>');
         tr.append('<td class="text-center">'+qty+'</td>');
-
-        // Total avec économie
-        let totalHtml = '<strong>'+(total.toFixed(2))+' '+sym+'</strong>';
-        if(l.remise_promo && l.remise_promo > 0){
-          totalHtml += '<br><small class="text-success">Économie: -'+l.remise_promo.toFixed(2)+' '+sym+'</small>';
-        }
-        tr.append('<td class="text-right">'+totalHtml+'</td>');
-
+        tr.append('<td class="text-right"><strong>'+(total.toFixed(2))+' '+sym+'</strong></td>');
         tr.append('<td class="text-center"><button class="btn btn-sm btn-outline-danger" data-action="rm" data-idx="'+idx+'"><i class="fa fa-trash"></i></button></td>');
         $tbody.append(tr);
       });
@@ -494,54 +414,17 @@
     if(!qty || qty <= 0){ alert('Quantité invalide'); return; }
     const p = PRODUCTS_CACHE[prodId];
     if(!p){ alert('Produit introuvable en cache, réessayez.'); return; }
-
-    const prixOriginal = getBestPrice(p);
-
-    // Vérifier s'il y a une promotion applicable
-    calculatePriceWithPromotion(prodId, qty, prixOriginal)
-      .done(function(result){
-        dbg('Résultat calcul promo:', result);
-
-        const line = {
-          produit: prodId,
-          designation: p.designation || '',
-          quantite: qty,
-          prixU_snapshot: prixOriginal,
-          currency: p.currency || null,
-          // Champs promotion
-          promotion: result.promotion ? result.promotion.id : null,
-          promotion_code: result.promotion ? result.promotion.code : null,
-          promotion_nom: result.promotion ? result.promotion.nom : null,
-          prix_original: prixOriginal,
-          prix_avec_promo: result.prix_total_avec_promo / qty,
-          remise_promo: result.economie_montant,
-          quantite_offerte: result.quantite_offerte || 0
-        };
-
-        // Si promotion, utiliser le prix promo
-        if(result.promotion){
-          line.prixU_snapshot = result.prix_total_avec_promo / qty;
-        }
-
-        LINES.push(line);
-        // reset input qty only
-        $('#vente_qte').val('1');
-        $('#promo_info').hide().empty();
-        renderLines();
-      })
-      .fail(function(){
-        // En cas d'erreur, ajouter sans promo
-        const line = {
-          produit: prodId,
-          designation: p.designation || '',
-          quantite: qty,
-          prixU_snapshot: prixOriginal,
-          currency: p.currency || null
-        };
-        LINES.push(line);
-        $('#vente_qte').val('1');
-        renderLines();
-      });
+    const line = {
+      produit: prodId,
+      designation: p.designation || '',
+      quantite: qty,
+      prixU_snapshot: getBestPrice(p),
+      currency: p.currency || null
+    };
+    LINES.push(line);
+    // reset input qty only
+    $('#vente_qte').val('1');
+    renderLines();
   }
 
   function removeLine(idx){
@@ -564,20 +447,7 @@
       currency: currency || undefined,
       remise_percent: isNaN(remise) ? 0 : remise,
       observations: ($('#vente_obs').val()||'').trim(),
-      lignes: LINES.map(function(l){
-        return {
-          produit: l.produit,
-          designation: l.designation,
-          quantite: l.quantite,
-          prixU_snapshot: l.prixU_snapshot,
-          currency: l.currency || undefined,
-          // Champs promotion
-          promotion: l.promotion || undefined,
-          prix_original: l.prix_original || undefined,
-          remise_promo: l.remise_promo || 0,
-          quantite_offerte: l.quantite_offerte || 0
-        };
-      })
+      lignes: LINES.map(function(l){ return { produit: l.produit, designation: l.designation, quantite: l.quantite, prixU_snapshot: l.prixU_snapshot, currency: l.currency || undefined }; })
     };
     return payload;
   }
@@ -1127,18 +997,6 @@
     $(document).off('click', '#vente_body [data-action="rm"]').on('click', '#vente_body [data-action="rm"]', function(){ var idx = parseInt($(this).data('idx'),10); removeLine(idx); });
     // recalc on remise change
     $(document).off('input', '#vente_remise').on('input', '#vente_remise', recalcTotals);
-
-    // Charger les promotions quand un produit est sélectionné
-    $(document).off('change', '#vente_prod').on('change', '#vente_prod', function(){
-      const prodId = parseInt($(this).val() || '0', 10);
-      if(prodId > 0){
-        loadPromotionsForProduct(prodId).done(function(){
-          displayAvailablePromotions(prodId);
-        });
-      } else {
-        $('#promo_info').hide().empty();
-      }
-    });
     // save draft
     $(document).off('click', '#vente_save_draft').on('click', '#vente_save_draft', function(e){ e.preventDefault(); saveSale(false); });
     // complete sale (same as draft for now due to API contract)

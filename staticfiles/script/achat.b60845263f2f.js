@@ -5,8 +5,6 @@
   const API_PRODUITS = '/API/produits/';
   const API_ENTREPOTS = '/API/entrepots/';
 
-  let achatsDataTable = null;
-
   function asList(data){
     if(Array.isArray(data)) return data;
     if(data && Array.isArray(data.results)) return data.results;
@@ -257,18 +255,8 @@
   }
 
   function renderAchats(list){
-    const $table = $('#tachat');
-    const $tbody = $table.find('tbody#table-content');
+    const $tbody = $('#tachat tbody#table-content');
     if(!$tbody.length) return;
-
-    // Détruire l'instance DataTable existante
-    if(achatsDataTable){
-      try {
-        achatsDataTable.destroy();
-        achatsDataTable = null;
-      } catch(e) { dbg('DataTable destroy error:', e); }
-    }
-
     $tbody.empty();
     if(!list || !list.length){
       $tbody.append('<tr><td colspan="12" class="text-center text-muted">Aucun achat</td></tr>');
@@ -330,29 +318,6 @@
       tr.append('<td><button class="btn btn-sm btn-outline-primary" data-action="edit" data-id="'+a.id+'">Modifier</button></td>');
       $tbody.append(tr);
     });
-
-    // Initialiser DataTables
-    try {
-      if($.fn.DataTable && list && list.length > 0){
-        achatsDataTable = $table.DataTable({
-          destroy: true,
-          language: {
-            url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/fr-FR.json',
-            emptyTable: 'Aucun achat'
-          },
-          order: [[0, 'desc']], // Trier par ID décroissant
-          columnDefs: [
-            { targets: [10, 11], orderable: false }, // Boutons non triables
-            { targets: [8, 9], className: 'text-right' } // Prix alignés à droite
-          ],
-          pageLength: 25,
-          dom: 'Bfrtip',
-          buttons: []
-        });
-      }
-    } catch(e) {
-      dbg('DataTable init error:', e);
-    }
   }
 
   function loadAchats(){

@@ -583,20 +583,63 @@ class Client(models.Model):
         return '{} {}'.format(self.nom, self.prenom)
 
 class Achat(models.Model):
+    UNITE_CHOICES = (
+        ('piece', 'Pièce'),
+        ('carton', 'Carton'),
+    )
+
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='achats',
                                null=True, blank=True,
                                help_text="Entreprise propriétaire de cet achat")
     date_Achat = models.DateField(default=timezone.now)
     date_expiration = models.DateField("Date d'expiration", null=True, blank=True)
+
+    # Type d'unité d'achat
+    unite_achat = models.CharField(
+        "Unité d'achat",
+        max_length=10,
+        choices=UNITE_CHOICES,
+        default='piece',
+        help_text="Unité d'achat: pièce ou carton"
+    )
+
+    # Quantité achetée (en cartons ou pièces selon unite_achat)
     quantite = models.IntegerField()
+
+    # Nombre de pièces par carton (utilisé seulement si unite_achat='carton')
+    pieces_par_carton = models.IntegerField(
+        "Pièces par carton",
+        default=1,
+        help_text="Nombre de pièces contenues dans un carton"
+    )
+
+    # Prix d'achat unitaire (par carton ou par pièce selon unite_achat)
     prix_achat = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
     fournisseur = models.ForeignKey(Fournisseur, on_delete=models.CASCADE, null=True, blank=True)
     produit = models.ForeignKey(Produit, on_delete=models.CASCADE)
     warehouse = models.ForeignKey('Warehouse', on_delete=models.SET_NULL, null=True, blank=True,
                                  related_name='achats', help_text="Entrepôt de destination pour cet achat")
 
+    def get_quantite_pieces(self):
+        """Retourne la quantité totale en pièces"""
+        if self.unite_achat == 'carton':
+            return self.quantite * self.pieces_par_carton
+        return self.quantite
+
+    def get_prix_unitaire_piece(self):
+        """Retourne le prix unitaire par pièce"""
+        if self.unite_achat == 'carton':
+            return self.prix_achat / self.pieces_par_carton if self.pieces_par_carton > 0 else 0
+        return self.prix_achat
+
+    def get_prix_total(self):
+        """Retourne le prix total de l'achat"""
+        return self.quantite * self.prix_achat
+
     def __str__(self):
-        return '{} - {} unités'.format(self.date_Achat, self.quantite)
+        unite_display = dict(self.UNITE_CHOICES).get(self.unite_achat, 'unités')
+        return '{} - {} {}'.format(self.date_Achat, self.quantite, unite_display)
 
     class Meta:
         ordering = ['date_Achat',]
@@ -1025,6 +1068,36 @@ class LigneVente(models.Model):
     prixU_snapshot = models.DecimalField(max_digits=8, decimal_places=2)
     currency = models.ForeignKey(Currency, on_delete=models.PROTECT, null=True, blank=True,
                                 help_text="Devise du prix unitaire (héritée du produit)")
+
+    # Champs pour les promotions
+    promotion = models.ForeignKey(
+        'Promotion',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='lignes_vente',
+        help_text="Promotion appliquée à cette ligne"
+    )
+    prix_original = models.DecimalField(
+        "Prix original (avant promo)",
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Prix unitaire avant application de la promotion"
+    )
+    remise_promo = models.DecimalField(
+        "Remise promotion",
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        help_text="Montant de la remise appliquée par la promotion"
+    )
+    quantite_offerte = models.PositiveIntegerField(
+        "Quantité offerte",
+        default=0,
+        help_text="Quantité offerte gratuitement (pour promos X+Y)"
+    )
 
     def __str__(self):
         currency_symbol = self.currency.symbol if self.currency else self.vente.get_sale_currency().symbol if self.vente.get_sale_currency() else '€'

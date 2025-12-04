@@ -179,18 +179,43 @@
             <div class="card-body container-fluid">
   <div id="section-achat">
                 <div class="row">
-                    <div class="col-sm-4 mb-2">
+                    <div class="col-sm-3 mb-2">
                         <label for="code">{% trans "Date d'Achat" %} : </label>
                         <input class="" type="text" id="id" hidden>
                          <input class="form-control" type="date"  id="datea">
                     </div>
-                    <div class="col-sm-4 mb-2">
-                        <label for="nom">{% trans "Quantité" %} : </label>
-                        <input class="form-control" type="number" id="quantite" required>
+                    <div class="col-sm-3 mb-2">
+                        <label for="unite_achat">{% trans "Unité d'achat" %} : </label>
+                        <select class="form-control" id="unite_achat" onchange="toggleAchatParCarton()">
+                            <option value="piece">{% trans "Pièce" %}</option>
+                            <option value="carton">{% trans "Carton" %}</option>
+                        </select>
                     </div>
-                    <div class="col-sm-4 mb-2">
-                        <label>{% trans "Prix d'achat unitaire" %}</label>
-                        <input class="form-control" type="number" id="prix_achat" step="0.01" min="0" placeholder="0.00">
+                    <div class="col-sm-3 mb-2" id="qte_carton_container" style="display:none;">
+                        <label for="qte_carton">{% trans "Qté carton" %} : </label>
+                        <input class="form-control" type="number" id="qte_carton" value="0" min="0" onchange="calculateAchatTotal()">
+                    </div>
+                    <div class="col-sm-3 mb-2" id="pieces_par_carton_container" style="display:none;">
+                        <label for="pieces_par_carton">{% trans "Pièces par carton" %} : </label>
+                        <input class="form-control" type="number" id="pieces_par_carton" value="1" min="1" onchange="calculateAchatTotal()">
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-sm-3 mb-2" id="qte_piece_container">
+                        <label for="quantite">{% trans "Qté pièce" %} : </label>
+                        <input class="form-control" type="number" id="quantite" required onchange="calculateAchatTotal()">
+                    </div>
+                    <div class="col-sm-3 mb-2" id="quantite_totale_container" style="display:none;">
+                        <label>{% trans "Quantité totale (pièces)" %}</label>
+                        <input class="form-control" type="text" id="quantite_pieces_display" readonly placeholder="0">
+                    </div>
+                    <div class="col-sm-3 mb-2" id="prix_carton_container" style="display:none;">
+                        <label>{% trans "Prix par carton" %}</label>
+                        <input class="form-control" type="number" id="prix_carton" step="0.01" min="0" placeholder="0.00" onchange="calculateAchatTotal()">
+                    </div>
+                    <div class="col-sm-3 mb-2">
+                        <label>{% trans "Prix d'achat unitaire (pièce)" %}</label>
+                        <input class="form-control" type="number" id="prix_achat" step="0.01" min="0" placeholder="0.00" onchange="calculateAchatTotal()">
                     </div>
                 </div>
                 <div class="row">
@@ -352,23 +377,26 @@
 
                 <div id="section-achat-table" class="row table-responsive m-auto rounded">
                     <table id="tachat" class="table table-hover w-100">
-                        <thead>
-                        <tr class="text-uppercase bg-light  w-100">
-                            <th scope="col">{% trans "Id" %}</th>
-                            <th scope="col">{% trans "Date d'Achat" %}</th>
-                            <th scope="col">{% trans "Quantité" %}</th>
-                            <th scope="col">{% trans "Fournisseur" %}</th>
-                            <th scope="col">{% trans "Produit" %}</th>
-                            <th scope="col">{% trans "Prix unitaire" %}</th>
-                            <th scope="col">{% trans "Total" %}</th>
-                            <th scope="col">{% trans "Supprimer" %}</th>
-                            <th scope="col">{% trans "Modifier" %}</th>
-                        </tr>
-                        </thead>
-                        <tbody id="table-content">
+                            <thead>
+                            <tr class="text-uppercase bg-light w-100">
+                                <th scope="col">{% trans "Id" %}</th>
+                                <th scope="col">{% trans "Date" %}</th>
+                                <th scope="col">{% trans "Unité" %}</th>
+                                <th scope="col">{% trans "Qté" %}</th>
+                                <th scope="col">{% trans "Pcs/Carton" %}</th>
+                                <th scope="col">{% trans "Qté totale (pcs)" %}</th>
+                                <th scope="col">{% trans "Fournisseur" %}</th>
+                                <th scope="col">{% trans "Produit" %}</th>
+                                <th scope="col">{% trans "Prix unit." %}</th>
+                                <th scope="col">{% trans "Total" %}</th>
+                                <th scope="col">{% trans "Supprimer" %}</th>
+                                <th scope="col">{% trans "Modifier" %}</th>
+                            </tr>
+                            </thead>
+                            <tbody id="table-content">
 
-                        </tbody>
-                    </table>
+                            </tbody>
+                        </table>
                 </div>
             </div>
         </form>
@@ -733,4 +761,85 @@ setTimeout(function() {
         initAchatPage();
     }
 }, 500);
+
+// Fonction pour afficher/masquer les champs d'achat par carton
+function toggleAchatParCarton() {
+    const uniteAchat = document.getElementById('unite_achat').value;
+    const qteCartonContainer = document.getElementById('qte_carton_container');
+    const piecesParCartonContainer = document.getElementById('pieces_par_carton_container');
+    const qtePieceContainer = document.getElementById('qte_piece_container');
+    const quantiteTotaleContainer = document.getElementById('quantite_totale_container');
+    const prixCartonContainer = document.getElementById('prix_carton_container');
+    const prixAchatInput = document.getElementById('prix_achat');
+    const prixCartonInput = document.getElementById('prix_carton');
+
+    if (uniteAchat === 'carton') {
+        // Mode Carton : on saisit le prix par carton
+        qteCartonContainer.style.display = 'block';
+        piecesParCartonContainer.style.display = 'block';
+        qtePieceContainer.style.display = 'none';
+        quantiteTotaleContainer.style.display = 'block';
+        prixCartonContainer.style.display = 'block';
+
+        // Prix par carton devient éditable, prix unitaire devient calculé
+        prixCartonInput.removeAttribute('readonly');
+        prixAchatInput.setAttribute('readonly', 'readonly');
+
+        // Réinitialiser les valeurs
+        document.getElementById('quantite').value = 0;
+        prixCartonInput.value = '';
+    } else {
+        // Mode Pièce : on saisit le prix par pièce
+        qteCartonContainer.style.display = 'none';
+        piecesParCartonContainer.style.display = 'none';
+        qtePieceContainer.style.display = 'block';
+        quantiteTotaleContainer.style.display = 'none';
+        prixCartonContainer.style.display = 'none';
+
+        // Prix unitaire devient éditable
+        prixAchatInput.removeAttribute('readonly');
+
+        // Réinitialiser les valeurs
+        document.getElementById('qte_carton').value = 0;
+        document.getElementById('pieces_par_carton').value = 1;
+        prixCartonInput.value = '';
+    }
+    calculateAchatTotal();
+}
+
+// Fonction pour calculer le total
+function calculateAchatTotal() {
+    const uniteAchat = document.getElementById('unite_achat').value;
+    const qteCarton = parseFloat(document.getElementById('qte_carton').value) || 0;
+    const qtePiece = parseFloat(document.getElementById('quantite').value) || 0;
+    const piecesParCarton = parseFloat(document.getElementById('pieces_par_carton').value) || 1;
+    const prixPiece = parseFloat(document.getElementById('prix_achat').value) || 0;
+
+    let quantiteTotalePieces = 0;
+
+    let prixPieceCalcule = prixPiece;
+
+    if (uniteAchat === 'carton') {
+        // Mode carton : on saisit le prix par carton, on calcule le prix par pièce
+        const prixCarton = parseFloat(document.getElementById('prix_carton').value) || 0;
+
+        // Calculer le prix unitaire par pièce à partir du prix carton
+        prixPieceCalcule = piecesParCarton > 0 ? (prixCarton / piecesParCarton) : 0;
+        document.getElementById('prix_achat').value = prixPieceCalcule.toFixed(2);
+
+        // Calculer la quantité totale en pièces
+        quantiteTotalePieces = qteCarton * piecesParCarton;
+    } else {
+        // Mode pièce : on saisit le prix par pièce
+        prixPieceCalcule = prixPiece;
+        quantiteTotalePieces = qtePiece;
+    }
+
+    // Afficher la quantité totale en pièces
+    document.getElementById('quantite_pieces_display').value = quantiteTotalePieces;
+
+    // Calculer le total = quantité totale en pièces × prix par pièce
+    const total = quantiteTotalePieces * prixPieceCalcule;
+    document.getElementById('total_achat').value = total.toFixed(2);
+}
 </script>

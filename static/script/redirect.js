@@ -93,6 +93,11 @@
           $('.table').each(function(){
             // Ne pas initialiser DataTable si l'attribut data-no-datatable est présent
             if($(this).attr('data-no-datatable') === 'true') return;
+            // Ne pas initialiser les tables de vente (panier dynamique)
+            if($(this).attr('id') === 'tbl_vente') return;
+            // Vérifier que la table a des colonnes définies dans thead
+            var headerCols = $(this).find('thead th').length;
+            if(headerCols === 0) return;
             if(!$.fn.dataTable.isDataTable(this)){
               try {
                 $(this).DataTable();

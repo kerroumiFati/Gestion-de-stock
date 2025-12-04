@@ -7,7 +7,11 @@
       "mcp__gestion-stock__list_categories",
       "Bash(python:*)",
       "Bash(copy /Y \"static\\script\\vente.js\" \"staticfiles\\script\\vente.js\")",
-      "Bash(copy /Y \"C:\\Users\\KB\\Documents\\autre\\GestionStock-django-master\\GestionStock-django-master\\static\\script\\vente.js\" \"C:\\Users\\KB\\Documents\\autre\\GestionStock-django-master\\GestionStock-django-master\\staticfiles\\script\\vente.js\")"
+      "Bash(copy /Y \"C:\\Users\\KB\\Documents\\autre\\GestionStock-django-master\\GestionStock-django-master\\static\\script\\vente.js\" \"C:\\Users\\KB\\Documents\\autre\\GestionStock-django-master\\GestionStock-django-master\\staticfiles\\script\\vente.js\")",
+      "Bash(for file in caisse.html entrepots_list.html facture.html parametres.html promotions.html)",
+      "Bash(do sed -i \"s/€/DA/g\" \"$file\")",
+      "Bash(done)",
+      "Bash(copy /Y \"C:\\Users\\KB\\Documents\\autre\\GestionStock-django-master\\GestionStock-django-master\\static\\script\\achat.js\" \"C:\\Users\\KB\\Documents\\autre\\GestionStock-django-master\\GestionStock-django-master\\staticfiles\\script\\achat.js\")"
     ],
     "deny": [],
     "ask": []

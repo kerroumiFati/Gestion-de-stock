@@ -272,19 +272,38 @@ class AchatSerializer(serializers.ModelSerializer):
     currency_symbol = serializers.CharField(source='produit.currency.symbol', read_only=True)
     warehouse_name = serializers.CharField(source='warehouse.name', read_only=True)
     total_achat = serializers.SerializerMethodField()
+    quantite_pieces = serializers.SerializerMethodField()
+    prix_unitaire_piece = serializers.SerializerMethodField()
+    unite_achat_display = serializers.CharField(source='get_unite_achat_display', read_only=True)
+
     class Meta:
         model = Achat
         fields = (
-            'id','date_Achat','date_expiration','quantite','prix_achat','total_achat','currency_symbol',
+            'id','date_Achat','date_expiration',
+            'unite_achat','unite_achat_display','quantite','pieces_par_carton',
+            'quantite_pieces','prix_achat','prix_unitaire_piece','total_achat','currency_symbol',
             'fournisseur','fournisseur_nom','fournisseur_prenom',
             'produit','produit_reference','produit_designation',
             'warehouse','warehouse_name'
         )
+
     def get_total_achat(self, obj):
         try:
-            return obj.prix_achat * obj.quantite
+            return obj.get_prix_total()
         except Exception:
             return 0
+
+    def get_quantite_pieces(self, obj):
+        try:
+            return obj.get_quantite_pieces()
+        except Exception:
+            return obj.quantite
+
+    def get_prix_unitaire_piece(self, obj):
+        try:
+            return obj.get_prix_unitaire_piece()
+        except Exception:
+            return obj.prix_achat
 
 class LigneLivraisonSerializer(serializers.ModelSerializer):
     class Meta:
@@ -527,12 +546,28 @@ class LigneVenteSerializer(serializers.ModelSerializer):
     total_ligne = serializers.SerializerMethodField()
     total_ligne_vente_currency = serializers.SerializerMethodField()
     prix_formatted = serializers.SerializerMethodField()
-    
+
+    # Champs promotion
+    promotion_code = serializers.CharField(source='promotion.code', read_only=True)
+    promotion_nom = serializers.CharField(source='promotion.nom', read_only=True)
+    a_promotion = serializers.SerializerMethodField()
+    economie_totale = serializers.SerializerMethodField()
+
     class Meta:
         model = LigneVente
-        fields = ['id', 'produit', 'produit_nom', 'produit_reference', 'produit_stock_actuel', 
-                 'designation', 'quantite', 'prixU_snapshot', 'currency', 'currency_code', 
-                 'currency_symbol', 'prix_formatted', 'total_ligne', 'total_ligne_vente_currency']
+        fields = ['id', 'produit', 'produit_nom', 'produit_reference', 'produit_stock_actuel',
+                 'designation', 'quantite', 'prixU_snapshot', 'currency', 'currency_code',
+                 'currency_symbol', 'prix_formatted', 'total_ligne', 'total_ligne_vente_currency',
+                 'promotion', 'promotion_code', 'promotion_nom', 'prix_original', 'remise_promo',
+                 'quantite_offerte', 'a_promotion', 'economie_totale']
+
+    def get_a_promotion(self, obj):
+        return obj.promotion is not None
+
+    def get_economie_totale(self, obj):
+        if obj.prix_original and obj.prixU_snapshot:
+            return float((obj.prix_original - obj.prixU_snapshot) * obj.quantite)
+        return 0
     
     def get_total_ligne(self, obj):
         return obj.quantite * obj.prixU_snapshot

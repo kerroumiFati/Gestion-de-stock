@@ -5,8 +5,6 @@
   const API_PRODUITS = '/API/produits/';
   const API_ENTREPOTS = '/API/entrepots/';
 
-  let achatsDataTable = null;
-
   function asList(data){
     if(Array.isArray(data)) return data;
     if(data && Array.isArray(data.results)) return data.results;
@@ -125,28 +123,13 @@
   }
 
   function buildAchatPayload(){
-    const uniteAchat = ($('#unite_achat').val()||'piece').toString();
-
-    // En mode carton, prix_achat contient le prix unitaire calculé
-    // En mode pièce, prix_achat contient le prix unitaire saisi
     const prixStr = ($('#prix_achat').val()||'').toString();
     const prix = normalizeNumberToFloat(prixStr);
-
-    // Calculer la quantité totale en pièces
-    let quantiteTotale = 0;
-    if(uniteAchat === 'carton'){
-      const qteCarton = parseInt(($('#qte_carton').val()||'0').toString(), 10);
-      const piecesParCarton = parseInt(($('#pieces_par_carton').val()||'1').toString(), 10);
-      quantiteTotale = qteCarton * piecesParCarton;
-    } else {
-      quantiteTotale = parseInt(($('#quantite').val()||'0').toString(), 10);
-    }
-
     const data = {
       date_Achat: ($('#datea').val()||'').toString().slice(0,10),
       date_expiration: ($('#dateexp').val()||'').toString().slice(0,10) || null,
-      unite_achat: uniteAchat,
-      quantite: quantiteTotale,
+      unite_achat: ($('#unite_achat').val()||'piece').toString(),
+      quantite: parseInt(($('#quantite').val()||'0').toString(), 10),
       pieces_par_carton: parseInt(($('#pieces_par_carton').val()||'1').toString(), 10),
       prix_achat: isNaN(prix) ? 0 : prix,
       fournisseur: parseInt(($('#fournisseur').val()||'0').toString(), 10) || null,
@@ -170,12 +153,8 @@
         alert('Achat ajouté');
         // refresh table
         loadAchats();
-        // reset quantity fields (keep date and selections)
+        // reset some fields (keep date and selections)
         $('#quantite').val('');
-        $('#qte_carton').val('0');
-        $('#prix_achat').val('');
-        $('#prix_carton').val('');
-        $('#total_achat').val('');
         $('#ref').val('');
         $('#codebar').val('');
       })
@@ -211,35 +190,12 @@
     try {
       if(achat.date_Achat) $('#datea').val((achat.date_Achat||'').toString().slice(0,10));
       if(achat.date_expiration) $('#dateexp').val((achat.date_expiration||'').toString().slice(0,10)); else $('#dateexp').val('');
-
-      // Gérer unite_achat et champs liés
-      const uniteAchat = achat.unite_achat || 'piece';
-      $('#unite_achat').val(uniteAchat);
-
-      if(uniteAchat === 'carton'){
-        // Mode carton: calculer qte_carton à partir de la quantité totale
-        const piecesParCarton = achat.pieces_par_carton || 1;
-        const qteCarton = Math.floor(achat.quantite / piecesParCarton);
-        $('#qte_carton').val(qteCarton);
-        $('#pieces_par_carton').val(piecesParCarton);
-        // Calculer le prix par carton à partir du prix unitaire
-        const prixCarton = (achat.prix_achat || 0) * piecesParCarton;
-        $('#prix_carton').val(prixCarton.toFixed(2));
-      } else {
-        // Mode pièce
-        $('#quantite').val(achat.quantite);
-        $('#prix_achat').val(achat.prix_achat);
-      }
-
+      if(achat.quantite != null) $('#quantite').val(achat.quantite);
+      if(achat.prix_achat != null) $('#prix_achat').val(achat.prix_achat);
       if(achat.fournisseur) $('#fournisseur').val(achat.fournisseur);
       if(achat.produit) $('#sproduit').val(achat.produit);
-      if(achat.warehouse) $('#warehouse').val(achat.warehouse);
-
-      // Trigger toggle to show/hide appropriate fields
-      if(typeof toggleAchatParCarton === 'function') toggleAchatParCarton();
-      // Recalculate totals
-      if(typeof calculateAchatTotal === 'function') calculateAchatTotal();
-    } catch(e) { dbg('enterEditMode error:', e); }
+      updateTotalAchat();
+    } catch(e) {}
     $('#id').val(achat.id);
     $('#section-achat #btn').text('Mettre à jour').attr('data-mode','edit');
   }
@@ -247,112 +203,37 @@
   function resetEditMode(){
     $('#id').val('');
     $('#section-achat #btn').text('Ajouter').attr('data-mode','add');
-    // Reset carton mode fields
-    $('#unite_achat').val('piece');
-    $('#qte_carton').val('0');
-    $('#pieces_par_carton').val('1');
-    $('#prix_carton').val('');
-    // Trigger toggle to reset field visibility
-    if(typeof toggleAchatParCarton === 'function') toggleAchatParCarton();
   }
 
   function renderAchats(list){
-    const $table = $('#tachat');
-    const $tbody = $table.find('tbody#table-content');
+    const $tbody = $('#tachat tbody#table-content');
     if(!$tbody.length) return;
-
-    // Détruire l'instance DataTable existante
-    if(achatsDataTable){
-      try {
-        achatsDataTable.destroy();
-        achatsDataTable = null;
-      } catch(e) { dbg('DataTable destroy error:', e); }
-    }
-
     $tbody.empty();
     if(!list || !list.length){
-      $tbody.append('<tr><td colspan="12" class="text-center text-muted">Aucun achat</td></tr>');
+      $tbody.append('<tr><td colspan="9" class="text-center text-muted">Aucun achat</td></tr>');
       return;
     }
     list.forEach(function(a){
       const tr = $('<tr>');
-      const sym = a.currency_symbol || 'DA';
-
-      // ID
       tr.append('<td>'+(a.id||'')+'</td>');
-
-      // Date
       tr.append('<td>'+(a.date_Achat||'')+'</td>');
-
-      // Unité d'achat (Pièce ou Carton)
-      const uniteDisplay = a.unite_achat_display || (a.unite_achat === 'carton' ? 'Carton' : 'Pièce');
-      tr.append('<td>'+uniteDisplay+'</td>');
-
-      // Quantité (cartons ou pièces selon le mode)
-      let qteDisplay = '';
-      if(a.unite_achat === 'carton'){
-        // Afficher le nombre de cartons
-        const nbCartons = a.pieces_par_carton > 0 ? Math.floor(a.quantite / a.pieces_par_carton) : 0;
-        qteDisplay = nbCartons + ' carton' + (nbCartons > 1 ? 's' : '');
-      } else {
-        qteDisplay = (a.quantite||0) + ' pcs';
-      }
-      tr.append('<td>'+qteDisplay+'</td>');
-
-      // Pièces par carton
-      const pcsParCarton = a.unite_achat === 'carton' ? (a.pieces_par_carton||1) : '-';
-      tr.append('<td>'+pcsParCarton+'</td>');
-
-      // Quantité totale en pièces
-      const qteTotalePcs = a.quantite_pieces || a.quantite || 0;
-      tr.append('<td>'+qteTotalePcs+' pcs</td>');
-
-      // Fournisseur
+      tr.append('<td>'+(a.quantite||0)+'</td>');
       var fournisseurTxt = (a.fournisseur_nom||'') + (a.fournisseur_prenom?(' '+a.fournisseur_prenom):'');
-      // Pour les fournisseurs, utiliser libelle s'il est disponible (car Fournisseur n'a pas nom/prenom mais libelle)
-      if(!fournisseurTxt && a.fournisseur_libelle) fournisseurTxt = a.fournisseur_libelle;
-      tr.append('<td>'+ (fournisseurTxt || a.fournisseur || '') +'</td>');
-
-      // Produit
       var prodTxt = (a.produit_reference? (a.produit_reference+' - ') : '') + (a.produit_designation||'');
+      tr.append('<td>'+ (fournisseurTxt || a.fournisseur || '') +'</td>');
       tr.append('<td>'+ (prodTxt || a.produit || '') +'</td>');
-
-      // Prix unitaire (par pièce)
-      var prixUnitaire = a.prix_unitaire_piece || a.prix_achat || 0;
-      tr.append('<td>'+prixUnitaire.toFixed(2)+' '+sym+'</td>');
-
-      // Total
-      var total = (a.total_achat != null) ? a.total_achat : 0;
-      tr.append('<td>'+total.toFixed(2)+' '+sym+'</td>');
-
-      // Actions
+      var prix = (typeof a.prix_achat !== 'undefined') ? a.prix_achat : '';
+      var total = (a.total_achat != null) ? a.total_achat : '';
+      var sym = a.currency_symbol || '';
+      // If we add new columns, ensure header also updated if needed
+      // Append price and total columns after product if header supports it
+      // For now, include in product cell suffix for backward-compatible header
+      tr.append('<td>'+(prix!==''? (prix+' '+sym): '')+'</td>');
+      tr.append('<td>'+(total!==''? (total+' '+sym): '')+'</td>');
       tr.append('<td><button class="btn btn-sm btn-outline-danger" data-action="delete" data-id="'+a.id+'">Supprimer</button></td>');
       tr.append('<td><button class="btn btn-sm btn-outline-primary" data-action="edit" data-id="'+a.id+'">Modifier</button></td>');
       $tbody.append(tr);
     });
-
-    // Initialiser DataTables
-    try {
-      if($.fn.DataTable && list && list.length > 0){
-        achatsDataTable = $table.DataTable({
-          destroy: true,
-          language: {
-            url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/fr-FR.json',
-            emptyTable: 'Aucun achat'
-          },
-          order: [[0, 'desc']], // Trier par ID décroissant
-          columnDefs: [
-            { targets: [10, 11], orderable: false }, // Boutons non triables
-            { targets: [8, 9], className: 'text-right' } // Prix alignés à droite
-          ],
-          pageLength: 25,
-          dom: 'Bfrtip',
-          buttons: []
-        });
-      }
-    } catch(e) {
-      dbg('DataTable init error:', e);
-    }
   }
 
   function loadAchats(){

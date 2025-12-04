@@ -775,10 +775,8 @@ async function savePromotion(statut) {
         );
 
         cancelForm();
-
-        // Attendre le rechargement de la liste et des stats
-        await loadPromotions();
-        await loadStats();
+        loadPromotions();
+        loadStats();
 
     } catch (error) {
         console.error('Erreur sauvegarde:', error);
@@ -804,8 +802,8 @@ async function activatePromotion(id) {
         if (!response.ok) throw new Error('Erreur activation');
 
         showNotification('Promotion activée', 'success');
-        await loadPromotions();
-        await loadStats();
+        loadPromotions();
+        loadStats();
     } catch (error) {
         showNotification('Erreur lors de l\'activation', 'error');
     }
@@ -825,8 +823,8 @@ async function suspendPromotion(id) {
         if (!response.ok) throw new Error('Erreur suspension');
 
         showNotification('Promotion suspendue', 'success');
-        await loadPromotions();
-        await loadStats();
+        loadPromotions();
+        loadStats();
     } catch (error) {
         showNotification('Erreur lors de la suspension', 'error');
     }
@@ -847,7 +845,7 @@ async function duplicatePromotion(id) {
 
         const newPromo = await response.json();
         showNotification('Promotion dupliquée', 'success');
-        await loadPromotions();
+        loadPromotions();
 
         // Ouvrir la nouvelle promotion en édition
         editPromotion(newPromo.id);
@@ -870,8 +868,8 @@ async function deletePromotion(id) {
         if (!response.ok) throw new Error('Erreur suppression');
 
         showNotification('Promotion supprimée', 'success');
-        await loadPromotions();
-        await loadStats();
+        loadPromotions();
+        loadStats();
     } catch (error) {
         showNotification('Erreur lors de la suppression', 'error');
     }

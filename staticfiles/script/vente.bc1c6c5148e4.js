@@ -360,7 +360,7 @@
     const $tbody = $('#vente_body'); if(!$tbody.length) return;
     $tbody.empty();
     if(!LINES.length){
-      $tbody.append('<tr><td colspan="6" class="text-center text-muted">Aucune ligne</td></tr>');
+      $tbody.append('<tr><td colspan="7" class="text-center text-muted">Aucune ligne</td></tr>');
     } else {
       LINES.forEach(function(l, idx){
         const p = PRODUCTS_CACHE[l.produit] || {};

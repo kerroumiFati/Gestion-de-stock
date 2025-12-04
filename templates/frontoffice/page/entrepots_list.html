@@ -111,7 +111,7 @@
                             </td>
                             <td class="text-center">{{ entrepot.nb_produits }}</td>
                             <td class="text-center">{{ entrepot.total_quantite }}</td>
-                            <td class="text-right">{{ entrepot.valeur_stock|floatformat:2 }} {{ currency.symbol|default:"€" }}</td>
+                            <td class="text-right">{{ entrepot.valeur_stock|floatformat:2 }} {{ currency.symbol|default:"DA" }}</td>
                             <td>
                                 {% if entrepot.is_active %}
                                 <span class="badge badge-success">{% trans "Actif" %}</span>

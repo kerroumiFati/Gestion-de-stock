@@ -125,7 +125,7 @@ async function loadProduits() {
         PromoConfig.cache.produits.forEach(p => {
             const option = document.createElement('option');
             option.value = p.id;
-            const prix = p.prix_formatted || (p.prixU ? p.prixU + ' €' : 'N/A');
+            const prix = p.prix_formatted || (p.prixU ? p.prixU + ' DA' : 'N/A');
             option.textContent = `${p.reference || 'N/A'} - ${p.designation || 'Sans nom'} (${prix})`;
             select.appendChild(option);
         });
@@ -481,7 +481,7 @@ function renderTypeConfig(type) {
                         <div class="input-group">
                             <input type="number" class="form-control-promo" id="config-valeur-fixe"
                                    min="0" step="0.01" placeholder="Ex: 2.00" onchange="updatePreview()">
-                            <span class="input-group-text">€</span>
+                            <span class="input-group-text">DA</span>
                         </div>
                     </div>
                 </div>
@@ -496,7 +496,7 @@ function renderTypeConfig(type) {
                         <div class="input-group">
                             <input type="number" class="form-control-promo" id="config-prix-special"
                                    min="0" step="0.01" placeholder="Ex: 9.99" onchange="updatePreview()">
-                            <span class="input-group-text">€</span>
+                            <span class="input-group-text">DA</span>
                         </div>
                     </div>
                 </div>
@@ -589,14 +589,14 @@ async function onProductChange(produitId) {
     const produit = PromoConfig.cache.produits.find(p => p.id == produitId);
     if (!produit) return;
 
-    document.getElementById('cond-prix-unite').textContent = `${produit.prixU || 0} €`;
+    document.getElementById('cond-prix-unite').textContent = `${produit.prixU || 0} DA`;
 
     // Charger le conditionnement
     const cond = await loadConditionnement(produitId);
 
     if (cond) {
         document.getElementById('cond-unites-carton').textContent = cond.unites_par_carton || '-';
-        document.getElementById('cond-prix-carton').textContent = cond.prix_carton_calcule ? `${cond.prix_carton_calcule} €` : '-';
+        document.getElementById('cond-prix-carton').textContent = cond.prix_carton_calcule ? `${cond.prix_carton_calcule} DA` : '-';
         document.getElementById('cond-cartons-colis').textContent = cond.cartons_par_colis || '-';
         condDisplay.style.display = 'block';
     } else {
@@ -649,13 +649,13 @@ function updatePreview() {
     }
 
     // Afficher l'aperçu
-    document.getElementById('preview-prix-original').textContent = `${prixOriginal.toFixed(2)} €`;
-    document.getElementById('preview-prix-promo').textContent = `${prixPromo.toFixed(2)} €`;
+    document.getElementById('preview-prix-original').textContent = `${prixOriginal.toFixed(2)} DA`;
+    document.getElementById('preview-prix-promo').textContent = `${prixPromo.toFixed(2)} DA`;
 
     const economie = prixOriginal - prixPromo;
     const pourcentEconomie = prixOriginal > 0 ? (economie / prixOriginal * 100) : 0;
     document.getElementById('preview-economie').textContent =
-        `${economie.toFixed(2)} € (${pourcentEconomie.toFixed(0)}%)`;
+        `${economie.toFixed(2)} DA (${pourcentEconomie.toFixed(0)}%)`;
 
     preview.style.display = 'block';
 }
@@ -775,8 +775,10 @@ async function savePromotion(statut) {
         );
 
         cancelForm();
-        loadPromotions();
-        loadStats();
+
+        // Attendre le rechargement de la liste et des stats
+        await loadPromotions();
+        await loadStats();
 
     } catch (error) {
         console.error('Erreur sauvegarde:', error);
@@ -802,8 +804,8 @@ async function activatePromotion(id) {
         if (!response.ok) throw new Error('Erreur activation');
 
         showNotification('Promotion activée', 'success');
-        loadPromotions();
-        loadStats();
+        await loadPromotions();
+        await loadStats();
     } catch (error) {
         showNotification('Erreur lors de l\'activation', 'error');
     }
@@ -823,8 +825,8 @@ async function suspendPromotion(id) {
         if (!response.ok) throw new Error('Erreur suspension');
 
         showNotification('Promotion suspendue', 'success');
-        loadPromotions();
-        loadStats();
+        await loadPromotions();
+        await loadStats();
     } catch (error) {
         showNotification('Erreur lors de la suspension', 'error');
     }
@@ -845,7 +847,7 @@ async function duplicatePromotion(id) {
 
         const newPromo = await response.json();
         showNotification('Promotion dupliquée', 'success');
-        loadPromotions();
+        await loadPromotions();
 
         // Ouvrir la nouvelle promotion en édition
         editPromotion(newPromo.id);
@@ -868,8 +870,8 @@ async function deletePromotion(id) {
         if (!response.ok) throw new Error('Erreur suppression');
 
         showNotification('Promotion supprimée', 'success');
-        loadPromotions();
-        loadStats();
+        await loadPromotions();
+        await loadStats();
     } catch (error) {
         showNotification('Erreur lors de la suppression', 'error');
     }
@@ -934,18 +936,18 @@ function renderSimulationResult(result) {
             <div class="price-comparison">
                 <div class="price-box original">
                     <label>Prix original</label>
-                    <div class="amount">${result.prix_total_sans_promotion.toFixed(2)} €</div>
+                    <div class="amount">${result.prix_total_sans_promotion.toFixed(2)} DA</div>
                 </div>
                 <div class="price-arrow"><i class="fas fa-arrow-right"></i></div>
                 <div class="price-box promo">
                     <label>Prix avec promo</label>
-                    <div class="amount">${result.prix_total_avec_promotion.toFixed(2)} €</div>
+                    <div class="amount">${result.prix_total_avec_promotion.toFixed(2)} DA</div>
                 </div>
             </div>
             <div class="text-center mt-3">
                 <div class="savings-badge">
                     <i class="fas fa-piggy-bank"></i>
-                    Économie: ${result.economie_montant.toFixed(2)} € (${result.economie_pourcentage.toFixed(1)}%)
+                    Économie: ${result.economie_montant.toFixed(2)} DA (${result.economie_pourcentage.toFixed(1)}%)
                 </div>
             </div>
             ${result.offre_speciale.quantite_gratuite > 0 ? `

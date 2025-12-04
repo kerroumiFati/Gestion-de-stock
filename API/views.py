@@ -2894,7 +2894,9 @@ class PromotionViewSet(TenantFilterMixin, viewsets.ModelViewSet):
         return qs.select_related('produit', 'categorie', 'currency', 'created_by')
 
     def perform_create(self, serializer):
-        obj = serializer.save(created_by=self.request.user)
+        # Récupérer la company de l'utilisateur
+        company = getattr(self.request, 'company', None)
+        obj = serializer.save(created_by=self.request.user, company=company)
         try:
             log_event(self.request, 'promotion.create', target=obj,
                      metadata={'id': obj.id, 'code': obj.code})
@@ -3069,6 +3071,105 @@ class PromotionViewSet(TenantFilterMixin, viewsets.ModelViewSet):
 
         serializer = PromotionListSerializer(promotions_applicables, many=True)
         return Response(serializer.data)
+
+    @action(detail=False, methods=['post'])
+    def calculer_prix(self, request):
+        """
+        Calcule le prix avec promotion pour un produit et une quantité donnée.
+        Retourne la meilleure promotion applicable.
+        """
+        produit_id = request.data.get('produit_id')
+        quantite = int(request.data.get('quantite', 1))
+        client_id = request.data.get('client_id')
+
+        if not produit_id:
+            return Response({'error': 'produit_id requis'}, status=400)
+
+        try:
+            produit = Produit.objects.get(id=produit_id)
+        except Produit.DoesNotExist:
+            return Response({'error': 'Produit non trouvé'}, status=404)
+
+        prix_original = produit.prixU or Decimal('0')
+        prix_total_original = prix_original * quantite
+
+        from django.utils import timezone
+        now = timezone.now()
+
+        # Trouver les promotions applicables
+        promotions = self.get_queryset().filter(
+            statut='active',
+            date_debut__lte=now,
+            date_fin__gte=now
+        ).order_by('-priorite')
+
+        meilleure_promo = None
+        meilleur_prix = prix_total_original
+        meilleure_economie = Decimal('0')
+        quantite_offerte = 0
+        details_offre = None
+
+        for promo in promotions:
+            if not promo.is_applicable_to_product(produit):
+                continue
+
+            if quantite < promo.quantite_minimum:
+                continue
+
+            # Vérifier limite d'usage
+            if promo.usage_maximum and promo.usage_actuel >= promo.usage_maximum:
+                continue
+
+            # Calculer le prix avec cette promo
+            if promo.type_promotion in ['achetez_x_payez_y', 'achetez_x_offert_y']:
+                offre = promo.calculer_offre_speciale(quantite)
+                if promo.type_promotion == 'achetez_x_payez_y':
+                    prix_avec_promo = prix_original * offre['quantite_a_payer']
+                else:
+                    prix_avec_promo = prix_original * quantite
+                    quantite_offerte_temp = offre['quantite_gratuite']
+            else:
+                prix_avec_promo = promo.calculer_prix_promotion(prix_original, quantite)
+                quantite_offerte_temp = 0
+
+            economie = prix_total_original - prix_avec_promo
+
+            # Garder la meilleure économie (si cumul non autorisé)
+            if economie > meilleure_economie:
+                meilleure_economie = economie
+                meilleur_prix = prix_avec_promo
+                meilleure_promo = promo
+                if promo.type_promotion in ['achetez_x_payez_y', 'achetez_x_offert_y']:
+                    details_offre = promo.calculer_offre_speciale(quantite)
+                    quantite_offerte = details_offre.get('quantite_gratuite', 0)
+                else:
+                    quantite_offerte = 0
+                    details_offre = None
+
+        result = {
+            'produit_id': produit.id,
+            'produit_designation': produit.designation,
+            'quantite': quantite,
+            'prix_unitaire_original': float(prix_original),
+            'prix_total_original': float(prix_total_original),
+            'prix_total_avec_promo': float(meilleur_prix),
+            'economie_montant': float(meilleure_economie),
+            'economie_pourcentage': float((meilleure_economie / prix_total_original * 100)) if prix_total_original > 0 else 0,
+            'quantite_offerte': quantite_offerte,
+            'promotion': None,
+            'details_offre': details_offre
+        }
+
+        if meilleure_promo:
+            result['promotion'] = {
+                'id': meilleure_promo.id,
+                'code': meilleure_promo.code,
+                'nom': meilleure_promo.nom,
+                'type': meilleure_promo.type_promotion,
+                'type_display': meilleure_promo.get_type_promotion_display()
+            }
+
+        return Response(result)
 
 
 class PromotionUsageViewSet(viewsets.ReadOnlyModelViewSet):
