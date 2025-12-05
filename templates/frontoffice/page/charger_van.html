@@ -228,7 +228,7 @@
 
                         <!-- Tableau du stock du van -->
                         <div class="table-responsive">
-                            <table class="table table-hover table-bordered" id="vanStockTable">
+                            <table class="table table-hover table-bordered" id="vanStockTable" data-no-datatable="true">
                                 <thead class="thead-light">
                                     <tr>
                                         <th width="15%">{% trans "Référence" %}</th>
@@ -288,26 +288,95 @@
 (function() {
     'use strict';
 
+    // Fonction d'échappement HTML pour éviter les erreurs de syntaxe
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // Fonction d'échappement pour les attributs HTML (guillemets doubles)
+    function escapeAttr(text) {
+        if (!text) return '';
+        return String(text)
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+    }
+
+    // Convertir une référence en ID HTML valide
+    function refToId(reference) {
+        return escapeAttr(reference).replace(/[^a-zA-Z0-9_-]/g, '_');
+    }
+
     // Données globales (scoped to this IIFE to avoid redeclaration errors)
     let selectedProducts = [];
     let allProducts = [];
 
     // Charger tous les produits au chargement de la page
     document.addEventListener('fragment:loaded', function(e) {
+        console.log('[CHARGER_VAN] Event fragment:loaded déclenché:', e.detail.name);
         if (e.detail.name === 'charger_van') {
+            console.log('[CHARGER_VAN] Page charger_van détectée, chargement des produits...');
             loadProducts();
         }
     });
 
+    // Charger immédiatement si la page est déjà affichée
+    if (document.getElementById('productsTableBody')) {
+        console.log('[CHARGER_VAN] Page déjà présente, chargement immédiat des produits');
+        loadProducts();
+    }
+
 // Charger la liste des produits
 function loadProducts() {
+    console.log('[CHARGER_VAN] Chargement des produits...');
+    const container = document.getElementById('productCheckboxList');
+
     fetch('/API/distribution/produits/')
-        .then(res => res.json())
-        .then(data => {
-            allProducts = data;
-            renderCheckboxList();
+        .then(res => {
+            console.log('[CHARGER_VAN] Réponse API status:', res.status);
+            if (res.status === 401 || res.status === 403) {
+                throw new Error('Non authentifié - Veuillez vous connecter');
+            }
+            if (!res.ok) {
+                throw new Error('Erreur HTTP ' + res.status + ' - ' + res.statusText);
+            }
+            return res.json();
         })
-        .catch(err => console.error('Erreur chargement produits:', err));
+        .then(data => {
+            console.log('[CHARGER_VAN] Données reçues:', data);
+            console.log('[CHARGER_VAN] Type de données:', Array.isArray(data) ? 'Array' : 'Object');
+
+            // Gérer la réponse paginée ou directe
+            allProducts = Array.isArray(data) ? data : (data.results || []);
+            console.log('[CHARGER_VAN] Produits chargés:', allProducts.length);
+
+            if (allProducts.length === 0) {
+                console.warn('[CHARGER_VAN] Aucun produit disponible');
+                if (container) {
+                    container.innerHTML = '<div class="alert alert-warning m-3"><i class="fa fa-exclamation-triangle"></i> Aucun produit disponible. Vérifiez que des produits sont actifs dans le système.</div>';
+                }
+                return;
+            }
+
+            renderCheckboxList();
+            console.log('[CHARGER_VAN] renderCheckboxList() terminé');
+        })
+        .catch(err => {
+            console.error('[CHARGER_VAN] Erreur chargement produits:', err);
+            if (container) {
+                let errorMsg = '<div class="alert alert-danger m-3"><strong>Erreur de chargement:</strong> ' + err.message;
+                if (err.message.includes('Non authentifié')) {
+                    errorMsg += '<br><br>Veuillez vous connecter pour accéder à cette fonctionnalité.';
+                }
+                errorMsg += '</div>';
+                container.innerHTML = errorMsg;
+            }
+        });
 }
 
 // Ajouter une ligne au tableau
@@ -322,13 +391,13 @@ function addProductRow() {
     row.id = 'row-' + rowCounter;
     row.innerHTML = `
         <td>
-            <select class="form-control product-select" onchange="updateStock(this, ${rowCounter})" required>
+            <select class="form-control product-select" onchange="updateStock(this, ${rowCounter})">
                 <option value="">-- {% trans "Sélectionner" %} --</option>
-                ${allProducts.map(p => `<option value="${p.reference}" data-stock="${p.stock || 0}">${p.reference} - ${p.designation}</option>`).join('')}
+                ${allProducts.map(p => `<option value="${escapeAttr(p.reference)}" data-stock="${p.stock || 0}">${escapeHtml(p.reference)} - ${escapeHtml(p.designation)}</option>`).join('')}
             </select>
         </td>
         <td><span id="stock-${rowCounter}" class="badge badge-info">-</span></td>
-        <td><input type="number" class="form-control quantity-input" min="1" placeholder="0" required></td>
+        <td><input type="number" class="form-control quantity-input" min="1" placeholder="0"></td>
         <td><button type="button" class="btn btn-sm btn-danger" onclick="removeRow(${rowCounter})"><i class="fa fa-trash"></i></button></td>
     `;
     tbody.appendChild(row);
@@ -378,14 +447,14 @@ function addScannedProduct(barcode) {
         renderScannedProducts();
         updateSummary();
     } else {
-        alert('{% trans "Produit non trouvé" %}: ' + barcode);
+        alert("{% trans 'Produit non trouvé' %}: " + barcode);
     }
 }
 
 function renderScannedProducts() {
     const container = document.getElementById('scannedProducts');
     if (selectedProducts.length === 0) {
-        container.innerHTML = '<p class="text-muted">{% trans "Aucun produit scanné" %}</p>';
+        container.innerHTML = "<p class=\"text-muted\">{% trans 'Aucun produit scanné' %}</p>";
         return;
     }
 
@@ -393,7 +462,7 @@ function renderScannedProducts() {
         <div class="card mb-2">
             <div class="card-body p-2">
                 <div class="row align-items-center">
-                    <div class="col-md-5"><strong>${p.reference}</strong> - ${p.designation}</div>
+                    <div class="col-md-5"><strong>${escapeHtml(p.reference)}</strong> - ${escapeHtml(p.designation)}</div>
                     <div class="col-md-3">
                         <input type="number" class="form-control form-control-sm" value="${p.quantity}"
                                onchange="updateScannedQuantity(${idx}, this.value)" min="1">
@@ -422,32 +491,43 @@ function removeScannedProduct(idx) {
 
 // Liste avec checkboxes - Version améliorée
 function renderCheckboxList() {
+    console.log('[CHARGER_VAN] renderCheckboxList() appelée, nombre de produits:', allProducts.length);
     const container = document.getElementById('productCheckboxList');
+
+    if (!container) {
+        console.error('[CHARGER_VAN] Container productCheckboxList introuvable');
+        return;
+    }
+
     if (!allProducts || allProducts.length === 0) {
+        console.warn('[CHARGER_VAN] Aucun produit à afficher');
         container.innerHTML = '<p class="text-center text-muted"><i class="fa fa-inbox"></i> Aucun produit disponible</p>';
         return;
     }
 
-    container.innerHTML = allProducts.map(p => {
+    try {
+        container.innerHTML = allProducts.map(p => {
         const stock = p.stock || 0;
         const stockBadgeClass = stock > 50 ? 'badge-success' : stock > 10 ? 'badge-warning' : 'badge-danger';
+        const refEscaped = escapeAttr(p.reference);
+        const refId = escapeAttr(p.reference).replace(/[^a-zA-Z0-9_-]/g, '_'); // ID HTML valide
 
         return `
-        <div class="card mb-2 product-checkbox-item" data-name="${(p.designation + ' ' + p.reference).toLowerCase()}" style="border-left: 3px solid ${stock > 10 ? '#28a745' : '#ffc107'};">
+        <div class="card mb-2 product-checkbox-item" data-name="${escapeAttr((p.designation + ' ' + p.reference).toLowerCase())}" style="border-left: 3px solid ${stock > 10 ? '#28a745' : '#ffc107'};">
             <div class="card-body p-2">
                 <div class="row align-items-center">
                     <div class="col-auto">
                         <div class="custom-control custom-checkbox">
-                            <input type="checkbox" class="custom-control-input" id="check-${p.reference}"
-                                   value="${p.reference}" onchange="toggleProduct('${p.reference}', this.checked)">
-                            <label class="custom-control-label" for="check-${p.reference}"></label>
+                            <input type="checkbox" class="custom-control-input" id="check-${refId}"
+                                   value="${refEscaped}" onchange='toggleProduct(this.value, this.checked)'>
+                            <label class="custom-control-label" for="check-${refId}"></label>
                         </div>
                     </div>
                     <div class="col">
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
-                                <strong style="font-size: 0.9rem;">${p.reference}</strong>
-                                <div class="text-muted small">${p.designation}</div>
+                                <strong style="font-size: 0.9rem;">${escapeHtml(p.reference)}</strong>
+                                <div class="text-muted small">${escapeHtml(p.designation)}</div>
                             </div>
                             <div class="text-right">
                                 <span class="badge ${stockBadgeClass}" style="font-size: 0.85rem;">
@@ -459,7 +539,7 @@ function renderCheckboxList() {
                 </div>
 
                 <!-- Contrôles de quantité -->
-                <div id="qty-controls-${p.reference}" class="mt-2" style="display:none;">
+                <div id="qty-controls-${refId}" class="mt-2" style="display:none;">
                     <div class="row align-items-center">
                         <div class="col-auto">
                             <label class="mb-0 small text-muted">Quantité:</label>
@@ -467,15 +547,15 @@ function renderCheckboxList() {
                         <div class="col">
                             <div class="input-group input-group-sm">
                                 <div class="input-group-prepend">
-                                    <button class="btn btn-outline-secondary" type="button" onclick="adjustQuantity('${p.reference}', -1)">
+                                    <button class="btn btn-outline-secondary" type="button" onclick='adjustQuantity("${refEscaped}", -1)'>
                                         <i class="fa fa-minus"></i>
                                     </button>
                                 </div>
-                                <input type="number" class="form-control text-center" id="qty-${p.reference}"
-                                       value="1" min="1" max="${stock}" style="max-width: 80px;"
-                                       onchange="updateCheckboxQuantity('${p.reference}')">
+                                <input type="number" class="form-control text-center" id="qty-${refId}"
+                                       value="1" min="1" data-max="${stock}" style="max-width: 80px;"
+                                       onchange='updateCheckboxQuantity("${refEscaped}")'>
                                 <div class="input-group-append">
-                                    <button class="btn btn-outline-secondary" type="button" onclick="adjustQuantity('${p.reference}', 1)">
+                                    <button class="btn btn-outline-secondary" type="button" onclick='adjustQuantity("${refEscaped}", 1)'>
                                         <i class="fa fa-plus"></i>
                                     </button>
                                 </div>
@@ -483,13 +563,13 @@ function renderCheckboxList() {
                         </div>
                         <div class="col-auto">
                             <div class="btn-group btn-group-sm" role="group">
-                                <button type="button" class="btn btn-outline-primary" onclick="setQuantity('${p.reference}', 5)" title="x5">
+                                <button type="button" class="btn btn-outline-primary" onclick='setQuantity("${refEscaped}", 5)' title="x5">
                                     <small>x5</small>
                                 </button>
-                                <button type="button" class="btn btn-outline-primary" onclick="setQuantity('${p.reference}', 10)" title="x10">
+                                <button type="button" class="btn btn-outline-primary" onclick='setQuantity("${refEscaped}", 10)' title="x10">
                                     <small>x10</small>
                                 </button>
-                                <button type="button" class="btn btn-outline-primary" onclick="setQuantity('${p.reference}', 20)" title="x20">
+                                <button type="button" class="btn btn-outline-primary" onclick='setQuantity("${refEscaped}", 20)' title="x20">
                                     <small>x20</small>
                                 </button>
                             </div>
@@ -501,7 +581,13 @@ function renderCheckboxList() {
         `;
     }).join('');
 
-    updateSelectionCounter();
+        console.log('[CHARGER_VAN] HTML généré, mise à jour de l\'interface...');
+        updateSelectionCounter();
+        console.log('[CHARGER_VAN] renderCheckboxList() terminée avec succès');
+    } catch (error) {
+        console.error('[CHARGER_VAN] Erreur dans renderCheckboxList():', error);
+        container.innerHTML = '<div class="alert alert-danger m-3">Erreur lors de l\'affichage des produits: ' + error.message + '</div>';
+    }
 }
 
 // Recherche produits améliorée
@@ -534,16 +620,19 @@ function clearSearch() {
 }
 
 function toggleProduct(reference, checked) {
-    const qtyControls = document.getElementById('qty-controls-' + reference);
-    const qtyInput = document.getElementById('qty-' + reference);
+    const refId = refToId(reference);
+    const qtyControls = document.getElementById('qty-controls-' + refId);
+    const qtyInput = document.getElementById('qty-' + refId);
+
+    if (!qtyControls || !qtyInput) {
+        console.error('[CHARGER_VAN] Elements not found for reference:', reference, 'id:', refId);
+        return;
+    }
 
     qtyControls.style.display = checked ? 'block' : 'none';
 
     if (checked) {
         qtyInput.value = 1;
-        qtyInput.required = true;
-    } else {
-        qtyInput.required = false;
     }
 
     updateSummary();
@@ -552,13 +641,20 @@ function toggleProduct(reference, checked) {
 
 // Nouvelle fonction: Ajuster la quantité avec +/-
 function adjustQuantity(reference, delta) {
-    const qtyInput = document.getElementById('qty-' + reference);
+    const refId = refToId(reference);
+    const qtyInput = document.getElementById('qty-' + refId);
+
+    if (!qtyInput) {
+        console.error('[CHARGER_VAN] Quantity input not found for reference:', reference, 'id:', refId);
+        return;
+    }
+
     let currentQty = parseInt(qtyInput.value) || 1;
     let newQty = currentQty + delta;
 
-    // Respecter min et max
+    // Respecter min et max (utiliser data-max au lieu de max)
     const min = parseInt(qtyInput.min) || 1;
-    const max = parseInt(qtyInput.max) || 9999;
+    const max = parseInt(qtyInput.dataset.max) || 9999;
     newQty = Math.max(min, Math.min(max, newQty));
 
     qtyInput.value = newQty;
@@ -568,8 +664,15 @@ function adjustQuantity(reference, delta) {
 
 // Nouvelle fonction: Définir une quantité prédéfinie
 function setQuantity(reference, quantity) {
-    const qtyInput = document.getElementById('qty-' + reference);
-    const max = parseInt(qtyInput.max) || 9999;
+    const refId = refToId(reference);
+    const qtyInput = document.getElementById('qty-' + refId);
+
+    if (!qtyInput) {
+        console.error('[CHARGER_VAN] Quantity input not found for reference:', reference, 'id:', refId);
+        return;
+    }
+
+    const max = parseInt(qtyInput.dataset.max) || 9999;
     qtyInput.value = Math.min(quantity, max);
     updateSummary();
     updateSelectionCounter();
@@ -613,7 +716,8 @@ function updateSelectionCounter() {
     // Calculer la quantité totale
     let totalQty = 0;
     checkedBoxes.forEach(checkbox => {
-        const qtyInput = document.getElementById('qty-' + checkbox.value);
+        const refId = refToId(checkbox.value);
+        const qtyInput = document.getElementById('qty-' + refId);
         if (qtyInput) {
             totalQty += parseInt(qtyInput.value) || 0;
         }
@@ -648,7 +752,7 @@ function importFromText() {
     });
 
     updateSummary();
-    alert(`{% trans "Importé" %}: ${selectedProducts.length} {% trans "produits" %}`);
+    alert("{% trans 'Importé' %}: " + selectedProducts.length + " {% trans 'produits' %}");
 }
 
 // Mettre à jour le récapitulatif
@@ -672,7 +776,8 @@ function updateSummary() {
 
     // Depuis les checkboxes
     document.querySelectorAll('.product-checkbox-item input[type="checkbox"]:checked').forEach(cb => {
-        const qtyInput = document.getElementById('qty-' + cb.value);
+        const refId = refToId(cb.value);
+        const qtyInput = document.getElementById('qty-' + refId);
         if (qtyInput && qtyInput.value) {
             const product = allProducts.find(p => p.reference === cb.value);
             products.push({
@@ -712,7 +817,7 @@ function updateSummary() {
             <table class="table table-sm">
                 <thead><tr><th>Référence</th><th>Produit</th><th class="text-right">Quantité</th></tr></thead>
                 <tbody>
-                    ${products.map(p => `<tr><td><code>${p.reference}</code></td><td>${p.designation}</td><td class="text-right"><strong>${p.quantity}</strong></td></tr>`).join('')}
+                    ${products.map(p => `<tr><td><code>${escapeHtml(p.reference)}</code></td><td>${escapeHtml(p.designation)}</td><td class="text-right"><strong>${p.quantity}</strong></td></tr>`).join('')}
                 </tbody>
             </table>
         </div>
@@ -730,7 +835,7 @@ document.getElementById('chargerVanForm').addEventListener('submit', function(e)
 
     const data = document.getElementById('produitsData').value;
     if (!data || data.trim() === '') {
-        alert('{% trans "Veuillez ajouter au moins un produit" %}');
+        alert("{% trans 'Veuillez ajouter au moins un produit' %}");
         return false;
     }
 
@@ -738,7 +843,7 @@ document.getElementById('chargerVanForm').addEventListener('submit', function(e)
     const source = document.getElementById('entrepot_source').value;
 
     if (!van || !source) {
-        alert('{% trans "Veuillez sélectionner un van et un entrepôt source" %}');
+        alert("{% trans 'Veuillez sélectionner un van et un entrepôt source' %}");
         return false;
     }
 
@@ -746,7 +851,7 @@ document.getElementById('chargerVanForm').addEventListener('submit', function(e)
     const submitBtn = this.querySelector('button[type="submit"]');
     const originalText = submitBtn.innerHTML;
     submitBtn.disabled = true;
-    submitBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> {% trans "Chargement en cours..." %}';
+    submitBtn.innerHTML = "<i class=\"fa fa-spinner fa-spin\"></i> {% trans 'Chargement en cours...' %}";
 
     // Soumettre en AJAX
     const formData = new FormData(this);
@@ -791,7 +896,7 @@ async function loadVanStock() {
     const vanId = document.getElementById('van').value;
 
     if (!vanId) {
-        alert('{% trans "Veuillez d\'abord sélectionner un van" %}');
+        alert("{% trans 'Veuillez sélectionner un van en premier' %}");
         // Revenir au premier onglet
         document.querySelector('a[href="#tab-table"]').click();
         return;
@@ -802,7 +907,7 @@ async function loadVanStock() {
         <tr>
             <td colspan="5" class="text-center py-4">
                 <i class="fa fa-spinner fa-spin fa-2x"></i>
-                <p class="mt-2">{% trans "Chargement du stock du van..." %}</p>
+                <p class="mt-2">{% trans 'Chargement du stock du van...' %}</p>
             </td>
         </tr>
     `;
@@ -815,7 +920,7 @@ async function loadVanStock() {
         const vanData = await vanResponse.json();
 
         // Récupérer le stock du van
-        const stockResponse = await fetch(`/API/product-stocks/?warehouse=${vanId}`);
+        const stockResponse = await fetch(`/API/stocks/?warehouse=${vanId}`);
         if (!stockResponse.ok) throw new Error('Erreur lors du chargement du stock');
 
         vanStockData = await stockResponse.json();
@@ -829,7 +934,7 @@ async function loadVanStock() {
             <tr>
                 <td colspan="5" class="text-center text-danger py-4">
                     <i class="fa fa-exclamation-triangle fa-2x"></i>
-                    <p class="mt-2">{% trans "Erreur lors du chargement du stock" %}: ${error.message}</p>
+                    <p class="mt-2">{% trans 'Erreur lors du chargement du stock' %}: ${error.message}</p>
                 </td>
             </tr>
         `;

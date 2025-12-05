@@ -759,10 +759,9 @@ class TourneeViewSet(viewsets.ModelViewSet):
                 ArretTourneeMobile.objects.create(
                     tournee=tournee,
                     client=config.client,
-                    ordre=config.ordre_passage or 0,
-                    adresse_livraison=config.client.adresse or '',
-                    latitude=config.client.lat,
-                    longitude=config.client.lng,
+                    ordre_passage=config.ordre_passage or 1,
+                    latitude=getattr(config.client, 'lat', None),
+                    longitude=getattr(config.client, 'lng', None),
                     statut='en_attente',
                     notes=config.notes or ''
                 )
@@ -813,10 +812,9 @@ class TourneeViewSet(viewsets.ModelViewSet):
                         ArretTourneeMobile.objects.create(
                             tournee=tournee,
                             client=config.client,
-                            ordre=config.ordre_passage or 0,
-                            adresse_livraison=config.client.adresse or '',
-                            latitude=config.client.lat,
-                            longitude=config.client.lng,
+                            ordre_passage=config.ordre_passage or 1,
+                            latitude=getattr(config.client, 'lat', None),
+                            longitude=getattr(config.client, 'lng', None),
                             statut='en_attente',
                             notes=config.notes or ''
                         )

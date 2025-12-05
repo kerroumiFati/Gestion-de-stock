@@ -6,6 +6,9 @@
   const API_ENTREPOTS = '/API/entrepots/';
 
   let achatsDataTable = null;
+  let allAchats = []; // Store all achats for search/pagination
+  let currentPage = 1;
+  let itemsPerPage = 25;
 
   function asList(data){
     if(Array.isArray(data)) return data;
@@ -257,16 +260,46 @@
   }
 
   function renderAchats(list){
-    const $table = $('#tachat');
-    const $tbody = $table.find('tbody#table-content');
-    if(!$tbody.length) return;
+    dbg('renderAchats called with list:', list);
+    allAchats = list || [];
+    dbg('Total achats:', allAchats.length);
+    filterAndRenderAchats();
+  }
 
-    // Détruire l'instance DataTable existante
-    if(achatsDataTable){
-      try {
-        achatsDataTable.destroy();
-        achatsDataTable = null;
-      } catch(e) { dbg('DataTable destroy error:', e); }
+  function filterAndRenderAchats(){
+    const searchTerm = ($('#achat-search-input').val() || '').toLowerCase();
+    let filtered = allAchats;
+
+    // Apply search filter
+    if(searchTerm){
+      filtered = allAchats.filter(function(a){
+        const searchable = [
+          a.id,
+          a.date_Achat,
+          a.fournisseur_nom,
+          a.fournisseur_prenom,
+          a.fournisseur_libelle,
+          a.produit_reference,
+          a.produit_designation
+        ].join(' ').toLowerCase();
+        return searchable.includes(searchTerm);
+      });
+    }
+
+    const totalPages = Math.ceil(filtered.length / itemsPerPage);
+    const startIdx = (currentPage - 1) * itemsPerPage;
+    const endIdx = startIdx + itemsPerPage;
+    const pageData = filtered.slice(startIdx, endIdx);
+
+    renderAchatsTable(pageData);
+    renderPagination(filtered.length, totalPages);
+  }
+
+  function renderAchatsTable(list){
+    const $tbody = $('#tachat tbody#table-content');
+    if(!$tbody.length){
+      dbg('renderAchatsTable: tbody not found!');
+      return;
     }
 
     $tbody.empty();
@@ -274,24 +307,20 @@
       $tbody.append('<tr><td colspan="12" class="text-center text-muted">Aucun achat</td></tr>');
       return;
     }
+
+    dbg('renderAchatsTable: Rendering', list.length, 'rows');
     list.forEach(function(a){
       const tr = $('<tr>');
       const sym = a.currency_symbol || 'DA';
 
-      // ID
       tr.append('<td>'+(a.id||'')+'</td>');
-
-      // Date
       tr.append('<td>'+(a.date_Achat||'')+'</td>');
 
-      // Unité d'achat (Pièce ou Carton)
       const uniteDisplay = a.unite_achat_display || (a.unite_achat === 'carton' ? 'Carton' : 'Pièce');
       tr.append('<td>'+uniteDisplay+'</td>');
 
-      // Quantité (cartons ou pièces selon le mode)
       let qteDisplay = '';
       if(a.unite_achat === 'carton'){
-        // Afficher le nombre de cartons
         const nbCartons = a.pieces_par_carton > 0 ? Math.floor(a.quantite / a.pieces_par_carton) : 0;
         qteDisplay = nbCartons + ' carton' + (nbCartons > 1 ? 's' : '');
       } else {
@@ -299,67 +328,83 @@
       }
       tr.append('<td>'+qteDisplay+'</td>');
 
-      // Pièces par carton
       const pcsParCarton = a.unite_achat === 'carton' ? (a.pieces_par_carton||1) : '-';
       tr.append('<td>'+pcsParCarton+'</td>');
 
-      // Quantité totale en pièces
       const qteTotalePcs = a.quantite_pieces || a.quantite || 0;
       tr.append('<td>'+qteTotalePcs+' pcs</td>');
 
-      // Fournisseur
       var fournisseurTxt = (a.fournisseur_nom||'') + (a.fournisseur_prenom?(' '+a.fournisseur_prenom):'');
-      // Pour les fournisseurs, utiliser libelle s'il est disponible (car Fournisseur n'a pas nom/prenom mais libelle)
       if(!fournisseurTxt && a.fournisseur_libelle) fournisseurTxt = a.fournisseur_libelle;
       tr.append('<td>'+ (fournisseurTxt || a.fournisseur || '') +'</td>');
 
-      // Produit
       var prodTxt = (a.produit_reference? (a.produit_reference+' - ') : '') + (a.produit_designation||'');
       tr.append('<td>'+ (prodTxt || a.produit || '') +'</td>');
 
-      // Prix unitaire (par pièce)
-      var prixUnitaire = a.prix_unitaire_piece || a.prix_achat || 0;
-      tr.append('<td>'+prixUnitaire.toFixed(2)+' '+sym+'</td>');
+      var prixUnitaire = parseFloat(a.prix_unitaire_piece || a.prix_achat || 0);
+      tr.append('<td>'+(isNaN(prixUnitaire) ? '0.00' : prixUnitaire.toFixed(2))+' '+sym+'</td>');
 
-      // Total
-      var total = (a.total_achat != null) ? a.total_achat : 0;
-      tr.append('<td>'+total.toFixed(2)+' '+sym+'</td>');
+      var total = parseFloat(a.total_achat != null ? a.total_achat : 0);
+      tr.append('<td>'+(isNaN(total) ? '0.00' : total.toFixed(2))+' '+sym+'</td>');
 
-      // Actions
       tr.append('<td><button class="btn btn-sm btn-outline-danger" data-action="delete" data-id="'+a.id+'">Supprimer</button></td>');
       tr.append('<td><button class="btn btn-sm btn-outline-primary" data-action="edit" data-id="'+a.id+'">Modifier</button></td>');
       $tbody.append(tr);
     });
-
-    // Initialiser DataTables
-    try {
-      if($.fn.DataTable && list && list.length > 0){
-        achatsDataTable = $table.DataTable({
-          destroy: true,
-          language: {
-            url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/fr-FR.json',
-            emptyTable: 'Aucun achat'
-          },
-          order: [[0, 'desc']], // Trier par ID décroissant
-          columnDefs: [
-            { targets: [10, 11], orderable: false }, // Boutons non triables
-            { targets: [8, 9], className: 'text-right' } // Prix alignés à droite
-          ],
-          pageLength: 25,
-          dom: 'Bfrtip',
-          buttons: []
-        });
-      }
-    } catch(e) {
-      dbg('DataTable init error:', e);
-    }
   }
+
+  function renderPagination(totalItems, totalPages){
+    const $pagination = $('#achat-pagination');
+    if(!$pagination.length) return;
+
+    $pagination.empty();
+
+    const infoText = 'Affichage de ' + ((currentPage-1)*itemsPerPage + 1) + ' à ' +
+                     Math.min(currentPage*itemsPerPage, totalItems) + ' sur ' + totalItems + ' achats';
+
+    let html = '<div class="d-flex justify-content-between align-items-center">';
+    html += '<div class="text-muted">' + infoText + '</div>';
+    html += '<div class="btn-group">';
+
+    if(currentPage > 1){
+      html += '<button class="btn btn-sm btn-outline-secondary" onclick="goToAchatPage(1)">Premier</button>';
+      html += '<button class="btn btn-sm btn-outline-secondary" onclick="goToAchatPage('+(currentPage-1)+')">Précédent</button>';
+    }
+
+    for(let i = Math.max(1, currentPage-2); i <= Math.min(totalPages, currentPage+2); i++){
+      const active = i === currentPage ? 'active' : '';
+      html += '<button class="btn btn-sm btn-outline-secondary '+active+'" onclick="goToAchatPage('+i+')">'+i+'</button>';
+    }
+
+    if(currentPage < totalPages){
+      html += '<button class="btn btn-sm btn-outline-secondary" onclick="goToAchatPage('+(currentPage+1)+')">Suivant</button>';
+      html += '<button class="btn btn-sm btn-outline-secondary" onclick="goToAchatPage('+totalPages+')">Dernier</button>';
+    }
+
+    html += '</div></div>';
+    $pagination.html(html);
+  }
+
+  window.goToAchatPage = function(page){
+    currentPage = page;
+    filterAndRenderAchats();
+  };
+
+  window.filterAndRenderAchats = filterAndRenderAchats;
 
   function loadAchats(){
     const url = '/API/achats/?page_size=1000';
     return $.ajax({ url:url, method:'GET', dataType:'json' })
-      .done(function(data){ const list = Array.isArray(data)?data:(data.results||data||[]); renderAchats(list); })
-      .fail(function(xhr){ console.warn('loadAchats failed', xhr.status, xhr.responseText||xhr.statusText); });
+      .done(function(data){
+        dbg('loadAchats data received:', data);
+        const list = Array.isArray(data)?data:(data.results||data||[]);
+        dbg('loadAchats list to render:', list, 'length:', list.length);
+        renderAchats(list);
+      })
+      .fail(function(xhr){
+        dbg('loadAchats failed', xhr.status, xhr.responseText||xhr.statusText);
+        console.warn('loadAchats failed', xhr.status, xhr.responseText||xhr.statusText);
+      });
   }
 
   function updateTotalAchat(){

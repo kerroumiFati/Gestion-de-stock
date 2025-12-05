@@ -1035,13 +1035,6 @@ async function openTourneeModal(tourneeId = null) {
         loadPromises.push(Promise.resolve());
     }
 
-    if (!window.codes_prix_tournees || window.codes_prix_tournees.length === 0) {
-        console.log('Rechargement des codes de prix...');
-        loadPromises.push(loadCodesPrix());
-    } else {
-        loadPromises.push(Promise.resolve());
-    }
-
     // Attendre que toutes les données soient chargées
     try {
         await Promise.all(loadPromises);
@@ -1053,7 +1046,6 @@ async function openTourneeModal(tourneeId = null) {
     // Peupler les selects après le chargement
     populateLivreursSelect();
     populateWarehousesSelect();
-    populateCodesPrixSelect();
 
     if (tourneeId) {
         // Charger les données de la tournée après que les selects soient peuplés
@@ -1542,13 +1534,9 @@ function submitTourneeForm(id, dateValue, livreurValue, warehouseValue, codePrix
         return response.json();
     })
     .then(tournee => {
-        // Si c'est une modification, supprimer les anciens arrêts d'abord
+        // Créer les arrêts
         const arrets = collectArrets();
-        if (id && arrets.length > 0) {
-            // Supprimer les anciens arrêts puis créer les nouveaux
-            return deleteExistingArrets(tournee.id).then(() => createArrets(tournee.id, arrets));
-        } else if (arrets.length > 0) {
-            // Nouvelle tournée, créer directement les arrêts
+        if (arrets.length > 0) {
             return createArrets(tournee.id, arrets);
         }
         return tournee;
@@ -1598,43 +1586,6 @@ function collectArrets() {
     });
 
     return arrets;
-}
-
-// Supprimer les arrêts existants d'une tournée
-async function deleteExistingArrets(tourneeId) {
-    console.log('[TOURNEES] Suppression des arrêts existants pour tournée:', tourneeId);
-
-    try {
-        // Récupérer les arrêts existants
-        const response = await fetch(`/API/distribution/arrets/?tournee=${tourneeId}`, {
-            credentials: 'same-origin',
-            headers: { 'Accept': 'application/json' }
-        });
-
-        if (!response.ok) {
-            console.warn('[TOURNEES] Impossible de récupérer les arrêts existants');
-            return;
-        }
-
-        const data = await response.json();
-        const arrets = Array.isArray(data) ? data : (data.results || []);
-
-        // Supprimer seulement les arrêts en attente (ne pas supprimer ceux déjà livrés)
-        for (const arret of arrets) {
-            if (arret.statut === 'en_attente') {
-                await fetch(`/API/distribution/arrets/${arret.id}/`, {
-                    method: 'DELETE',
-                    credentials: 'same-origin',
-                    headers: {
-                        'X-CSRFToken': getCookie('csrftoken')
-                    }
-                });
-                console.log('[TOURNEES] Arrêt supprimé:', arret.id);
-            }
-        }
-    } catch (error) {
-        console.error('[TOURNEES] Erreur suppression arrêts:', error);
-    }
 }
 
 // Créer les arrêts
@@ -1687,38 +1638,13 @@ function loadTourneeData(id) {
 
     ensureClientsLoaded
         .then(() => fetch(`/API/tournees/${id}/`))
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Erreur HTTP: ' + response.status);
-            }
-            return response.json();
-        })
+        .then(response => response.json())
         .then(tournee => {
             console.log('[TOURNEES] Données chargées:', tournee);
-            console.log('[TOURNEES] Champs: date_tournee=' + tournee.date_tournee + ', livreur=' + tournee.livreur);
-
             document.getElementById('tournee-id').value = tournee.id;
 
-            // Utiliser les noms de champs corrects du serializer TourneeMobile
-            var dateInput = document.getElementById('date');
-            if (dateInput) {
-                dateInput.value = tournee.date_tournee || '';
-                console.log('[TOURNEES] Date définie:', dateInput.value);
-            }
-
-            // Fonction helper pour mettre à jour un custom select trigger
-            function updateCustomSelectTrigger(triggerId, text) {
-                var trigger = document.getElementById(triggerId);
-                if (trigger) {
-                    var span = trigger.querySelector('.selected-text');
-                    if (span) {
-                        span.textContent = text;
-                        span.classList.remove('placeholder');
-                    } else {
-                        trigger.innerHTML = '<span class="selected-text">' + text + '</span><i class="fas fa-chevron-down arrow"></i>';
-                    }
-                }
-            }
+            // Utiliser les noms de champs corrects du serializer
+            document.getElementById('date').value = tournee.date || '';
 
             // Mettre à jour le select livreur et son custom select
             var livreurSelect = document.getElementById('livreur');
@@ -1733,14 +1659,33 @@ function loadTourneeData(id) {
                     livreurSelect.appendChild(newOption);
                 }
                 livreurSelect.value = tournee.livreur;
+                // Mettre à jour l'affichage du custom select
+                var livreurTrigger = document.getElementById('livreurTrigger');
                 var selectedOption = livreurSelect.options[livreurSelect.selectedIndex];
-                if (selectedOption && selectedOption.value) {
-                    updateCustomSelectTrigger('livreurTrigger', selectedOption.text);
+                if (livreurTrigger && selectedOption) {
+                    livreurTrigger.textContent = selectedOption.text || 'Sélectionner un livreur';
                 }
-                console.log('[TOURNEES] Livreur défini:', livreurSelect.value);
             }
 
-            // Note: TourneeMobile n'a pas de champ warehouse, ignorer
+            // Mettre à jour le select entrepôt et son custom select
+            var warehouseSelect = document.getElementById('warehouse');
+            if (warehouseSelect && tournee.warehouse) {
+                // Vérifier si l'option existe déjà dans le select
+                var optionExists = Array.from(warehouseSelect.options).some(opt => opt.value == tournee.warehouse);
+                if (!optionExists && tournee.warehouse_nom) {
+                    // Ajouter l'option si elle n'existe pas
+                    var newOption = document.createElement('option');
+                    newOption.value = tournee.warehouse;
+                    newOption.textContent = tournee.warehouse_nom;
+                    warehouseSelect.appendChild(newOption);
+                }
+                warehouseSelect.value = tournee.warehouse;
+                var warehouseTrigger = document.getElementById('warehouseTrigger');
+                var selectedOption = warehouseSelect.options[warehouseSelect.selectedIndex];
+                if (warehouseTrigger && selectedOption) {
+                    warehouseTrigger.textContent = selectedOption.text || 'Sélectionner un entrepôt';
+                }
+            }
 
             // Formater l'heure pour le champ input (HH:mm seulement)
             function formatTimeForInput(timeStr) {
@@ -1748,97 +1693,32 @@ function loadTourneeData(id) {
                 // Prendre seulement HH:mm (les 5 premiers caractères)
                 return timeStr.substring(0, 5);
             }
+            document.getElementById('heure_depart_prevue').value = formatTimeForInput(tournee.heure_depart_prevue);
+            document.getElementById('heure_retour_prevue').value = formatTimeForInput(tournee.heure_retour_prevue);
 
-            // TourneeMobile utilise heure_debut et heure_fin
-            var heureDepart = document.getElementById('heure_depart_prevue');
-            var heureRetour = document.getElementById('heure_retour_prevue');
-            if (heureDepart) {
-                heureDepart.value = formatTimeForInput(tournee.heure_debut);
-                console.log('[TOURNEES] Heure départ définie:', heureDepart.value);
-            }
-            if (heureRetour) {
-                heureRetour.value = formatTimeForInput(tournee.heure_fin);
-                console.log('[TOURNEES] Heure retour définie:', heureRetour.value);
-            }
-
-            // Stocker le numero_tournee pour la modification
-            window.currentTourneeNumero = tournee.numero_tournee;
-
-            // TourneeMobile utilise 'notes' au lieu de 'commentaire'
-            var commentaireInput = document.getElementById('commentaire');
-            if (commentaireInput) {
-                commentaireInput.value = tournee.notes || '';
-            }
+            // Stocker le numero pour la modification
+            window.currentTourneeNumero = tournee.numero;
+            document.getElementById('commentaire').value = tournee.commentaire || '';
 
             // Code prix si présent
             var codePrixSelect = document.getElementById('code_prix');
             if (codePrixSelect && tournee.code_prix) {
-                // Vérifier si l'option existe déjà dans le select
-                var optionExists = Array.from(codePrixSelect.options).some(opt => opt.value == tournee.code_prix);
-                if (!optionExists && (tournee.code_prix_libelle || tournee.code_prix_code)) {
-                    // Ajouter l'option si elle n'existe pas
-                    var newOption = document.createElement('option');
-                    newOption.value = tournee.code_prix;
-                    newOption.textContent = tournee.code_prix_libelle + ' (' + tournee.code_prix_code + ')';
-                    codePrixSelect.appendChild(newOption);
-                }
                 codePrixSelect.value = tournee.code_prix;
-                var selectedOption = codePrixSelect.options[codePrixSelect.selectedIndex];
-                if (selectedOption && selectedOption.value) {
-                    updateCustomSelectTrigger('codePrixTrigger', selectedOption.text);
-                }
-                console.log('[TOURNEES] Code prix défini:', codePrixSelect.value);
             }
 
             // Charger les arrêts existants si disponibles
             if (tournee.arrets && tournee.arrets.length > 0) {
-                console.log('[TOURNEES] Chargement de', tournee.arrets.length, 'arrêts');
-
-                // S'assurer que les clients sont chargés avant d'ajouter les arrêts
-                const loadClientsPromise = (!window.clients_tournees || window.clients_tournees.length === 0)
-                    ? loadClients()
-                    : Promise.resolve();
-
-                loadClientsPromise.then(function() {
-                    tournee.arrets.forEach(function(arret, index) {
-                        console.log('[TOURNEES] Ajout arrêt:', arret.client, arret.client_nom);
-                        addArretFormInternal();
-                        var lastArret = document.getElementById('arret-' + window.arretCounter);
-                        if (lastArret) {
-                            var clientSelect = lastArret.querySelector('.arret-client');
-                            if (clientSelect) {
-                                // Vérifier si l'option existe, sinon l'ajouter
-                                var optionExists = Array.from(clientSelect.options).some(function(opt) {
-                                    return opt.value == arret.client;
-                                });
-                                if (!optionExists && arret.client_nom) {
-                                    var newOption = document.createElement('option');
-                                    newOption.value = arret.client;
-                                    newOption.textContent = arret.client_nom;
-                                    clientSelect.appendChild(newOption);
-                                }
-                                clientSelect.value = arret.client;
-                                console.log('[TOURNEES] Client défini pour arrêt:', clientSelect.value);
-                            }
-                            var heureInput = lastArret.querySelector('.arret-heure');
-                            if (heureInput && arret.heure_prevue) {
-                                heureInput.value = arret.heure_prevue.substring(0, 5);
-                            }
-
-                            // Afficher le statut de l'arrêt si livré ou en échec
-                            if (arret.statut && arret.statut !== 'en_attente') {
-                                var statusBadge = document.createElement('span');
-                                statusBadge.className = 'badge ' + (arret.statut === 'livre' ? 'badge-success' : 'badge-danger');
-                                statusBadge.style.cssText = 'margin-left: 10px; padding: 4px 8px; border-radius: 4px; font-size: 0.8em;';
-                                statusBadge.textContent = arret.statut === 'livre' ? 'Livré' : (arret.statut === 'echec' ? 'Échec' : arret.statut);
-                                var header = lastArret.querySelector('.arret-header') || lastArret.firstChild;
-                                if (header) header.appendChild(statusBadge);
-                            }
-                        }
-                    });
-                    console.log('[TOURNEES] Tous les arrêts ont été chargés');
-                }).catch(function(err) {
-                    console.error('[TOURNEES] Erreur chargement clients pour arrêts:', err);
+                tournee.arrets.forEach((arret, index) => {
+                    addArretFormInternal();
+                    const lastArret = document.getElementById(`arret-${window.arretCounter}`);
+                    if (lastArret) {
+                        var clientSelect = lastArret.querySelector('.arret-client');
+                        if (clientSelect) clientSelect.value = arret.client;
+                        var heureInput = lastArret.querySelector('.arret-heure');
+                        if (heureInput) heureInput.value = arret.heure_prevue || '';
+                        var adresseInput = lastArret.querySelector('.arret-adresse');
+                        if (adresseInput) adresseInput.value = arret.adresse_livraison || '';
+                    }
                 });
             }
 

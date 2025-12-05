@@ -35,6 +35,15 @@
     });
   }
 
+  function refreshSelect2($sel){
+    // Appeler la fonction globale d'initialisation Select2
+    if(window.initVenteSelect2){
+      var currentVal = $sel.val();
+      window.initVenteSelect2('#' + $sel.attr('id'));
+      if(currentVal) $sel.val(currentVal).trigger('change');
+    }
+  }
+
   function loadClients(){
     const $sel = $('#vente_client');
     if(!$sel.length){ return; }
@@ -52,6 +61,7 @@
           if(diversId === null && (label === 'divers' || label.includes('divers'))){ diversId = c.id; }
         });
         if(diversId) { $sel.val(diversId); }
+        refreshSelect2($sel);
       })
       .fail(function(xhr){ dbg('loadClients fail', xhr.status, xhr.responseText || xhr.statusText); });
   }
@@ -117,15 +127,17 @@
           const dw = cfg && (cfg[0] || cfg).default_warehouse;
           if(dw){
             const exists = list.some(function(w){ return String(w.id) === String(dw); });
-            if(exists){ $sel.val(String(dw)); return; }
+            if(exists){ $sel.val(String(dw)); refreshSelect2($sel); return; }
           }
           // Fallback: keep previous heuristic if no config or not found
           const defByCode = list.find(function(w){ return (w.code||'').toUpperCase().startsWith('DEF'); });
           if(defByCode){ $sel.val(defByCode.id); }
+          refreshSelect2($sel);
         }).fail(function(){
           // If config not accessible, fallback to DEF* heuristic
           const defByCode = list.find(function(w){ return (w.code||'').toUpperCase().startsWith('DEF'); });
           if(defByCode){ $sel.val(defByCode.id); }
+          refreshSelect2($sel);
         });
         if(list.length === 0){ console.warn('Aucun entrepôt chargé'); }
       })
@@ -268,6 +280,7 @@
           return { value: p.id, text: text };
         });
         if(list.length === 1){ $sel.val(list[0].id); }
+        refreshSelect2($sel);
       })
       .fail(function(xhr){ dbg('loadProduits fail', xhr.status, xhr.responseText || xhr.statusText); });
   }
@@ -298,15 +311,21 @@
 
   // Fonction pour charger les promotions applicables à un produit
   function loadPromotionsForProduct(produitId){
+    const url = API_PROMOTIONS + 'applicables/?produit_id=' + produitId;
+    dbg('Loading promotions from:', url);
     return $.ajax({
-      url: API_PROMOTIONS + 'applicables/?produit_id=' + produitId,
+      url: url,
       method: 'GET',
       dataType: 'json'
     }).done(function(data){
+      dbg('Promotions API response for product', produitId, ':', data);
       PROMOTIONS_CACHE[produitId] = asList(data);
       dbg('Promotions chargées pour produit', produitId, ':', PROMOTIONS_CACHE[produitId]);
+      if(PROMOTIONS_CACHE[produitId].length === 0){
+        dbg('WARNING: No promotions found for product', produitId);
+      }
     }).fail(function(xhr){
-      dbg('loadPromotionsForProduct fail', xhr.status);
+      dbg('loadPromotionsForProduct FAILED for product', produitId, 'status:', xhr.status, 'response:', xhr.responseText);
       PROMOTIONS_CACHE[produitId] = [];
     });
   }
@@ -495,53 +514,89 @@
     const p = PRODUCTS_CACHE[prodId];
     if(!p){ alert('Produit introuvable en cache, réessayez.'); return; }
 
-    const prixOriginal = getBestPrice(p);
+    // Vérifier si le produit existe déjà dans le panier
+    const existingIndex = LINES.findIndex(function(l){ return l.produit === prodId; });
 
-    // Vérifier s'il y a une promotion applicable
-    calculatePriceWithPromotion(prodId, qty, prixOriginal)
-      .done(function(result){
-        dbg('Résultat calcul promo:', result);
+    if(existingIndex !== -1){
+      // Produit déjà dans le panier - mettre à jour la quantité
+      const existingLine = LINES[existingIndex];
+      const newQty = existingLine.quantite + qty;
+      const prixOriginal = existingLine.prix_original || existingLine.prixU_snapshot;
 
-        const line = {
-          produit: prodId,
-          designation: p.designation || '',
-          quantite: qty,
-          prixU_snapshot: prixOriginal,
-          currency: p.currency || null,
-          // Champs promotion
-          promotion: result.promotion ? result.promotion.id : null,
-          promotion_code: result.promotion ? result.promotion.code : null,
-          promotion_nom: result.promotion ? result.promotion.nom : null,
-          prix_original: prixOriginal,
-          prix_avec_promo: result.prix_total_avec_promo / qty,
-          remise_promo: result.economie_montant,
-          quantite_offerte: result.quantite_offerte || 0
-        };
+      // Recalculer la promotion avec la nouvelle quantité
+      calculatePriceWithPromotion(prodId, newQty, prixOriginal)
+        .done(function(result){
+          dbg('Mise à jour quantité, résultat promo:', result);
 
-        // Si promotion, utiliser le prix promo
-        if(result.promotion){
-          line.prixU_snapshot = result.prix_total_avec_promo / qty;
-        }
+          existingLine.quantite = newQty;
+          existingLine.promotion = result.promotion ? result.promotion.id : null;
+          existingLine.promotion_code = result.promotion ? result.promotion.code : null;
+          existingLine.promotion_nom = result.promotion ? result.promotion.nom : null;
+          existingLine.remise_promo = result.economie_montant;
+          existingLine.quantite_offerte = result.quantite_offerte || 0;
 
-        LINES.push(line);
-        // reset input qty only
-        $('#vente_qte').val('1');
-        $('#promo_info').hide().empty();
-        renderLines();
-      })
-      .fail(function(){
-        // En cas d'erreur, ajouter sans promo
-        const line = {
-          produit: prodId,
-          designation: p.designation || '',
-          quantite: qty,
-          prixU_snapshot: prixOriginal,
-          currency: p.currency || null
-        };
-        LINES.push(line);
-        $('#vente_qte').val('1');
-        renderLines();
-      });
+          if(result.promotion){
+            existingLine.prixU_snapshot = result.prix_total_avec_promo / newQty;
+            existingLine.prix_avec_promo = result.prix_total_avec_promo / newQty;
+          } else {
+            existingLine.prixU_snapshot = prixOriginal;
+          }
+
+          $('#vente_qte').val('1');
+          $('#promo_info').hide().empty();
+          renderLines();
+        })
+        .fail(function(){
+          // En cas d'erreur, juste mettre à jour la quantité
+          existingLine.quantite = newQty;
+          $('#vente_qte').val('1');
+          renderLines();
+        });
+    } else {
+      // Nouveau produit - ajouter une nouvelle ligne
+      const prixOriginal = getBestPrice(p);
+
+      calculatePriceWithPromotion(prodId, qty, prixOriginal)
+        .done(function(result){
+          dbg('Résultat calcul promo:', result);
+
+          const line = {
+            produit: prodId,
+            designation: p.designation || '',
+            quantite: qty,
+            prixU_snapshot: prixOriginal,
+            currency: p.currency || null,
+            promotion: result.promotion ? result.promotion.id : null,
+            promotion_code: result.promotion ? result.promotion.code : null,
+            promotion_nom: result.promotion ? result.promotion.nom : null,
+            prix_original: prixOriginal,
+            prix_avec_promo: result.prix_total_avec_promo / qty,
+            remise_promo: result.economie_montant,
+            quantite_offerte: result.quantite_offerte || 0
+          };
+
+          if(result.promotion){
+            line.prixU_snapshot = result.prix_total_avec_promo / qty;
+          }
+
+          LINES.push(line);
+          $('#vente_qte').val('1');
+          $('#promo_info').hide().empty();
+          renderLines();
+        })
+        .fail(function(){
+          const line = {
+            produit: prodId,
+            designation: p.designation || '',
+            quantite: qty,
+            prixU_snapshot: prixOriginal,
+            currency: p.currency || null
+          };
+          LINES.push(line);
+          $('#vente_qte').val('1');
+          renderLines();
+        });
+    }
   }
 
   function removeLine(idx){
@@ -615,19 +670,23 @@
     }
 
     // Créer la vente avec le statut approprié
+    dbg('Creating sale with payload:', payload);
     $.ajax({ url:'/API/ventes/', method:'POST', contentType:'application/json', headers:{ 'X-CSRFToken': getCSRFToken() }, data: JSON.stringify(payload) })
       .done(function(resp){
+        dbg('Sale created successfully:', resp);
         const id = resp.id; const num = resp.numero || id;
         const statusText = isFinal ? 'finalisée' : 'enregistrée en brouillon';
         $('#vente_status').text('Vente '+statusText+' (#'+num+')')
           .removeClass('text-danger').addClass('text-success');
         clearSale();
         // refresh list and stats, then switch to list tab
+        dbg('Reloading sales list after creation...');
         loadSalesList();
         loadStats();
         $('a#liste-ventes-tab').tab('show');
       })
       .fail(function(xhr){
+        dbg('Sale creation FAILED:', xhr.status, xhr.responseJSON || xhr.responseText);
         let msg = 'Bad Request';
         if(xhr.responseJSON){
           if(typeof xhr.responseJSON === 'string') msg = xhr.responseJSON;
@@ -673,54 +732,75 @@
 
   function applySalesFilterAndRender(){
     const status = getSelectedStatusFilter();
+    dbg('applySalesFilterAndRender: status filter =', status);
     const rows = Array.isArray(SALES_LIST) ? SALES_LIST : [];
+    dbg('applySalesFilterAndRender: total rows =', rows.length);
     const filtered = status==='all' ? rows : rows.filter(function(v){ return (v.statut||'') === status; });
+    dbg('applySalesFilterAndRender: filtered rows =', filtered.length);
     renderSalesList(filtered);
   }
 
   function renderSalesList(rows){
-    const $tbody = $('#liste_ventes_body'); if(!$tbody.length) return;
+    dbg('renderSalesList called with rows:', rows);
+    const $tbody = $('#liste_ventes_body');
+    if(!$tbody.length){
+      dbg('renderSalesList: tbody not found!');
+      return;
+    }
     const $table = $('#tbl_liste_ventes');
 
     // Destroy DataTable if it exists
     if($.fn.dataTable && $.fn.dataTable.isDataTable($table)){
       $table.DataTable().clear().destroy();
+      dbg('renderSalesList: DataTable destroyed');
     }
 
     $tbody.empty();
     const list = asList(rows);
-    if(!list.length){ $tbody.append('<tr><td colspan="8" class="text-center text-muted">Aucune vente</td></tr>'); }
+    dbg('renderSalesList: list length =', list.length);
+    if(!list.length){
+      dbg('renderSalesList: No sales to display');
+      $tbody.append('<tr><td colspan="8" class="text-center text-muted">Aucune vente</td></tr>');
+    }
     else {
-      list.forEach(function(v){
-        const tr = $('<tr>').css('cursor', 'pointer').addClass('sale-row');
-        tr.attr('data-sale-id', v.id);
-        tr.append('<td>'+(v.numero || v.id)+'</td>');
-        tr.append('<td>'+(v.date_vente || '').toString().replace('T',' ').slice(0,16)+'</td>');
-        tr.append('<td>'+(v.client_nom || '')+' '+(v.client_prenom || '')+'</td>');
-        tr.append('<td>'+ (v.statut || '') +'</td>');
-        const totalTtc = parseFloat(v.total_ttc) || 0;
-        const montantPaye = parseFloat(v.montant_paye) || 0;
-        const reste = typeof v.reste_a_payer !== "undefined" ? parseFloat(v.reste_a_payer) : totalTtc;
-        tr.append('<td>'+ totalTtc.toFixed(2) +' DA</td>');
-        tr.append('<td>'+ montantPaye.toFixed(2) +' DA</td>');
-        const resteClass = reste <= 0 ? 'text-success' : (reste < totalTtc ? 'text-warning' : 'text-danger');
-        tr.append('<td class="'+resteClass+'"><strong>'+ reste.toFixed(2) +' DA</strong></td>');
-        var actions = '';
-        if((v.statut||'') === 'draft'){
-          actions += '<button class="btn btn-sm btn-success finalize-sale" data-id="'+v.id+'"><i class="fa fa-check"></i> Finaliser</button> ';
+      dbg('renderSalesList: Starting to render', list.length, 'rows');
+      list.forEach(function(v, idx){
+        try {
+          const tr = $('<tr>').css('cursor', 'pointer').addClass('sale-row');
+          tr.attr('data-sale-id', v.id);
+          tr.append('<td>'+(v.numero || v.id)+'</td>');
+          tr.append('<td>'+(v.date_vente || '').toString().replace('T',' ').slice(0,16)+'</td>');
+          tr.append('<td>'+(v.client_nom || '')+' '+(v.client_prenom || '')+'</td>');
+          tr.append('<td>'+ (v.statut || '') +'</td>');
+          const totalTtc = parseFloat(v.total_ttc) || 0;
+          const montantPaye = parseFloat(v.montant_paye) || 0;
+          const reste = typeof v.reste_a_payer !== "undefined" ? parseFloat(v.reste_a_payer) : totalTtc;
+          tr.append('<td>'+ totalTtc.toFixed(2) +' DA</td>');
+          tr.append('<td>'+ montantPaye.toFixed(2) +' DA</td>');
+          const resteClass = reste <= 0 ? 'text-success' : (reste < totalTtc ? 'text-warning' : 'text-danger');
+          tr.append('<td class="'+resteClass+'"><strong>'+ reste.toFixed(2) +' DA</strong></td>');
+          var actions = '';
+          if((v.statut||'') === 'draft'){
+            actions += '<button class="btn btn-sm btn-success finalize-sale" data-id="'+v.id+'"><i class="fa fa-check"></i> Finaliser</button> ';
+          }
+          actions += '<button class="btn btn-sm btn-info view-sale-details" data-id="'+v.id+'"><i class="fa fa-eye"></i> Détails</button> ';
+          if(reste > 0) {
+            actions += '<button class="btn btn-sm btn-primary add-payment" data-id="'+v.id+'" data-reste="'+reste+'"><i class="fa fa-money"></i> Payer</button>';
+          }
+          tr.append('<td>'+ (actions || '') +'</td>');
+          $tbody.append(tr);
+          if(idx === 0) dbg('renderSalesList: First row appended successfully');
+        } catch(e) {
+          dbg('renderSalesList: Error rendering row', idx, e);
         }
-        actions += '<button class="btn btn-sm btn-info view-sale-details" data-id="'+v.id+'"><i class="fa fa-eye"></i> Détails</button> ';
-        if(reste > 0) {
-          actions += '<button class="btn btn-sm btn-primary add-payment" data-id="'+v.id+'" data-reste="'+reste+'"><i class="fa fa-money"></i> Payer</button>';
-        }
-        tr.append('<td>'+ (actions || '') +'</td>');
-        $tbody.append(tr);
       });
+      dbg('renderSalesList: Finished rendering. tbody children count:', $tbody.children().length);
     }
 
     // Reinitialize DataTable
     if($.fn.DataTable){
       try {
+        dbg('renderSalesList: Initializing DataTable...');
         $table.DataTable({
           language: {
             "sProcessing": "Traitement en cours...",
@@ -754,15 +834,23 @@
           order: [[1, 'desc']], // Sort by date (column 1) descending
           pageLength: 25
         });
+        dbg('renderSalesList: DataTable initialized successfully');
       } catch(e) {
         dbg('DataTable init failed:', e);
       }
+    } else {
+      dbg('renderSalesList: $.fn.DataTable not available!');
     }
   }
 
   function loadSalesList(){
     $.ajax({ url:'/API/ventes/?page_size=100', method:'GET', dataType:'json' })
-      .done(function(data){ SALES_LIST = asList(data); applySalesFilterAndRender(); })
+      .done(function(data){
+        dbg('loadSalesList data received:', data);
+        SALES_LIST = asList(data);
+        dbg('SALES_LIST after asList:', SALES_LIST, 'length:', SALES_LIST.length);
+        applySalesFilterAndRender();
+      })
       .fail(function(xhr){ dbg('loadSalesList fail', xhr.status, xhr.responseText || xhr.statusText); });
   }
 
@@ -903,17 +991,40 @@
       html += '<tbody>';
       lignes.forEach(function(ligne){
         const ref = ligne.produit_reference || 'N/A';
-        const desig = ligne.designation || 'N/A';
+        let desig = ligne.designation || 'N/A';
         const prix = parseFloat(ligne.prixU_snapshot || 0);
         const qty = parseInt(ligne.quantite || 0, 10);
         const total = prix * qty;
         const sym = ligne.currency_symbol || sale.currency_symbol || 'DA';
+
+        // Ajouter badge promotion si applicable
+        if(ligne.promotion_code || ligne.promotion){
+          desig += ' <span class="badge badge-success"><i class="fa fa-tag"></i> '+(ligne.promotion_code || 'Promo')+'</span>';
+          if(ligne.quantite_offerte > 0){
+            desig += ' <span class="badge badge-info">+'+ligne.quantite_offerte+' offert(s)</span>';
+          }
+        }
+
+        // Prix avec indication de promo
+        let prixHtml = (isNaN(prix) ? '0.00' : prix.toFixed(2))+' '+sym;
+        const prixOriginal = parseFloat(ligne.prix_original || 0);
+        if(ligne.promotion && prixOriginal > 0 && prixOriginal > prix){
+          prixHtml = '<del class="text-muted">'+(prixOriginal.toFixed(2))+'</del> <span class="text-success">'+(prix.toFixed(2))+'</span> '+sym;
+        }
+
+        // Total avec économie
+        let totalHtml = '<strong>'+(isNaN(total) ? '0.00' : total.toFixed(2))+' '+sym+'</strong>';
+        const remisePromo = parseFloat(ligne.remise_promo || 0);
+        if(remisePromo > 0){
+          totalHtml += '<br><small class="text-success">Économie: -'+remisePromo.toFixed(2)+' '+sym+'</small>';
+        }
+
         html += '<tr>';
         html += '<td><code>'+ref+'</code></td>';
         html += '<td>'+desig+'</td>';
-        html += '<td class="text-right">'+(isNaN(prix) ? '0.00' : prix.toFixed(2))+' '+sym+'</td>';
+        html += '<td class="text-right">'+prixHtml+'</td>';
         html += '<td class="text-center"><span class="badge badge-primary">'+qty+'</span></td>';
-        html += '<td class="text-right"><strong>'+(isNaN(total) ? '0.00' : total.toFixed(2))+' '+sym+'</strong></td>';
+        html += '<td class="text-right">'+totalHtml+'</td>';
         html += '</tr>';
       });
       html += '</tbody>';

@@ -375,8 +375,18 @@
                   </div>
                 </div>
 
-                <div id="section-achat-table" class="row table-responsive m-auto rounded">
-                    <table id="tachat" class="table table-hover w-100">
+                <div id="section-achat-table" class="row m-auto rounded">
+                    <!-- Search box -->
+                    <div class="col-12 mb-3">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <input type="text" id="achat-search-input" class="form-control" placeholder="Rechercher..." onkeyup="filterAndRenderAchats()">
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Table -->
+                    <div class="col-12 table-responsive">
+                        <table id="tachat" class="table table-hover w-100" data-no-datatable="true">
                             <thead>
                             <tr class="text-uppercase bg-light w-100">
                                 <th scope="col">{% trans "Id" %}</th>
@@ -397,6 +407,9 @@
 
                             </tbody>
                         </table>
+                    </div>
+                    <!-- Pagination -->
+                    <div class="col-12 mt-3" id="achat-pagination"></div>
                 </div>
             </div>
         </form>

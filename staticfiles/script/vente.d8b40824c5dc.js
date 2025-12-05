@@ -311,21 +311,15 @@
 
   // Fonction pour charger les promotions applicables à un produit
   function loadPromotionsForProduct(produitId){
-    const url = API_PROMOTIONS + 'applicables/?produit_id=' + produitId;
-    dbg('Loading promotions from:', url);
     return $.ajax({
-      url: url,
+      url: API_PROMOTIONS + 'applicables/?produit_id=' + produitId,
       method: 'GET',
       dataType: 'json'
     }).done(function(data){
-      dbg('Promotions API response for product', produitId, ':', data);
       PROMOTIONS_CACHE[produitId] = asList(data);
       dbg('Promotions chargées pour produit', produitId, ':', PROMOTIONS_CACHE[produitId]);
-      if(PROMOTIONS_CACHE[produitId].length === 0){
-        dbg('WARNING: No promotions found for product', produitId);
-      }
     }).fail(function(xhr){
-      dbg('loadPromotionsForProduct FAILED for product', produitId, 'status:', xhr.status, 'response:', xhr.responseText);
+      dbg('loadPromotionsForProduct fail', xhr.status);
       PROMOTIONS_CACHE[produitId] = [];
     });
   }
@@ -514,89 +508,53 @@
     const p = PRODUCTS_CACHE[prodId];
     if(!p){ alert('Produit introuvable en cache, réessayez.'); return; }
 
-    // Vérifier si le produit existe déjà dans le panier
-    const existingIndex = LINES.findIndex(function(l){ return l.produit === prodId; });
+    const prixOriginal = getBestPrice(p);
 
-    if(existingIndex !== -1){
-      // Produit déjà dans le panier - mettre à jour la quantité
-      const existingLine = LINES[existingIndex];
-      const newQty = existingLine.quantite + qty;
-      const prixOriginal = existingLine.prix_original || existingLine.prixU_snapshot;
+    // Vérifier s'il y a une promotion applicable
+    calculatePriceWithPromotion(prodId, qty, prixOriginal)
+      .done(function(result){
+        dbg('Résultat calcul promo:', result);
 
-      // Recalculer la promotion avec la nouvelle quantité
-      calculatePriceWithPromotion(prodId, newQty, prixOriginal)
-        .done(function(result){
-          dbg('Mise à jour quantité, résultat promo:', result);
+        const line = {
+          produit: prodId,
+          designation: p.designation || '',
+          quantite: qty,
+          prixU_snapshot: prixOriginal,
+          currency: p.currency || null,
+          // Champs promotion
+          promotion: result.promotion ? result.promotion.id : null,
+          promotion_code: result.promotion ? result.promotion.code : null,
+          promotion_nom: result.promotion ? result.promotion.nom : null,
+          prix_original: prixOriginal,
+          prix_avec_promo: result.prix_total_avec_promo / qty,
+          remise_promo: result.economie_montant,
+          quantite_offerte: result.quantite_offerte || 0
+        };
 
-          existingLine.quantite = newQty;
-          existingLine.promotion = result.promotion ? result.promotion.id : null;
-          existingLine.promotion_code = result.promotion ? result.promotion.code : null;
-          existingLine.promotion_nom = result.promotion ? result.promotion.nom : null;
-          existingLine.remise_promo = result.economie_montant;
-          existingLine.quantite_offerte = result.quantite_offerte || 0;
+        // Si promotion, utiliser le prix promo
+        if(result.promotion){
+          line.prixU_snapshot = result.prix_total_avec_promo / qty;
+        }
 
-          if(result.promotion){
-            existingLine.prixU_snapshot = result.prix_total_avec_promo / newQty;
-            existingLine.prix_avec_promo = result.prix_total_avec_promo / newQty;
-          } else {
-            existingLine.prixU_snapshot = prixOriginal;
-          }
-
-          $('#vente_qte').val('1');
-          $('#promo_info').hide().empty();
-          renderLines();
-        })
-        .fail(function(){
-          // En cas d'erreur, juste mettre à jour la quantité
-          existingLine.quantite = newQty;
-          $('#vente_qte').val('1');
-          renderLines();
-        });
-    } else {
-      // Nouveau produit - ajouter une nouvelle ligne
-      const prixOriginal = getBestPrice(p);
-
-      calculatePriceWithPromotion(prodId, qty, prixOriginal)
-        .done(function(result){
-          dbg('Résultat calcul promo:', result);
-
-          const line = {
-            produit: prodId,
-            designation: p.designation || '',
-            quantite: qty,
-            prixU_snapshot: prixOriginal,
-            currency: p.currency || null,
-            promotion: result.promotion ? result.promotion.id : null,
-            promotion_code: result.promotion ? result.promotion.code : null,
-            promotion_nom: result.promotion ? result.promotion.nom : null,
-            prix_original: prixOriginal,
-            prix_avec_promo: result.prix_total_avec_promo / qty,
-            remise_promo: result.economie_montant,
-            quantite_offerte: result.quantite_offerte || 0
-          };
-
-          if(result.promotion){
-            line.prixU_snapshot = result.prix_total_avec_promo / qty;
-          }
-
-          LINES.push(line);
-          $('#vente_qte').val('1');
-          $('#promo_info').hide().empty();
-          renderLines();
-        })
-        .fail(function(){
-          const line = {
-            produit: prodId,
-            designation: p.designation || '',
-            quantite: qty,
-            prixU_snapshot: prixOriginal,
-            currency: p.currency || null
-          };
-          LINES.push(line);
-          $('#vente_qte').val('1');
-          renderLines();
-        });
-    }
+        LINES.push(line);
+        // reset input qty only
+        $('#vente_qte').val('1');
+        $('#promo_info').hide().empty();
+        renderLines();
+      })
+      .fail(function(){
+        // En cas d'erreur, ajouter sans promo
+        const line = {
+          produit: prodId,
+          designation: p.designation || '',
+          quantite: qty,
+          prixU_snapshot: prixOriginal,
+          currency: p.currency || null
+        };
+        LINES.push(line);
+        $('#vente_qte').val('1');
+        renderLines();
+      });
   }
 
   function removeLine(idx){
@@ -670,23 +628,19 @@
     }
 
     // Créer la vente avec le statut approprié
-    dbg('Creating sale with payload:', payload);
     $.ajax({ url:'/API/ventes/', method:'POST', contentType:'application/json', headers:{ 'X-CSRFToken': getCSRFToken() }, data: JSON.stringify(payload) })
       .done(function(resp){
-        dbg('Sale created successfully:', resp);
         const id = resp.id; const num = resp.numero || id;
         const statusText = isFinal ? 'finalisée' : 'enregistrée en brouillon';
         $('#vente_status').text('Vente '+statusText+' (#'+num+')')
           .removeClass('text-danger').addClass('text-success');
         clearSale();
         // refresh list and stats, then switch to list tab
-        dbg('Reloading sales list after creation...');
         loadSalesList();
         loadStats();
         $('a#liste-ventes-tab').tab('show');
       })
       .fail(function(xhr){
-        dbg('Sale creation FAILED:', xhr.status, xhr.responseJSON || xhr.responseText);
         let msg = 'Bad Request';
         if(xhr.responseJSON){
           if(typeof xhr.responseJSON === 'string') msg = xhr.responseJSON;
@@ -991,40 +945,17 @@
       html += '<tbody>';
       lignes.forEach(function(ligne){
         const ref = ligne.produit_reference || 'N/A';
-        let desig = ligne.designation || 'N/A';
+        const desig = ligne.designation || 'N/A';
         const prix = parseFloat(ligne.prixU_snapshot || 0);
         const qty = parseInt(ligne.quantite || 0, 10);
         const total = prix * qty;
         const sym = ligne.currency_symbol || sale.currency_symbol || 'DA';
-
-        // Ajouter badge promotion si applicable
-        if(ligne.promotion_code || ligne.promotion){
-          desig += ' <span class="badge badge-success"><i class="fa fa-tag"></i> '+(ligne.promotion_code || 'Promo')+'</span>';
-          if(ligne.quantite_offerte > 0){
-            desig += ' <span class="badge badge-info">+'+ligne.quantite_offerte+' offert(s)</span>';
-          }
-        }
-
-        // Prix avec indication de promo
-        let prixHtml = (isNaN(prix) ? '0.00' : prix.toFixed(2))+' '+sym;
-        const prixOriginal = parseFloat(ligne.prix_original || 0);
-        if(ligne.promotion && prixOriginal > 0 && prixOriginal > prix){
-          prixHtml = '<del class="text-muted">'+(prixOriginal.toFixed(2))+'</del> <span class="text-success">'+(prix.toFixed(2))+'</span> '+sym;
-        }
-
-        // Total avec économie
-        let totalHtml = '<strong>'+(isNaN(total) ? '0.00' : total.toFixed(2))+' '+sym+'</strong>';
-        const remisePromo = parseFloat(ligne.remise_promo || 0);
-        if(remisePromo > 0){
-          totalHtml += '<br><small class="text-success">Économie: -'+remisePromo.toFixed(2)+' '+sym+'</small>';
-        }
-
         html += '<tr>';
         html += '<td><code>'+ref+'</code></td>';
         html += '<td>'+desig+'</td>';
-        html += '<td class="text-right">'+prixHtml+'</td>';
+        html += '<td class="text-right">'+(isNaN(prix) ? '0.00' : prix.toFixed(2))+' '+sym+'</td>';
         html += '<td class="text-center"><span class="badge badge-primary">'+qty+'</span></td>';
-        html += '<td class="text-right">'+totalHtml+'</td>';
+        html += '<td class="text-right"><strong>'+(isNaN(total) ? '0.00' : total.toFixed(2))+' '+sym+'</strong></td>';
         html += '</tr>';
       });
       html += '</tbody>';

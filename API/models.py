@@ -1282,6 +1282,9 @@ class Tournee(models.Model):
         verbose_name = "Tournée"
         verbose_name_plural = "Tournées"
         unique_together = [['company', 'numero']]
+        permissions = [
+            ('edit_tournee_en_cours', 'Peut modifier une tournée en cours'),
+        ]
 
     def __str__(self):
         return f"{self.numero} - {self.date} ({self.get_statut_display()})"
@@ -2104,8 +2107,13 @@ class Promotion(models.Model):
 
     def is_applicable_to_product(self, produit):
         """Vérifie si la promotion s'applique à un produit"""
+        # Si aucun produit ni catégorie spécifié, la promo s'applique à tous les produits
+        if not self.produit and not self.categorie:
+            return True
+        # Si un produit spécifique est défini
         if self.produit and self.produit.id == produit.id:
             return True
+        # Si une catégorie est définie
         if self.categorie:
             # Vérifier si le produit est dans la catégorie ou ses sous-catégories
             cat = produit.categorie

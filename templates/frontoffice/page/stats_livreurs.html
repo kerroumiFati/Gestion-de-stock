@@ -382,10 +382,10 @@
             <div class="col-md-3 mb-2">
                 <label class="d-block">&nbsp;</label>
                 <div class="quick-dates">
-                    <button class="quick-date-btn" onclick="setQuickDate('today')">{% trans "Aujourd'hui" %}</button>
-                    <button class="quick-date-btn" onclick="setQuickDate('week')">{% trans "Cette semaine" %}</button>
-                    <button class="quick-date-btn active" onclick="setQuickDate('month')">{% trans "Ce mois" %}</button>
-                    <button class="quick-date-btn" onclick="setQuickDate('year')">{% trans "Cette année" %}</button>
+                    <button class="quick-date-btn" onclick="setQuickDate('today', this)">{% trans "Aujourd'hui" %}</button>
+                    <button class="quick-date-btn" onclick="setQuickDate('week', this)">{% trans "Cette semaine" %}</button>
+                    <button class="quick-date-btn active" onclick="setQuickDate('month', this)">{% trans "Ce mois" %}</button>
+                    <button class="quick-date-btn" onclick="setQuickDate('year', this)">{% trans "Cette année" %}</button>
                 </div>
             </div>
             <div class="col-md-2 mb-2">
@@ -580,13 +580,13 @@
     }
 
     // Définir les dates rapides
-    window.setQuickDate = function(period) {
+    window.setQuickDate = function(period, element) {
         const today = new Date();
         let dateDebut, dateFin;
 
         // Mettre à jour les boutons actifs
         document.querySelectorAll('.quick-date-btn').forEach(btn => btn.classList.remove('active'));
-        event.target.classList.add('active');
+        if(element) element.classList.add('active');
 
         switch(period) {
             case 'today':

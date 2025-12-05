@@ -1582,7 +1582,9 @@ class VenteViewSet(TenantFilterMixin, viewsets.ModelViewSet):
     queryset = Vente.objects.all().order_by('-date_vente')
     
     def perform_create(self, serializer):
-        obj = serializer.save()
+        # Assigner la company de l'utilisateur connecté
+        company = getattr(self.request, 'company', None)
+        obj = serializer.save(company=company)
         try:
             log_event(self.request, 'vente.create', target=obj, metadata={'id': obj.id, 'numero': getattr(obj, 'numero', None)})
         except Exception:
@@ -3123,11 +3125,9 @@ class PromotionViewSet(TenantFilterMixin, viewsets.ModelViewSet):
             # Calculer le prix avec cette promo
             if promo.type_promotion in ['achetez_x_payez_y', 'achetez_x_offert_y']:
                 offre = promo.calculer_offre_speciale(quantite)
-                if promo.type_promotion == 'achetez_x_payez_y':
-                    prix_avec_promo = prix_original * offre['quantite_a_payer']
-                else:
-                    prix_avec_promo = prix_original * quantite
-                    quantite_offerte_temp = offre['quantite_gratuite']
+                # Pour les deux types, on paie seulement quantite_a_payer
+                prix_avec_promo = prix_original * offre['quantite_a_payer']
+                quantite_offerte_temp = offre.get('quantite_gratuite', 0)
             else:
                 prix_avec_promo = promo.calculer_prix_promotion(prix_original, quantite)
                 quantite_offerte_temp = 0

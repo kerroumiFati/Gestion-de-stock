@@ -991,40 +991,17 @@
       html += '<tbody>';
       lignes.forEach(function(ligne){
         const ref = ligne.produit_reference || 'N/A';
-        let desig = ligne.designation || 'N/A';
+        const desig = ligne.designation || 'N/A';
         const prix = parseFloat(ligne.prixU_snapshot || 0);
         const qty = parseInt(ligne.quantite || 0, 10);
         const total = prix * qty;
         const sym = ligne.currency_symbol || sale.currency_symbol || 'DA';
-
-        // Ajouter badge promotion si applicable
-        if(ligne.promotion_code || ligne.promotion){
-          desig += ' <span class="badge badge-success"><i class="fa fa-tag"></i> '+(ligne.promotion_code || 'Promo')+'</span>';
-          if(ligne.quantite_offerte > 0){
-            desig += ' <span class="badge badge-info">+'+ligne.quantite_offerte+' offert(s)</span>';
-          }
-        }
-
-        // Prix avec indication de promo
-        let prixHtml = (isNaN(prix) ? '0.00' : prix.toFixed(2))+' '+sym;
-        const prixOriginal = parseFloat(ligne.prix_original || 0);
-        if(ligne.promotion && prixOriginal > 0 && prixOriginal > prix){
-          prixHtml = '<del class="text-muted">'+(prixOriginal.toFixed(2))+'</del> <span class="text-success">'+(prix.toFixed(2))+'</span> '+sym;
-        }
-
-        // Total avec économie
-        let totalHtml = '<strong>'+(isNaN(total) ? '0.00' : total.toFixed(2))+' '+sym+'</strong>';
-        const remisePromo = parseFloat(ligne.remise_promo || 0);
-        if(remisePromo > 0){
-          totalHtml += '<br><small class="text-success">Économie: -'+remisePromo.toFixed(2)+' '+sym+'</small>';
-        }
-
         html += '<tr>';
         html += '<td><code>'+ref+'</code></td>';
         html += '<td>'+desig+'</td>';
-        html += '<td class="text-right">'+prixHtml+'</td>';
+        html += '<td class="text-right">'+(isNaN(prix) ? '0.00' : prix.toFixed(2))+' '+sym+'</td>';
         html += '<td class="text-center"><span class="badge badge-primary">'+qty+'</span></td>';
-        html += '<td class="text-right">'+totalHtml+'</td>';
+        html += '<td class="text-right"><strong>'+(isNaN(total) ? '0.00' : total.toFixed(2))+' '+sym+'</strong></td>';
         html += '</tr>';
       });
       html += '</tbody>';

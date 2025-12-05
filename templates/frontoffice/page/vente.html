@@ -278,7 +278,7 @@ label {
               <div class="row">
             <div class="col-sm-3 mb-2">
               <label>{% trans "Client" %} *</label>
-              <select id="vente_client" class="form-control">
+              <select id="vente_client" class="form-control select2-vente" data-placeholder="{% trans 'Choisir un client...' %}">
                   <option value="">{% trans "Choisir un client..." %}</option>
               </select>
             </div>
@@ -306,7 +306,7 @@ label {
             </div>
             <div class="col-sm-3 mb-2">
               <label>{% trans "Entrepôt" %} *</label>
-              <select id="vente_warehouse" class="form-control">
+              <select id="vente_warehouse" class="form-control select2-vente" data-placeholder="{% trans 'Sélectionner un entrepôt...' %}">
                   <option value="">{% trans "Sélectionner un entrepôt..." %}</option>
               </select>
             </div>
@@ -348,7 +348,7 @@ label {
             </div>
             <div class="col-sm-4 mb-2">
               <label>{% trans "Produit" %}</label>
-              <select id="vente_prod" class="form-control">
+              <select id="vente_prod" class="form-control select2-vente" data-placeholder="{% trans 'Choisir un produit...' %}">
                   <option value="">{% trans "Choisir un produit..." %}</option>
               </select>
             </div>
@@ -657,3 +657,76 @@ label {
     </div>
   </div>
 </div>
+
+<style>
+/* Select2 - Limite de hauteur avec scroll */
+.select2-container--bootstrap4 .select2-results__options {
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+/* Scrollbar personnalisée pour Select2 */
+.select2-container--bootstrap4 .select2-results__options::-webkit-scrollbar {
+  width: 8px;
+}
+
+.select2-container--bootstrap4 .select2-results__options::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.select2-container--bootstrap4 .select2-results__options::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+.select2-container--bootstrap4 .select2-results__options::-webkit-scrollbar-thumb:hover {
+  background: #a1a1a1;
+}
+
+/* Style amélioré pour les options */
+.select2-container--bootstrap4 .select2-results__option {
+  padding: 8px 12px;
+}
+
+.select2-container--bootstrap4 .select2-results__option--highlighted {
+  background-color: #667eea !important;
+}
+</style>
+
+<script>
+// Initialisation Select2 pour les selects de vente
+(function(){
+  // Exposer la fonction globalement pour que vente.js puisse l'appeler
+  window.initVenteSelect2 = function(selector){
+    if(typeof $ === 'undefined' || !$.fn.select2) {
+      setTimeout(function(){ window.initVenteSelect2(selector); }, 100);
+      return;
+    }
+
+    var $elements = selector ? $(selector) : $('.select2-vente');
+
+    $elements.each(function(){
+      var $el = $(this);
+
+      // Détruire si déjà initialisé
+      if($el.hasClass('select2-hidden-accessible')){
+        $el.select2('destroy');
+      }
+
+      var placeholder = $el.data('placeholder') || 'Sélectionner...';
+      $el.select2({
+        theme: 'bootstrap4',
+        width: '100%',
+        allowClear: true,
+        placeholder: placeholder,
+        language: {
+          noResults: function() { return "Aucun résultat trouvé"; },
+          searching: function() { return "Recherche..."; },
+          loadingMore: function() { return "Chargement..."; }
+        }
+      });
+    });
+  };
+})();
+</script>
