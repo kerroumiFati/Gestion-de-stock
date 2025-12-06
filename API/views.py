@@ -1803,6 +1803,58 @@ class VenteViewSet(TenantFilterMixin, viewsets.ModelViewSet):
         return Response(stats)
 
     @action(detail=False, methods=['get'])
+    def all_sales(self, request):
+        """Retourne toutes les ventes (web + mobiles) combinées"""
+        from API.distribution_models import VenteTourneeMobile
+
+        # Ventes web
+        web_sales = []
+        for v in self.get_queryset():
+            web_sales.append({
+                'id': v.id,
+                'source': 'web',
+                'numero': v.numero,
+                'date_vente': v.date_vente.isoformat() if v.date_vente else None,
+                'client_id': v.client_id,
+                'client_nom': v.client.nom if v.client else '',
+                'client_prenom': v.client.prenom if v.client else '',
+                'statut': v.statut,
+                'total_ttc': float(v.total_ttc or 0),
+                'montant_paye': float(v.get_montant_paye() if hasattr(v, 'get_montant_paye') else 0),
+                'reste_a_payer': float(v.get_reste_a_payer() if hasattr(v, 'get_reste_a_payer') else v.total_ttc or 0),
+                'type_paiement': v.type_paiement,
+            })
+
+        # Ventes mobiles
+        mobile_sales = []
+        try:
+            for vm in VenteTourneeMobile.objects.all().select_related('client', 'tournee').order_by('-date_vente'):
+                reste = float(vm.montant_total or 0) - float(vm.montant_paye or 0)
+                mobile_sales.append({
+                    'id': f'mobile_{vm.id}',
+                    'source': 'mobile',
+                    'numero': vm.numero_vente,
+                    'date_vente': vm.date_vente.isoformat() if vm.date_vente else None,
+                    'client_id': vm.client_id,
+                    'client_nom': vm.client.nom if vm.client else '',
+                    'client_prenom': vm.client.prenom if vm.client else '',
+                    'statut': 'completed' if vm.est_synchronise else 'synced',
+                    'total_ttc': float(vm.montant_total or 0),
+                    'montant_paye': float(vm.montant_paye or 0),
+                    'reste_a_payer': max(0, reste),
+                    'type_paiement': vm.type_paiement,
+                    'tournee': vm.tournee.numero_tournee if vm.tournee else None,
+                })
+        except Exception as e:
+            logger.warning(f"Erreur chargement ventes mobiles: {e}")
+
+        # Combiner et trier par date
+        all_sales = web_sales + mobile_sales
+        all_sales.sort(key=lambda x: x['date_vente'] or '', reverse=True)
+
+        return Response(all_sales)
+
+    @action(detail=False, methods=['get'])
     def clients_avec_reste(self, request):
         """Liste des clients ayant un reste à payer sur leurs ventes"""
         from django.db.models import Sum, F, Value, DecimalField

@@ -767,11 +767,27 @@
       list.forEach(function(v, idx){
         try {
           const tr = $('<tr>').css('cursor', 'pointer').addClass('sale-row');
+          const isMobile = v.source === 'mobile';
           tr.attr('data-sale-id', v.id);
-          tr.append('<td>'+(v.numero || v.id)+'</td>');
+          tr.attr('data-source', v.source || 'web');
+
+          // Numéro avec badge source
+          let numeroHtml = (v.numero || v.id);
+          if(isMobile){
+            numeroHtml += ' <span class="badge badge-info" title="Vente effectuée depuis l\'application mobile"><i class="fa fa-mobile"></i></span>';
+          }
+          tr.append('<td>'+numeroHtml+'</td>');
           tr.append('<td>'+(v.date_vente || '').toString().replace('T',' ').slice(0,16)+'</td>');
           tr.append('<td>'+(v.client_nom || '')+' '+(v.client_prenom || '')+'</td>');
-          tr.append('<td>'+ (v.statut || '') +'</td>');
+
+          // Statut avec couleur
+          let statutHtml = v.statut || '';
+          if(v.statut === 'completed') statutHtml = '<span class="badge badge-success">Terminée</span>';
+          else if(v.statut === 'draft') statutHtml = '<span class="badge badge-warning">Brouillon</span>';
+          else if(v.statut === 'synced') statutHtml = '<span class="badge badge-info">Synchronisée</span>';
+          else if(v.statut === 'canceled') statutHtml = '<span class="badge badge-danger">Annulée</span>';
+          tr.append('<td>'+ statutHtml +'</td>');
+
           const totalTtc = parseFloat(v.total_ttc) || 0;
           const montantPaye = parseFloat(v.montant_paye) || 0;
           const reste = typeof v.reste_a_payer !== "undefined" ? parseFloat(v.reste_a_payer) : totalTtc;
@@ -779,13 +795,23 @@
           tr.append('<td>'+ montantPaye.toFixed(2) +' DA</td>');
           const resteClass = reste <= 0 ? 'text-success' : (reste < totalTtc ? 'text-warning' : 'text-danger');
           tr.append('<td class="'+resteClass+'"><strong>'+ reste.toFixed(2) +' DA</strong></td>');
+
           var actions = '';
-          if((v.statut||'') === 'draft'){
-            actions += '<button class="btn btn-sm btn-success finalize-sale" data-id="'+v.id+'"><i class="fa fa-check"></i> Finaliser</button> ';
-          }
-          actions += '<button class="btn btn-sm btn-info view-sale-details" data-id="'+v.id+'"><i class="fa fa-eye"></i> Détails</button> ';
-          if(reste > 0) {
-            actions += '<button class="btn btn-sm btn-primary add-payment" data-id="'+v.id+'" data-reste="'+reste+'"><i class="fa fa-money"></i> Payer</button>';
+          if(!isMobile){
+            // Actions pour ventes web seulement
+            if((v.statut||'') === 'draft'){
+              actions += '<button class="btn btn-sm btn-success finalize-sale" data-id="'+v.id+'"><i class="fa fa-check"></i> Finaliser</button> ';
+            }
+            actions += '<button class="btn btn-sm btn-info view-sale-details" data-id="'+v.id+'"><i class="fa fa-eye"></i> Détails</button> ';
+            if(reste > 0) {
+              actions += '<button class="btn btn-sm btn-primary add-payment" data-id="'+v.id+'" data-reste="'+reste+'"><i class="fa fa-money"></i> Payer</button>';
+            }
+          } else {
+            // Actions pour ventes mobiles
+            actions += '<button class="btn btn-sm btn-info view-sale-details" data-id="'+v.id+'"><i class="fa fa-eye"></i> Détails</button> ';
+            if(v.tournee){
+              actions += '<span class="badge badge-secondary ml-1"><i class="fa fa-truck"></i> '+v.tournee+'</span> ';
+            }
           }
           tr.append('<td>'+ (actions || '') +'</td>');
           $tbody.append(tr);
@@ -797,11 +823,14 @@
       dbg('renderSalesList: Finished rendering. tbody children count:', $tbody.children().length);
     }
 
-    // Only initialize DataTable if the tab is visible
+    // Only initialize DataTable if the tab is visible and table exists with proper structure
     const $tabPane = $table.closest('.tab-pane');
     const isTabVisible = $tabPane.length === 0 || ($tabPane.hasClass('active') && $tabPane.hasClass('show'));
 
-    if($.fn.DataTable && isTabVisible){
+    // Check if table has proper structure (thead exists)
+    const hasProperStructure = $table.find('thead').length > 0;
+
+    if($.fn.DataTable && isTabVisible && hasProperStructure){
       try {
         dbg('renderSalesList: Initializing DataTable (tab is visible)...');
         $table.DataTable({
@@ -843,20 +872,33 @@
       }
     } else if(!isTabVisible) {
       dbg('renderSalesList: Skipping DataTable init (tab not visible yet)');
+    } else if(!hasProperStructure) {
+      dbg('renderSalesList: Table missing proper structure (thead)');
     } else {
       dbg('renderSalesList: $.fn.DataTable not available!');
     }
   }
 
   function loadSalesList(){
-    $.ajax({ url:'/API/ventes/?page_size=100', method:'GET', dataType:'json' })
+    // Utiliser l'endpoint all_sales qui combine ventes web + mobiles
+    $.ajax({ url:'/API/ventes/all_sales/', method:'GET', dataType:'json' })
       .done(function(data){
         dbg('loadSalesList data received:', data);
         SALES_LIST = asList(data);
         dbg('SALES_LIST after asList:', SALES_LIST, 'length:', SALES_LIST.length);
         applySalesFilterAndRender();
       })
-      .fail(function(xhr){ dbg('loadSalesList fail', xhr.status, xhr.responseText || xhr.statusText); });
+      .fail(function(xhr){
+        dbg('loadSalesList fail', xhr.status, xhr.responseText || xhr.statusText);
+        // Fallback to regular endpoint if all_sales fails
+        $.ajax({ url:'/API/ventes/?page_size=100', method:'GET', dataType:'json' })
+          .done(function(data){
+            dbg('loadSalesList fallback data received:', data);
+            SALES_LIST = asList(data);
+            applySalesFilterAndRender();
+          })
+          .fail(function(xhr2){ dbg('loadSalesList fallback also failed', xhr2.status); });
+      });
   }
 
   function loadStats(){
@@ -950,6 +992,11 @@
   }
 
   function loadSaleDetails(saleId){
+    // Vérifier si c'est une vente mobile
+    if(String(saleId).startsWith('mobile_')){
+      const mobileId = saleId.replace('mobile_', '');
+      return $.ajax({ url:'/API/distribution/ventes/'+mobileId+'/', method:'GET', dataType:'json' });
+    }
     return $.ajax({ url:'/API/ventes/'+saleId+'/', method:'GET', dataType:'json' });
   }
 
@@ -960,14 +1007,126 @@
     // Réinitialiser le contenu avec un loader
     $('#saleDetailsContent').html('<div class="text-center py-5"><i class="fa fa-spinner fa-spin fa-3x text-muted"></i><p class="mt-3 text-muted">Chargement des détails...</p></div>');
 
+    // Vérifier si c'est une vente mobile
+    const isMobile = String(saleId).startsWith('mobile_');
+
     // Charger les détails de la vente
     loadSaleDetails(saleId)
       .done(function(sale){
-        renderSaleDetailsInModal(sale);
+        if(isMobile){
+          renderMobileSaleDetailsInModal(sale);
+        } else {
+          renderSaleDetailsInModal(sale);
+        }
       })
       .fail(function(xhr){
         $('#saleDetailsContent').html('<div class="alert alert-danger m-3"><i class="fa fa-exclamation-triangle"></i> Erreur de chargement: '+(xhr.responseText || xhr.statusText)+'</div>');
       });
+  }
+
+  function renderMobileSaleDetailsInModal(sale){
+    const $container = $('#saleDetailsContent');
+    if(!$container.length) return;
+
+    // Mise à jour du titre de la modal
+    $('#saleDetailsModalLabel').html('<i class="fa fa-mobile"></i> Vente Mobile #'+(sale.numero_vente || sale.id));
+
+    let html = '<div class="container-fluid">';
+
+    // Badge source mobile
+    html += '<div class="alert alert-info mb-3"><i class="fa fa-mobile"></i> <strong>Vente effectuée depuis l\'application mobile</strong></div>';
+
+    // En-tête avec informations principales
+    html += '<div class="row mb-4">';
+    html += '<div class="col-md-6">';
+    html += '<div class="card border-primary mb-3">';
+    html += '<div class="card-header bg-primary text-white"><i class="fa fa-info-circle"></i> Informations générales</div>';
+    html += '<div class="card-body">';
+    html += '<p class="mb-2"><strong><i class="fa fa-calendar"></i> Date:</strong> '+(sale.date_vente || '').toString().replace('T',' ').slice(0,16)+'</p>';
+    html += '<p class="mb-2"><strong><i class="fa fa-user"></i> Client:</strong> '+(sale.client_nom || '')+'</p>';
+    if(sale.tournee){
+      html += '<p class="mb-2"><strong><i class="fa fa-truck"></i> Tournée:</strong> '+(sale.tournee_numero || sale.tournee)+'</p>';
+    }
+    const statutVente = sale.est_synchronise ? 'Synchronisée' : 'En attente';
+    html += '<p class="mb-2"><strong><i class="fa fa-sync"></i> Statut:</strong> <span class="badge badge-'+(sale.est_synchronise?'success':'warning')+'">'+statutVente+'</span></p>';
+    html += '<p class="mb-0"><strong><i class="fa fa-credit-card"></i> Paiement:</strong> '+(sale.type_paiement || '')+'</p>';
+    html += '</div></div>';
+    html += '</div>';
+
+    html += '<div class="col-md-6">';
+    html += '<div class="card border-success mb-3">';
+    html += '<div class="card-header bg-success text-white"><i class="fa fa-money-bill-wave"></i> Montants</div>';
+    html += '<div class="card-body">';
+    html += '<p class="mb-2"><strong>Montant HT:</strong> <span class="float-right">'+(sale.montant_ht || 0)+' DA</span></p>';
+    html += '<p class="mb-2"><strong>TVA:</strong> <span class="float-right">'+(sale.montant_tva || 0)+' DA</span></p>';
+    html += '<hr class="my-2">';
+    html += '<h5 class="mb-0"><strong>Total TTC:</strong> <span class="float-right text-success">'+(sale.montant_total || 0)+' DA</span></h5>';
+    html += '</div></div>';
+
+    // Section Paiement
+    const totalTtc = parseFloat(sale.montant_total) || 0;
+    const montantPaye = parseFloat(sale.montant_paye) || 0;
+    const resteAPayer = totalTtc - montantPaye;
+    const isPaye = resteAPayer <= 0;
+
+    let statutPaiement = isPaye ? 'PAYÉ' : 'NON PAYÉ';
+    let badgeClass = isPaye ? 'success' : 'danger';
+
+    html += '<div class="card border-'+badgeClass+' mb-3">';
+    html += '<div class="card-header bg-'+badgeClass+' text-white"><i class="fa fa-wallet"></i> État du paiement</div>';
+    html += '<div class="card-body">';
+    html += '<p class="mb-2"><strong>Montant payé:</strong> <span class="float-right text-success">'+(montantPaye.toFixed(2))+' DA</span></p>';
+    if(sale.montant_rendu > 0){
+      html += '<p class="mb-2"><strong>Monnaie rendue:</strong> <span class="float-right">'+(sale.montant_rendu || 0)+' DA</span></p>';
+    }
+    html += '<hr class="my-2">';
+    html += '<p class="mb-0"><strong>Statut:</strong> <span class="badge badge-'+badgeClass+'">'+statutPaiement+'</span></p>';
+    html += '</div></div>';
+
+    if(sale.notes){
+      html += '<div class="alert alert-secondary mb-0"><strong><i class="fa fa-comment"></i> Notes:</strong><br>'+(sale.notes || '')+'</div>';
+    }
+    html += '</div>';
+    html += '</div>';
+
+    // Tableau des produits
+    html += '<div class="row">';
+    html += '<div class="col-12">';
+    html += '<h5 class="mb-3"><i class="fa fa-boxes"></i> Produits</h5>';
+
+    const lignes = sale.lignes || [];
+    if(lignes.length === 0){
+      html += '<div class="alert alert-warning"><i class="fa fa-exclamation-triangle"></i> Aucun produit dans cette vente</div>';
+    } else {
+      html += '<div class="table-responsive">';
+      html += '<table class="table table-sm table-bordered table-hover mb-0">';
+      html += '<thead class="thead-dark">';
+      html += '<tr><th>Produit</th><th>Prix unitaire</th><th>Quantité</th><th>Total</th></tr>';
+      html += '</thead>';
+      html += '<tbody>';
+      lignes.forEach(function(ligne){
+        const desig = ligne.produit_designation || ligne.designation || 'Produit';
+        const prix = parseFloat(ligne.prix_unitaire || 0);
+        const qty = parseInt(ligne.quantite || 0, 10);
+        const total = parseFloat(ligne.montant_total || prix * qty);
+
+        html += '<tr>';
+        html += '<td>'+desig+'</td>';
+        html += '<td class="text-right">'+(prix.toFixed(2))+' DA</td>';
+        html += '<td class="text-center"><span class="badge badge-primary">'+qty+'</span></td>';
+        html += '<td class="text-right"><strong>'+(total.toFixed(2))+' DA</strong></td>';
+        html += '</tr>';
+      });
+      html += '</tbody>';
+      html += '</table>';
+      html += '</div>';
+    }
+    html += '</div>';
+    html += '</div>';
+
+    html += '</div>';
+
+    $container.html(html);
   }
 
   function renderSaleDetailsInModal(sale){

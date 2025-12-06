@@ -295,10 +295,12 @@ class VenteTourneeCreateSerializer(serializers.ModelSerializer):
 
 class LigneVenteMobileSerializer(serializers.Serializer):
     """Serializer pour les lignes de vente depuis l'app mobile"""
-    produit = serializers.IntegerField()
+    # Accepter string ou int pour produit (le mobile peut envoyer une string)
+    produit = serializers.CharField(max_length=50)
     quantite = serializers.DecimalField(max_digits=10, decimal_places=2)
     prix_unitaire = serializers.DecimalField(max_digits=10, decimal_places=2)
     total = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
+    montant = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)  # Alias pour total
 
 
 class VenteMobileCreateSerializer(serializers.Serializer):
@@ -308,6 +310,9 @@ class VenteMobileCreateSerializer(serializers.Serializer):
     client = serializers.CharField(max_length=50)
     mode_paiement = serializers.ChoiceField(choices=['especes', 'credit', 'cheque', 'virement'])
     montant_total = serializers.DecimalField(max_digits=10, decimal_places=2)
+    montant_paye = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, default=0)
+    montant_rendu = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, default=0)
+    reste_a_payer = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, default=0)
     lignes_vente = LigneVenteMobileSerializer(many=True)
 
     def create(self, validated_data):
@@ -322,6 +327,9 @@ class VenteMobileCreateSerializer(serializers.Serializer):
         client_id_str = validated_data.pop('client')
         mode_paiement = validated_data.pop('mode_paiement')
         montant_total = validated_data.pop('montant_total')
+        montant_paye = validated_data.pop('montant_paye', 0)
+        montant_rendu = validated_data.pop('montant_rendu', 0)
+        reste_a_payer = validated_data.pop('reste_a_payer', 0)
         app_id = validated_data.pop('app_id', None)
 
         # Convertir client_id en int (le mobile peut envoyer une string)
@@ -392,6 +400,8 @@ class VenteMobileCreateSerializer(serializers.Serializer):
             client=client,
             numero_vente=numero_vente,
             montant_total=montant_total,
+            montant_paye=montant_paye,
+            montant_rendu=montant_rendu,
             type_paiement=type_paiement_map.get(mode_paiement, 'especes'),
             date_vente=timezone.now(),
             est_synchronise=True,
@@ -443,6 +453,11 @@ class VenteMobileCreateSerializer(serializers.Serializer):
                     )
             elif not livreur:
                 logger.warning(f"Pas de livreur - stock non décrémenté pour produit {produit.id}")
+
+        # Si reste à payer > 0, enregistrer l'info
+        if reste_a_payer > 0:
+            logger.info(f"Vente avec paiement partiel pour client {client.id} ({client.nom}): reste à payer = {reste_a_payer} DZD")
+            # TODO: Ajouter le champ solde_actuel au modèle Client si besoin de suivre les dettes
 
         return vente
 
