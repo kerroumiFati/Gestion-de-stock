@@ -33,7 +33,11 @@
   },
   "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
+<<<<<<< HEAD
     "gestion-stock",
     "gestion-stock-ui"
+=======
+    "gestion-stock"
+>>>>>>> 636ca312577497c064474164394be989bbd92d16
   ]
 }

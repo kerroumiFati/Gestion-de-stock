@@ -22,7 +22,10 @@ class TenantFilterMixin:
         Filtre le queryset par la company de l'utilisateur connecté.
         Uniquement si le modèle a un champ 'company'.
         """
+<<<<<<< HEAD
         from django.db.models import Q
+=======
+>>>>>>> 636ca312577497c064474164394be989bbd92d16
         queryset = super().get_queryset()
 
         # Vérifier si l'utilisateur est authentifié
@@ -32,6 +35,7 @@ class TenantFilterMixin:
         # Vérifier si le modèle a un champ 'company'
         model = queryset.model
         if hasattr(model, 'company'):
+<<<<<<< HEAD
             # Filtrer par la company de l'utilisateur OU données sans company (null)
             if hasattr(self.request, 'company') and self.request.company is not None:
                 # Afficher les données de la company de l'utilisateur + celles sans company
@@ -39,6 +43,14 @@ class TenantFilterMixin:
             else:
                 # Si l'utilisateur n'a pas de company, afficher uniquement les données sans company
                 queryset = queryset.filter(company__isnull=True)
+=======
+            # Filtrer strictement par la company de l'utilisateur
+            if hasattr(self.request, 'company') and self.request.company is not None:
+                queryset = queryset.filter(company=self.request.company)
+            else:
+                # Si l'utilisateur n'a pas de company, ne retourner aucune donnée
+                return queryset.none()
+>>>>>>> 636ca312577497c064474164394be989bbd92d16
 
         return queryset
 
@@ -79,6 +91,7 @@ class WarehouseRelatedTenantMixin:
         """
         Filtre le queryset par la company via le warehouse.
         """
+<<<<<<< HEAD
         from django.db.models import Q
         queryset = super().get_queryset()
 
@@ -95,5 +108,20 @@ class WarehouseRelatedTenantMixin:
             else:
                 # Si l'utilisateur n'a pas de company, afficher les données sans company
                 queryset = queryset.filter(warehouse__company__isnull=True)
+=======
+        queryset = super().get_queryset()
+
+        # Vérifier si l'utilisateur est authentifié et a une company
+        if not self.request.user.is_authenticated:
+            return queryset.none()
+
+        if not hasattr(self.request, 'company') or self.request.company is None:
+            return queryset.none()
+
+        # Filtrer par warehouse.company
+        model = queryset.model
+        if hasattr(model, 'warehouse'):
+            queryset = queryset.filter(warehouse__company=self.request.company)
+>>>>>>> 636ca312577497c064474164394be989bbd92d16
 
         return queryset

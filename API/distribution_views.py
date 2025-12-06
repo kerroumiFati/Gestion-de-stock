@@ -2391,6 +2391,7 @@ class ProduitMobileViewSet(viewsets.ReadOnlyModelViewSet):
     pagination_class = None  # Pas de pagination pour l'app mobile
 
     def get_queryset(self):
+<<<<<<< HEAD
         """Filtre par company de l'utilisateur (inclut aussi les produits sans company)"""
         from django.db.models import Q
         queryset = super().get_queryset()
@@ -2401,6 +2402,14 @@ class ProduitMobileViewSet(viewsets.ReadOnlyModelViewSet):
         else:
             # Si pas de company, afficher uniquement les produits sans company
             queryset = queryset.filter(company__isnull=True)
+=======
+        """Filtre par company de l'utilisateur"""
+        queryset = super().get_queryset()
+
+        # Filtrer par company (utiliser request.company du middleware)
+        if hasattr(self.request, 'company') and self.request.company:
+            queryset = queryset.filter(company=self.request.company)
+>>>>>>> 636ca312577497c064474164394be989bbd92d16
 
         return queryset
 

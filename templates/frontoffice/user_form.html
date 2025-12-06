@@ -282,18 +282,28 @@
         </div>
 
         <div class="row">
+<<<<<<< HEAD
           {% if not form.instance.pk %}
+=======
+>>>>>>> 636ca312577497c064474164394be989bbd92d16
           <div class="col-md-6">
             <div class="form-group">
               <label><i class="fa fa-lock"></i> {{ form.password.label }}</label>
               {{ form.password }}
+<<<<<<< HEAD
               <small class="text-muted d-block mt-1">Laisser vide pour générer automatiquement</small>
+=======
+              <small class="text-muted d-block mt-1">Laisser vide pour ne pas changer le mot de passe</small>
+>>>>>>> 636ca312577497c064474164394be989bbd92d16
               {% if form.password.errors %}
                 <div class="text-danger small mt-1">{{ form.password.errors }}</div>
               {% endif %}
             </div>
           </div>
+<<<<<<< HEAD
           {% endif %}
+=======
+>>>>>>> 636ca312577497c064474164394be989bbd92d16
           <div class="col-md-6">
             <div class="form-group">
               <label><i class="fa fa-user-tag"></i> {{ form.groups.label }}</label>

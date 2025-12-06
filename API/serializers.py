@@ -1297,7 +1297,11 @@ class SecteurSerializer(serializers.ModelSerializer):
             'id', 'company', 'code', 'nom', 'description', 'couleur',
             'is_active', 'clients_count', 'created_at', 'updated_at'
         ]
+<<<<<<< HEAD
         read_only_fields = ['company', 'created_at', 'updated_at']
+=======
+        read_only_fields = ['created_at', 'updated_at']
+>>>>>>> 636ca312577497c064474164394be989bbd92d16
 
     def get_clients_count(self, obj):
         return obj.get_clients_count()
