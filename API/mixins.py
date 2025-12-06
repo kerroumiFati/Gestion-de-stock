@@ -21,6 +21,7 @@ class TenantFilterMixin:
         """
         Filtre le queryset par la company de l'utilisateur connecté.
         Uniquement si le modèle a un champ 'company'.
+        Les superusers et staff voient toutes les données.
         """
         from django.db.models import Q
         queryset = super().get_queryset()
@@ -28,6 +29,10 @@ class TenantFilterMixin:
         # Vérifier si l'utilisateur est authentifié
         if not self.request.user.is_authenticated:
             return queryset.none()
+
+        # Les superusers et staff voient toutes les données
+        if self.request.user.is_superuser or self.request.user.is_staff:
+            return queryset
 
         # Vérifier si le modèle a un champ 'company'
         model = queryset.model
@@ -78,6 +83,7 @@ class WarehouseRelatedTenantMixin:
     def get_queryset(self):
         """
         Filtre le queryset par la company via le warehouse.
+        Les superusers et staff voient toutes les données.
         """
         from django.db.models import Q
         queryset = super().get_queryset()
@@ -85,6 +91,10 @@ class WarehouseRelatedTenantMixin:
         # Vérifier si l'utilisateur est authentifié
         if not self.request.user.is_authenticated:
             return queryset.none()
+
+        # Les superusers et staff voient toutes les données
+        if self.request.user.is_superuser or self.request.user.is_staff:
+            return queryset
 
         # Filtrer par warehouse.company
         model = queryset.model

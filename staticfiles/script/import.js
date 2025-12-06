@@ -6,6 +6,27 @@
     let uploadedFile = null;
     let previewData = null;
 
+    // Fonction pour récupérer le CSRF token
+    function getCSRFToken() {
+        // Essayer de récupérer depuis le cookie
+        const cookieValue = document.cookie
+            .split('; ')
+            .find(row => row.startsWith('csrftoken='));
+        if (cookieValue) {
+            return cookieValue.split('=')[1];
+        }
+        // Essayer de récupérer depuis le meta tag ou input hidden
+        const csrfInput = document.querySelector('[name=csrfmiddlewaretoken]');
+        if (csrfInput) {
+            return csrfInput.value;
+        }
+        const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+        if (csrfMeta) {
+            return csrfMeta.getAttribute('content');
+        }
+        return '';
+    }
+
     // Gérer les onglets
     window.switchTab = function(tab) {
         currentTab = tab;
@@ -20,7 +41,7 @@
     };
 
     // Drag & Drop
-    ['products', 'categories'].forEach(type => {
+    ['products', 'categories', 'fournisseurs', 'clients'].forEach(type => {
         const zone = document.getElementById('uploadZone' + capitalize(type));
         if (!zone) return;
 
@@ -86,52 +107,10 @@
         parseFile(file, type);
     };
 
-    // Parser le fichier
+    // Parser le fichier - toujours envoyer au serveur pour un parsing fiable
     function parseFile(file, type) {
-        const reader = new FileReader();
-
-        reader.onload = function(e) {
-            try {
-                let data;
-
-                if (file.name.endsWith('.csv')) {
-                    data = parseCSV(e.target.result);
-                } else {
-                    // Pour Excel, on envoie au serveur pour traitement
-                    previewFromServer(file, type);
-                    return;
-                }
-
-                displayPreview(data, type);
-            } catch (error) {
-                console.error('Erreur de parsing:', error);
-                alert('Erreur lors de la lecture du fichier: ' + error.message);
-            }
-        };
-
-        if (file.name.endsWith('.csv')) {
-            reader.readAsText(file);
-        } else {
-            reader.readAsArrayBuffer(file);
-        }
-    }
-
-    // Parser CSV
-    function parseCSV(text) {
-        const lines = text.split('\n').filter(line => line.trim());
-        if (lines.length === 0) return { headers: [], rows: [] };
-
-        const headers = lines[0].split(',').map(h => h.trim().replace(/['"]/g, ''));
-        const rows = lines.slice(1).map(line => {
-            const values = line.split(',').map(v => v.trim().replace(/['"]/g, ''));
-            const obj = {};
-            headers.forEach((header, i) => {
-                obj[header] = values[i] || '';
-            });
-            return obj;
-        });
-
-        return { headers, rows };
+        // Envoyer au serveur pour traitement (CSV et Excel)
+        previewFromServer(file, type);
     }
 
     // Obtenir la prévisualisation depuis le serveur (pour Excel)
@@ -143,7 +122,10 @@
         fetch('/API/import/preview/', {
             method: 'POST',
             body: formData,
-            credentials: 'same-origin'
+            credentials: 'same-origin',
+            headers: {
+                'X-CSRFToken': getCSRFToken()
+            }
         })
         .then(res => res.json())
         .then(data => {
@@ -227,6 +209,16 @@
                 return { valid: false, error: 'Nom manquant' };
             }
             return { valid: true };
+        } else if (type === 'fournisseurs') {
+            if (!row.libelle || !row.libelle.trim()) {
+                return { valid: false, error: 'Libellé manquant' };
+            }
+            return { valid: true };
+        } else if (type === 'clients') {
+            if (!row.nom || !row.nom.trim()) {
+                return { valid: false, error: 'Nom manquant' };
+            }
+            return { valid: true };
         }
         return { valid: false, error: 'Type inconnu' };
     }
@@ -253,7 +245,10 @@
         fetch('/API/import/execute/', {
             method: 'POST',
             body: formData,
-            credentials: 'same-origin'
+            credentials: 'same-origin',
+            headers: {
+                'X-CSRFToken': getCSRFToken()
+            }
         })
         .then(res => res.json())
         .then(data => {
@@ -322,6 +317,10 @@
                 show('produit');
             } else if (type === 'categories') {
                 show('categorie');
+            } else if (type === 'fournisseurs') {
+                show('fournisseur');
+            } else if (type === 'clients') {
+                show('client');
             }
         }, 3000);
     }

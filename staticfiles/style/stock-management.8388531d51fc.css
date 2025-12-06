@@ -1,0 +1,246 @@
+/**
+ * Stock Management Pages - Enhanced Styling
+ */
+
+/* En-têtes de pages colorés */
+.card-header.card-color {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
+    color: white !important;
+    border: none !important;
+}
+
+.card-header.card-color .h4 {
+    margin-bottom: 0;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+.card-header.card-color i {
+    margin-right: 8px;
+}
+
+/* Cartes principales */
+.card.bg-white {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+/* Cartes de filtres */
+.card-body .card {
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+/* Tables améliorées */
+.table-striped tbody tr:nth-of-type(odd) {
+    background-color: rgba(0,0,0,0.02);
+}
+
+.table-hover tbody tr:hover {
+    background-color: rgba(37, 99, 235, 0.05);
+}
+
+.table thead.thead-dark th {
+    background: linear-gradient(135deg, #1f2937, #111827);
+    border-color: #1f2937;
+    color: white;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.85rem;
+    letter-spacing: 0.5px;
+}
+
+/* Badges améliorés */
+.badge {
+    padding: 0.35em 0.65em;
+    font-weight: 600;
+    font-size: 0.75rem;
+}
+
+.badge-success {
+    background: linear-gradient(135deg, #10b981, #059669);
+}
+
+.badge-warning {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+}
+
+.badge-danger {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+}
+
+.badge-primary {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+}
+
+.badge-secondary {
+    background: linear-gradient(135deg, #6b7280, #4b5563);
+}
+
+.badge-info {
+    background: linear-gradient(135deg, #06b6d4, #0891b2);
+}
+
+/* Boutons améliorés */
+.btn-primary {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    border: none;
+    font-weight: 600;
+    box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
+    transition: all 0.2s ease;
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(37, 99, 235, 0.3);
+}
+
+.btn-secondary {
+    background: linear-gradient(135deg, #6b7280, #4b5563);
+    border: none;
+    font-weight: 600;
+}
+
+.btn-secondary:hover {
+    background: linear-gradient(135deg, #4b5563, #374151);
+}
+
+/* Formulaires */
+.form-control:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 0.2rem rgba(59, 130, 246, 0.15);
+}
+
+select.form-control {
+    cursor: pointer;
+}
+
+/* Alertes améliorées */
+.alert-info {
+    background: linear-gradient(135deg, #e0f2fe, #bae6fd);
+    border-color: #7dd3fc;
+    color: #0c4a6e;
+}
+
+.alert-warning {
+    background: linear-gradient(135deg, #fef3c7, #fde68a);
+    border-color: #fbbf24;
+    color: #78350f;
+}
+
+/* Cartes de van dans le dashboard */
+.card.border {
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+}
+
+.card.border:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+}
+
+.card-header.bg-primary {
+    background: linear-gradient(135deg, #3b82f6, #2563eb) !important;
+}
+
+/* Messages d'état vide */
+.text-muted i.fa-inbox {
+    opacity: 0.3;
+}
+
+/* Pagination */
+.pagination .page-link {
+    color: #2563eb;
+    border-color: #e5e7eb;
+}
+
+.pagination .page-item.active .page-link {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    border-color: #2563eb;
+}
+
+.pagination .page-link:hover {
+    background-color: #eff6ff;
+    border-color: #3b82f6;
+}
+
+/* Textarea monospace */
+textarea[style*="monospace"] {
+    background-color: #f9fafb;
+    border: 2px dashed #d1d5db;
+}
+
+textarea[style*="monospace"]:focus {
+    background-color: white;
+    border-color: #3b82f6;
+    border-style: solid;
+}
+
+/* Exemple de code */
+pre.bg-dark {
+    background: linear-gradient(135deg, #1f2937, #111827) !important;
+    border-radius: 8px;
+}
+
+code {
+    background-color: #f3f4f6;
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: #dc2626;
+    font-weight: 600;
+}
+
+/* Success border card */
+.card.border-success {
+    border: 2px solid #10b981 !important;
+}
+
+.card-header.bg-success {
+    background: linear-gradient(135deg, #10b981, #059669) !important;
+}
+
+/* Responsive improvements */
+@media (max-width: 768px) {
+    .card-header.card-color .h4 {
+        font-size: 1.1rem;
+    }
+
+    .table {
+        font-size: 0.85rem;
+    }
+
+    .btn-block {
+        margin-bottom: 10px;
+    }
+}
+
+/* Icons dans les labels */
+label i {
+    margin-right: 5px;
+    color: #6b7280;
+}
+
+/* Strong emphasis */
+td strong {
+    color: #1f2937;
+    font-weight: 700;
+}
+
+/* Small text in cards */
+small.text-muted {
+    color: #6b7280 !important;
+}
+
+/* Form groups spacing */
+.form-group {
+    margin-bottom: 1.25rem;
+}
+
+/* Alert dismissible */
+.alert {
+    border-radius: 8px;
+    border-left-width: 4px;
+}

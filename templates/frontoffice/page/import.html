@@ -1,4 +1,5 @@
 {% load i18n %}
+{% csrf_token %}
 <head>
     <meta charset="UTF-8">
     <style>
@@ -236,7 +237,7 @@
             <i class="fas fa-file-import mr-3"></i>{% trans "Import de Données" %}
         </h1>
         <p class="mb-0" style="opacity: 0.9;">
-            {% trans "Importez vos produits et catégories en masse depuis des fichiers Excel ou CSV" %}
+            {% trans "Importez vos produits, catégories, fournisseurs et clients en masse depuis des fichiers Excel ou CSV" %}
         </p>
     </div>
 
@@ -247,6 +248,12 @@
         </button>
         <button class="tab-btn" onclick="switchTab('categories')">
             <i class="fas fa-tags mr-2"></i>{% trans "Catégories" %}
+        </button>
+        <button class="tab-btn" onclick="switchTab('fournisseurs')">
+            <i class="fas fa-truck mr-2"></i>{% trans "Fournisseurs" %}
+        </button>
+        <button class="tab-btn" onclick="switchTab('clients')">
+            <i class="fas fa-users mr-2"></i>{% trans "Clients" %}
         </button>
     </div>
 
@@ -394,6 +401,150 @@
         </div>
     </div>
 
+    <!-- Contenu Fournisseurs -->
+    <div id="fournisseurs-tab" class="tab-content">
+        <div class="import-card">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h3 class="mb-0">
+                    <i class="fas fa-truck text-primary mr-2"></i>{% trans "Importer des Fournisseurs" %}
+                </h3>
+                <div>
+                    <button class="template-btn" onclick="downloadTemplate('fournisseurs', 'excel')">
+                        <i class="fas fa-file-excel"></i>
+                        {% trans "Template Excel" %}
+                    </button>
+                    <button class="template-btn ml-2" onclick="downloadTemplate('fournisseurs', 'csv')">
+                        <i class="fas fa-file-csv"></i>
+                        {% trans "Template CSV" %}
+                    </button>
+                </div>
+            </div>
+
+            <!-- Zone d'upload -->
+            <div class="upload-zone" id="uploadZoneFournisseurs" onclick="document.getElementById('fileInputFournisseurs').click()">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <h4>{% trans "Glissez votre fichier ici ou cliquez pour parcourir" %}</h4>
+                <p class="text-muted mb-0">{% trans "Formats acceptés" %}: .xlsx, .xls, .csv ({% trans "max" %} 10 MB)</p>
+                <input type="file" id="fileInputFournisseurs" class="file-input" accept=".xlsx,.xls,.csv" onchange="handleFileSelect(this, 'fournisseurs')">
+            </div>
+
+            <!-- Informations fichier -->
+            <div id="fileInfoFournisseurs" style="display: none; margin-top: 20px;">
+                <div class="alert alert-info">
+                    <i class="fas fa-file mr-2"></i>
+                    <strong id="fileNameFournisseurs"></strong> -
+                    <span id="fileSizeFournisseurs"></span>
+                </div>
+            </div>
+
+            <!-- Prévisualisation -->
+            <div id="previewFournisseurs" style="display: none;">
+                <h5 class="mt-4 mb-3">
+                    <i class="fas fa-eye mr-2"></i>{% trans "Prévisualisation" %} (<span id="previewCountFournisseurs">0</span> {% trans "lignes" %})
+                </h5>
+                <div class="preview-table" id="previewTableFournisseurs"></div>
+
+                <div class="text-right mt-3">
+                    <button class="btn btn-secondary mr-2" onclick="cancelImport('fournisseurs')">
+                        <i class="fas fa-times mr-2"></i>{% trans "Annuler" %}
+                    </button>
+                    <button class="btn btn-success" onclick="confirmImport('fournisseurs')">
+                        <i class="fas fa-check mr-2"></i>{% trans "Confirmer l'import" %}
+                    </button>
+                </div>
+            </div>
+
+            <!-- Progression -->
+            <div id="progressFournisseurs" style="display: none;">
+                <h5 class="mt-4">{% trans "Import en cours..." %}</h5>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFillFournisseurs" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- Résultats -->
+            <div id="resultsFournisseurs" style="display: none;">
+                <h5 class="mt-4 mb-3">
+                    <i class="fas fa-check-circle text-success mr-2"></i>{% trans "Import terminé" %}
+                </h5>
+                <div class="import-results" id="resultsStatsFournisseurs"></div>
+                <div id="errorsListFournisseurs" style="display: none; margin-top: 20px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Contenu Clients -->
+    <div id="clients-tab" class="tab-content">
+        <div class="import-card">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h3 class="mb-0">
+                    <i class="fas fa-users text-primary mr-2"></i>{% trans "Importer des Clients" %}
+                </h3>
+                <div>
+                    <button class="template-btn" onclick="downloadTemplate('clients', 'excel')">
+                        <i class="fas fa-file-excel"></i>
+                        {% trans "Template Excel" %}
+                    </button>
+                    <button class="template-btn ml-2" onclick="downloadTemplate('clients', 'csv')">
+                        <i class="fas fa-file-csv"></i>
+                        {% trans "Template CSV" %}
+                    </button>
+                </div>
+            </div>
+
+            <!-- Zone d'upload -->
+            <div class="upload-zone" id="uploadZoneClients" onclick="document.getElementById('fileInputClients').click()">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <h4>{% trans "Glissez votre fichier ici ou cliquez pour parcourir" %}</h4>
+                <p class="text-muted mb-0">{% trans "Formats acceptés" %}: .xlsx, .xls, .csv ({% trans "max" %} 10 MB)</p>
+                <input type="file" id="fileInputClients" class="file-input" accept=".xlsx,.xls,.csv" onchange="handleFileSelect(this, 'clients')">
+            </div>
+
+            <!-- Informations fichier -->
+            <div id="fileInfoClients" style="display: none; margin-top: 20px;">
+                <div class="alert alert-info">
+                    <i class="fas fa-file mr-2"></i>
+                    <strong id="fileNameClients"></strong> -
+                    <span id="fileSizeClients"></span>
+                </div>
+            </div>
+
+            <!-- Prévisualisation -->
+            <div id="previewClients" style="display: none;">
+                <h5 class="mt-4 mb-3">
+                    <i class="fas fa-eye mr-2"></i>{% trans "Prévisualisation" %} (<span id="previewCountClients">0</span> {% trans "lignes" %})
+                </h5>
+                <div class="preview-table" id="previewTableClients"></div>
+
+                <div class="text-right mt-3">
+                    <button class="btn btn-secondary mr-2" onclick="cancelImport('clients')">
+                        <i class="fas fa-times mr-2"></i>{% trans "Annuler" %}
+                    </button>
+                    <button class="btn btn-success" onclick="confirmImport('clients')">
+                        <i class="fas fa-check mr-2"></i>{% trans "Confirmer l'import" %}
+                    </button>
+                </div>
+            </div>
+
+            <!-- Progression -->
+            <div id="progressClients" style="display: none;">
+                <h5 class="mt-4">{% trans "Import en cours..." %}</h5>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFillClients" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- Résultats -->
+            <div id="resultsClients" style="display: none;">
+                <h5 class="mt-4 mb-3">
+                    <i class="fas fa-check-circle text-success mr-2"></i>{% trans "Import terminé" %}
+                </h5>
+                <div class="import-results" id="resultsStatsClients"></div>
+                <div id="errorsListClients" style="display: none; margin-top: 20px;"></div>
+            </div>
+        </div>
+    </div>
+
     <!-- Instructions -->
     <div class="import-card">
         <h4 class="mb-3">
@@ -416,6 +567,25 @@
                     <li>{% trans "Colonnes optionnelles" %}: <code>parent</code>, <code>description</code>, <code>couleur</code>, <code>icone</code></li>
                     <li>{% trans "La catégorie parente doit exister si spécifiée" %}</li>
                     <li>{% trans "La couleur doit être au format hexadécimal" %} (ex: #FF5733)</li>
+                </ul>
+            </div>
+        </div>
+        <div class="row mt-3">
+            <div class="col-md-6">
+                <h6 class="font-weight-bold mb-2">{% trans "Pour les Fournisseurs:" %}</h6>
+                <ul class="text-muted">
+                    <li>{% trans "Colonnes requises" %}: <code>libelle</code></li>
+                    <li>{% trans "Colonnes optionnelles" %}: <code>telephone</code>, <code>email</code>, <code>adresse</code>, <code>nif</code>, <code>nis</code>, <code>ai</code>, <code>rc</code></li>
+                    <li>{% trans "Si un fournisseur existe déjà (même libellé), il sera mis à jour" %}</li>
+                </ul>
+            </div>
+            <div class="col-md-6">
+                <h6 class="font-weight-bold mb-2">{% trans "Pour les Clients:" %}</h6>
+                <ul class="text-muted">
+                    <li>{% trans "Colonnes requises" %}: <code>nom</code></li>
+                    <li>{% trans "Colonnes optionnelles" %}: <code>prenom</code>, <code>telephone</code>, <code>email</code>, <code>adresse</code>, <code>lat</code>, <code>lng</code>, <code>secteur</code>, <code>nif</code>, <code>nis</code>, <code>ai</code>, <code>rc</code></li>
+                    <li>{% trans "Le secteur doit exister dans le système si spécifié" %}</li>
+                    <li>{% trans "Si un client existe déjà (même nom + prénom), il sera mis à jour" %}</li>
                 </ul>
             </div>
         </div>

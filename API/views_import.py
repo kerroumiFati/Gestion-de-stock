@@ -2,6 +2,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.authentication import SessionAuthentication, BasicAuthentication
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
@@ -9,14 +10,22 @@ import pandas as pd
 import io
 import csv
 from decimal import Decimal
-from .models import Produit, Categorie, Fournisseur, Currency
+from .models import Produit, Categorie, Fournisseur, Client, Secteur, Currency
 from django.db import transaction
 
 
+class CsrfExemptSessionAuthentication(SessionAuthentication):
+    """Session authentication sans vérification CSRF"""
+    def enforce_csrf(self, request):
+        return  # Ne pas vérifier le CSRF
+
+
+@method_decorator(csrf_exempt, name='dispatch')
 class ImportPreviewView(APIView):
     """
     Prévisualisation d'un fichier d'import avant traitement
     """
+    authentication_classes = [CsrfExemptSessionAuthentication, BasicAuthentication]
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -29,9 +38,22 @@ class ImportPreviewView(APIView):
 
             # Lire le fichier selon le type
             if file.name.endswith('.csv'):
-                df = pd.read_csv(io.StringIO(file.read().decode('utf-8')))
+                # Lire le contenu brut
+                content = file.read()
+                # Essayer différents encodages
+                for encoding in ['utf-8-sig', 'utf-8', 'latin-1', 'cp1252']:
+                    try:
+                        text = content.decode(encoding)
+                        df = pd.read_csv(io.StringIO(text), sep=None, engine='python')
+                        break
+                    except (UnicodeDecodeError, pd.errors.ParserError):
+                        continue
+                else:
+                    return Response({'error': 'Impossible de décoder le fichier CSV'}, status=status.HTTP_400_BAD_REQUEST)
             elif file.name.endswith(('.xlsx', '.xls')):
-                df = pd.read_excel(file)
+                # Pour Excel, lire directement depuis le fichier uploadé
+                file.seek(0)
+                df = pd.read_excel(file, engine='openpyxl')
             else:
                 return Response({'error': 'Format de fichier non supporté'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -52,10 +74,12 @@ class ImportPreviewView(APIView):
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class ImportExecuteView(APIView):
     """
     Exécution de l'import de données
     """
+    authentication_classes = [CsrfExemptSessionAuthentication, BasicAuthentication]
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -68,20 +92,42 @@ class ImportExecuteView(APIView):
 
             # Lire le fichier
             if file.name.endswith('.csv'):
-                df = pd.read_csv(io.StringIO(file.read().decode('utf-8')))
+                # Lire le contenu brut
+                content = file.read()
+                # Essayer différents encodages
+                for encoding in ['utf-8-sig', 'utf-8', 'latin-1', 'cp1252']:
+                    try:
+                        text = content.decode(encoding)
+                        df = pd.read_csv(io.StringIO(text), sep=None, engine='python')
+                        break
+                    except (UnicodeDecodeError, pd.errors.ParserError):
+                        continue
+                else:
+                    return Response({'error': 'Impossible de décoder le fichier CSV'}, status=status.HTTP_400_BAD_REQUEST)
             elif file.name.endswith(('.xlsx', '.xls')):
-                df = pd.read_excel(file)
+                # Pour Excel, lire directement depuis le fichier uploadé
+                file.seek(0)
+                df = pd.read_excel(file, engine='openpyxl')
             else:
                 return Response({'error': 'Format de fichier non supporté'}, status=status.HTTP_400_BAD_REQUEST)
 
             # Remplacer les NaN par des chaînes vides
             df = df.fillna('')
 
+            # Récupérer la company de l'utilisateur
+            company = None
+            if hasattr(request, 'company') and request.company is not None:
+                company = request.company
+
             # Traiter selon le type
             if import_type == 'products':
-                result = self.import_products(df, request.user)
+                result = self.import_products(df, request.user, company)
             elif import_type == 'categories':
-                result = self.import_categories(df, request.user)
+                result = self.import_categories(df, request.user, company)
+            elif import_type == 'fournisseurs':
+                result = self.import_fournisseurs(df, request.user, company)
+            elif import_type == 'clients':
+                result = self.import_clients(df, request.user, company)
             else:
                 return Response({'error': 'Type d\'import non supporté'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -90,7 +136,7 @@ class ImportExecuteView(APIView):
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    def import_products(self, df, user):
+    def import_products(self, df, user, company=None):
         """Importer des produits"""
         created = 0
         updated = 0
@@ -131,6 +177,10 @@ class ImportExecuteView(APIView):
                         'designation': str(row['designation']).strip(),
                         'prixU': prix,
                     }
+
+                    # Assigner la company
+                    if company:
+                        data['company'] = company
 
                     # Champs optionnels
                     if row.get('code_barre'):
@@ -203,7 +253,7 @@ class ImportExecuteView(APIView):
             'errors': errors
         }
 
-    def import_categories(self, df, user):
+    def import_categories(self, df, user, company=None):
         """Importer des catégories"""
         created = 0
         updated = 0
@@ -223,6 +273,10 @@ class ImportExecuteView(APIView):
                     data = {
                         'nom': str(row['nom']).strip(),
                     }
+
+                    # Assigner la company
+                    if company:
+                        data['company'] = company
 
                     # Champs optionnels
                     if row.get('description'):
@@ -255,6 +309,189 @@ class ImportExecuteView(APIView):
                     except Categorie.DoesNotExist:
                         # Créer
                         categorie = Categorie.objects.create(**data)
+                        is_created = True
+
+                    if is_created:
+                        created += 1
+                    else:
+                        updated += 1
+
+                except Exception as e:
+                    errors.append({'row': idx + 2, 'message': str(e)})
+                    skipped += 1
+
+        return {
+            'stats': {
+                'created': created,
+                'updated': updated,
+                'skipped': skipped,
+                'total': len(df)
+            },
+            'errors': errors
+        }
+
+    def import_fournisseurs(self, df, user, company=None):
+        """Importer des fournisseurs"""
+        created = 0
+        updated = 0
+        skipped = 0
+        errors = []
+
+        with transaction.atomic():
+            for idx, row in df.iterrows():
+                try:
+                    # Vérifier les champs requis
+                    if not row.get('libelle') or not str(row.get('libelle')).strip():
+                        errors.append({'row': idx + 2, 'message': 'Libellé manquant'})
+                        skipped += 1
+                        continue
+
+                    # Préparer les données
+                    data = {
+                        'libelle': str(row['libelle']).strip(),
+                    }
+
+                    # Assigner la company
+                    if company:
+                        data['company'] = company
+
+                    # Champs optionnels
+                    if row.get('telephone'):
+                        data['telephone'] = str(row['telephone']).strip()
+
+                    if row.get('email'):
+                        data['email'] = str(row['email']).strip()
+
+                    if row.get('adresse'):
+                        data['adresse'] = str(row['adresse']).strip()
+
+                    if row.get('nif'):
+                        data['nif'] = str(row['nif']).strip()
+
+                    if row.get('nis'):
+                        data['nis'] = str(row['nis']).strip()
+
+                    if row.get('ai'):
+                        data['ai'] = str(row['ai']).strip()
+
+                    if row.get('rc'):
+                        data['rc'] = str(row['rc']).strip()
+
+                    # Créer ou mettre à jour le fournisseur
+                    try:
+                        fournisseur = Fournisseur.objects.get(libelle__iexact=data['libelle'])
+                        # Mettre à jour
+                        for key, value in data.items():
+                            setattr(fournisseur, key, value)
+                        fournisseur.save()
+                        is_created = False
+                    except Fournisseur.DoesNotExist:
+                        # Créer
+                        fournisseur = Fournisseur.objects.create(**data)
+                        is_created = True
+
+                    if is_created:
+                        created += 1
+                    else:
+                        updated += 1
+
+                except Exception as e:
+                    errors.append({'row': idx + 2, 'message': str(e)})
+                    skipped += 1
+
+        return {
+            'stats': {
+                'created': created,
+                'updated': updated,
+                'skipped': skipped,
+                'total': len(df)
+            },
+            'errors': errors
+        }
+
+    def import_clients(self, df, user, company=None):
+        """Importer des clients"""
+        created = 0
+        updated = 0
+        skipped = 0
+        errors = []
+
+        with transaction.atomic():
+            for idx, row in df.iterrows():
+                try:
+                    # Vérifier les champs requis
+                    if not row.get('nom') or not str(row.get('nom')).strip():
+                        errors.append({'row': idx + 2, 'message': 'Nom manquant'})
+                        skipped += 1
+                        continue
+
+                    # Préparer les données
+                    data = {
+                        'nom': str(row['nom']).strip(),
+                    }
+
+                    # Assigner la company
+                    if company:
+                        data['company'] = company
+
+                    # Champs optionnels
+                    if row.get('prenom'):
+                        data['prenom'] = str(row['prenom']).strip()
+
+                    if row.get('telephone'):
+                        data['telephone'] = str(row['telephone']).strip()
+
+                    if row.get('email'):
+                        data['email'] = str(row['email']).strip()
+
+                    if row.get('adresse'):
+                        data['adresse'] = str(row['adresse']).strip()
+
+                    if row.get('lat'):
+                        try:
+                            data['lat'] = float(row['lat'])
+                        except:
+                            pass
+
+                    if row.get('lng'):
+                        try:
+                            data['lng'] = float(row['lng'])
+                        except:
+                            pass
+
+                    if row.get('nif'):
+                        data['nif'] = str(row['nif']).strip()
+
+                    if row.get('nis'):
+                        data['nis'] = str(row['nis']).strip()
+
+                    if row.get('ai'):
+                        data['ai'] = str(row['ai']).strip()
+
+                    if row.get('rc'):
+                        data['rc'] = str(row['rc']).strip()
+
+                    # Gérer le secteur
+                    if row.get('secteur'):
+                        secteur_name = str(row['secteur']).strip()
+                        try:
+                            secteur = Secteur.objects.get(nom__iexact=secteur_name)
+                            data['secteur'] = secteur
+                        except Secteur.DoesNotExist:
+                            errors.append({'row': idx + 2, 'message': f'Secteur "{secteur_name}" introuvable'})
+
+                    # Créer ou mettre à jour le client (basé sur nom + prénom pour unicité)
+                    prenom = data.get('prenom', '')
+                    try:
+                        client = Client.objects.get(nom__iexact=data['nom'], prenom__iexact=prenom)
+                        # Mettre à jour
+                        for key, value in data.items():
+                            setattr(client, key, value)
+                        client.save()
+                        is_created = False
+                    except Client.DoesNotExist:
+                        # Créer
+                        client = Client.objects.create(**data)
                         is_created = True
 
                     if is_created:
@@ -320,6 +557,43 @@ class ImportTemplateView(APIView):
                     'description': 'Produits électroniques',
                     'couleur': '#3B82F6',
                     'icone': 'fas fa-laptop'
+                }]
+
+            elif import_type == 'fournisseurs':
+                columns = ['libelle', 'telephone', 'email', 'adresse', 'nif', 'nis', 'ai', 'rc']
+                filename = 'template_fournisseurs'
+
+                # Données d'exemple
+                example_data = [{
+                    'libelle': 'Fournisseur Exemple',
+                    'telephone': '0555123456',
+                    'email': 'contact@fournisseur.com',
+                    'adresse': '123 Rue Principale, Alger',
+                    'nif': '123456789012345',
+                    'nis': '123456789012345',
+                    'ai': '12345678901',
+                    'rc': '12/00-1234567B89'
+                }]
+
+            elif import_type == 'clients':
+                columns = ['nom', 'prenom', 'telephone', 'email', 'adresse', 'lat', 'lng',
+                          'secteur', 'nif', 'nis', 'ai', 'rc']
+                filename = 'template_clients'
+
+                # Données d'exemple
+                example_data = [{
+                    'nom': 'Superette Centrale',
+                    'prenom': '',
+                    'telephone': '0555987654',
+                    'email': 'contact@superette.com',
+                    'adresse': '45 Avenue des Palmiers, Oran',
+                    'lat': '35.6976',
+                    'lng': '-0.6337',
+                    'secteur': 'Centre',
+                    'nif': '123456789012345',
+                    'nis': '123456789012345',
+                    'ai': '12345678901',
+                    'rc': '12/00-1234567B89'
                 }]
 
             else:

@@ -157,6 +157,33 @@ class ClientViewSet(TenantFilterMixin, viewsets.ModelViewSet):
     serializer_class = ClientSerializer
     permission_classes = [IsAuthenticated]
 
+    def perform_create(self, serializer):
+        """Assigner automatiquement la company de l'utilisateur connecté lors de la création"""
+        if hasattr(self.request, 'company') and self.request.company is not None:
+            obj = serializer.save(company=self.request.company)
+        else:
+            obj = serializer.save()
+        try:
+            log_event(self.request, 'client.create', target=obj, metadata={'id': obj.id, 'nom': obj.nom})
+        except Exception:
+            pass
+
+    def perform_update(self, serializer):
+        obj = serializer.save()
+        try:
+            log_event(self.request, 'client.update', target=obj, metadata={'id': obj.id, 'nom': obj.nom})
+        except Exception:
+            pass
+
+    def perform_destroy(self, instance):
+        mid = instance.id
+        nom = instance.nom
+        super().perform_destroy(instance)
+        try:
+            log_event(self.request, 'client.delete', target=None, metadata={'id': mid, 'nom': nom})
+        except Exception:
+            pass
+
     def get_queryset(self):
         """
         Override pour permettre l'accès aux clients pour les utilisateurs mobiles
@@ -167,6 +194,10 @@ class ClientViewSet(TenantFilterMixin, viewsets.ModelViewSet):
         # Si l'utilisateur n'est pas authentifié, rien
         if not self.request.user.is_authenticated:
             return queryset.none()
+
+        # Si superuser ou staff, voir tous les clients
+        if self.request.user.is_superuser or self.request.user.is_staff:
+            return queryset
 
         # Si l'utilisateur a une company, filtrer par company
         if hasattr(self.request, 'company') and self.request.company is not None:

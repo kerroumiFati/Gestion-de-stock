@@ -145,7 +145,7 @@ def download_template_view(request):
                     'unite_mesure': 'paquet'
                 }
             ]
-        else:  # categories
+        elif import_type == 'categories':
             columns = ['nom', 'parent', 'description', 'couleur', 'icone']
             filename = 'template_categories'
             example_data = [
@@ -185,6 +185,93 @@ def download_template_view(request):
                     'icone': 'fas fa-cookie-bite'
                 }
             ]
+
+        elif import_type == 'fournisseurs':
+            columns = ['libelle', 'telephone', 'email', 'adresse', 'nif', 'nis', 'ai', 'rc']
+            filename = 'template_fournisseurs'
+            example_data = [
+                {
+                    'libelle': 'Coca-Cola Company',
+                    'telephone': '021123456',
+                    'email': 'contact@coca-cola.dz',
+                    'adresse': 'Zone Industrielle, Alger',
+                    'nif': '001234567890123',
+                    'nis': '001234567890123',
+                    'ai': '12345678901',
+                    'rc': '16/00-0123456B19'
+                },
+                {
+                    'libelle': 'Ifri',
+                    'telephone': '034567890',
+                    'email': 'contact@ifri.dz',
+                    'adresse': 'Ighzer Amokrane, Bejaia',
+                    'nif': '002345678901234',
+                    'nis': '002345678901234',
+                    'ai': '23456789012',
+                    'rc': '06/00-0234567B06'
+                },
+                {
+                    'libelle': 'Bimo',
+                    'telephone': '025678901',
+                    'email': 'contact@bimo.dz',
+                    'adresse': 'Zone Industrielle, Blida',
+                    'nif': '003456789012345',
+                    'nis': '003456789012345',
+                    'ai': '34567890123',
+                    'rc': '09/00-0345678B09'
+                }
+            ]
+
+        elif import_type == 'clients':
+            columns = ['nom', 'prenom', 'telephone', 'email', 'adresse', 'lat', 'lng', 'secteur', 'nif', 'nis', 'ai', 'rc']
+            filename = 'template_clients'
+            example_data = [
+                {
+                    'nom': 'Superette El Baraka',
+                    'prenom': '',
+                    'telephone': '0555123456',
+                    'email': 'elbaraka@email.com',
+                    'adresse': '15 Rue Didouche Mourad, Alger',
+                    'lat': '36.7538',
+                    'lng': '3.0588',
+                    'secteur': 'Centre',
+                    'nif': '111234567890123',
+                    'nis': '111234567890123',
+                    'ai': '11123456789',
+                    'rc': '16/00-1112345B16'
+                },
+                {
+                    'nom': 'Mini Market Essalam',
+                    'prenom': '',
+                    'telephone': '0555234567',
+                    'email': 'essalam@email.com',
+                    'adresse': '23 Boulevard Amirouche, Bejaia',
+                    'lat': '36.7509',
+                    'lng': '5.0567',
+                    'secteur': 'Est',
+                    'nif': '222345678901234',
+                    'nis': '222345678901234',
+                    'ai': '22234567890',
+                    'rc': '06/00-2223456B06'
+                },
+                {
+                    'nom': 'Alimentation Rahma',
+                    'prenom': '',
+                    'telephone': '0555345678',
+                    'email': 'rahma@email.com',
+                    'adresse': '8 Avenue de l\'ALN, Oran',
+                    'lat': '35.6969',
+                    'lng': '-0.6331',
+                    'secteur': 'Ouest',
+                    'nif': '333456789012345',
+                    'nis': '333456789012345',
+                    'ai': '33345678901',
+                    'rc': '31/00-3334567B31'
+                }
+            ]
+
+        else:
+            return JsonResponse({'error': 'Type non supporté: ' + import_type}, status=400)
 
         df = pd.DataFrame(example_data, columns=columns)
 
