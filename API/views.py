@@ -1856,16 +1856,15 @@ class VenteViewSet(TenantFilterMixin, viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def clients_avec_reste(self, request):
-        """Liste des clients ayant un reste à payer sur leurs ventes"""
+        """Liste des clients ayant un reste à payer sur leurs ventes (web + mobiles)"""
         from django.db.models import Sum, F, Value, DecimalField
         from django.db.models.functions import Coalesce
+        from .distribution_models import VenteTourneeMobile
 
-        # Récupérer toutes les ventes complétées avec reste à payer
-        base_qs = self.get_queryset().filter(statut='completed')
-
-        # Calculer le montant payé et le reste pour chaque vente
-        ventes_avec_reste = []
         clients_data = {}
+
+        # 1. Récupérer les ventes WEB complétées avec reste à payer
+        base_qs = self.get_queryset().filter(statut='completed')
 
         for vente in base_qs.select_related('client'):
             montant_paye = vente.get_montant_paye()
@@ -1889,6 +1888,37 @@ class VenteViewSet(TenantFilterMixin, viewsets.ModelViewSet):
                 clients_data[client_id]['total_ttc'] += float(vente.total_ttc or 0)
                 clients_data[client_id]['total_paye'] += float(montant_paye)
                 clients_data[client_id]['reste_a_payer'] += float(reste)
+                clients_data[client_id]['nombre_ventes'] += 1
+
+        # 2. Récupérer les ventes MOBILES avec reste à payer
+        company = getattr(request.user, 'company', None) or getattr(request.user, 'selected_company', None)
+        mobile_qs = VenteTourneeMobile.objects.select_related('client')
+        if company:
+            mobile_qs = mobile_qs.filter(company=company)
+
+        for vente_mobile in mobile_qs:
+            montant_total = float(vente_mobile.montant_total or 0)
+            montant_paye = float(vente_mobile.montant_paye or 0)
+            reste = montant_total - montant_paye
+
+            if reste > 0:
+                client_id = vente_mobile.client_id
+                if client_id not in clients_data:
+                    clients_data[client_id] = {
+                        'client_id': client_id,
+                        'client_nom': vente_mobile.client.nom if vente_mobile.client else '',
+                        'client_prenom': vente_mobile.client.prenom if vente_mobile.client else '',
+                        'telephone': getattr(vente_mobile.client, 'telephone', '') or '',
+                        'total_ventes': 0,
+                        'total_ttc': 0,
+                        'total_paye': 0,
+                        'reste_a_payer': 0,
+                        'nombre_ventes': 0,
+                    }
+
+                clients_data[client_id]['total_ttc'] += montant_total
+                clients_data[client_id]['total_paye'] += montant_paye
+                clients_data[client_id]['reste_a_payer'] += reste
                 clients_data[client_id]['nombre_ventes'] += 1
 
         # Convertir en liste et trier par reste à payer décroissant
