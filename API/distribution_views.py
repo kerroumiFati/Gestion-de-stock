@@ -1,0 +1,2719 @@
+"""
+Vues API pour la gestion de la distribution mobile
+"""
+from rest_framework import viewsets, status, filters
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
+from django_filters.rest_framework import DjangoFilterBackend
+from django.utils import timezone
+from django.db import transaction, models
+from django.shortcuts import get_object_or_404, render
+from django.contrib.auth import get_user_model
+from django.contrib.auth.decorators import login_required
+from datetime import datetime, timedelta
+import random
+import string
+
+from .distribution_models import (
+    LivreurDistribution, TourneeMobile, ArretTourneeMobile, VenteTourneeMobile,
+    LigneVenteTourneeMobile, RapportCaisseMobile, DepenseTourneeMobile, SyncLogMobile,
+    CommandeClient, LigneCommandeClient, PlanningHebdomadaire, ClientLivreurHebdo
+    # BonLivraisonVan, LigneBonLivraisonVan  # TODO: Models not yet created
+)
+from .distribution_serializers import (
+    LivreurSerializer, LivreurDetailSerializer,
+    TourneeSerializer, TourneeSyncSerializer,
+    ArretTourneeSerializer, ArretTourneeSyncSerializer,
+    VenteTourneeSerializer, VenteTourneeCreateSerializer,
+    RapportCaisseSerializer, DepenseTourneeSerializer,
+    SyncLogSerializer,
+    SyncDeltaSerializer, SyncResponseSerializer, MobileSyncPushSerializer,
+    CommandeClientSerializer, CommandeClientCreateSerializer, LigneCommandeClientSerializer,
+    PlanningHebdomadaireSerializer, PlanningHebdomadaireCreateSerializer,
+    ClientLivreurHebdoSerializer, ClientLivreurHebdoCreateSerializer
+    # BonLivraisonVanSerializer, BonLivraisonVanCreateSerializer, BonLivraisonVanMobileSerializer  # TODO: Serializers not yet created
+)
+
+User = get_user_model()
+
+
+class LivreurViewSet(viewsets.ModelViewSet):
+    """ViewSet pour la gestion des livreurs de distribution"""
+    queryset = LivreurDistribution.objects.all()
+    serializer_class = LivreurSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_serializer_class(self):
+        if self.action == 'retrieve':
+            return LivreurDetailSerializer
+        return LivreurSerializer
+
+    def get_permissions(self):
+        """
+        Seuls les administrateurs peuvent créer ou supprimer des livreurs
+        Les autres utilisateurs authentifiés peuvent lire
+        """
+        if self.action in ['create', 'destroy']:
+            return [IsAuthenticated(), IsAdminUser()]
+        return [IsAuthenticated()]
+
+    def generate_password(self, username):
+        """
+        Générer un mot de passe basé sur username + jour + mois de création
+        Format: username + JJMM
+        Exemple: LIV001 créé le 13 novembre -> LIV0011311
+        """
+        from django.utils import timezone
+        now = timezone.now()
+        jour = now.strftime('%d')  # Jour sur 2 chiffres (ex: 13)
+        mois = now.strftime('%m')  # Mois sur 2 chiffres (ex: 11)
+        password = f"{username}{jour}{mois}"
+        return password
+
+    def create(self, request, *args, **kwargs):
+        """Créer un livreur et son compte utilisateur automatiquement"""
+        from django.contrib.auth.models import Group
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        # Sauvegarder le livreur
+        livreur = serializer.save()
+
+        # Créer un compte utilisateur si pas encore créé
+        username = None
+        password = None
+        compte_cree = False
+
+        if not livreur.user:
+            # Utiliser le matricule comme username
+            username = livreur.matricule
+
+            # Vérifier si l'username existe déjà
+            if User.objects.filter(username=username).exists():
+                username = f"{livreur.matricule}_{livreur.id}"
+
+            # Générer un mot de passe basé sur username + date
+            password = self.generate_password(username)
+
+            # Créer l'utilisateur
+            user = User.objects.create_user(
+                username=username,
+                password=password,
+                email=livreur.email or '',
+                first_name=livreur.nom.split()[0] if livreur.nom else '',
+                last_name=' '.join(livreur.nom.split()[1:]) if len(livreur.nom.split()) > 1 else ''
+            )
+
+            # Créer le groupe "livreurs" s'il n'existe pas
+            livreurs_group, created = Group.objects.get_or_create(name='livreurs')
+            if created:
+                print('[INFO] Groupe "livreurs" créé automatiquement')
+
+            # Ajouter l'utilisateur au groupe "livreurs"
+            user.groups.add(livreurs_group)
+
+            livreur.user = user
+            livreur.save()
+            compte_cree = True
+
+        # Préparer la réponse avec les informations de connexion
+        headers = self.get_success_headers(serializer.data)
+        response_data = serializer.data
+
+        if compte_cree:
+            response_data = {
+                **serializer.data,
+                'compte_cree': True,
+                'username': username,
+                'mot_de_passe_initial': password,
+                'groupe': 'livreurs',
+                'message': f'Compte créé. Username: {username}, Mot de passe: {password}'
+            }
+
+        return Response(response_data, status=status.HTTP_201_CREATED, headers=headers)
+
+    @action(detail=True, methods=['get'])
+    def tournees(self, request, pk=None):
+        """Récupérer les tournées d'un livreur"""
+        livreur = self.get_object()
+        date_debut = request.query_params.get('date_debut')
+        date_fin = request.query_params.get('date_fin')
+
+        tournees = livreur.tournees.all()
+
+        if date_debut:
+            tournees = tournees.filter(date_tournee__gte=date_debut)
+        if date_fin:
+            tournees = tournees.filter(date_tournee__lte=date_fin)
+
+        serializer = TourneeSerializer(tournees, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['get'])
+    def statistiques(self, request, pk=None):
+        """Statistiques d'un livreur"""
+        livreur = self.get_object()
+        periode = request.query_params.get('periode', '30')  # jours
+
+        date_debut = timezone.now().date() - timedelta(days=int(periode))
+        tournees = livreur.tournees.filter(date_tournee__gte=date_debut)
+
+        stats = {
+            'periode_jours': int(periode),
+            'nb_tournees_total': tournees.count(),
+            'nb_tournees_terminees': tournees.filter(statut='terminee').count(),
+            'nb_tournees_en_cours': tournees.filter(statut='en_cours').count(),
+            'nb_tournees_planifiees': tournees.filter(statut='planifiee').count(),
+            'taux_completion': 0,
+            'ca_total': 0,
+            'nb_clients_visites': 0,
+        }
+
+        if stats['nb_tournees_total'] > 0:
+            stats['taux_completion'] = round(
+                stats['nb_tournees_terminees'] / stats['nb_tournees_total'] * 100, 2
+            )
+
+        # CA total
+        ventes = VenteTourneeMobile.objects.filter(tournee__in=tournees)
+        stats['ca_total'] = float(sum(v.montant_total for v in ventes))
+
+        # Clients uniques visités
+        arrets_livres = ArretTourneeMobile.objects.filter(
+            tournee__in=tournees,
+            statut='livre'
+        )
+        stats['nb_clients_visites'] = arrets_livres.values('client').distinct().count()
+
+        return Response(stats)
+
+    @action(detail=True, methods=['get'])
+    def clients_assignes(self, request, pk=None):
+        """Récupérer les clients assignés à un livreur"""
+        livreur = self.get_object()
+        clients = livreur.clients_assignes.all()
+
+        from .distribution_serializers import ClientMobileSerializer
+        serializer = ClientMobileSerializer(clients, many=True)
+        return Response({
+            'livreur_id': livreur.id,
+            'livreur_nom': livreur.nom,
+            'clients': serializer.data
+        })
+
+    @action(detail=True, methods=['get'])
+    def clients_du_jour(self, request, pk=None):
+        """
+        Récupérer les clients à visiter selon le planning hebdomadaire.
+        Utilise ClientLivreurHebdo pour déterminer quels clients sont assignés
+        pour le jour de la semaine.
+
+        Paramètres optionnels:
+        - date: Date spécifique (format YYYY-MM-DD). Si non fourni, utilise aujourd'hui.
+        """
+        from datetime import date, datetime
+        from API.models import Client
+
+        livreur = self.get_object()
+
+        # Obtenir la date (paramètre ou aujourd'hui)
+        date_param = request.query_params.get('date', None)
+        if date_param:
+            try:
+                target_date = datetime.strptime(date_param, '%Y-%m-%d').date()
+            except ValueError:
+                target_date = date.today()
+        else:
+            target_date = date.today()
+
+        # Obtenir le jour de la semaine (1=Lundi ... 7=Dimanche)
+        # Python: weekday() retourne 0=Lundi, donc on ajoute 1
+        jour_semaine = target_date.weekday() + 1  # 1=Lundi, 7=Dimanche
+
+        # Récupérer les configurations actives pour ce livreur et ce jour
+        configs = ClientLivreurHebdo.objects.filter(
+            livreur=livreur,
+            jour_semaine=jour_semaine,
+            is_active=True
+        ).select_related('client').order_by('ordre_passage')
+
+        # Filtrer par période de validité si définie
+        configs = configs.filter(
+            models.Q(date_debut__isnull=True) | models.Q(date_debut__lte=target_date)
+        ).filter(
+            models.Q(date_fin__isnull=True) | models.Q(date_fin__gte=target_date)
+        )
+
+        # Extraire les clients avec leur ordre de passage
+        clients_data = []
+        for config in configs:
+            client = config.client
+            from .distribution_serializers import ClientMobileSerializer
+            client_data = ClientMobileSerializer(client).data
+            client_data['ordre_visite'] = config.ordre_passage
+            clients_data.append(client_data)
+
+        return Response({
+            'livreur_id': livreur.id,
+            'livreur_nom': livreur.nom,
+            'date': target_date.isoformat(),
+            'jour_semaine': jour_semaine,
+            'jour_nom': dict(ClientLivreurHebdo.JOURS_SEMAINE_CHOICES).get(jour_semaine, ''),
+            'clients': clients_data,
+            'nb_clients': len(clients_data)
+        })
+
+    @action(detail=False, methods=['post'], url_path='update-location')
+    def update_location(self, request):
+        """
+        Mettre à jour la position GPS du livreur connecté
+        POST /API/distribution/livreurs/update-location/
+        Body: { "lat": 36.7538, "lng": 3.0588 }
+        """
+        # Récupérer le livreur du user connecté
+        try:
+            livreur = LivreurDistribution.objects.get(user=request.user)
+        except LivreurDistribution.DoesNotExist:
+            return Response(
+                {'error': 'Aucun livreur associé à cet utilisateur'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        lat = request.data.get('lat')
+        lng = request.data.get('lng')
+
+        if lat is None or lng is None:
+            return Response(
+                {'error': 'Les champs lat et lng sont requis'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            # Arrondir à 7 décimales
+            lat = round(float(lat), 7)
+            lng = round(float(lng), 7)
+
+            # Mettre à jour la position
+            livreur.current_lat = lat
+            livreur.current_lng = lng
+            livreur.last_location_update = timezone.now()
+            livreur.save(update_fields=['current_lat', 'current_lng', 'last_location_update'])
+
+            return Response({
+                'success': True,
+                'livreur_id': livreur.id,
+                'livreur_nom': livreur.nom,
+                'lat': float(livreur.current_lat),
+                'lng': float(livreur.current_lng),
+                'last_update': livreur.last_location_update
+            })
+        except (ValueError, TypeError) as e:
+            return Response(
+                {'error': f'Coordonnées GPS invalides: {str(e)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    @action(detail=True, methods=['post'])
+    def assigner_clients(self, request, pk=None):
+        """Assigner des clients à un livreur"""
+        livreur = self.get_object()
+        client_ids = request.data.get('client_ids', [])
+
+        if not isinstance(client_ids, list):
+            return Response(
+                {'error': 'client_ids doit être une liste'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        from API.models import Client
+        clients = Client.objects.filter(id__in=client_ids)
+        livreur.clients_assignes.set(clients)
+
+        return Response({
+            'message': f'{clients.count()} client(s) assigné(s) avec succès',
+            'livreur_id': livreur.id,
+            'nb_clients': clients.count()
+        })
+
+    @action(detail=True, methods=['post'])
+    def ajouter_client(self, request, pk=None):
+        """Ajouter un client à un livreur"""
+        livreur = self.get_object()
+        client_id = request.data.get('client_id')
+
+        if not client_id:
+            return Response(
+                {'error': 'client_id requis'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        from API.models import Client
+        try:
+            client = Client.objects.get(id=client_id)
+            livreur.clients_assignes.add(client)
+
+            return Response({
+                'message': f'Client {client.nom} {client.prenom} ajouté avec succès',
+                'livreur_id': livreur.id,
+                'client_id': client.id
+            })
+        except Client.DoesNotExist:
+            return Response(
+                {'error': 'Client introuvable'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+    @action(detail=True, methods=['post'])
+    def retirer_client(self, request, pk=None):
+        """Retirer un client d'un livreur"""
+        livreur = self.get_object()
+        client_id = request.data.get('client_id')
+
+        if not client_id:
+            return Response(
+                {'error': 'client_id requis'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        from API.models import Client
+        try:
+            client = Client.objects.get(id=client_id)
+            livreur.clients_assignes.remove(client)
+
+            return Response({
+                'message': f'Client {client.nom} {client.prenom} retiré avec succès',
+                'livreur_id': livreur.id,
+                'client_id': client.id
+            })
+        except Client.DoesNotExist:
+            return Response(
+                {'error': 'Client introuvable'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+    @action(detail=True, methods=['post'])
+    def creer_compte(self, request, pk=None):
+        """Créer un compte utilisateur pour un livreur qui n'en a pas"""
+        from django.contrib.auth.models import Group
+
+        livreur = self.get_object()
+
+        # Vérifier que l'utilisateur est admin
+        if not request.user.is_staff:
+            return Response({
+                'error': 'Seuls les administrateurs peuvent créer des comptes'
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        if livreur.user:
+            return Response({
+                'error': 'Ce livreur a déjà un compte utilisateur',
+                'username': livreur.user.username
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Utiliser le matricule comme username
+        username = livreur.matricule
+
+        # Vérifier si l'username existe déjà
+        if User.objects.filter(username=username).exists():
+            username = f"{livreur.matricule}_{livreur.id}"
+
+        # Générer un mot de passe basé sur username + date
+        password = self.generate_password(username)
+
+        # Créer l'utilisateur
+        user = User.objects.create_user(
+            username=username,
+            password=password,
+            email=livreur.email or '',
+            first_name=livreur.nom.split()[0] if livreur.nom else '',
+            last_name=' '.join(livreur.nom.split()[1:]) if len(livreur.nom.split()) > 1 else ''
+        )
+
+        # Créer le groupe "livreurs" s'il n'existe pas et ajouter l'utilisateur
+        livreurs_group, created = Group.objects.get_or_create(name='livreurs')
+        user.groups.add(livreurs_group)
+
+        livreur.user = user
+        livreur.save()
+
+        return Response({
+            'message': 'Compte créé avec succès',
+            'username': username,
+            'mot_de_passe': password,
+            'groupe': 'livreurs',
+            'livreur_id': livreur.id,
+            'format_mot_de_passe': 'username + jour + mois (JJMM)'
+        })
+
+    @action(detail=True, methods=['post'])
+    def reinitialiser_mot_de_passe(self, request, pk=None):
+        """Réinitialiser le mot de passe d'un livreur"""
+        livreur = self.get_object()
+
+        # Vérifier que l'utilisateur est admin
+        if not request.user.is_staff:
+            return Response({
+                'error': 'Seuls les administrateurs peuvent réinitialiser les mots de passe'
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        if not livreur.user:
+            return Response({
+                'error': 'Ce livreur n\'a pas de compte utilisateur. Utilisez l\'action creer_compte d\'abord.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Générer un nouveau mot de passe basé sur username + date actuelle
+        new_password = self.generate_password(livreur.user.username)
+
+        # Mettre à jour le mot de passe
+        livreur.user.set_password(new_password)
+        livreur.user.save()
+
+        return Response({
+            'message': 'Mot de passe réinitialisé avec succès',
+            'username': livreur.user.username,
+            'nouveau_mot_de_passe': new_password,
+            'livreur_id': livreur.id,
+            'format_mot_de_passe': 'username + jour + mois (JJMM)',
+            'info': 'Le mot de passe a été réinitialisé avec la date actuelle'
+        })
+
+    @action(detail=True, methods=['get'])
+    def infos_connexion(self, request, pk=None):
+        """Récupérer les informations de connexion d'un livreur"""
+        livreur = self.get_object()
+
+        if not livreur.user:
+            return Response({
+                'a_compte': False,
+                'message': 'Ce livreur n\'a pas de compte utilisateur',
+                'livreur_id': livreur.id,
+                'livreur_nom': livreur.nom
+            })
+
+        return Response({
+            'a_compte': True,
+            'username': livreur.user.username,
+            'email': livreur.user.email,
+            'date_creation': livreur.user.date_joined,
+            'dernier_login': livreur.user.last_login,
+            'livreur_id': livreur.id,
+            'livreur_nom': livreur.nom
+        })
+
+    @action(detail=True, methods=['get'])
+    def stock_van(self, request, pk=None):
+        """Récupérer le stock du van assigné au livreur"""
+        from API.models import ProductStock, Currency
+
+        livreur = self.get_object()
+
+        if not livreur.entrepot:
+            return Response({
+                'error': 'Ce livreur n\'a pas de van assigné',
+                'livreur_id': livreur.id,
+                'livreur_nom': livreur.nom
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        # Récupérer la devise par défaut
+        currency = Currency.objects.filter(is_default=True, is_active=True).first()
+        if not currency:
+            currency = Currency.objects.filter(is_active=True).first()
+        currency_symbol = currency.symbol if currency else 'DA'
+
+        # Récupérer tous les stocks du van
+        stocks = ProductStock.objects.filter(
+            warehouse=livreur.entrepot
+        ).select_related('produit', 'produit__categorie').order_by('produit__reference')
+
+        # Filtrer les stocks vides si demandé
+        hide_empty = request.query_params.get('hide_empty', 'false').lower() == 'true'
+        if hide_empty:
+            stocks = stocks.filter(quantity__gt=0)
+
+        # Préparer les données
+        stocks_data = []
+        total_products = 0
+        total_quantity = 0
+        total_value = 0
+
+        for stock in stocks:
+            if stock.quantity > 0 or not hide_empty:
+                product_value = float(stock.quantity * stock.produit.prixU if stock.produit.prixU else 0)
+
+                # Déterminer le statut du stock
+                if stock.quantity <= 0:
+                    stock_status = 'rupture'
+                    stock_status_label = 'Rupture'
+                elif stock.quantity <= stock.produit.seuil_critique:
+                    stock_status = 'critique'
+                    stock_status_label = 'Critique'
+                elif stock.quantity <= stock.produit.seuil_alerte:
+                    stock_status = 'alerte'
+                    stock_status_label = 'Alerte'
+                else:
+                    stock_status = 'ok'
+                    stock_status_label = 'OK'
+
+                stocks_data.append({
+                    'id': stock.id,
+                    'produit_id': stock.produit.id,
+                    'reference': stock.produit.reference,
+                    'code_barre': stock.produit.code_barre,
+                    'designation': stock.produit.designation,
+                    'categorie': stock.produit.categorie.nom if stock.produit.categorie else None,
+                    'quantite': stock.quantity,
+                    'prix_unitaire': float(stock.produit.prixU) if stock.produit.prixU else 0,
+                    'valeur': product_value,
+                    'unite_mesure': stock.produit.get_unite_mesure_display(),
+                    'seuil_alerte': stock.produit.seuil_alerte,
+                    'seuil_critique': stock.produit.seuil_critique,
+                    'stock_status': stock_status,
+                    'stock_status_label': stock_status_label,
+                })
+
+                if stock.quantity > 0:
+                    total_products += 1
+                    total_quantity += stock.quantity
+                    total_value += product_value
+
+        return Response({
+            'livreur': {
+                'id': livreur.id,
+                'nom': livreur.nom,
+                'matricule': livreur.matricule,
+            },
+            'van': {
+                'id': livreur.entrepot.id,
+                'code': livreur.entrepot.code,
+                'name': livreur.entrepot.name,
+                'is_active': livreur.entrepot.is_active,
+            },
+            'statistiques': {
+                'nb_produits': total_products,
+                'nb_references': len(stocks_data),
+                'total_quantite': total_quantity,
+                'valeur_stock': total_value,
+                'currency_symbol': currency_symbol,
+            },
+            'stocks': stocks_data
+        })
+
+
+class TourneeViewSet(viewsets.ModelViewSet):
+    """ViewSet pour la gestion des tournées"""
+    queryset = TourneeMobile.objects.all()
+    serializer_class = TourneeSerializer
+    permission_classes = [AllowAny]  # TODO: Ajouter authentification en production
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+
+        # Filtres
+        livreur_id = self.request.query_params.get('livreur')
+        assigned_to = self.request.query_params.get('assigned_to')
+        date_tournee = self.request.query_params.get('date_tournee') or self.request.query_params.get('date')
+        statut = self.request.query_params.get('statut')
+        # Nouveau paramètre: inclure les tournées actives (non terminées)
+        actives_only = self.request.query_params.get('actives_only', 'false').lower() == 'true'
+
+        print(f"[TourneeViewSet] Params: livreur={livreur_id}, assigned_to={assigned_to}, actives_only={actives_only}")
+        print(f"[TourneeViewSet] Initial queryset count: {queryset.count()}")
+
+        # Filtre spécial pour l'app mobile : assigned_to='me'
+        if assigned_to == 'me':
+            # Récupérer le livreur depuis l'utilisateur connecté
+            if self.request.user and self.request.user.is_authenticated:
+                try:
+                    livreur = LivreurDistribution.objects.get(user=self.request.user)
+                    queryset = queryset.filter(livreur=livreur)
+                    print(f"[TourneeViewSet] Filtered by user's livreur: {livreur.id}")
+                except LivreurDistribution.DoesNotExist:
+                    # Si pas de livreur lié, retourner queryset vide
+                    queryset = queryset.none()
+                    print("[TourneeViewSet] No livreur found for user, returning empty")
+            else:
+                # Si pas authentifié, retourner queryset vide
+                queryset = queryset.none()
+                print("[TourneeViewSet] User not authenticated, returning empty")
+        elif livreur_id:
+            queryset = queryset.filter(livreur_id=livreur_id)
+            print(f"[TourneeViewSet] Filtered by livreur_id={livreur_id}, count: {queryset.count()}")
+
+        # Si actives_only=true, retourner toutes les tournées non terminées/clôturées
+        # Sinon, filtrer par date si spécifiée
+        if actives_only:
+            # Retourner les tournées planifiées ou en cours (pas terminées, annulées ou clôturées)
+            queryset = queryset.filter(statut__in=['planifiee', 'en_cours'])
+        elif date_tournee:
+            queryset = queryset.filter(date_tournee=date_tournee)
+
+        if statut:
+            queryset = queryset.filter(statut=statut)
+
+        return queryset.select_related('livreur').prefetch_related('arrets', 'arrets__client').order_by('-date_tournee', 'numero_tournee')
+
+    @action(detail=True, methods=['post'])
+    def cloturer(self, request, pk=None):
+        """Clôturer et verrouiller une tournée"""
+        tournee = self.get_object()
+
+        try:
+            tournee.cloturer(request.user)
+            return Response({
+                'message': 'Tournée clôturée avec succès',
+                'tournee': TourneeSerializer(tournee).data
+            })
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    @action(detail=True, methods=['post'])
+    def demarrer(self, request, pk=None):
+        """Démarrer une tournée"""
+        tournee = self.get_object()
+
+        if tournee.statut != 'planifiee':
+            return Response(
+                {'error': 'La tournée ne peut pas être démarrée'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        tournee.statut = 'en_cours'
+        tournee.heure_debut = timezone.now().time()
+        tournee.position_depart_lat = request.data.get('latitude')
+        tournee.position_depart_lng = request.data.get('longitude')
+        tournee.save()
+
+        return Response({
+            'message': 'Tournée démarrée',
+            'tournee': TourneeSerializer(tournee).data
+        })
+
+    @action(detail=True, methods=['post'])
+    def terminer(self, request, pk=None):
+        """Terminer une tournée"""
+        tournee = self.get_object()
+
+        if tournee.statut != 'en_cours':
+            return Response(
+                {'error': 'La tournée n\'est pas en cours'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        tournee.statut = 'terminee'
+        tournee.heure_fin = timezone.now().time()
+        tournee.position_fin_lat = request.data.get('latitude')
+        tournee.position_fin_lng = request.data.get('longitude')
+        tournee.distance_km = request.data.get('distance_km')
+        tournee.save()
+
+        return Response({
+            'message': 'Tournée terminée',
+            'tournee': TourneeSerializer(tournee).data
+        })
+
+    @action(detail=True, methods=['post'])
+    def sync_arrets(self, request, pk=None):
+        """Synchroniser les arrêts d'une tournée avec les clients assignés"""
+        try:
+            tournee = self.get_object()
+
+            # Vérifier que la tournée n'est pas terminée ou clôturée
+            if tournee.statut in ['terminee', 'cloturee', 'annulee']:
+                return Response(
+                    {'error': 'Impossible de synchroniser une tournée terminée ou clôturée'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Obtenir le jour de la semaine de la tournée
+            date_tournee = tournee.date_tournee
+            jour_semaine = date_tournee.weekday() + 1  # Python: 0=Lundi, donc +1 pour avoir 1=Lundi
+
+            # Récupérer les clients assignés au livreur pour ce jour
+            from .distribution_models import ClientLivreurHebdo
+            configs = ClientLivreurHebdo.objects.filter(
+                livreur=tournee.livreur,
+                jour_semaine=jour_semaine,
+                is_active=True
+            ).select_related('client').order_by('ordre_passage')
+
+            # Récupérer les arrêts existants
+            arrets_existants = {arret.client_id: arret for arret in tournee.arrets.all()}
+            clients_config = {config.client_id: config for config in configs}
+
+            arrets_ajoutes = 0
+            arrets_supprimes = 0
+            arrets_mis_a_jour = 0
+
+            # Mettre à jour les arrêts existants avec les nouvelles coordonnées du client
+            for config in configs:
+                if config.client_id in arrets_existants:
+                    arret = arrets_existants[config.client_id]
+                    # Mettre à jour l'adresse si elle a changé
+                    new_lat = getattr(config.client, 'lat', None)
+                    new_lng = getattr(config.client, 'lng', None)
+                    if (new_lat and new_lng and
+                        (arret.latitude != new_lat or arret.longitude != new_lng)):
+                        arret.latitude = new_lat
+                        arret.longitude = new_lng
+                        arret.save()
+                        arrets_mis_a_jour += 1
+
+            # Supprimer les arrêts qui ne sont plus dans la config (sauf s'ils sont déjà livrés)
+            for client_id, arret in arrets_existants.items():
+                if client_id not in clients_config and arret.statut == 'en_attente':
+                    arret.delete()
+                    arrets_supprimes += 1
+
+            # Ajouter les nouveaux clients
+            ordre_counter = 1
+            for config in configs:
+                if config.client_id not in arrets_existants:
+                    # Trouver le prochain ordre_passage disponible
+                    while ArretTourneeMobile.objects.filter(tournee=tournee, ordre_passage=ordre_counter).exists():
+                        ordre_counter += 1
+
+                    ArretTourneeMobile.objects.create(
+                        tournee=tournee,
+                        client=config.client,
+                        ordre_passage=ordre_counter,
+                        latitude=getattr(config.client, 'lat', None),
+                        longitude=getattr(config.client, 'lng', None),
+                        statut='en_attente',
+                        notes=config.notes or ''
+                    )
+                    arrets_ajoutes += 1
+                    ordre_counter += 1
+
+            return Response({
+                'message': 'Synchronisation terminée',
+                'arrets_ajoutes': arrets_ajoutes,
+                'arrets_supprimes': arrets_supprimes,
+                'arrets_mis_a_jour': arrets_mis_a_jour,
+                'total_arrets': tournee.arrets.count(),
+                'tournee': TourneeSerializer(tournee).data
+            })
+        except Exception as e:
+            import traceback
+            return Response({
+                'error': str(e),
+                'traceback': traceback.format_exc()
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['post'])
+    def sync_all_en_cours(self, request):
+        """Synchroniser toutes les tournées en cours avec les clients assignés"""
+        tournees_en_cours = TourneeMobile.objects.filter(statut__in=['planifiee', 'en_cours'])
+
+        tournees_synced = 0
+        errors = []
+
+        for tournee in tournees_en_cours:
+            try:
+                # Obtenir le jour de la semaine de la tournée
+                date_tournee = tournee.date_tournee
+                jour_semaine = date_tournee.weekday() + 1
+
+                # Récupérer les clients assignés au livreur pour ce jour
+                from .distribution_models import ClientLivreurHebdo
+                configs = ClientLivreurHebdo.objects.filter(
+                    livreur=tournee.livreur,
+                    jour_semaine=jour_semaine,
+                    is_active=True
+                ).select_related('client').order_by('ordre_passage')
+
+                # Récupérer les arrêts existants
+                arrets_existants = {arret.client_id: arret for arret in tournee.arrets.all()}
+                clients_config = {config.client_id for config in configs}
+
+                # Supprimer les arrêts qui ne sont plus dans la config (sauf livrés)
+                for client_id, arret in arrets_existants.items():
+                    if client_id not in clients_config and arret.statut == 'en_attente':
+                        arret.delete()
+
+                # Ajouter les nouveaux clients
+                for config in configs:
+                    if config.client_id not in arrets_existants:
+                        ArretTourneeMobile.objects.create(
+                            tournee=tournee,
+                            client=config.client,
+                            ordre_passage=config.ordre_passage or 1,
+                            latitude=getattr(config.client, 'lat', None),
+                            longitude=getattr(config.client, 'lng', None),
+                            statut='en_attente',
+                            notes=config.notes or ''
+                        )
+
+                tournees_synced += 1
+            except Exception as e:
+                errors.append({'tournee_id': tournee.id, 'error': str(e)})
+
+        return Response({
+            'message': f'{tournees_synced} tournée(s) synchronisée(s)',
+            'tournees_synced': tournees_synced,
+            'errors': errors if errors else None
+        })
+
+
+class ArretTourneeViewSet(viewsets.ModelViewSet):
+    """ViewSet pour la gestion des arrêts"""
+    queryset = ArretTourneeMobile.objects.all()
+    serializer_class = ArretTourneeSerializer
+    permission_classes = [AllowAny]  # TODO: Ajouter authentification en production
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        tournee_id = self.request.query_params.get('tournee')
+
+        if tournee_id:
+            queryset = queryset.filter(tournee_id=tournee_id)
+
+        return queryset.select_related('tournee', 'client').order_by('ordre_passage')
+
+    @action(detail=True, methods=['post'])
+    def livrer(self, request, pk=None):
+        """Marquer un arrêt comme livré"""
+        arret = self.get_object()
+
+        if arret.tournee.est_cloturee:
+            return Response(
+                {'error': 'La tournée est clôturée'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        arret.statut = 'livre'
+        arret.heure_arrivee = request.data.get('heure_arrivee', timezone.now())
+        arret.heure_depart = request.data.get('heure_depart', timezone.now())
+        arret.latitude = request.data.get('latitude')
+        arret.longitude = request.data.get('longitude')
+        arret.signature_base64 = request.data.get('signature_base64', '')
+        arret.nom_receptionnaire = request.data.get('nom_receptionnaire', '')
+        arret.notes = request.data.get('notes', '')
+        arret.save()
+
+        return Response({
+            'message': 'Arrêt marqué comme livré',
+            'arret': ArretTourneeSerializer(arret).data
+        })
+
+    @action(detail=True, methods=['post'])
+    def echec(self, request, pk=None):
+        """Marquer un arrêt comme échec"""
+        arret = self.get_object()
+
+        if arret.tournee.est_cloturee:
+            return Response(
+                {'error': 'La tournée est clôturée'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        arret.statut = 'echec'
+        arret.heure_arrivee = request.data.get('heure_arrivee', timezone.now())
+        arret.latitude = request.data.get('latitude')
+        arret.longitude = request.data.get('longitude')
+        arret.motif_echec = request.data.get('motif_echec', '')
+        arret.notes_echec = request.data.get('notes_echec', '')
+        arret.save()
+
+        return Response({
+            'message': 'Arrêt marqué comme échec',
+            'arret': ArretTourneeSerializer(arret).data
+        })
+
+
+class VenteTourneeViewSet(viewsets.ModelViewSet):
+    """ViewSet pour la gestion des ventes"""
+    queryset = VenteTourneeMobile.objects.all()
+    serializer_class = VenteTourneeSerializer
+    permission_classes = [AllowAny]  # TODO: Ajouter authentification en production
+
+    def get_serializer_class(self):
+        if self.action == 'create':
+            # Détecter le format mobile (lignes_vente) vs format standard (lignes)
+            if 'lignes_vente' in self.request.data:
+                from .distribution_serializers import VenteMobileCreateSerializer
+                return VenteMobileCreateSerializer
+            return VenteTourneeCreateSerializer
+        return VenteTourneeSerializer
+
+    def create(self, request, *args, **kwargs):
+        """Override create pour gérer le format mobile"""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        vente = serializer.save()
+
+        # Retourner la vente créée
+        return Response({
+            'id': vente.id,
+            'message': 'Vente créée avec succès',
+            'montant_total': float(vente.montant_total) if vente.montant_total else 0
+        }, status=status.HTTP_201_CREATED)
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        tournee_id = self.request.query_params.get('tournee')
+
+        if tournee_id:
+            queryset = queryset.filter(tournee_id=tournee_id)
+
+        return queryset.prefetch_related('lignes', 'lignes__produit')
+
+    @action(detail=False, methods=['post'])
+    def bulk_create(self, request):
+        """Création en masse de ventes (depuis mobile)"""
+        ventes_data = request.data.get('ventes', [])
+
+        if not ventes_data:
+            return Response(
+                {'error': 'Aucune vente fournie'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        created_ventes = []
+        errors = []
+
+        with transaction.atomic():
+            for vente_data in ventes_data:
+                serializer = VenteTourneeCreateSerializer(data=vente_data)
+                if serializer.is_valid():
+                    vente = serializer.save()
+                    vente.est_synchronise = True
+                    vente.date_synchronisation = timezone.now()
+                    vente.save()
+                    created_ventes.append(vente)
+                else:
+                    errors.append({
+                        'data': vente_data,
+                        'errors': serializer.errors
+                    })
+
+        return Response({
+            'created': len(created_ventes),
+            'errors': errors,
+            'ventes': VenteTourneeSerializer(created_ventes, many=True).data
+        })
+
+
+class RapportCaisseViewSet(viewsets.ModelViewSet):
+    """ViewSet pour la gestion des rapports de caisse"""
+    queryset = RapportCaisseMobile.objects.all()
+    serializer_class = RapportCaisseSerializer
+    permission_classes = [AllowAny]  # TODO: Ajouter authentification en production
+
+    def get_serializer_class(self):
+        """Utiliser RapportCaisseCreateSerializer pour create/update depuis mobile"""
+        from .distribution_serializers import RapportCaisseCreateSerializer
+        if self.action in ['create', 'update', 'partial_update']:
+            return RapportCaisseCreateSerializer
+        return RapportCaisseSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        tournee_id = self.request.query_params.get('tournee')
+        livreur_id = self.request.query_params.get('livreur')
+
+        if tournee_id:
+            queryset = queryset.filter(tournee_id=tournee_id)
+
+        if livreur_id:
+            queryset = queryset.filter(tournee__livreur_id=livreur_id)
+
+        return queryset.select_related('tournee', 'tournee__livreur')
+
+    @action(detail=True, methods=['post'])
+    def calculer(self, request, pk=None):
+        """Recalculer les totaux du rapport"""
+        rapport = self.get_object()
+        rapport.calculer_totaux()
+
+        return Response({
+            'message': 'Totaux recalculés',
+            'rapport': RapportCaisseSerializer(rapport).data
+        })
+
+    @action(detail=True, methods=['post'])
+    def valider(self, request, pk=None):
+        """Valider un rapport de caisse"""
+        rapport = self.get_object()
+
+        try:
+            rapport.valider(request.user)
+            return Response({
+                'message': 'Rapport validé',
+                'rapport': RapportCaisseSerializer(rapport).data
+            })
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    @action(detail=False, methods=['get'])
+    def anomalies(self, request):
+        """Liste des rapports avec anomalies"""
+        rapports = self.queryset.filter(a_des_anomalies=True)
+        serializer = self.get_serializer(rapports, many=True)
+        return Response(serializer.data)
+
+
+class CommandeClientViewSet(viewsets.ModelViewSet):
+    """ViewSet pour la gestion des commandes clients passées par les livreurs"""
+    queryset = CommandeClient.objects.all()
+    serializer_class = CommandeClientSerializer
+    permission_classes = [AllowAny]  # TODO: Ajouter authentification en production
+
+    def get_serializer_class(self):
+        """Utiliser CommandeClientCreateSerializer pour create depuis mobile"""
+        if self.action == 'create':
+            return CommandeClientCreateSerializer
+        return CommandeClientSerializer
+
+    def create(self, request, *args, **kwargs):
+        """Override create pour ajouter du logging et gérer les doublons"""
+        import logging
+        logger = logging.getLogger(__name__)
+
+        logger.info(f"=== CREATE COMMANDE REQUEST ===")
+        logger.info(f"Data received: {request.data}")
+
+        # Vérifier si une commande avec le même app_id existe déjà
+        app_id = request.data.get('app_id')
+        if app_id:
+            existing = CommandeClient.objects.filter(app_id=app_id).first()
+            if existing:
+                logger.info(f"Commande avec app_id={app_id} existe déjà, retour de l'existante")
+                serializer = CommandeClientSerializer(existing)
+                return Response(serializer.data, status=status.HTTP_200_OK)
+
+        serializer = self.get_serializer(data=request.data)
+        if not serializer.is_valid():
+            logger.error(f"Validation errors: {serializer.errors}")
+            logger.error(f"Data that failed: {request.data}")
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            self.perform_create(serializer)
+            headers = self.get_success_headers(serializer.data)
+            logger.info(f"Commande créée avec succès: {serializer.data}")
+            return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        except Exception as e:
+            logger.error(f"Error creating commande: {str(e)}")
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def get_queryset(self):
+        from django.db.models import Q
+        queryset = super().get_queryset()
+
+        # Filtrer par company de l'utilisateur OU commandes sans company assignée
+        if hasattr(self.request.user, 'company') and self.request.user.company:
+            # Inclure les commandes de la company de l'utilisateur ET les commandes sans company
+            queryset = queryset.filter(
+                Q(company=self.request.user.company) | Q(company__isnull=True)
+            )
+
+        # Filtres optionnels
+        livreur_id = self.request.query_params.get('livreur')
+        client_id = self.request.query_params.get('client')
+        statut = self.request.query_params.get('statut')
+        date_debut = self.request.query_params.get('date_debut')
+        date_fin = self.request.query_params.get('date_fin')
+
+        if livreur_id:
+            queryset = queryset.filter(livreur_id=livreur_id)
+
+        if client_id:
+            queryset = queryset.filter(client_id=client_id)
+
+        if statut:
+            queryset = queryset.filter(statut=statut)
+
+        if date_debut:
+            queryset = queryset.filter(date_commande__gte=date_debut)
+
+        if date_fin:
+            queryset = queryset.filter(date_commande__lte=date_fin)
+
+        return queryset.select_related('client', 'livreur').prefetch_related('lignes', 'lignes__produit')
+
+    @action(detail=False, methods=['post'])
+    def bulk_create(self, request):
+        """Création en masse de commandes (depuis mobile)"""
+        commandes_data = request.data.get('commandes', [])
+
+        if not commandes_data:
+            return Response(
+                {'error': 'Aucune commande fournie'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        created_commandes = []
+        errors = []
+
+        with transaction.atomic():
+            for commande_data in commandes_data:
+                serializer = CommandeClientCreateSerializer(data=commande_data)
+                if serializer.is_valid():
+                    commande = serializer.save()
+                    created_commandes.append(commande)
+                else:
+                    errors.append({
+                        'data': commande_data,
+                        'errors': serializer.errors
+                    })
+
+        return Response({
+            'created': len(created_commandes),
+            'errors': errors,
+            'commandes': CommandeClientSerializer(created_commandes, many=True).data
+        })
+
+    @action(detail=True, methods=['patch'])
+    def changer_statut(self, request, pk=None):
+        """Changer le statut d'une commande"""
+        commande = self.get_object()
+        nouveau_statut = request.data.get('statut')
+
+        if not nouveau_statut:
+            return Response(
+                {'error': 'Statut requis'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if nouveau_statut not in dict(CommandeClient.STATUT_CHOICES):
+            return Response(
+                {'error': f'Statut invalide. Choix: {[s[0] for s in CommandeClient.STATUT_CHOICES]}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        commande.statut = nouveau_statut
+
+        # Si livré, enregistrer la date de livraison réelle
+        if nouveau_statut == 'delivered':
+            commande.date_livraison_reelle = timezone.now()
+
+        commande.save()
+
+        return Response({
+            'message': f'Statut changé à {nouveau_statut}',
+            'commande': CommandeClientSerializer(commande).data
+        })
+
+    @action(detail=False, methods=['get'])
+    def en_attente(self, request):
+        """Liste des commandes en attente"""
+        commandes = self.get_queryset().filter(statut='pending')
+        serializer = CommandeClientSerializer(commandes, many=True)
+        return Response(serializer.data)
+
+
+class PlanningHebdomadaireViewSet(viewsets.ModelViewSet):
+    """ViewSet pour la gestion des plannings hebdomadaires"""
+    queryset = PlanningHebdomadaire.objects.all()
+    serializer_class = PlanningHebdomadaireSerializer
+    permission_classes = [AllowAny]  # TODO: Ajouter authentification en production
+
+    def get_serializer_class(self):
+        """Utiliser PlanningHebdomadaireCreateSerializer pour create"""
+        if self.action == 'create':
+            return PlanningHebdomadaireCreateSerializer
+        return PlanningHebdomadaireSerializer
+
+    def get_queryset(self):
+        from django.db.models import Q
+        queryset = super().get_queryset()
+
+        # Filtrer par company de l'utilisateur si applicable
+        if hasattr(self.request, 'company') and self.request.company:
+            queryset = queryset.filter(
+                Q(company=self.request.company) | Q(company__isnull=True)
+            )
+
+        # Filtres optionnels
+        livreur_id = self.request.query_params.get('livreur')
+        jour_semaine = self.request.query_params.get('jour_semaine')
+        is_active = self.request.query_params.get('is_active')
+
+        if livreur_id:
+            queryset = queryset.filter(livreur_id=livreur_id)
+
+        if jour_semaine:
+            queryset = queryset.filter(jour_semaine=jour_semaine)
+
+        if is_active is not None:
+            queryset = queryset.filter(is_active=is_active.lower() == 'true')
+
+        return queryset.select_related('livreur', 'code_prix', 'created_by', 'company')
+
+    def perform_create(self, serializer):
+        """Attacher la company et le created_by lors de la création"""
+        kwargs = {}
+        if hasattr(self.request, 'company') and self.request.company:
+            kwargs['company'] = self.request.company
+        if hasattr(self.request, 'user'):
+            kwargs['created_by'] = self.request.user
+        serializer.save(**kwargs)
+
+    @action(detail=False, methods=['post'])
+    def generer_semaine(self, request):
+        """Générer toutes les tournées pour une semaine donnée basées sur les plannings"""
+        from datetime import datetime, timedelta
+
+        date_debut_str = request.data.get('date_debut')
+        if not date_debut_str:
+            return Response(
+                {'error': 'date_debut requise (format YYYY-MM-DD)'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            date_debut = datetime.strptime(date_debut_str, '%Y-%m-%d').date()
+        except ValueError:
+            return Response(
+                {'error': 'Format de date invalide. Utilisez YYYY-MM-DD'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # S'assurer que date_debut est un lundi
+        if date_debut.weekday() != 0:  # 0 = lundi
+            # Ajuster au lundi précédent
+            date_debut = date_debut - timedelta(days=date_debut.weekday())
+
+        # Générer les tournées
+        company = self.request.company if hasattr(self.request, 'company') else None
+        tournees_creees = PlanningHebdomadaire.generer_tournees_pour_semaine(date_debut, company)
+
+        # Sérialiser les tournées créées
+        from .distribution_serializers import TourneeSerializer
+        serializer = TourneeSerializer(tournees_creees, many=True)
+
+        return Response({
+            'message': f'{len(tournees_creees)} tournée(s) générée(s) pour la semaine du {date_debut}',
+            'date_debut': date_debut,
+            'tournees': serializer.data
+        })
+
+    @action(detail=True, methods=['post'])
+    def generer_tournee(self, request, pk=None):
+        """Générer une tournée pour une date donnée basée sur ce planning"""
+        from datetime import datetime
+
+        planning = self.get_object()
+        date_str = request.data.get('date')
+
+        if not date_str:
+            return Response(
+                {'error': 'date requise (format YYYY-MM-DD)'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        except ValueError:
+            return Response(
+                {'error': 'Format de date invalide. Utilisez YYYY-MM-DD'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Générer la tournée
+        tournee = planning.generer_tournee_pour_date(date)
+
+        if not tournee:
+            return Response(
+                {'error': 'Impossible de générer la tournée pour cette date (planning inactif ou date invalide)'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Sérialiser la tournée créée
+        from .distribution_serializers import TourneeSerializer
+        serializer = TourneeSerializer(tournee)
+
+        return Response({
+            'message': 'Tournée générée avec succès',
+            'tournee': serializer.data
+        })
+
+    @action(detail=False, methods=['get'])
+    def par_livreur(self, request):
+        """Récupérer tous les plannings d'un livreur"""
+        livreur_id = request.query_params.get('livreur_id')
+
+        if not livreur_id:
+            return Response(
+                {'error': 'livreur_id requis'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        plannings = self.get_queryset().filter(livreur_id=livreur_id, is_active=True)
+        serializer = self.get_serializer(plannings, many=True)
+
+        return Response(serializer.data)
+
+
+class ClientLivreurHebdoViewSet(viewsets.ModelViewSet):
+    """ViewSet pour gérer la configuration hebdomadaire des clients par livreur"""
+    queryset = ClientLivreurHebdo.objects.all()
+    serializer_class = ClientLivreurHebdoSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['livreur', 'client', 'jour_semaine', 'is_active']
+    search_fields = ['client__nom', 'livreur__nom']
+    ordering_fields = ['jour_semaine', 'ordre_passage']
+    ordering = ['jour_semaine', 'ordre_passage']
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        company = self.request.user.company if hasattr(self.request.user, 'company') else None
+
+        if company:
+            queryset = queryset.filter(company=company)
+
+        return queryset.select_related('client', 'livreur', 'company', 'created_by')
+
+    def get_serializer_class(self):
+        if self.action in ['create', 'update', 'partial_update']:
+            return ClientLivreurHebdoCreateSerializer
+        return ClientLivreurHebdoSerializer
+
+    def perform_create(self, serializer):
+        """Assigner automatiquement la company et created_by lors de la création"""
+        kwargs = {}
+
+        # Assigner created_by
+        if self.request.user.is_authenticated:
+            kwargs['created_by'] = self.request.user
+
+            # Assigner company depuis l'utilisateur connecté
+            if hasattr(self.request.user, 'company') and self.request.user.company:
+                kwargs['company'] = self.request.user.company
+
+        serializer.save(**kwargs)
+
+    def perform_update(self, serializer):
+        """Ne pas modifier la company lors de la mise à jour"""
+        serializer.save()
+
+    @action(detail=False, methods=['get'])
+    def par_livreur(self, request):
+        """Récupérer tous les clients d'un livreur pour un jour donné"""
+        livreur_id = request.query_params.get('livreur_id')
+        jour_semaine = request.query_params.get('jour_semaine')
+
+        if not livreur_id:
+            return Response(
+                {'error': 'livreur_id requis'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        queryset = self.get_queryset().filter(livreur_id=livreur_id, is_active=True)
+
+        if jour_semaine:
+            queryset = queryset.filter(jour_semaine=jour_semaine)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'])
+    def par_client(self, request):
+        """Récupérer le livreur assigné à un client pour un jour donné"""
+        client_id = request.query_params.get('client_id')
+        jour_semaine = request.query_params.get('jour_semaine')
+
+        if not client_id:
+            return Response(
+                {'error': 'client_id requis'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        queryset = self.get_queryset().filter(client_id=client_id, is_active=True)
+
+        if jour_semaine:
+            queryset = queryset.filter(jour_semaine=jour_semaine)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['post'])
+    def assigner_clients(self, request):
+        """Assigner plusieurs clients à un livreur pour un ou plusieurs jours"""
+        livreur_id = request.data.get('livreur_id')
+        clients_ids = request.data.get('clients_ids', [])
+        jours_semaine = request.data.get('jours_semaine', [])
+
+        if not livreur_id or not clients_ids or not jours_semaine:
+            return Response(
+                {'error': 'livreur_id, clients_ids et jours_semaine requis'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Vérifier que le livreur existe
+        try:
+            livreur = LivreurDistribution.objects.get(id=livreur_id)
+        except LivreurDistribution.DoesNotExist:
+            return Response(
+                {'error': 'Livreur non trouvé'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        company = request.user.company if hasattr(request.user, 'company') else None
+        created_assignments = []
+        errors = []
+
+        for client_id in clients_ids:
+            try:
+                from .models import Client
+                client = Client.objects.get(id=client_id)
+
+                for jour in jours_semaine:
+                    # Vérifier si une assignation existe déjà
+                    existing = ClientLivreurHebdo.objects.filter(
+                        client=client,
+                        jour_semaine=jour,
+                        company=company,
+                        is_active=True
+                    ).first()
+
+                    if existing:
+                        # Mettre à jour l'assignation existante
+                        existing.livreur = livreur
+                        existing.updated_by = request.user
+                        existing.save()
+                        created_assignments.append({
+                            'client_id': client_id,
+                            'jour_semaine': jour,
+                            'action': 'updated'
+                        })
+                    else:
+                        # Créer une nouvelle assignation
+                        assignment = ClientLivreurHebdo.objects.create(
+                            client=client,
+                            livreur=livreur,
+                            jour_semaine=jour,
+                            company=company,
+                            created_by=request.user
+                        )
+                        created_assignments.append({
+                            'client_id': client_id,
+                            'jour_semaine': jour,
+                            'action': 'created',
+                            'id': assignment.id
+                        })
+
+            except Client.DoesNotExist:
+                errors.append(f'Client {client_id} non trouvé')
+            except Exception as e:
+                errors.append(f'Erreur pour client {client_id}: {str(e)}')
+
+        return Response({
+            'message': f'{len(created_assignments)} assignation(s) créée(s)/modifiée(s)',
+            'assignments': created_assignments,
+            'errors': errors
+        })
+
+    @action(detail=False, methods=['delete'])
+    def supprimer_assignations(self, request):
+        """Supprimer des assignations (désactiver)"""
+        assignations_ids = request.data.get('assignations_ids', [])
+
+        if not assignations_ids:
+            return Response(
+                {'error': 'assignations_ids requis'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        company = request.user.company if hasattr(request.user, 'company') else None
+
+        assignations = self.get_queryset().filter(id__in=assignations_ids)
+        count = assignations.count()
+
+        # Désactiver au lieu de supprimer
+        assignations.update(is_active=False, updated_by=request.user)
+
+        return Response({
+            'message': f'{count} assignation(s) désactivée(s)',
+            'count': count
+        })
+
+    @action(detail=False, methods=['get'], url_path='export-excel')
+    def export_excel(self, request):
+        """
+        Exporter les configurations clients-livreurs en Excel pour une semaine donnée.
+        GET /API/distribution/clients-livreurs-hebdo/export-excel/?date_debut=2024-12-02&date_fin=2024-12-08
+        """
+        from django.http import HttpResponse
+        import io
+        try:
+            import openpyxl
+            from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        except ImportError:
+            return Response(
+                {'error': 'openpyxl est requis. Installez-le avec: pip install openpyxl'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        date_debut_str = request.query_params.get('date_debut')
+        date_fin_str = request.query_params.get('date_fin')
+
+        if not date_debut_str or not date_fin_str:
+            return Response(
+                {'error': 'date_debut et date_fin sont requis (format YYYY-MM-DD)'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            date_debut = datetime.strptime(date_debut_str, '%Y-%m-%d').date()
+            date_fin = datetime.strptime(date_fin_str, '%Y-%m-%d').date()
+        except ValueError:
+            return Response(
+                {'error': 'Format de date invalide. Utilisez YYYY-MM-DD'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Récupérer les configurations actives pour la période
+        company = request.user.company if hasattr(request.user, 'company') else None
+        configs = self.get_queryset().filter(
+            is_active=True
+        ).filter(
+            models.Q(date_debut__isnull=True) | models.Q(date_debut__lte=date_fin)
+        ).filter(
+            models.Q(date_fin__isnull=True) | models.Q(date_fin__gte=date_debut)
+        ).select_related('client', 'livreur').order_by('livreur__nom', 'jour_semaine', 'ordre_passage')
+
+        # Créer le workbook Excel
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Planning Semaine"
+
+        # Styles
+        header_font = Font(bold=True, color="FFFFFF")
+        header_fill = PatternFill(start_color="3B82F6", end_color="3B82F6", fill_type="solid")
+        border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+
+        # En-têtes
+        jours_noms = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche']
+        headers = ['Livreur', 'Client ID', 'Client Nom', 'Client Prénom', 'Téléphone', 'Adresse', 'Secteur']
+        headers.extend(jours_noms)
+
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal='center')
+            cell.border = border
+
+        # Regrouper les configs par client
+        clients_configs = {}
+        for config in configs:
+            key = (config.livreur_id, config.client_id)
+            if key not in clients_configs:
+                clients_configs[key] = {
+                    'livreur': config.livreur.nom if config.livreur else '',
+                    'client_id': config.client.id if config.client else '',
+                    'client_nom': config.client.nom if config.client else '',
+                    'client_prenom': config.client.prenom if config.client else '',
+                    'telephone': config.client.telephone if config.client else '',
+                    'adresse': config.client.adresse if config.client else '',
+                    'secteur': config.client.secteur.nom if config.client and config.client.secteur else '',
+                    'jours': {}
+                }
+            clients_configs[key]['jours'][config.jour_semaine] = config.ordre_passage or 'X'
+
+        # Écrire les données
+        row = 2
+        for (livreur_id, client_id), data in clients_configs.items():
+            ws.cell(row=row, column=1, value=data['livreur']).border = border
+            ws.cell(row=row, column=2, value=data['client_id']).border = border
+            ws.cell(row=row, column=3, value=data['client_nom']).border = border
+            ws.cell(row=row, column=4, value=data['client_prenom']).border = border
+            ws.cell(row=row, column=5, value=data['telephone']).border = border
+            ws.cell(row=row, column=6, value=data['adresse']).border = border
+            ws.cell(row=row, column=7, value=data['secteur']).border = border
+
+            # Jours de la semaine (1=Lundi ... 7=Dimanche)
+            for jour in range(1, 8):
+                cell = ws.cell(row=row, column=7 + jour)
+                if jour in data['jours']:
+                    cell.value = data['jours'][jour]
+                    cell.fill = PatternFill(start_color="D1FAE5", end_color="D1FAE5", fill_type="solid")
+                cell.border = border
+                cell.alignment = Alignment(horizontal='center')
+
+            row += 1
+
+        # Ajuster la largeur des colonnes
+        ws.column_dimensions['A'].width = 20  # Livreur
+        ws.column_dimensions['B'].width = 10  # Client ID
+        ws.column_dimensions['C'].width = 20  # Client Nom
+        ws.column_dimensions['D'].width = 15  # Client Prénom
+        ws.column_dimensions['E'].width = 15  # Téléphone
+        ws.column_dimensions['F'].width = 30  # Adresse
+        ws.column_dimensions['G'].width = 15  # Secteur
+        for col in ['H', 'I', 'J', 'K', 'L', 'M', 'N']:  # Jours de la semaine
+            ws.column_dimensions[col].width = 12
+
+        # Créer la réponse HTTP
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+
+        response = HttpResponse(
+            output.read(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = f'attachment; filename=planning_semaine_{date_debut_str}_{date_fin_str}.xlsx'
+        return response
+
+    @action(detail=False, methods=['get'], url_path='template-excel')
+    def template_excel(self, request):
+        """
+        Télécharger un template Excel avec les configurations existantes.
+        GET /API/distribution/clients-livreurs-hebdo/template-excel/
+        """
+        from django.http import HttpResponse
+        import io
+        try:
+            import openpyxl
+            from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+            from openpyxl.utils.dataframe import dataframe_to_rows
+        except ImportError:
+            return Response(
+                {'error': 'openpyxl est requis. Installez-le avec: pip install openpyxl'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        from .models import Client
+
+        # Créer le workbook
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Planning Import"
+
+        # Styles
+        header_font = Font(bold=True, color="FFFFFF")
+        header_fill = PatternFill(start_color="3B82F6", end_color="3B82F6", fill_type="solid")
+        border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+
+        # En-têtes avec noms complets
+        headers = [
+            'Livreur ID*', 'Livreur Nom', 'Client ID*', 'Client Nom Complet', 'Secteur',
+            'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'
+        ]
+
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal='center')
+            cell.border = border
+
+        # Récupérer les données
+        company = getattr(request.user, 'company', None)
+
+        # Récupérer tous les livreurs
+        livreurs = list(LivreurDistribution.objects.all().order_by('nom'))
+
+        # Récupérer tous les clients
+        clients_qs = Client.objects.all().order_by('nom', 'prenom')
+        if company:
+            clients_qs = clients_qs.filter(company=company)
+        clients = list(clients_qs)
+
+        # Récupérer toutes les configurations existantes
+        configs_existantes = ClientLivreurHebdo.objects.filter(is_active=True).select_related('livreur', 'client')
+
+        # Regrouper les configurations par (livreur_id, client_id)
+        configs_dict = {}
+        for config in configs_existantes:
+            key = (config.livreur_id, config.client_id)
+            if key not in configs_dict:
+                configs_dict[key] = {}
+            configs_dict[key][config.jour_semaine] = config.ordre_passage or 'X'
+
+        # Styles supplémentaires
+        existing_fill = PatternFill(start_color="DBEAFE", end_color="DBEAFE", fill_type="solid")  # Bleu clair - config existante
+        new_fill = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")  # Blanc - nouvelle ligne
+        livreur_header_fill = PatternFill(start_color="FEF3C7", end_color="FEF3C7", fill_type="solid")  # Jaune - en-tête livreur
+
+        current_row = 2
+
+        # Pour chaque livreur, afficher TOUS les clients
+        for livreur in livreurs:
+            # Ajouter une ligne d'en-tête pour ce livreur
+            header_cell = ws.cell(row=current_row, column=1, value=f"▶ {livreur.nom} (ID: {livreur.id}) - {livreur.matricule or 'Sans matricule'}")
+            header_cell.font = Font(bold=True, color="92400E")
+            header_cell.fill = livreur_header_fill
+            ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=12)
+            for col in range(1, 13):
+                ws.cell(row=current_row, column=col).border = border
+                ws.cell(row=current_row, column=col).fill = livreur_header_fill
+            current_row += 1
+
+            # Afficher tous les clients pour ce livreur
+            for client in clients:
+                key = (livreur.id, client.id)
+                jours_config = configs_dict.get(key, {})
+                has_config = len(jours_config) > 0
+
+                # Choisir le style selon si config existante ou non
+                fill_style = existing_fill if has_config else new_fill
+
+                # Livreur ID
+                ws.cell(row=current_row, column=1, value=livreur.id).fill = fill_style
+                ws.cell(row=current_row, column=1).border = border
+                # Livreur Nom
+                ws.cell(row=current_row, column=2, value=livreur.nom).fill = fill_style
+                ws.cell(row=current_row, column=2).border = border
+                # Client ID
+                ws.cell(row=current_row, column=3, value=client.id).fill = fill_style
+                ws.cell(row=current_row, column=3).border = border
+                # Client Nom Complet
+                client_nom = f"{client.nom} {client.prenom}".strip()
+                ws.cell(row=current_row, column=4, value=client_nom).fill = fill_style
+                ws.cell(row=current_row, column=4).border = border
+                # Secteur
+                secteur_nom = client.secteur.nom if client.secteur else ''
+                ws.cell(row=current_row, column=5, value=secteur_nom).fill = fill_style
+                ws.cell(row=current_row, column=5).border = border
+
+                # Jours (1=Lundi ... 7=Dimanche) -> colonnes 6 à 12
+                for jour in range(1, 8):
+                    cell = ws.cell(row=current_row, column=5 + jour)
+                    cell.value = jours_config.get(jour, '')
+                    cell.fill = fill_style
+                    cell.border = border
+                    cell.alignment = Alignment(horizontal='center')
+
+                current_row += 1
+
+            # Ligne vide entre les livreurs
+            current_row += 1
+
+        # ========== FEUILLE LIVREURS ==========
+        ws_livreurs = wb.create_sheet(title="Liste Livreurs")
+
+        # En-têtes livreurs
+        livreurs_headers = ['ID', 'Nom Complet', 'Matricule', 'Téléphone', 'Statut', 'Nb Clients Assignés']
+        for col, header in enumerate(livreurs_headers, 1):
+            cell = ws_livreurs.cell(row=1, column=col, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.border = border
+
+        # Données livreurs
+        for row, livreur in enumerate(livreurs, 2):
+            nb_clients = livreur.clients_assignes.count()
+            ws_livreurs.cell(row=row, column=1, value=livreur.id).border = border
+            ws_livreurs.cell(row=row, column=2, value=livreur.nom).border = border
+            ws_livreurs.cell(row=row, column=3, value=livreur.matricule or '').border = border
+            ws_livreurs.cell(row=row, column=4, value=livreur.telephone or '').border = border
+            ws_livreurs.cell(row=row, column=5, value=livreur.statut or 'actif').border = border
+            ws_livreurs.cell(row=row, column=6, value=nb_clients).border = border
+
+        # Ajuster largeurs colonnes livreurs
+        ws_livreurs.column_dimensions['A'].width = 8
+        ws_livreurs.column_dimensions['B'].width = 25
+        ws_livreurs.column_dimensions['C'].width = 15
+        ws_livreurs.column_dimensions['D'].width = 15
+        ws_livreurs.column_dimensions['E'].width = 12
+        ws_livreurs.column_dimensions['F'].width = 18
+
+        # ========== FEUILLE CLIENTS ==========
+        ws_clients = wb.create_sheet(title="Liste Clients")
+
+        # En-têtes clients
+        clients_headers = ['ID', 'Nom', 'Prénom', 'Nom Complet', 'Téléphone', 'Email', 'Adresse', 'Secteur']
+        for col, header in enumerate(clients_headers, 1):
+            cell = ws_clients.cell(row=1, column=col, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.border = border
+
+        # Données clients
+        for row, client in enumerate(clients, 2):
+            nom_complet = f"{client.nom} {client.prenom}".strip()
+            secteur_nom = client.secteur.nom if client.secteur else ''
+
+            ws_clients.cell(row=row, column=1, value=client.id).border = border
+            ws_clients.cell(row=row, column=2, value=client.nom).border = border
+            ws_clients.cell(row=row, column=3, value=client.prenom or '').border = border
+            ws_clients.cell(row=row, column=4, value=nom_complet).border = border
+            ws_clients.cell(row=row, column=5, value=client.telephone or '').border = border
+            ws_clients.cell(row=row, column=6, value=client.email or '').border = border
+            ws_clients.cell(row=row, column=7, value=client.adresse or '').border = border
+            ws_clients.cell(row=row, column=8, value=secteur_nom).border = border
+
+        # Ajuster largeurs colonnes clients
+        ws_clients.column_dimensions['A'].width = 8
+        ws_clients.column_dimensions['B'].width = 20
+        ws_clients.column_dimensions['C'].width = 15
+        ws_clients.column_dimensions['D'].width = 30
+        ws_clients.column_dimensions['E'].width = 15
+        ws_clients.column_dimensions['F'].width = 25
+        ws_clients.column_dimensions['G'].width = 30
+        ws_clients.column_dimensions['H'].width = 15
+
+        # ========== FEUILLE INSTRUCTIONS ==========
+        ws_help = wb.create_sheet(title="Instructions")
+        instructions = [
+            "═══════════════════════════════════════════════════════════════",
+            "           INSTRUCTIONS POUR L'IMPORT DU PLANNING",
+            "═══════════════════════════════════════════════════════════════",
+            "",
+            "STRUCTURE DU FICHIER :",
+            "  • Chaque livreur a une section avec TOUS les clients listés",
+            "  • Les en-têtes jaunes indiquent le nom du livreur",
+            "  • Modifiez les jours directement dans les cellules",
+            "",
+            "COLONNES JOURS (Lundi à Dimanche) :",
+            "  • Mettre un numéro (1, 2, 3...) pour définir l'ordre de passage",
+            "  • Mettre 'X' pour assigner sans ordre spécifique",
+            "  • Laisser vide = pas de visite ce jour-là",
+            "",
+            "LÉGENDE COULEURS :",
+            "  • 🟡 Jaune : En-tête du livreur (ne pas modifier)",
+            "  • 🔵 Bleu clair : Configuration existante (déjà enregistrée)",
+            "  • ⚪ Blanc : Pas encore configuré (ajoutez les jours souhaités)",
+            "",
+            "COMMENT UTILISER :",
+            "  1. Repérez le livreur souhaité (en-tête jaune)",
+            "  2. Trouvez le client dans la liste en dessous",
+            "  3. Remplissez les colonnes des jours (1, 2, 3... ou X)",
+            "  4. Sauvegardez le fichier Excel",
+            "  5. Importez-le via le bouton 'Importer'",
+            "",
+            "EXEMPLE :",
+            "┌──────────┬─────────────┬───────────┬────────────────┬───────┬───────┬──────────┐",
+            "│Livreur ID│ Livreur Nom │ Client ID │ Client Nom     │ Lundi │ Mardi │ Mercredi │",
+            "├──────────┼─────────────┼───────────┼────────────────┼───────┼───────┼──────────┤",
+            "│    1     │ Ahmed Ben   │    101    │ Mohamed Ali    │   1   │       │    1     │",
+            "│    1     │ Ahmed Ben   │    102    │ Karim Salah    │   2   │   1   │          │",
+            "│    1     │ Ahmed Ben   │    103    │ Fatima Zahra   │       │       │          │",
+            "└──────────┴─────────────┴───────────┴────────────────┴───────┴───────┴──────────┘",
+            "",
+            "  → Client 101 : visité Lundi (1er) et Mercredi (1er)",
+            "  → Client 102 : visité Lundi (2ème) et Mardi (1er)",
+            "  → Client 103 : pas de visite programmée",
+            "",
+            "NOTES :",
+            "  • Les colonnes 'Livreur Nom' et 'Client Nom' sont informatives",
+            "  • Seuls les IDs et les jours sont utilisés lors de l'import",
+            "  • Supprimez les lignes inutiles pour alléger le fichier si besoin",
+        ]
+
+        for row, text in enumerate(instructions, 1):
+            cell = ws_help.cell(row=row, column=1, value=text)
+            if row <= 3:
+                cell.font = Font(bold=True, size=12)
+            elif text.startswith("COLONNES") or text.startswith("EXEMPLES") or text.startswith("LÉGENDE") or text.startswith("IMPORTANT"):
+                cell.font = Font(bold=True, color="1D4ED8")
+
+        ws_help.column_dimensions['A'].width = 80
+
+        # Ajuster les largeurs de colonnes de la feuille principale
+        ws.column_dimensions['A'].width = 12  # Livreur ID
+        ws.column_dimensions['B'].width = 22  # Livreur Nom
+        ws.column_dimensions['C'].width = 12  # Client ID
+        ws.column_dimensions['D'].width = 25  # Client Nom Complet
+        ws.column_dimensions['E'].width = 15  # Secteur
+        # Jours de la semaine (colonnes F à L)
+        for col in ['F', 'G', 'H', 'I', 'J', 'K', 'L']:
+            ws.column_dimensions[col].width = 10
+
+        # Créer la réponse
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+
+        response = HttpResponse(
+            output.read(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = 'attachment; filename=template_planning_clients_chauffeurs.xlsx'
+        return response
+
+    @action(detail=False, methods=['post'], url_path='preview-import')
+    def preview_import(self, request):
+        """
+        Prévisualiser un fichier Excel avant import.
+        POST /API/distribution/clients-livreurs-hebdo/preview-import/
+        Body: FormData avec fichier 'file'
+        """
+        try:
+            import openpyxl
+        except ImportError:
+            return Response(
+                {'error': 'openpyxl est requis. Installez-le avec: pip install openpyxl'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        if 'file' not in request.FILES:
+            return Response(
+                {'error': 'Aucun fichier fourni'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        file = request.FILES['file']
+
+        if not file.name.endswith(('.xlsx', '.xls')):
+            return Response(
+                {'error': 'Le fichier doit être au format Excel (.xlsx ou .xls)'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            wb = openpyxl.load_workbook(file, data_only=True)
+            ws = wb.active
+
+            preview_data = []
+            errors = []
+            valid_count = 0
+
+            company = request.user.company if hasattr(request.user, 'company') else None
+
+            from .models import Client
+
+            # Nouveau format du template:
+            # Col 0: Livreur ID, Col 1: Livreur Nom, Col 2: Client ID, Col 3: Client Nom
+            # Col 4-10: Lundi à Dimanche
+
+            # Sauter la première ligne (en-têtes)
+            for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), 2):
+                if not row or not any(row):
+                    continue
+
+                # Ignorer les lignes d'en-tête de livreur (commençant par ▶)
+                first_cell = str(row[0]) if row[0] else ''
+                if first_cell.startswith('▶') or first_cell.startswith('==='):
+                    continue
+
+                livreur_id = row[0]
+                # Col 1 est le nom du livreur (ignoré)
+                client_id = row[2]
+                # Col 3 est le nom du client (ignoré)
+
+                # Validation
+                row_errors = []
+                livreur = None
+                client = None
+
+                if not livreur_id:
+                    continue  # Ligne vide, on passe
+                else:
+                    try:
+                        livreur = LivreurDistribution.objects.get(id=int(livreur_id))
+                    except (LivreurDistribution.DoesNotExist, ValueError):
+                        row_errors.append(f'Livreur ID {livreur_id} invalide')
+
+                if not client_id:
+                    continue  # Ligne vide, on passe
+                else:
+                    try:
+                        client = Client.objects.get(id=int(client_id))
+                    except (Client.DoesNotExist, ValueError):
+                        row_errors.append(f'Client ID {client_id} invalide')
+
+                # Jours (colonnes 4 à 10, index 4-10) -> Lundi=1 à Dimanche=7
+                jours_assignes = []
+                ordres = {}
+                for jour_idx in range(1, 8):  # 1=Lundi ... 7=Dimanche
+                    col_idx = 3 + jour_idx  # Col 4=Lundi, Col 5=Mardi, etc.
+                    if len(row) > col_idx and row[col_idx]:
+                        val = row[col_idx]
+                        if isinstance(val, str) and val.upper() == 'X':
+                            jours_assignes.append(jour_idx)
+                            ordres[jour_idx] = None
+                        elif isinstance(val, (int, float)) and val > 0:
+                            jours_assignes.append(jour_idx)
+                            ordres[jour_idx] = int(val)
+
+                # Si aucun jour n'est assigné, ignorer cette ligne
+                if not jours_assignes:
+                    continue
+
+                row_data = {
+                    'row': row_idx,
+                    'livreur_id': int(livreur_id) if livreur_id else None,
+                    'livreur_nom': livreur.nom if livreur else str(livreur_id),
+                    'client_id': int(client_id) if client_id else None,
+                    'client_nom': f"{client.nom} {client.prenom}".strip() if client else str(client_id),
+                    'jours': jours_assignes,
+                    'ordres': ordres,
+                    'errors': row_errors,
+                    'valid': len(row_errors) == 0
+                }
+
+                preview_data.append(row_data)
+
+                if row_data['valid']:
+                    valid_count += 1
+                else:
+                    errors.extend([f"Ligne {row_idx}: {e}" for e in row_errors])
+
+            return Response({
+                'total_rows': len(preview_data),
+                'valid_rows': valid_count,
+                'error_rows': len(preview_data) - valid_count,
+                'preview': preview_data[:20],  # Limiter la preview
+                'errors': errors[:50],  # Limiter les erreurs
+                'can_import': valid_count > 0
+            })
+
+        except Exception as e:
+            return Response(
+                {'error': f'Erreur lors de la lecture du fichier: {str(e)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    @action(detail=False, methods=['post'], url_path='import-excel')
+    def import_excel(self, request):
+        """
+        Importer les configurations depuis un fichier Excel.
+        POST /API/distribution/clients-livreurs-hebdo/import-excel/
+        Body: FormData avec fichier 'file'
+        """
+        try:
+            import openpyxl
+        except ImportError:
+            return Response(
+                {'error': 'openpyxl est requis. Installez-le avec: pip install openpyxl'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        if 'file' not in request.FILES:
+            return Response(
+                {'error': 'Aucun fichier fourni'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        file = request.FILES['file']
+
+        if not file.name.endswith(('.xlsx', '.xls')):
+            return Response(
+                {'error': 'Le fichier doit être au format Excel (.xlsx ou .xls)'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        company = request.user.company if hasattr(request.user, 'company') else None
+        replace_existing = request.data.get('replace_existing', 'false').lower() == 'true'
+
+        try:
+            from .models import Client
+
+            wb = openpyxl.load_workbook(file, data_only=True)
+            ws = wb.active
+
+            created_count = 0
+            updated_count = 0
+            skipped_count = 0
+            errors = []
+
+            # Nouveau format du template:
+            # Col 0: Livreur ID, Col 1: Livreur Nom, Col 2: Client ID, Col 3: Client Nom
+            # Col 4-10: Lundi à Dimanche
+
+            with transaction.atomic():
+                for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), 2):
+                    if not row or not any(row):
+                        continue
+
+                    # Ignorer les lignes d'en-tête de livreur (commençant par ▶ ou ===)
+                    first_cell = str(row[0]) if row[0] else ''
+                    if first_cell.startswith('▶') or first_cell.startswith('==='):
+                        continue
+
+                    livreur_id = row[0]
+                    # Col 1 est le nom du livreur (ignoré)
+                    client_id = row[2] if len(row) > 2 else None
+                    # Col 3 est le nom du client (ignoré)
+
+                    if not livreur_id or not client_id:
+                        continue  # Ligne vide
+
+                    # Validation
+                    try:
+                        livreur = LivreurDistribution.objects.get(id=int(livreur_id))
+                    except (LivreurDistribution.DoesNotExist, ValueError, TypeError):
+                        errors.append(f'Ligne {row_idx}: Livreur ID {livreur_id} invalide')
+                        skipped_count += 1
+                        continue
+
+                    try:
+                        client = Client.objects.get(id=int(client_id))
+                    except (Client.DoesNotExist, ValueError, TypeError):
+                        errors.append(f'Ligne {row_idx}: Client ID {client_id} invalide')
+                        skipped_count += 1
+                        continue
+
+                    # Traiter les jours (colonnes 4 à 10) -> Lundi=1 à Dimanche=7
+                    has_any_day = False
+                    for jour_idx in range(1, 8):  # 1=Lundi ... 7=Dimanche
+                        col_idx = 3 + jour_idx  # Col 4=Lundi, Col 5=Mardi, etc.
+
+                        if len(row) > col_idx and row[col_idx]:
+                            val = row[col_idx]
+                            ordre_passage = None
+
+                            if isinstance(val, str) and val.upper() == 'X':
+                                ordre_passage = 0
+                                has_any_day = True
+                            elif isinstance(val, (int, float)) and val > 0:
+                                ordre_passage = int(val)
+                                has_any_day = True
+                            else:
+                                continue
+
+                            # Chercher une configuration existante
+                            existing = ClientLivreurHebdo.objects.filter(
+                                client=client,
+                                jour_semaine=jour_idx,
+                                company=company
+                            ).first()
+
+                            if existing:
+                                if replace_existing:
+                                    existing.livreur = livreur
+                                    existing.ordre_passage = ordre_passage
+                                    existing.is_active = True
+                                    existing.save()
+                                    updated_count += 1
+                                else:
+                                    # Mise à jour seulement si même livreur
+                                    if existing.livreur_id == livreur.id:
+                                        existing.ordre_passage = ordre_passage
+                                        existing.is_active = True
+                                        existing.save()
+                                        updated_count += 1
+                                    else:
+                                        skipped_count += 1
+                            else:
+                                ClientLivreurHebdo.objects.create(
+                                    client=client,
+                                    livreur=livreur,
+                                    jour_semaine=jour_idx,
+                                    ordre_passage=ordre_passage,
+                                    company=company,
+                                    is_active=True
+                                )
+                                created_count += 1
+
+                    if not has_any_day:
+                        skipped_count += 1
+
+            return Response({
+                'success': True,
+                'message': f'Import terminé: {created_count} créé(s), {updated_count} mis à jour, {skipped_count} ignoré(s)',
+                'created': created_count,
+                'updated': updated_count,
+                'skipped': skipped_count,
+                'errors': errors[:20]
+            })
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return Response(
+                {'error': f'Erreur lors de l\'import: {str(e)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+class SyncViewSet(viewsets.ViewSet):
+    """ViewSet pour la synchronisation mobile"""
+    permission_classes = [AllowAny]  # TODO: Ajouter authentification en production
+
+    @action(detail=False, methods=['post'])
+    def pull(self, request):
+        """Pull: Récupérer les données depuis le serveur (Serveur -> Mobile)"""
+        serializer = SyncDeltaSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        livreur_id = serializer.validated_data['livreur_id']
+        derniere_sync = serializer.validated_data.get('derniere_sync')
+
+        livreur = get_object_or_404(LivreurDistribution, id=livreur_id)
+
+        # Récupérer les tournées modifiées depuis la dernière sync
+        tournees = TourneeMobile.objects.filter(livreur=livreur)
+
+        if derniere_sync:
+            tournees = tournees.filter(updated_at__gte=derniere_sync)
+        else:
+            # Première sync: tournées du jour et futures
+            aujourd_hui = timezone.now().date()
+            tournees = tournees.filter(date_tournee__gte=aujourd_hui)
+
+        # Exclure les tournées clôturées (sauf si dernière sync)
+        if not derniere_sync:
+            tournees = tournees.exclude(est_cloturee=True)
+
+        tournees = tournees.prefetch_related('arrets', 'arrets__client')
+
+        # Log de sync
+        sync_log = SyncLogMobile.objects.create(
+            livreur=livreur,
+            type_sync='pull',
+            statut='succes',
+            nb_tournees=tournees.count(),
+            nb_arrets=sum(t.arrets.count() for t in tournees),
+            device_id=serializer.validated_data.get('device_id', ''),
+            app_version=serializer.validated_data.get('app_version', '')
+        )
+
+        response_data = {
+            'timestamp': timezone.now(),
+            'tournees': TourneeSyncSerializer(tournees, many=True).data,
+            'nb_tournees': tournees.count(),
+            'nb_arrets': sum(t.arrets.count() for t in tournees),
+            'message': f'Synchronisation réussie: {tournees.count()} tournée(s)'
+        }
+
+        return Response(response_data)
+
+    @action(detail=False, methods=['post'])
+    def push(self, request):
+        """Push: Envoyer les données vers le serveur (Mobile -> Serveur)"""
+        serializer = MobileSyncPushSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        livreur_id = serializer.validated_data['livreur_id']
+        livreur = get_object_or_404(LivreurDistribution, id=livreur_id)
+
+        nb_ventes = 0
+        nb_arrets = 0
+        errors = []
+
+        with transaction.atomic():
+            # Synchroniser les ventes
+            ventes_data = serializer.validated_data.get('ventes', [])
+            for vente_data in ventes_data:
+                vente_serializer = VenteTourneeCreateSerializer(data=vente_data)
+                if vente_serializer.is_valid():
+                    vente = vente_serializer.save()
+                    vente.est_synchronise = True
+                    vente.date_synchronisation = timezone.now()
+                    vente.save()
+                    nb_ventes += 1
+                else:
+                    errors.append({
+                        'type': 'vente',
+                        'data': vente_data,
+                        'errors': vente_serializer.errors
+                    })
+
+            # Synchroniser les mises à jour d'arrêts
+            arrets_updates = serializer.validated_data.get('arrets_updates', [])
+            for arret_data in arrets_updates:
+                arret_id = arret_data.get('id')
+                if arret_id:
+                    try:
+                        arret = ArretTourneeMobile.objects.get(id=arret_id)
+                        if not arret.tournee.est_cloturee:
+                            for field, value in arret_data.items():
+                                if field != 'id':
+                                    setattr(arret, field, value)
+                            arret.save()
+                            nb_arrets += 1
+                    except ArretTournee.DoesNotExist:
+                        errors.append({
+                            'type': 'arret',
+                            'error': f'Arrêt {arret_id} introuvable'
+                        })
+
+            # Log de sync
+            sync_log = SyncLogMobile.objects.create(
+                livreur=livreur,
+                type_sync='push',
+                statut='succes' if not errors else 'partiel',
+                nb_ventes=nb_ventes,
+                nb_arrets=nb_arrets,
+                message=f'Synchronisé: {nb_ventes} vente(s), {nb_arrets} arrêt(s)',
+                erreur_details=str(errors) if errors else '',
+                device_id=serializer.validated_data.get('device_id', ''),
+                app_version=serializer.validated_data.get('app_version', '')
+            )
+
+        return Response({
+            'success': True,
+            'nb_ventes': nb_ventes,
+            'nb_arrets': nb_arrets,
+            'errors': errors,
+            'message': f'Synchronisation réussie: {nb_ventes} vente(s), {nb_arrets} arrêt(s)'
+        })
+
+    @action(detail=False, methods=['get'])
+    def logs(self, request):
+        """Récupérer l'historique des synchronisations"""
+        livreur_id = request.query_params.get('livreur')
+
+        if not livreur_id:
+            return Response(
+                {'error': 'livreur_id requis'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        logs = SyncLogMobile.objects.filter(livreur_id=livreur_id).order_by('-date_sync')[:50]
+        serializer = SyncLogSerializer(logs, many=True)
+        return Response(serializer.data)
+
+
+# TODO: BonLivraisonVanViewSet removed - models not yet created
+# Re-add when BonLivraisonVan and LigneBonLivraisonVan models are implemented
+
+
+############################
+# Produits pour Mobile App #
+############################
+
+class ProduitMobileViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    ViewSet pour la nomenclature des produits - app mobile
+    Liste TOUS les produits disponibles (pas seulement le stock du van)
+    Pour permettre aux livreurs de passer des commandes
+    """
+    from .distribution_serializers import ProduitMobileSerializer
+    from .models import Produit
+
+    queryset = Produit.objects.filter(is_active=True).order_by('designation')
+    serializer_class = ProduitMobileSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = None  # Pas de pagination pour l'app mobile
+
+    def get_queryset(self):
+        """Filtre par company de l'utilisateur"""
+        queryset = super().get_queryset()
+
+        # Filtrer par company (utiliser request.company du middleware)
+        if hasattr(self.request, 'company') and self.request.company:
+            queryset = queryset.filter(company=self.request.company)
+
+        return queryset
+
+
+############################
+# Statistiques Livreurs    #
+############################
+
+from rest_framework.views import APIView
+from django.db.models import Sum, Count, Q, F
+from django.db.models.functions import TruncDate
+from collections import defaultdict
+
+
+class StatsLivreursAPIView(APIView):
+    """
+    API pour les statistiques détaillées des livreurs
+    GET /API/distribution/stats-livreurs/?date_debut=YYYY-MM-DD&date_fin=YYYY-MM-DD&livreur_id=X
+    """
+    permission_classes = [AllowAny]  # Accessible depuis le frontend avec session auth
+
+    def get(self, request):
+        # Récupérer les paramètres
+        date_debut_str = request.query_params.get('date_debut')
+        date_fin_str = request.query_params.get('date_fin')
+        livreur_id = request.query_params.get('livreur_id')
+
+        # Validation des dates
+        if not date_debut_str or not date_fin_str:
+            return Response(
+                {'error': 'date_debut et date_fin sont requis (format YYYY-MM-DD)'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            date_debut = datetime.strptime(date_debut_str, '%Y-%m-%d').date()
+            date_fin = datetime.strptime(date_fin_str, '%Y-%m-%d').date()
+        except ValueError:
+            return Response(
+                {'error': 'Format de date invalide. Utilisez YYYY-MM-DD'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Récupérer la company de l'utilisateur
+        company = None
+        if hasattr(request.user, 'company') and request.user.company:
+            company = request.user.company
+
+        # Filtrer les tournées
+        tournees_qs = TourneeMobile.objects.filter(
+            date_tournee__gte=date_debut,
+            date_tournee__lte=date_fin
+        )
+
+        if company:
+            tournees_qs = tournees_qs.filter(company=company)
+
+        if livreur_id:
+            tournees_qs = tournees_qs.filter(livreur_id=livreur_id)
+
+        # Filtrer les ventes
+        ventes_qs = VenteTourneeMobile.objects.filter(
+            date_vente__date__gte=date_debut,
+            date_vente__date__lte=date_fin
+        )
+
+        if company:
+            ventes_qs = ventes_qs.filter(company=company)
+
+        if livreur_id:
+            ventes_qs = ventes_qs.filter(tournee__livreur_id=livreur_id)
+
+        # Filtrer les arrêts
+        arrets_qs = ArretTourneeMobile.objects.filter(
+            tournee__date_tournee__gte=date_debut,
+            tournee__date_tournee__lte=date_fin
+        )
+
+        if company:
+            arrets_qs = arrets_qs.filter(company=company)
+
+        if livreur_id:
+            arrets_qs = arrets_qs.filter(tournee__livreur_id=livreur_id)
+
+        # ========================================
+        # RÉSUMÉ GLOBAL
+        # ========================================
+        summary = {
+            'total_clients': arrets_qs.filter(statut='livre').values('client').distinct().count(),
+            'total_tournees': tournees_qs.count(),
+            'total_especes': float(ventes_qs.filter(type_paiement='especes').aggregate(
+                total=Sum('montant_total'))['total'] or 0),
+            'total_cheques': float(ventes_qs.filter(type_paiement='cheque').aggregate(
+                total=Sum('montant_total'))['total'] or 0),
+            'total_credits': float(ventes_qs.filter(type_paiement='credit').aggregate(
+                total=Sum('montant_total'))['total'] or 0),
+            'total_ventes': float(ventes_qs.aggregate(total=Sum('montant_total'))['total'] or 0),
+        }
+
+        # ========================================
+        # STATISTIQUES PAR LIVREUR
+        # ========================================
+        livreurs_stats = []
+
+        # Récupérer tous les livreurs concernés
+        livreurs_ids = tournees_qs.values_list('livreur_id', flat=True).distinct()
+        livreurs = LivreurDistribution.objects.filter(id__in=livreurs_ids)
+
+        for livreur in livreurs:
+            # Tournées du livreur
+            tournees_livreur = tournees_qs.filter(livreur=livreur)
+
+            # Ventes du livreur
+            ventes_livreur = ventes_qs.filter(tournee__livreur=livreur)
+
+            # Arrêts du livreur
+            arrets_livreur = arrets_qs.filter(tournee__livreur=livreur)
+
+            # Calculer les stats
+            especes = float(ventes_livreur.filter(type_paiement='especes').aggregate(
+                total=Sum('montant_total'))['total'] or 0)
+            cheques = float(ventes_livreur.filter(type_paiement='cheque').aggregate(
+                total=Sum('montant_total'))['total'] or 0)
+            credits = float(ventes_livreur.filter(type_paiement='credit').aggregate(
+                total=Sum('montant_total'))['total'] or 0)
+
+            total_arrets = arrets_livreur.count()
+            arrets_livres = arrets_livreur.filter(statut='livre').count()
+            arrets_echec = arrets_livreur.filter(statut='echec').count()
+
+            livreurs_stats.append({
+                'id': livreur.id,
+                'nom': livreur.nom,
+                'matricule': livreur.matricule,
+                'tournees': tournees_livreur.count(),
+                'clients_visites': arrets_livreur.filter(statut='livre').values('client').distinct().count(),
+                'total_arrets': total_arrets,
+                'arrets_livres': arrets_livres,
+                'arrets_echec': arrets_echec,
+                'especes': especes,
+                'cheques': cheques,
+                'credits': credits,
+                'total': especes + cheques + credits,
+            })
+
+        # Trier par total décroissant
+        livreurs_stats.sort(key=lambda x: x['total'], reverse=True)
+
+        # ========================================
+        # STATISTIQUES PAR JOUR
+        # ========================================
+        par_jour = []
+
+        # Regrouper les ventes par jour
+        ventes_par_jour = ventes_qs.annotate(
+            jour=TruncDate('date_vente')
+        ).values('jour').annotate(
+            total=Sum('montant_total'),
+            especes=Sum('montant_total', filter=Q(type_paiement='especes')),
+            cheques=Sum('montant_total', filter=Q(type_paiement='cheque')),
+            credits=Sum('montant_total', filter=Q(type_paiement='credit')),
+            nb_ventes=Count('id')
+        ).order_by('jour')
+
+        # Pour chaque jour, récupérer les stats par livreur
+        jours_data = {}
+        for v in ventes_par_jour:
+            jour = v['jour']
+            if jour not in jours_data:
+                jours_data[jour] = {
+                    'date': jour,
+                    'date_label': jour.strftime('%d/%m'),
+                    'jour_semaine': ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'][jour.weekday()],
+                    'total': float(v['total'] or 0),
+                    'especes': float(v['especes'] or 0),
+                    'cheques': float(v['cheques'] or 0),
+                    'credits': float(v['credits'] or 0),
+                    'nb_ventes': v['nb_ventes'],
+                    'livreurs': []
+                }
+
+        # Ajouter les stats par livreur pour chaque jour
+        for jour, data in jours_data.items():
+            jour_ventes = ventes_qs.filter(date_vente__date=jour)
+            jour_arrets = arrets_qs.filter(tournee__date_tournee=jour)
+
+            livreurs_jour_ids = jour_ventes.values_list('tournee__livreur_id', flat=True).distinct()
+
+            for lid in livreurs_jour_ids:
+                try:
+                    liv = LivreurDistribution.objects.get(id=lid)
+                    liv_ventes = jour_ventes.filter(tournee__livreur_id=lid)
+                    liv_arrets = jour_arrets.filter(tournee__livreur_id=lid)
+
+                    data['livreurs'].append({
+                        'id': liv.id,
+                        'nom': liv.nom,
+                        'clients': liv_arrets.values('client').distinct().count(),
+                        'livres': liv_arrets.filter(statut='livre').count(),
+                        'echecs': liv_arrets.filter(statut='echec').count(),
+                        'especes': float(liv_ventes.filter(type_paiement='especes').aggregate(
+                            total=Sum('montant_total'))['total'] or 0),
+                        'cheques': float(liv_ventes.filter(type_paiement='cheque').aggregate(
+                            total=Sum('montant_total'))['total'] or 0),
+                        'credits': float(liv_ventes.filter(type_paiement='credit').aggregate(
+                            total=Sum('montant_total'))['total'] or 0),
+                        'total': float(liv_ventes.aggregate(total=Sum('montant_total'))['total'] or 0),
+                    })
+                except LivreurDistribution.DoesNotExist:
+                    pass
+
+        # Convertir en liste triée par date
+        par_jour = sorted(jours_data.values(), key=lambda x: x['date'])
+
+        # Convertir les dates en string pour JSON
+        for jour in par_jour:
+            jour['date'] = jour['date'].strftime('%Y-%m-%d')
+
+        return Response({
+            'date_debut': date_debut_str,
+            'date_fin': date_fin_str,
+            'summary': summary,
+            'livreurs': livreurs_stats,
+            'par_jour': par_jour,
+        })
+
+
+# ============================================
+# ENDPOINTS LIVRAISONS COMPAT MOBILE
+# ============================================
+
+from rest_framework.views import APIView
+
+
+class LivraisonConfirmerView(APIView):
+    """
+    Endpoint pour confirmer une livraison depuis l'app mobile.
+    POST /API/livraisons/confirmer/
+    {
+        "arret_id": "123",
+        "signature_base64": "...",
+        "notes": "...",
+        "ts_client": 1234567890
+    }
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        arret_id = request.data.get('arret_id')
+        signature_base64 = request.data.get('signature_base64', '')
+        notes = request.data.get('notes', '')
+        nom_receptionnaire = request.data.get('nom_receptionnaire', '')
+
+        if not arret_id:
+            return Response({'error': 'arret_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            arret = ArretTourneeMobile.objects.get(id=arret_id)
+        except ArretTourneeMobile.DoesNotExist:
+            return Response({'error': 'Arret not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        if arret.tournee.est_cloturee:
+            return Response({'error': 'La tournee est cloturee'}, status=status.HTTP_400_BAD_REQUEST)
+
+        arret.statut = 'livre'
+        arret.heure_arrivee = timezone.now()
+        arret.heure_depart = timezone.now()
+        arret.signature_base64 = signature_base64
+        arret.nom_receptionnaire = nom_receptionnaire
+        arret.notes = notes
+        arret.save()
+
+        return Response({
+            'message': 'Livraison confirmee',
+            'arret_id': arret.id,
+            'statut': arret.statut
+        })
+
+
+class LivraisonEchecView(APIView):
+    """
+    Endpoint pour marquer une livraison comme echec depuis l'app mobile.
+    POST /API/livraisons/echec/
+    {
+        "arret_id": "123",
+        "motif": "Client absent",
+        "notes": "...",
+        "ts_client": 1234567890
+    }
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        arret_id = request.data.get('arret_id')
+        motif = request.data.get('motif', '')
+        notes = request.data.get('notes', '')
+
+        if not arret_id:
+            return Response({'error': 'arret_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            arret = ArretTourneeMobile.objects.get(id=arret_id)
+        except ArretTourneeMobile.DoesNotExist:
+            return Response({'error': 'Arret not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        if arret.tournee.est_cloturee:
+            return Response({'error': 'La tournee est cloturee'}, status=status.HTTP_400_BAD_REQUEST)
+
+        arret.statut = 'echec'
+        arret.heure_arrivee = timezone.now()
+        arret.motif_echec = motif
+        arret.notes_echec = notes
+        arret.save()
+
+        return Response({
+            'message': 'Echec enregistre',
+            'arret_id': arret.id,
+            'statut': arret.statut,
+            'motif': motif
+        })

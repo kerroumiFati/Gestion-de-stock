@@ -1,0 +1,6 @@
+/* Base style overrides for the app */
+html, body { height: 100%; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif; }
+.container-fluid { max-width: 1400px; }
+.table thead th { font-weight: 600; }
+.badge { font-weight: 500; }

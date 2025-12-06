@@ -1,0 +1,19 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Confirmer la suppression</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="p-4">
+  <div class="container">
+    <h1>Supprimer l'utilisateur {{ user.username }} ?</h1>
+    <form method="post">
+      {% csrf_token %}
+      <button class="btn btn-danger" type="submit">Supprimer</button>
+      <a class="btn btn-secondary" href="/users-admin/">Annuler</a>
+    </form>
+  </div>
+</body>
+</html>

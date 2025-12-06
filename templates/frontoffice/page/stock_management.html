@@ -1,0 +1,1606 @@
+{% load i18n %}
+{% load static %}
+
+<style>
+/* Modern Stock Management Styles */
+.stock-dashboard {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.stat-card {
+    background: white;
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    border: none;
+    min-height: 120px;
+    display: flex;
+    align-items: center;
+}
+
+.stat-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+}
+
+.stat-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    color: white;
+}
+
+.stat-icon.primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+.stat-icon.success { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
+.stat-icon.warning { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+.stat-icon.danger { background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%); }
+.stat-icon.info { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+
+.stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #2d3748;
+    margin: 0;
+    line-height: 1.2;
+    word-wrap: break-word;
+}
+
+.stat-label {
+    font-size: 0.875rem;
+    color: #718096;
+    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.main-card {
+    background: white;
+    border-radius: 20px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+    overflow: hidden;
+}
+
+.card-header-modern {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 20px 30px;
+    border: none;
+}
+
+.search-box {
+    position: relative;
+}
+
+.search-box input {
+    padding-left: 45px;
+    border-radius: 50px;
+    border: 2px solid #e2e8f0;
+    height: 48px;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+}
+
+.search-box input:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+}
+
+.search-box .search-icon {
+    position: absolute;
+    left: 18px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #a0aec0;
+}
+
+.filter-btn {
+    border-radius: 50px;
+    padding: 10px 20px;
+    border: 2px solid #e2e8f0;
+    background: white;
+    color: #4a5568;
+    transition: all 0.3s ease;
+    font-weight: 500;
+}
+
+.filter-btn:hover, .filter-btn.active {
+    background: #667eea;
+    border-color: #667eea;
+    color: white;
+}
+
+.product-table {
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.product-table thead th {
+    background: #f8fafc;
+    color: #4a5568;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.5px;
+    padding: 16px 20px;
+    border: none;
+    position: sticky;
+    top: 0;
+}
+
+.product-table tbody tr {
+    transition: all 0.2s ease;
+}
+
+.product-table tbody tr:hover {
+    background: #f7fafc;
+}
+
+.product-table tbody td {
+    padding: 16px 20px;
+    vertical-align: middle;
+    border-bottom: 1px solid #edf2f7;
+}
+
+.product-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    font-weight: 700;
+    color: white;
+}
+
+.stock-badge {
+    padding: 6px 14px;
+    border-radius: 50px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.stock-badge.ok { background: #c6f6d5; color: #22543d; }
+.stock-badge.alert { background: #fefcbf; color: #744210; }
+.stock-badge.critical { background: #fed7d7; color: #742a2a; }
+.stock-badge.rupture { background: #e2e8f0; color: #4a5568; }
+
+.stock-bar {
+    height: 8px;
+    border-radius: 4px;
+    background: #e2e8f0;
+    overflow: hidden;
+    min-width: 100px;
+}
+
+.stock-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.5s ease;
+}
+
+.stock-bar-fill.ok { background: linear-gradient(90deg, #38a169 0%, #68d391 100%); }
+.stock-bar-fill.alert { background: linear-gradient(90deg, #d69e2e 0%, #f6e05e 100%); }
+.stock-bar-fill.critical { background: linear-gradient(90deg, #e53e3e 0%, #fc8181 100%); }
+
+.action-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    transition: all 0.2s ease;
+    margin: 0 2px;
+}
+
+.action-btn.edit { background: #ebf8ff; color: #3182ce; }
+.action-btn.edit:hover { background: #3182ce; color: white; }
+.action-btn.adjust { background: #f0fff4; color: #38a169; }
+.action-btn.adjust:hover { background: #38a169; color: white; }
+.action-btn.history { background: #faf5ff; color: #805ad5; }
+.action-btn.history:hover { background: #805ad5; color: white; }
+
+.quick-action-bar {
+    background: #f8fafc;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 20px;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #a0aec0;
+}
+
+.empty-state i {
+    font-size: 64px;
+    margin-bottom: 20px;
+    opacity: 0.5;
+}
+
+/* Modal Modern Style */
+.modal-modern .modal-content {
+    border-radius: 20px;
+    border: none;
+    overflow: hidden;
+}
+
+.modal-modern .modal-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    padding: 20px 30px;
+}
+
+.modal-modern .modal-body {
+    padding: 30px;
+}
+
+.modal-modern .form-control {
+    border-radius: 10px;
+    padding: 12px 16px;
+    border: 2px solid #e2e8f0;
+}
+
+.modal-modern .form-control:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+}
+
+.btn-modern {
+    border-radius: 10px;
+    padding: 12px 24px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.btn-modern.primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    color: white;
+}
+
+.btn-modern.primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+/* Loading Skeleton */
+.skeleton {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: 8px;
+}
+
+@keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+/* Custom Warehouse Select Dropdown */
+.warehouse-select-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+.warehouse-select-trigger {
+    padding: 10px 20px;
+    border: 2px solid #e2e8f0;
+    border-radius: 50px;
+    background: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    font-weight: 500;
+    color: #4a5568;
+    transition: all 0.3s ease;
+    min-width: 200px;
+}
+
+.warehouse-select-trigger:hover {
+    border-color: #667eea;
+    color: #667eea;
+}
+
+.warehouse-select-trigger.open {
+    border-color: #667eea;
+    border-radius: 20px 20px 0 0;
+}
+
+.warehouse-select-trigger .fa-chevron-down {
+    margin-left: auto;
+    transition: transform 0.2s;
+    font-size: 12px;
+}
+
+.warehouse-select-trigger.open .fa-chevron-down {
+    transform: rotate(180deg);
+}
+
+.warehouse-select-dropdown {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 2px solid #667eea;
+    border-top: none;
+    border-radius: 0 0 15px 15px;
+    z-index: 1000;
+    box-shadow: 0 8px 20px rgba(102, 126, 234, 0.2);
+    overflow: hidden;
+}
+
+.warehouse-select-dropdown.open {
+    display: block;
+}
+
+.warehouse-select-search {
+    width: 100%;
+    padding: 12px 15px;
+    border: none;
+    border-bottom: 1px solid #e2e8f0;
+    font-size: 0.9rem;
+    outline: none;
+    background: #f8fafc;
+}
+
+.warehouse-select-search:focus {
+    background: white;
+}
+
+.warehouse-select-options {
+    max-height: 250px;
+    overflow-y: auto;
+    background: white;
+}
+
+.warehouse-select-option {
+    padding: 12px 15px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: all 0.2s;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.warehouse-select-option:last-child {
+    border-bottom: none;
+}
+
+.warehouse-select-option:hover {
+    background: #eff6ff;
+}
+
+.warehouse-select-option.selected {
+    background: #667eea;
+    color: white;
+}
+
+.warehouse-select-option .warehouse-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+}
+
+.warehouse-select-option .warehouse-icon.entrepot {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.warehouse-select-option .warehouse-icon.van {
+    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    color: white;
+}
+
+.warehouse-select-option .warehouse-info {
+    flex: 1;
+}
+
+.warehouse-select-option .warehouse-name {
+    font-weight: 500;
+    font-size: 0.9rem;
+}
+
+.warehouse-select-option .warehouse-code {
+    font-size: 0.75rem;
+    opacity: 0.7;
+}
+
+.warehouse-select-option.selected .warehouse-icon {
+    background: rgba(255,255,255,0.2);
+}
+
+/* Scrollbar pour le dropdown */
+.warehouse-select-options::-webkit-scrollbar {
+    width: 6px;
+}
+
+.warehouse-select-options::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+.warehouse-select-options::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+.warehouse-select-options::-webkit-scrollbar-thumb:hover {
+    background: #a1a1a1;
+}
+
+/* Custom Select pour Modal Ajustement */
+.custom-select-container {
+    position: relative;
+    width: 100%;
+}
+
+.custom-select-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border: 2px solid #e2e8f0;
+    border-radius: 10px;
+    background: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-height: 48px;
+}
+
+.custom-select-trigger:hover {
+    border-color: #667eea;
+}
+
+.custom-select-trigger.open {
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+    border-radius: 10px 10px 0 0;
+}
+
+.custom-select-trigger .selected-text {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #000;
+    font-weight: 500;
+}
+
+.custom-select-trigger .selected-text.placeholder {
+    color: #a0aec0;
+    font-weight: 400;
+}
+
+.custom-select-trigger .arrow {
+    margin-left: 10px;
+    transition: transform 0.2s;
+    color: #718096;
+}
+
+.custom-select-trigger.open .arrow {
+    transform: rotate(180deg);
+}
+
+.custom-select-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 2px solid #667eea;
+    border-top: none;
+    border-radius: 0 0 10px 10px;
+    box-shadow: 0 8px 20px rgba(102, 126, 234, 0.2);
+    z-index: 1060;
+    display: none;
+}
+
+.custom-select-dropdown.open {
+    display: block;
+}
+
+.custom-select-search {
+    padding: 10px;
+    border-bottom: 1px solid #e2e8f0;
+    background: #f8fafc;
+}
+
+.custom-select-search input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    font-size: 0.9rem;
+}
+
+.custom-select-search input:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+.custom-select-options {
+    max-height: 250px;
+    overflow-y: auto;
+}
+
+.custom-select-options::-webkit-scrollbar {
+    width: 6px;
+}
+
+.custom-select-options::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+.custom-select-options::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+.custom-select-options::-webkit-scrollbar-thumb:hover {
+    background: #a1a1a1;
+}
+
+.custom-select-option {
+    padding: 10px 16px;
+    cursor: pointer;
+    transition: background 0.15s;
+    border-bottom: 1px solid #f1f5f9;
+    color: #000;
+}
+
+.custom-select-option:last-child {
+    border-bottom: none;
+}
+
+.custom-select-option:hover {
+    background: #eff6ff;
+}
+
+.custom-select-option.selected {
+    background: #667eea;
+    color: white;
+}
+
+.custom-select-no-results {
+    padding: 16px;
+    text-align: center;
+    color: #a0aec0;
+    font-style: italic;
+}
+</style>
+
+<div class="container-fluid py-4">
+    <!-- Header avec statistiques -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h2 class="mb-1 font-weight-bold text-dark">
+                        <i class="fas fa-boxes mr-2" style="color: #667eea;"></i>
+                        {% trans "Gestion des Stocks" %}
+                    </h2>
+                    <p class="text-muted mb-0">{% trans "Vue d'ensemble et gestion de votre inventaire" %}</p>
+                </div>
+                <div>
+                    <button class="btn btn-modern primary" onclick="openAjustementModal()">
+                        <i class="fas fa-plus mr-2"></i>{% trans "Nouvel ajustement" %}
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cartes de statistiques -->
+    <div class="row mb-4" id="stats-row">
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="stat-card">
+                <div class="d-flex align-items-center">
+                    <div class="stat-icon primary mr-3">
+                        <i class="fas fa-cubes"></i>
+                    </div>
+                    <div>
+                        <p class="stat-value" id="stat-total-products">--</p>
+                        <p class="stat-label">{% trans "Produits en stock" %}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="stat-card">
+                <div class="d-flex align-items-center">
+                    <div class="stat-icon success mr-3">
+                        <i class="fas fa-coins"></i>
+                    </div>
+                    <div>
+                        <p class="stat-value" id="stat-total-value">--</p>
+                        <p class="stat-label">{% trans "Valeur totale" %}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="stat-card">
+                <div class="d-flex align-items-center">
+                    <div class="stat-icon warning mr-3">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                    <div>
+                        <p class="stat-value" id="stat-alerts">--</p>
+                        <p class="stat-label">{% trans "Stock faible" %}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="stat-card">
+                <div class="d-flex align-items-center">
+                    <div class="stat-icon danger mr-3">
+                        <i class="fas fa-times-circle"></i>
+                    </div>
+                    <div>
+                        <p class="stat-value" id="stat-ruptures">--</p>
+                        <p class="stat-label">{% trans "Ruptures" %}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Carte principale -->
+    <div class="main-card">
+        <div class="card-header-modern">
+            <div class="row align-items-center">
+                <div class="col-md-6">
+                    <h5 class="mb-0 font-weight-bold">
+                        <i class="fas fa-list mr-2"></i>{% trans "Inventaire des produits" %}
+                    </h5>
+                </div>
+                <div class="col-md-6">
+                    <div class="search-box">
+                        <i class="fas fa-search search-icon"></i>
+                        <input type="text" class="form-control" id="searchInput"
+                               placeholder="{% trans 'Rechercher par nom, référence ou code-barres...' %}">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card-body p-4">
+            <!-- Filtres rapides -->
+            <div class="quick-action-bar">
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        <div class="btn-group" role="group">
+                            <button class="filter-btn active" data-filter="all">
+                                <i class="fas fa-th-list mr-1"></i>{% trans "Tous" %}
+                            </button>
+                            <button class="filter-btn" data-filter="alert">
+                                <i class="fas fa-exclamation mr-1"></i>{% trans "Alertes" %}
+                            </button>
+                            <button class="filter-btn" data-filter="rupture">
+                                <i class="fas fa-times mr-1"></i>{% trans "Ruptures" %}
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-6 text-right d-flex justify-content-end align-items-center">
+                        <!-- Custom Dropdown Entrepôt -->
+                        <div class="warehouse-select-wrapper">
+                            <input type="hidden" id="warehouseFilter" value="">
+                            <div class="warehouse-select-trigger" id="warehouse-select-trigger" onclick="toggleWarehouseDropdown()">
+                                <i class="fas fa-warehouse mr-2"></i>
+                                <span id="warehouse-select-text">{% trans "Tous les entrepôts" %}</span>
+                                <i class="fas fa-chevron-down ml-2"></i>
+                            </div>
+                            <div class="warehouse-select-dropdown" id="warehouse-dropdown">
+                                <input type="text" class="warehouse-select-search" id="warehouse-search" placeholder="{% trans 'Rechercher...' %}" oninput="filterWarehouses()">
+                                <div class="warehouse-select-options" id="warehouse-options-list">
+                                    <!-- Options chargées dynamiquement -->
+                                </div>
+                            </div>
+                        </div>
+                        <button class="btn btn-outline-secondary ml-2" style="border-radius: 50px;" onclick="exportStock()">
+                            <i class="fas fa-download mr-1"></i>{% trans "Exporter" %}
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tableau des produits -->
+            <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
+                <table class="table product-table" id="stockTable" data-no-datatable="true">
+                    <thead>
+                        <tr>
+                            <th style="width: 50px;"></th>
+                            <th>{% trans "Produit" %}</th>
+                            <th>{% trans "Catégorie" %}</th>
+                            <th class="text-center">{% trans "Stock" %}</th>
+                            <th style="width: 150px;">{% trans "Niveau" %}</th>
+                            <th class="text-right">{% trans "Prix" %}</th>
+                            <th class="text-right">{% trans "Valeur" %}</th>
+                            <th class="text-center" style="width: 130px;">{% trans "Actions" %}</th>
+                        </tr>
+                    </thead>
+                    <tbody id="stockTableBody">
+                        <tr>
+                            <td colspan="8" class="text-center py-5">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="sr-only">Loading...</span>
+                                </div>
+                                <p class="mt-2 text-muted">{% trans "Chargement des données..." %}</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Résumé bas de page -->
+            <div class="border-top pt-3 mt-3">
+                <div class="row">
+                    <div class="col-md-6">
+                        <span class="text-muted" id="result-count">{% trans "0 produits affichés" %}</span>
+                    </div>
+                    <div class="col-md-6 text-right">
+                        <strong>{% trans "Valeur affichée" %}:</strong>
+                        <span id="displayed-value" class="text-primary font-weight-bold">0.00 DA</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Ajustement Stock -->
+<div class="modal fade modal-modern" id="adjustStockModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-sliders-h mr-2"></i>{% trans "Ajuster le stock" %}
+                </h5>
+                <button type="button" class="close text-white" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="adjustStockForm">
+                    <div class="form-group">
+                        <label class="font-weight-bold">{% trans "Produit" %}</label>
+                        <!-- Custom Select Produit -->
+                        <div class="custom-select-container" id="customSelectAdjustProduct">
+                            <div class="custom-select-trigger" data-target="adjustProductSelect">
+                                <span class="selected-text placeholder">{% trans "Sélectionner un produit..." %}</span>
+                                <i class="fas fa-chevron-down arrow"></i>
+                            </div>
+                            <div class="custom-select-dropdown">
+                                <div class="custom-select-search">
+                                    <input type="text" placeholder="{% trans 'Rechercher un produit...' %}">
+                                </div>
+                                <div class="custom-select-options"></div>
+                            </div>
+                            <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
+                                <select id="adjustProductSelect" required>
+                                    <option value="">{% trans "Sélectionner un produit..." %}</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="font-weight-bold">{% trans "Entrepôt" %}</label>
+                        <!-- Custom Select Entrepôt -->
+                        <div class="custom-select-container" id="customSelectAdjustWarehouse">
+                            <div class="custom-select-trigger" data-target="adjustWarehouseSelect">
+                                <span class="selected-text placeholder">{% trans "Sélectionner un entrepôt..." %}</span>
+                                <i class="fas fa-chevron-down arrow"></i>
+                            </div>
+                            <div class="custom-select-dropdown">
+                                <div class="custom-select-search">
+                                    <input type="text" placeholder="{% trans 'Rechercher un entrepôt...' %}">
+                                </div>
+                                <div class="custom-select-options"></div>
+                            </div>
+                            <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
+                                <select id="adjustWarehouseSelect" required>
+                                    <option value="">{% trans "Sélectionner un entrepôt..." %}</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label class="font-weight-bold">{% trans "Stock actuel" %}</label>
+                                <input type="text" class="form-control" id="currentStock" readonly>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label class="font-weight-bold">{% trans "Nouvelle quantité" %}</label>
+                                <input type="number" class="form-control" id="newQuantity" min="0" required>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="font-weight-bold">{% trans "Motif" %}</label>
+                        <select class="form-control" id="adjustReason" required>
+                            <option value="INV">{% trans "Inventaire" %}</option>
+                            <option value="CORR">{% trans "Correction" %}</option>
+                            <option value="PERTE">{% trans "Perte" %}</option>
+                            <option value="CASSE">{% trans "Casse" %}</option>
+                            <option value="EXP">{% trans "Expiration" %}</option>
+                            <option value="AUTRE">{% trans "Autre" %}</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="font-weight-bold">{% trans "Note" %}</label>
+                        <textarea class="form-control" id="adjustNote" rows="2"
+                                  placeholder="{% trans 'Commentaire optionnel...' %}"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-light" data-dismiss="modal">{% trans "Annuler" %}</button>
+                <button type="button" class="btn btn-modern primary" onclick="submitAdjustment()">
+                    <i class="fas fa-check mr-2"></i>{% trans "Valider l'ajustement" %}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Historique -->
+<div class="modal fade modal-modern" id="historyModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-history mr-2"></i>{% trans "Historique des mouvements" %}
+                </h5>
+                <button type="button" class="close text-white" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div id="historyContent">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    'use strict';
+
+    let allProducts = [];
+    let allWarehouses = [];
+    let allCategories = [];
+    let allProductStocks = [];
+    let currentFilter = 'all';
+    let searchTerm = '';
+
+    // Couleurs pour les catégories
+    const categoryColors = [
+        '#667eea', '#38a169', '#d69e2e', '#e53e3e', '#805ad5',
+        '#3182ce', '#dd6b20', '#319795', '#d53f8c', '#718096'
+    ];
+
+    // Initialisation
+    document.addEventListener('DOMContentLoaded', init);
+    document.addEventListener('fragment:loaded', function(e) {
+        if (e.detail && e.detail.name === 'stock_management') {
+            init();
+        }
+    });
+
+    function init() {
+        loadData();
+        bindEvents();
+    }
+
+    function bindEvents() {
+        // Recherche
+        const searchInput = document.getElementById('searchInput');
+        if (searchInput) {
+            searchInput.addEventListener('input', debounce(function() {
+                searchTerm = this.value.toLowerCase();
+                renderTable();
+            }, 300));
+        }
+
+        // Filtres de statut
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                currentFilter = this.dataset.filter;
+                renderTable();
+            });
+        });
+
+        // Filtre entrepôt
+        const warehouseFilter = document.getElementById('warehouseFilter');
+        if (warehouseFilter) {
+            warehouseFilter.addEventListener('change', renderTable);
+        }
+    }
+
+    function loadData() {
+        Promise.all([
+            fetch('/API/produits/').then(r => r.json()),
+            fetch('/API/warehouses/').then(r => r.json()),
+            fetch('/API/categories/').then(r => r.json()),
+            fetch('/API/stocks/').then(r => r.json())
+        ])
+        .then(([products, warehouses, categories, productStocks]) => {
+            // Gérer la pagination si présente
+            allProducts = products.results || products;
+            allWarehouses = warehouses.results || warehouses;
+            allCategories = categories.results || categories;
+            allProductStocks = productStocks.results || productStocks;
+
+            renderStats();
+            renderWarehouseSelect();
+            renderTable();
+        })
+        .catch(err => {
+            console.error('Erreur chargement:', err);
+            document.getElementById('stockTableBody').innerHTML = `
+                <tr>
+                    <td colspan="8" class="text-center py-5 text-danger">
+                        <i class="fas fa-exclamation-circle fa-3x mb-3"></i>
+                        <p>Erreur de chargement des données</p>
+                    </td>
+                </tr>
+            `;
+        });
+    }
+
+    function renderStats() {
+        const totalProducts = allProducts.filter(p => p.quantite > 0).length;
+        const totalValue = allProducts.reduce((sum, p) => sum + (p.quantite * parseFloat(p.prixU || 0)), 0);
+        const alerts = allProducts.filter(p => p.quantite > 0 && p.quantite <= (p.seuil_alerte || 10)).length;
+        const ruptures = allProducts.filter(p => p.quantite <= 0).length;
+
+        document.getElementById('stat-total-products').textContent = totalProducts;
+        document.getElementById('stat-total-value').textContent = formatMoney(totalValue);
+        document.getElementById('stat-alerts').textContent = alerts;
+        document.getElementById('stat-ruptures').textContent = ruptures;
+    }
+
+    function renderWarehouseSelect() {
+        // Remplir le dropdown personnalisé pour le filtre
+        renderWarehouseOptions(allWarehouses);
+
+        // Remplir les custom selects du modal ajustement
+        populateAdjustProductSelect();
+        populateAdjustWarehouseSelect();
+        initAdjustCustomSelects();
+    }
+
+    // Populate custom select for products in adjust modal
+    function populateAdjustProductSelect() {
+        const container = document.getElementById('customSelectAdjustProduct');
+        if (!container) return;
+
+        const optionsContainer = container.querySelector('.custom-select-options');
+        optionsContainer.innerHTML = '';
+
+        // Option par défaut
+        const defaultOpt = document.createElement('div');
+        defaultOpt.className = 'custom-select-option';
+        defaultOpt.setAttribute('data-value', '');
+        defaultOpt.textContent = 'Sélectionner un produit...';
+        defaultOpt.onclick = function() {
+            selectAdjustOption('customSelectAdjustProduct', '', 'Sélectionner un produit...', 'adjustProductSelect', null);
+        };
+        optionsContainer.appendChild(defaultOpt);
+
+        // Produits
+        allProducts.forEach(p => {
+            const opt = document.createElement('div');
+            opt.className = 'custom-select-option';
+            opt.setAttribute('data-value', p.id);
+            const label = (p.reference || '') + ' - ' + (p.designation || 'Produit #' + p.id);
+            opt.textContent = label;
+            opt.onclick = function() {
+                selectAdjustOption('customSelectAdjustProduct', p.id, label, 'adjustProductSelect', p.quantite);
+            };
+            optionsContainer.appendChild(opt);
+        });
+    }
+
+    // Populate custom select for warehouses in adjust modal
+    function populateAdjustWarehouseSelect() {
+        const container = document.getElementById('customSelectAdjustWarehouse');
+        if (!container) return;
+
+        const optionsContainer = container.querySelector('.custom-select-options');
+        optionsContainer.innerHTML = '';
+
+        // Option par défaut
+        const defaultOpt = document.createElement('div');
+        defaultOpt.className = 'custom-select-option';
+        defaultOpt.setAttribute('data-value', '');
+        defaultOpt.textContent = 'Sélectionner un entrepôt...';
+        defaultOpt.onclick = function() {
+            selectAdjustOption('customSelectAdjustWarehouse', '', 'Sélectionner un entrepôt...', 'adjustWarehouseSelect', null);
+        };
+        optionsContainer.appendChild(defaultOpt);
+
+        // Entrepôts
+        allWarehouses.forEach(w => {
+            const opt = document.createElement('div');
+            opt.className = 'custom-select-option';
+            opt.setAttribute('data-value', w.id);
+            const label = (w.code || '') + ' - ' + (w.name || 'Entrepôt #' + w.id);
+            opt.textContent = label;
+            opt.onclick = function() {
+                selectAdjustOption('customSelectAdjustWarehouse', w.id, label, 'adjustWarehouseSelect', null);
+            };
+            optionsContainer.appendChild(opt);
+        });
+    }
+
+    // Toggle custom select in adjust modal
+    function toggleAdjustCustomSelect(containerId) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+
+        const trigger = container.querySelector('.custom-select-trigger');
+        const dropdown = container.querySelector('.custom-select-dropdown');
+        const isOpen = dropdown.classList.contains('open');
+
+        // Fermer tous les autres custom selects du modal
+        document.querySelectorAll('#adjustStockModal .custom-select-dropdown.open').forEach(d => {
+            d.classList.remove('open');
+            const t = d.closest('.custom-select-container');
+            if (t) t.querySelector('.custom-select-trigger').classList.remove('open');
+        });
+
+        if (!isOpen) {
+            dropdown.classList.add('open');
+            trigger.classList.add('open');
+            const searchInput = dropdown.querySelector('input');
+            if (searchInput) {
+                searchInput.value = '';
+                searchInput.focus();
+            }
+            filterAdjustOptions(containerId, '');
+        }
+    }
+
+    // Filter options in custom select
+    function filterAdjustOptions(containerId, searchText) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+
+        const optionsContainer = container.querySelector('.custom-select-options');
+        const options = optionsContainer.querySelectorAll('.custom-select-option');
+        const search = (searchText || '').toLowerCase().trim();
+        let hasVisible = false;
+
+        options.forEach(opt => {
+            const text = (opt.textContent || '').toLowerCase();
+            const match = !search || text.includes(search);
+            opt.style.display = match ? '' : 'none';
+            if (match) hasVisible = true;
+        });
+
+        let noResults = optionsContainer.querySelector('.custom-select-no-results');
+        if (!hasVisible) {
+            if (!noResults) {
+                noResults = document.createElement('div');
+                noResults.className = 'custom-select-no-results';
+                noResults.textContent = 'Aucun résultat trouvé';
+                optionsContainer.appendChild(noResults);
+            }
+            noResults.style.display = '';
+        } else if (noResults) {
+            noResults.style.display = 'none';
+        }
+    }
+
+    // Select option in adjust modal custom select
+    function selectAdjustOption(containerId, value, text, hiddenSelectId, stockValue) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+
+        const trigger = container.querySelector('.custom-select-trigger');
+        const selectedText = trigger.querySelector('.selected-text');
+        const dropdown = container.querySelector('.custom-select-dropdown');
+        const hiddenSelect = document.getElementById(hiddenSelectId);
+
+        selectedText.textContent = text;
+        selectedText.classList.toggle('placeholder', !value);
+
+        dropdown.classList.remove('open');
+        trigger.classList.remove('open');
+
+        if (hiddenSelect) {
+            let option = hiddenSelect.querySelector(`option[value="${value}"]`);
+            if (!option && value !== '') {
+                option = document.createElement('option');
+                option.value = value;
+                option.textContent = text;
+                hiddenSelect.appendChild(option);
+            }
+            hiddenSelect.value = value;
+        }
+
+        // Update stock display if this is the product select
+        if (containerId === 'customSelectAdjustProduct' && stockValue !== null) {
+            document.getElementById('currentStock').value = stockValue || 0;
+            document.getElementById('newQuantity').value = stockValue || 0;
+        }
+
+        // Update selected state
+        container.querySelectorAll('.custom-select-option').forEach(opt => {
+            opt.classList.toggle('selected', opt.getAttribute('data-value') === String(value));
+        });
+    }
+
+    // Initialize adjust modal custom selects event listeners
+    function initAdjustCustomSelects() {
+        ['customSelectAdjustProduct', 'customSelectAdjustWarehouse'].forEach(containerId => {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+
+            const trigger = container.querySelector('.custom-select-trigger');
+            const searchInput = container.querySelector('.custom-select-search input');
+
+            if (trigger && !trigger.hasAttribute('data-init')) {
+                trigger.setAttribute('data-init', 'true');
+                trigger.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    toggleAdjustCustomSelect(containerId);
+                });
+            }
+
+            if (searchInput && !searchInput.hasAttribute('data-init')) {
+                searchInput.setAttribute('data-init', 'true');
+                searchInput.addEventListener('input', function() {
+                    filterAdjustOptions(containerId, this.value);
+                });
+                searchInput.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                });
+            }
+        });
+
+        // Close when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.custom-select-container')) {
+                document.querySelectorAll('#adjustStockModal .custom-select-dropdown.open').forEach(d => {
+                    d.classList.remove('open');
+                    const t = d.closest('.custom-select-container');
+                    if (t) t.querySelector('.custom-select-trigger').classList.remove('open');
+                });
+            }
+        });
+    }
+
+    // Afficher les options du dropdown entrepôt
+    function renderWarehouseOptions(warehouses) {
+        const optionsList = document.getElementById('warehouse-options-list');
+        const selectedValue = document.getElementById('warehouseFilter').value;
+
+        // Option "Tous les entrepôts"
+        let html = `
+            <div class="warehouse-select-option ${!selectedValue ? 'selected' : ''}"
+                 data-value=""
+                 onclick="selectWarehouse('', 'Tous les entrepôts')">
+                <div class="warehouse-icon entrepot">
+                    <i class="fas fa-layer-group"></i>
+                </div>
+                <div class="warehouse-info">
+                    <div class="warehouse-name">Tous les entrepôts</div>
+                    <div class="warehouse-code">Afficher tout le stock</div>
+                </div>
+            </div>
+        `;
+
+        // Options des entrepôts
+        warehouses.forEach(w => {
+            const isVan = w.code && w.code.startsWith('VAN');
+            html += `
+                <div class="warehouse-select-option ${w.id == selectedValue ? 'selected' : ''}"
+                     data-value="${w.id}"
+                     data-name="${(w.name || '').toLowerCase()}"
+                     data-code="${(w.code || '').toLowerCase()}"
+                     onclick="selectWarehouse('${w.id}', '${(w.name || w.code).replace(/'/g, "\\'")}')">
+                    <div class="warehouse-icon ${isVan ? 'van' : 'entrepot'}">
+                        <i class="fas fa-${isVan ? 'truck' : 'warehouse'}"></i>
+                    </div>
+                    <div class="warehouse-info">
+                        <div class="warehouse-name">${w.name || w.code}</div>
+                        <div class="warehouse-code">${w.code}</div>
+                    </div>
+                </div>
+            `;
+        });
+
+        optionsList.innerHTML = html;
+    }
+
+    // Toggle dropdown entrepôt
+    window.toggleWarehouseDropdown = function() {
+        const trigger = document.getElementById('warehouse-select-trigger');
+        const dropdown = document.getElementById('warehouse-dropdown');
+        const isOpen = dropdown.classList.contains('open');
+
+        if (isOpen) {
+            closeWarehouseDropdown();
+        } else {
+            trigger.classList.add('open');
+            dropdown.classList.add('open');
+            document.getElementById('warehouse-search').focus();
+        }
+    };
+
+    // Fermer dropdown entrepôt
+    window.closeWarehouseDropdown = function() {
+        document.getElementById('warehouse-select-trigger').classList.remove('open');
+        document.getElementById('warehouse-dropdown').classList.remove('open');
+        document.getElementById('warehouse-search').value = '';
+        renderWarehouseOptions(allWarehouses);
+    };
+
+    // Sélectionner un entrepôt
+    window.selectWarehouse = function(id, name) {
+        document.getElementById('warehouseFilter').value = id;
+        document.getElementById('warehouse-select-text').textContent = name;
+        closeWarehouseDropdown();
+        renderTable();
+    };
+
+    // Filtrer les entrepôts
+    window.filterWarehouses = function() {
+        const searchValue = document.getElementById('warehouse-search').value.toLowerCase();
+        const filtered = allWarehouses.filter(w => {
+            const searchable = `${w.name || ''} ${w.code || ''}`.toLowerCase();
+            return searchable.includes(searchValue);
+        });
+        renderWarehouseOptions(filtered);
+    };
+
+    // Fermer dropdown si clic en dehors
+    document.addEventListener('click', function(e) {
+        const wrapper = document.querySelector('.warehouse-select-wrapper');
+        if (wrapper && !wrapper.contains(e.target)) {
+            closeWarehouseDropdown();
+        }
+    });
+
+    function renderTable() {
+        const tbody = document.getElementById('stockTableBody');
+        const warehouseId = document.getElementById('warehouseFilter')?.value;
+
+        // Si un entrepôt est sélectionné, on filtre par les stocks de cet entrepôt
+        let productsToShow = allProducts;
+
+        if (warehouseId) {
+            // Récupérer les IDs des produits qui ont du stock dans cet entrepôt
+            const productIdsInWarehouse = allProductStocks
+                .filter(ps => ps.warehouse == warehouseId)
+                .map(ps => ps.produit);
+
+            // Créer une map des quantités par produit pour cet entrepôt
+            const warehouseStockMap = {};
+            allProductStocks
+                .filter(ps => ps.warehouse == warehouseId)
+                .forEach(ps => {
+                    warehouseStockMap[ps.produit] = ps.quantity;
+                });
+
+            // Filtrer et adapter les quantités
+            productsToShow = allProducts
+                .filter(p => productIdsInWarehouse.includes(p.id))
+                .map(p => ({
+                    ...p,
+                    quantite: warehouseStockMap[p.id] || 0
+                }));
+        }
+
+        // Filtrer les produits
+        let filtered = productsToShow.filter(p => {
+            // Filtre recherche
+            if (searchTerm) {
+                const searchable = `${p.reference} ${p.designation} ${p.code_barre || ''}`.toLowerCase();
+                if (!searchable.includes(searchTerm)) return false;
+            }
+
+            // Filtre statut
+            if (currentFilter === 'alert' && (p.quantite <= 0 || p.quantite > (p.seuil_alerte || 10))) return false;
+            if (currentFilter === 'rupture' && p.quantite > 0) return false;
+
+            return true;
+        });
+
+        // Trier par statut (ruptures en premier) puis par nom
+        filtered.sort((a, b) => {
+            if (a.quantite <= 0 && b.quantite > 0) return -1;
+            if (a.quantite > 0 && b.quantite <= 0) return 1;
+            if (a.quantite <= (a.seuil_alerte || 10) && b.quantite > (b.seuil_alerte || 10)) return -1;
+            if (a.quantite > (a.seuil_alerte || 10) && b.quantite <= (b.seuil_alerte || 10)) return 1;
+            return (a.designation || '').localeCompare(b.designation || '');
+        });
+
+        if (filtered.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="8">
+                        <div class="empty-state">
+                            <i class="fas fa-inbox"></i>
+                            <h5>Aucun produit trouvé</h5>
+                            <p class="text-muted">Essayez de modifier vos critères de recherche</p>
+                        </div>
+                    </td>
+                </tr>
+            `;
+            document.getElementById('result-count').textContent = '0 produits affichés';
+            document.getElementById('displayed-value').textContent = '0.00 DA';
+            return;
+        }
+
+        // Calculer la valeur affichée
+        const displayedValue = filtered.reduce((sum, p) => sum + (p.quantite * parseFloat(p.prixU || 0)), 0);
+        document.getElementById('result-count').textContent = `${filtered.length} produits affichés`;
+        document.getElementById('displayed-value').textContent = formatMoney(displayedValue);
+
+        // Rendre le tableau
+        tbody.innerHTML = filtered.map((p, idx) => {
+            const category = allCategories.find(c => c.id === p.categorie) || {};
+            const status = getStockStatus(p);
+            const stockPercent = Math.min(100, (p.quantite / (p.seuil_alerte * 2 || 20)) * 100);
+            const colorIdx = allCategories.indexOf(category);
+            const avatarColor = categoryColors[colorIdx >= 0 ? colorIdx % categoryColors.length : 0];
+
+            return `
+                <tr>
+                    <td>
+                        <div class="product-avatar" style="background: ${avatarColor};">
+                            ${(p.reference || 'P')[0].toUpperCase()}
+                        </div>
+                    </td>
+                    <td>
+                        <div>
+                            <strong class="d-block">${p.designation || 'Sans nom'}</strong>
+                            <small class="text-muted">
+                                <i class="fas fa-barcode mr-1"></i>${p.reference || '-'}
+                                ${p.code_barre ? `<span class="ml-2"><i class="fas fa-qrcode mr-1"></i>${p.code_barre}</span>` : ''}
+                            </small>
+                        </div>
+                    </td>
+                    <td>
+                        <span class="badge" style="background: ${avatarColor}20; color: ${avatarColor};">
+                            <i class="${category.icone || 'fas fa-tag'} mr-1"></i>
+                            ${category.nom || 'Non classé'}
+                        </span>
+                    </td>
+                    <td class="text-center">
+                        <span class="font-weight-bold ${status.class}" style="font-size: 1.1rem;">
+                            ${p.quantite || 0}
+                        </span>
+                        <small class="text-muted d-block">${p.unite_mesure || 'unités'}</small>
+                    </td>
+                    <td>
+                        <div class="stock-bar">
+                            <div class="stock-bar-fill ${status.barClass}" style="width: ${stockPercent}%;"></div>
+                        </div>
+                        <span class="stock-badge ${status.badge} mt-1 d-inline-block">${status.label}</span>
+                    </td>
+                    <td class="text-right">
+                        <strong>${formatMoney(parseFloat(p.prixU || 0))}</strong>
+                    </td>
+                    <td class="text-right">
+                        <strong>${formatMoney(p.quantite * parseFloat(p.prixU || 0))}</strong>
+                    </td>
+                    <td class="text-center">
+                        <button class="action-btn adjust" title="Ajuster" onclick="openAdjustForProduct(${p.id})">
+                            <i class="fas fa-sliders-h"></i>
+                        </button>
+                        <button class="action-btn history" title="Historique" onclick="showHistory(${p.id})">
+                            <i class="fas fa-history"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function getStockStatus(product) {
+        const qty = product.quantite || 0;
+        const alertThreshold = product.seuil_alerte || 10;
+        const criticalThreshold = product.seuil_critique || 5;
+
+        if (qty <= 0) {
+            return { label: 'Rupture', badge: 'rupture', class: 'text-secondary', barClass: 'critical' };
+        } else if (qty <= criticalThreshold) {
+            return { label: 'Critique', badge: 'critical', class: 'text-danger', barClass: 'critical' };
+        } else if (qty <= alertThreshold) {
+            return { label: 'Alerte', badge: 'alert', class: 'text-warning', barClass: 'alert' };
+        }
+        return { label: 'OK', badge: 'ok', class: 'text-success', barClass: 'ok' };
+    }
+
+    function formatMoney(amount) {
+        return new Intl.NumberFormat('fr-DZ', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(amount) + ' DA';
+    }
+
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => func.apply(this, args), wait);
+        };
+    }
+
+    // Fonctions globales pour les boutons
+    window.openAjustementModal = function() {
+        $('#adjustStockModal').modal('show');
+    };
+
+    window.openAdjustForProduct = function(productId) {
+        const product = allProducts.find(p => p.id === productId);
+        if (product) {
+            const label = (product.reference || '') + ' - ' + (product.designation || 'Produit #' + product.id);
+            selectAdjustOption('customSelectAdjustProduct', product.id, label, 'adjustProductSelect', product.quantite);
+            document.getElementById('currentStock').value = product.quantite || 0;
+            document.getElementById('newQuantity').value = product.quantite || 0;
+            $('#adjustStockModal').modal('show');
+        }
+    };
+
+    window.showHistory = function(productId) {
+        const content = document.getElementById('historyContent');
+        content.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary"></div></div>';
+        $('#historyModal').modal('show');
+
+        fetch(`/API/stock-moves/?produit=${productId}&ordering=-date`)
+            .then(r => r.json())
+            .then(data => {
+                const moves = data.results || data;
+                if (moves.length === 0) {
+                    content.innerHTML = '<div class="text-center py-4 text-muted"><i class="fas fa-history fa-3x mb-3"></i><p>Aucun mouvement enregistré</p></div>';
+                    return;
+                }
+
+                content.innerHTML = `
+                    <table class="table table-sm" data-no-datatable="true">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Type</th>
+                                <th class="text-center">Quantité</th>
+                                <th>Note</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${moves.slice(0, 20).map(m => `
+                                <tr>
+                                    <td>${new Date(m.date).toLocaleString('fr-FR')}</td>
+                                    <td><span class="badge badge-${m.delta > 0 ? 'success' : 'danger'}">${m.source}</span></td>
+                                    <td class="text-center font-weight-bold ${m.delta > 0 ? 'text-success' : 'text-danger'}">
+                                        ${m.delta > 0 ? '+' : ''}${m.delta}
+                                    </td>
+                                    <td>${m.note || '-'}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+            })
+            .catch(err => {
+                content.innerHTML = '<div class="text-center py-4 text-danger"><i class="fas fa-exclamation-circle fa-3x mb-3"></i><p>Erreur de chargement</p></div>';
+            });
+    };
+
+    window.submitAdjustment = function() {
+        const productId = document.getElementById('adjustProductSelect').value;
+        const warehouseId = document.getElementById('adjustWarehouseSelect').value;
+        const newQty = parseInt(document.getElementById('newQuantity').value);
+        const reason = document.getElementById('adjustReason').value;
+        const note = document.getElementById('adjustNote').value;
+
+        if (!productId || !warehouseId) {
+            alert('Veuillez sélectionner un produit et un entrepôt');
+            return;
+        }
+
+        const product = allProducts.find(p => p.id == productId);
+        const delta = newQty - (product?.quantite || 0);
+
+        // Créer le mouvement de stock
+        fetch('/API/stock-moves/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                produit: productId,
+                warehouse: warehouseId,
+                delta: delta,
+                source: reason,
+                note: note || `Ajustement: ${product?.quantite || 0} -> ${newQty}`
+            })
+        })
+        .then(r => {
+            if (!r.ok) throw new Error('Erreur serveur');
+            return r.json();
+        })
+        .then(() => {
+            $('#adjustStockModal').modal('hide');
+            // Recharger les données
+            loadData();
+            // Notification
+            if (window.toastr) {
+                toastr.success('Stock ajusté avec succès');
+            } else {
+                alert('Stock ajusté avec succès');
+            }
+        })
+        .catch(err => {
+            console.error('Erreur:', err);
+            alert('Erreur lors de l\'ajustement du stock');
+        });
+    };
+
+    window.exportStock = function() {
+        // Export CSV simple
+        let csv = 'Reference,Designation,Categorie,Quantite,Prix,Valeur\n';
+        allProducts.forEach(p => {
+            const cat = allCategories.find(c => c.id === p.categorie)?.nom || '';
+            const valeur = p.quantite * parseFloat(p.prixU || 0);
+            csv += `"${p.reference}","${p.designation}","${cat}",${p.quantite},${p.prixU},${valeur}\n`;
+        });
+
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `stock_${new Date().toISOString().slice(0,10)}.csv`;
+        link.click();
+    };
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    })();
+</script>

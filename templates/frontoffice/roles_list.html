@@ -1,0 +1,443 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestion des Rôles - UltraThink</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+  <link rel="stylesheet" href="{% static 'style/modern-pages.css' %}">
+  <style>
+    body {
+      background: #f7fafc;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+
+    /* Sidebar (même style que users_list.html) */
+    .admin-sidebar {
+      position: fixed;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 260px;
+      background: #2d3748;
+      color: white;
+      padding: 20px 0;
+      overflow-y: auto;
+      z-index: 1000;
+      box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+    }
+
+    .admin-sidebar-header {
+      padding: 0 20px 20px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      margin-bottom: 20px;
+    }
+
+    .admin-sidebar-header h4 {
+      color: white;
+      font-weight: 600;
+      margin: 0;
+      font-size: 1.2rem;
+    }
+
+    .sidebar-menu {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .sidebar-menu-item {
+      margin: 0;
+    }
+
+    .sidebar-menu-link {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 20px;
+      color: #cbd5e0;
+      text-decoration: none;
+      transition: all 0.2s;
+      border-left: 3px solid transparent;
+    }
+
+    .sidebar-menu-link:hover {
+      background: rgba(255,255,255,0.05);
+      color: white;
+      text-decoration: none;
+    }
+
+    .sidebar-menu-link.active {
+      background: rgba(255,255,255,0.1);
+      color: white;
+      border-left-color: #4299e1;
+      font-weight: 600;
+    }
+
+    .sidebar-menu-link i {
+      width: 20px;
+      text-align: center;
+    }
+
+    .admin-content {
+      margin-left: 260px;
+      padding: 30px;
+      min-height: 100vh;
+    }
+
+    .page-header {
+      background: white;
+      border-radius: 10px;
+      padding: 25px 30px;
+      margin-bottom: 30px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      border: 1px solid #e2e8f0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .page-title {
+      font-size: 1.8rem;
+      font-weight: 600;
+      color: #2d3748;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      border-radius: 10px;
+      padding: 20px;
+      color: white;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .stat-card h3 {
+      font-size: 2.5rem;
+      font-weight: 700;
+      margin: 10px 0;
+    }
+
+    .modern-section {
+      background: white;
+      border-radius: 10px;
+      padding: 25px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      border: 1px solid #e2e8f0;
+    }
+
+    .permission-badge {
+      display: inline-block;
+      padding: 4px 8px;
+      margin: 2px;
+      background: #f7fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      color: #4a5568;
+    }
+
+    .role-card {
+      background: white;
+      border: 2px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 15px;
+      transition: all 0.2s;
+    }
+
+    .role-card:hover {
+      border-color: #4299e1;
+      box-shadow: 0 4px 12px rgba(66, 153, 225, 0.15);
+    }
+
+    .role-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    .role-card-title {
+      font-size: 1.3rem;
+      font-weight: 600;
+      color: #2d3748;
+      margin: 0;
+    }
+
+    .role-card-stats {
+      display: flex;
+      gap: 15px;
+    }
+
+    .role-stat {
+      text-align: center;
+    }
+
+    .role-stat-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #4299e1;
+    }
+
+    .role-stat-label {
+      font-size: 0.75rem;
+      color: #718096;
+      text-transform: uppercase;
+    }
+
+    /* Boutons modernes */
+    .modern-btn {
+      border-radius: 8px;
+      padding: 12px 30px;
+      font-weight: 600;
+      font-size: 1rem;
+      transition: all 0.3s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      border: none;
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    .modern-btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white !important;
+      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    }
+
+    .modern-btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+      color: white !important;
+      text-decoration: none;
+    }
+
+    .modern-btn-secondary {
+      background: #e2e8f0;
+      color: #2d3748 !important;
+      padding: 8px 16px;
+      font-size: 0.9rem;
+    }
+
+    .modern-btn-secondary:hover {
+      background: #cbd5e0;
+      color: #2d3748 !important;
+      text-decoration: none;
+    }
+
+    .modern-btn-danger {
+      background: linear-gradient(135deg, #f56565 0%, #c53030 100%);
+      color: white !important;
+      padding: 8px 16px;
+      font-size: 0.9rem;
+    }
+
+    .modern-btn-danger:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(245, 101, 101, 0.4);
+      color: white !important;
+      text-decoration: none;
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 8px;
+    }
+
+    .d-flex { display: flex; }
+    .align-items-center { align-items: center; }
+    .gap-3 { gap: 15px; }
+  </style>
+</head>
+<body>
+  <!-- Sidebar -->
+  <div class="admin-sidebar">
+    <div class="admin-sidebar-header">
+      <h4><i class="fa fa-shield-alt"></i> Administration</h4>
+      <small>Gestion des accès</small>
+    </div>
+    <ul class="sidebar-menu">
+      <li class="sidebar-menu-item">
+        <a href="/users-admin/" class="sidebar-menu-link">
+          <i class="fa fa-users"></i>
+          <span>Utilisateurs</span>
+        </a>
+      </li>
+      <li class="sidebar-menu-item">
+        <a href="/roles-admin/" class="sidebar-menu-link active">
+          <i class="fa fa-user-tag"></i>
+          <span>Rôles</span>
+        </a>
+      </li>
+      <li class="sidebar-menu-item">
+        <a href="/audit-logs/" class="sidebar-menu-link">
+          <i class="fa fa-history"></i>
+          <span>Journal d'audit</span>
+        </a>
+      </li>
+      <li class="sidebar-menu-item" style="margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px;">
+        <a href="/admindash/" class="sidebar-menu-link">
+          <i class="fa fa-arrow-left"></i>
+          <span>Retour au dashboard</span>
+        </a>
+      </li>
+    </ul>
+  </div>
+
+  <!-- Main Content -->
+  <div class="admin-content">
+    {% if messages %}
+      {% for message in messages %}
+        <div class="alert alert-{{ message.tags }}">
+          <i class="fa fa-{% if message.tags == 'success' %}check-circle{% else %}exclamation-circle{% endif %}"></i>
+          {{ message }}
+        </div>
+      {% endfor %}
+    {% endif %}
+
+    <div class="page-header">
+      <h1 class="page-title">
+        <i class="fa fa-user-tag"></i>
+        Gestion des Rôles & Permissions
+      </h1>
+      <a href="/roles-admin/new/" class="modern-btn modern-btn-primary">
+        <i class="fa fa-plus"></i> Nouveau Groupe
+      </a>
+    </div>
+
+    <!-- Stats -->
+    <div class="row mb-4">
+      <div class="col-md-6">
+        <div class="stat-card">
+          <i class="fa fa-user-tag fa-2x"></i>
+          <h3>{{ roles|length }}</h3>
+          <p>Rôles Définis</p>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="stat-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+          <i class="fa fa-key fa-2x"></i>
+          <h3 id="total_permissions">-</h3>
+          <p>Permissions Total</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Liste des rôles -->
+    <div class="modern-section">
+      <div class="mb-4">
+        <h5 style="color: #2d3748; font-weight: 600; margin-bottom: 20px;">
+          <i class="fa fa-shield-alt"></i> Rôles et Permissions
+        </h5>
+        <p class="text-muted">
+          Gérez les rôles et leurs permissions associées. Chaque utilisateur peut avoir plusieurs rôles.
+        </p>
+      </div>
+
+      {% for r in roles %}
+      <div class="role-card">
+        <div class="role-card-header">
+          <h5 class="role-card-title">
+            <i class="fa fa-user-tag"></i> {{ r.name }}
+            {% if r.name == 'livreurs' %}
+              <span style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; margin-left: 10px;">
+                Mobile App
+              </span>
+            {% endif %}
+          </h5>
+          <div class="d-flex align-items-center gap-3">
+            <div class="role-card-stats">
+              <div class="role-stat">
+                <div class="role-stat-value">{{ r.permissions.all|length }}</div>
+                <div class="role-stat-label">Permissions</div>
+              </div>
+              <div class="role-stat">
+                <div class="role-stat-value">{{ r.user_set.count }}</div>
+                <div class="role-stat-label">Utilisateurs</div>
+              </div>
+            </div>
+            <div class="action-buttons">
+              <a href="/roles-admin/{{ r.id }}/permissions/" class="modern-btn modern-btn-primary" style="padding: 8px 16px; font-size: 0.9rem;">
+                <i class="fa fa-key"></i> Permissions
+              </a>
+              <a href="/roles-admin/{{ r.id }}/edit/" class="modern-btn modern-btn-secondary">
+                <i class="fa fa-edit"></i> Modifier
+              </a>
+              <form action="/roles-admin/{{ r.id }}/delete/" method="post" style="display: inline; margin: 0;" onsubmit="return confirm('Êtes-vous sûr de vouloir supprimer le groupe {{ r.name }} ?');">
+                {% csrf_token %}
+                <button type="submit" class="modern-btn modern-btn-danger">
+                  <i class="fa fa-trash"></i> Supprimer
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <div class="role-card-body">
+          {% if r.permissions.all %}
+            <h6 class="mb-2" style="color: #4a5568; font-size: 0.9rem; font-weight: 600;">
+              <i class="fa fa-key"></i> Permissions accordées :
+            </h6>
+            <div class="d-flex flex-wrap">
+              {% for p in r.permissions.all %}
+                <span class="permission-badge">
+                  <i class="fa fa-check-circle" style="color: #48bb78;"></i> {{ p.name }}
+                </span>
+              {% endfor %}
+            </div>
+          {% else %}
+            <p class="text-muted mb-0">
+              <i class="fa fa-info-circle"></i> Aucune permission assignée à ce rôle
+            </p>
+          {% endif %}
+        </div>
+      </div>
+      {% empty %}
+      <div class="alert alert-warning">
+        <i class="fa fa-exclamation-triangle"></i> Aucun rôle défini
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- Information utile -->
+    <div class="modern-section mt-4">
+      <div class="modern-alert modern-alert-info">
+        <i class="fa fa-lightbulb"></i>
+        <div>
+          <strong>Comment gérer les rôles et permissions ?</strong>
+          <ul class="mb-0 mt-2">
+            <li>Créez des rôles via l'administration Django ou l'API REST</li>
+            <li>Assignez des permissions aux rôles via l'admin Django</li>
+            <li>Associez les rôles aux utilisateurs dans la section <a href="/users-admin/" class="font-weight-bold">Utilisateurs</a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    $(document).ready(function(){
+      // Calculer le nombre total de permissions uniques
+      let totalPerms = 0;
+      {% for r in roles %}
+        totalPerms += {{ r.permissions.all|length }};
+      {% endfor %}
+      $('#total_permissions').text(totalPerms);
+    });
+  </script>
+</body>
+</html>

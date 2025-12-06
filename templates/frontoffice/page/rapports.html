@@ -1,0 +1,559 @@
+{% load i18n %}
+<style>
+.report-card {
+    border: none;
+    border-radius: 15px;
+    overflow: hidden;
+    transition: all 0.3s ease;
+    background: white;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.report-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+}
+
+.report-card-header {
+    padding: 25px 20px;
+    border: none;
+    color: white;
+    position: relative;
+    min-height: 150px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.report-card-header::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 100px;
+    height: 100px;
+    opacity: 0.1;
+    border-radius: 50%;
+    background: white;
+    transform: translate(30%, -30%);
+}
+
+.report-card-header.primary-gradient {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.report-card-header.success-gradient {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.report-card-header.info-gradient {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+}
+
+.report-card-icon {
+    font-size: 2.5rem;
+    margin-bottom: 10px;
+    opacity: 0.9;
+}
+
+.report-card-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 0;
+}
+
+.report-card-body {
+    padding: 25px 20px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.report-description {
+    color: #6c757d;
+    font-size: 0.9rem;
+    margin-bottom: 20px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+}
+
+.report-card .d-grid {
+    margin-top: auto;
+}
+
+.export-btn {
+    border-radius: 10px;
+    font-weight: 500;
+    padding: 12px;
+    border: none;
+    transition: all 0.2s ease;
+    margin-bottom: 10px;
+}
+
+.export-btn:hover {
+    transform: scale(1.02);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.export-btn-excel {
+    background: linear-gradient(135deg, #1e7e34 0%, #28a745 100%);
+    color: white;
+}
+
+.export-btn-excel:hover {
+    background: linear-gradient(135deg, #155724 0%, #1e7e34 100%);
+    color: white;
+}
+
+.export-btn-pdf {
+    background: linear-gradient(135deg, #bd2130 0%, #dc3545 100%);
+    color: white;
+}
+
+.export-btn-pdf:hover {
+    background: linear-gradient(135deg, #a71d2a 0%, #bd2130 100%);
+    color: white;
+}
+
+.page-title {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #2d3748;
+    margin-bottom: 30px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.page-title i {
+    color: #667eea;
+}
+
+/* Style pour les inputs de date */
+input[type="date"] {
+    border: 2px solid #e2e8f0;
+    transition: all 0.2s ease;
+}
+
+input[type="date"]:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    outline: none;
+}
+
+/* Animation de pulse pour les boutons */
+@keyframes pulse-shadow {
+    0%, 100% {
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    }
+    50% {
+        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.25);
+    }
+}
+
+.export-btn:active {
+    transform: scale(0.98);
+}
+
+/* Amélioration du tableau d'historique */
+.table-hover tbody tr:hover {
+    background-color: #f7fafc;
+    transition: background-color 0.2s ease;
+}
+
+/* Style pour la section historique vide */
+.empty-history {
+    text-align: center;
+    padding: 40px 20px;
+    color: #a0aec0;
+}
+
+.empty-history i {
+    font-size: 3rem;
+    margin-bottom: 15px;
+    opacity: 0.5;
+}
+
+/* Forcer toutes les colonnes à avoir la même hauteur */
+.row-equal-height {
+    display: flex;
+    flex-wrap: wrap;
+}
+
+.row-equal-height > [class*='col-'] {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Section pour la sélection des dates - hauteur fixe */
+.date-selection-section {
+    min-height: 100px;
+    margin-bottom: 20px;
+}
+</style>
+
+<div class="container mt-4">
+    <h1 class="page-title">
+        <i class="fas fa-file-export"></i> Exports de Rapports
+    </h1>
+
+    <div class="row row-equal-height">
+        <!-- Rapport Valorisation du Stock -->
+        <div class="col-md-4 mb-4">
+            <div class="card report-card">
+                <div class="card-header report-card-header primary-gradient text-center">
+                    <div class="report-card-icon">
+                        <i class="fas fa-box"></i>
+                    </div>
+                    <h5 class="report-card-title">Valorisation du Stock</h5>
+                </div>
+                <div class="card-body report-card-body">
+                    <p class="report-description">
+                        Export de la valeur totale du stock avec calcul par produit.
+                    </p>
+
+                    <!-- Espace pour aligner avec la carte des ventes -->
+                    <div class="date-selection-section"></div>
+
+                    <div class="d-grid gap-2">
+                        <button class="btn export-btn export-btn-excel" onclick="exportReport('stock-valuation', 'excel')">
+                            <i class="fas fa-file-excel"></i> Export Excel
+                        </button>
+                        <button class="btn export-btn export-btn-pdf" onclick="exportReport('stock-valuation', 'pdf')">
+                            <i class="fas fa-file-pdf"></i> Export PDF
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Rapport des Ventes -->
+        <div class="col-md-4 mb-4">
+            <div class="card report-card">
+                <div class="card-header report-card-header success-gradient text-center">
+                    <div class="report-card-icon">
+                        <i class="fas fa-shopping-cart"></i>
+                    </div>
+                    <h5 class="report-card-title">Rapport des Ventes</h5>
+                </div>
+                <div class="card-body report-card-body">
+                    <p class="report-description">
+                        Export détaillé des ventes avec CA et statistiques.
+                    </p>
+
+                    <!-- Sélection de dates -->
+                    <div class="date-selection-section">
+                        <label class="form-label fw-bold" style="font-size: 0.85rem;">
+                            <i class="fas fa-calendar-alt"></i> Période:
+                        </label>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <input type="date" id="sales_start_date" class="form-control form-control-sm" style="border-radius: 8px;">
+                            </div>
+                            <div class="col-6">
+                                <input type="date" id="sales_end_date" class="form-control form-control-sm" style="border-radius: 8px;">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <button class="btn export-btn export-btn-excel" onclick="exportSalesReport('excel')">
+                            <i class="fas fa-file-excel"></i> Export Excel
+                        </button>
+                        <button class="btn export-btn export-btn-pdf" onclick="exportSalesReport('pdf')">
+                            <i class="fas fa-file-pdf"></i> Export PDF
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Rapport d'Inventaire -->
+        <div class="col-md-4 mb-4">
+            <div class="card report-card">
+                <div class="card-header report-card-header info-gradient text-center">
+                    <div class="report-card-icon">
+                        <i class="fas fa-clipboard-list"></i>
+                    </div>
+                    <h5 class="report-card-title">Inventaire Complet</h5>
+                </div>
+                <div class="card-body report-card-body">
+                    <p class="report-description">
+                        Export de tous les produits avec leurs caractéristiques.
+                    </p>
+
+                    <!-- Espace pour aligner avec la carte des ventes -->
+                    <div class="date-selection-section"></div>
+
+                    <div class="d-grid gap-2">
+                        <button class="btn export-btn export-btn-excel" onclick="exportReport('inventory', 'excel')">
+                            <i class="fas fa-file-excel"></i> Export Excel
+                        </button>
+                        <button class="btn export-btn export-btn-pdf" onclick="exportReport('inventory', 'pdf')">
+                            <i class="fas fa-file-pdf"></i> Export PDF
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Historique des exports -->
+    <div class="card report-card mt-5">
+        <div class="card-header" style="background: linear-gradient(135deg, #868CFF 0%, #4318FF 100%); color: white; padding: 20px;">
+            <h5 class="mb-0 d-flex align-items-center gap-2">
+                <i class="fas fa-history"></i> Historique des Exports
+            </h5>
+        </div>
+        <div class="card-body">
+            <div id="export-history" class="table-responsive">
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Chargement...</span>
+                    </div>
+                    <p class="text-muted mt-2">Chargement de l'historique...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Encapsuler dans une fonction pour éviter les conflits lors des rechargements
+(function() {
+'use strict';
+
+// Configuration - Nouvelles routes simplifiées
+const REPORTS_BASE = '/reports';
+
+// Fonction générique d'export
+window.exportReport = async function(reportType, format) {
+    const endpoints = {
+        'stock-valuation': `${REPORTS_BASE}/stock-valuation/`,
+        'inventory': `${REPORTS_BASE}/inventory/`
+    };
+
+    const url = `${endpoints[reportType]}?format=${format}`;
+
+    try {
+        showLoading();
+        const response = await fetch(url, {
+            credentials: 'include',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        });
+
+        if (response.ok) {
+            const blob = await response.blob();
+            downloadBlob(blob, response.headers, format);
+            showSuccess(`Rapport ${format.toUpperCase()} téléchargé avec succès!`);
+            loadExportHistory();
+        } else {
+            const error = await response.json();
+            showError('Erreur: ' + (error.error || 'Erreur inconnue'));
+        }
+    } catch (e) {
+        showError('Erreur réseau: ' + e.message);
+    } finally {
+        hideLoading();
+    }
+}
+
+// Export des ventes avec dates
+window.exportSalesReport = async function(format) {
+    const startDate = document.getElementById('sales_start_date').value;
+    const endDate = document.getElementById('sales_end_date').value;
+
+    const params = new URLSearchParams({format});
+    if (startDate) params.append('start_date', startDate);
+    if (endDate) params.append('end_date', endDate);
+
+    const url = `${REPORTS_BASE}/sales/?${params}`;
+
+    try {
+        showLoading();
+        const response = await fetch(url, {
+            credentials: 'include',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        });
+
+        if (response.ok) {
+            const blob = await response.blob();
+            downloadBlob(blob, response.headers, format);
+            showSuccess(`Rapport des ventes ${format.toUpperCase()} téléchargé!`);
+            loadExportHistory();
+        } else {
+            const error = await response.json();
+            showError('Erreur: ' + (error.error || 'Erreur inconnue'));
+        }
+    } catch (e) {
+        showError('Erreur réseau: ' + e.message);
+    } finally {
+        hideLoading();
+    }
+}
+
+// Télécharger le blob
+function downloadBlob(blob, headers, format) {
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+
+    // Extraire le nom de fichier du header Content-Disposition
+    const contentDisposition = headers.get('Content-Disposition');
+    let filename = `rapport.${format === 'pdf' ? 'pdf' : 'xlsx'}`;
+
+    if (contentDisposition) {
+        const matches = /filename="?([^"]+)"?/.exec(contentDisposition);
+        if (matches && matches[1]) {
+            filename = matches[1];
+        }
+    }
+
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+}
+
+// Notifications
+function showLoading() {
+    // Implémenter votre système de loading
+    console.log('Génération du rapport en cours...');
+}
+
+function hideLoading() {
+    console.log('Terminé');
+}
+
+function showSuccess(message) {
+    alert(message);
+}
+
+function showError(message) {
+    alert(message);
+}
+
+// Charger l'historique des exports
+async function loadExportHistory() {
+    try {
+        const response = await fetch('/API/audit-logs/?limit=100', {
+            credentials: 'include'
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            const allLogs = data.results || data;
+
+            // Filtrer UNIQUEMENT les exports de rapports
+            const logs = allLogs.filter(log =>
+                log.action && log.action.startsWith('report.export')
+            ).slice(0, 10); // Garder seulement les 10 premiers
+
+            if (logs.length === 0) {
+                document.getElementById('export-history').innerHTML = `
+                    <div class="empty-history">
+                        <i class="fas fa-inbox"></i>
+                        <h5 style="color: #718096; font-weight: 600;">Aucun export récent</h5>
+                        <p style="font-size: 0.9rem;">Vos exports de rapports apparaîtront ici</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const tableHtml = `
+                <table class="table table-hover align-middle" style="margin-bottom: 0;">
+                    <thead style="background: #f8f9fa;">
+                        <tr>
+                            <th style="padding: 15px; border: none; font-weight: 600; color: #4a5568;">
+                                <i class="fas fa-calendar-check" style="color: #667eea;"></i> Date
+                            </th>
+                            <th style="padding: 15px; border: none; font-weight: 600; color: #4a5568;">
+                                <i class="fas fa-user" style="color: #667eea;"></i> Utilisateur
+                            </th>
+                            <th style="padding: 15px; border: none; font-weight: 600; color: #4a5568;">
+                                <i class="fas fa-file-alt" style="color: #667eea;"></i> Rapport
+                            </th>
+                            <th style="padding: 15px; border: none; font-weight: 600; color: #4a5568;">
+                                <i class="fas fa-tag" style="color: #667eea;"></i> Format
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${logs.map(log => {
+                            const metadata = typeof log.metadata === 'string' ? JSON.parse(log.metadata) : log.metadata;
+                            const format = metadata?.format || 'N/A';
+                            const badgeClass = format === 'pdf' ? 'badge-danger' : 'badge-success';
+
+                            // Noms lisibles pour les rapports
+                            let reportName = log.action.replace('report.export_', '');
+                            if (reportName === 'stock_valuation') reportName = 'Valorisation Stock';
+                            else if (reportName === 'sales') reportName = 'Rapport Ventes';
+                            else if (reportName === 'inventory') reportName = 'Inventaire Complet';
+
+                            return `
+                                <tr style="border-bottom: 1px solid #e2e8f0;">
+                                    <td style="padding: 15px;">${new Date(log.created_at).toLocaleString('fr-FR')}</td>
+                                    <td style="padding: 15px;">
+                                        <span class="badge bg-secondary" style="font-weight: 500;">
+                                            <i class="fas fa-user-circle"></i> ${log.actor_username || 'N/A'}
+                                        </span>
+                                    </td>
+                                    <td style="padding: 15px; font-weight: 500;">${reportName}</td>
+                                    <td style="padding: 15px;">
+                                        <span class="badge ${badgeClass}" style="padding: 8px 15px; font-size: 0.85rem; border-radius: 8px;">
+                                            <i class="fas fa-file-${format === 'pdf' ? 'pdf' : 'excel'}"></i> ${format.toUpperCase()}
+                                        </span>
+                                    </td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
+
+            document.getElementById('export-history').innerHTML = tableHtml;
+        } else {
+            document.getElementById('export-history').innerHTML = `
+                <div class="empty-history">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <h5 style="color: #718096; font-weight: 600;">Impossible de charger l'historique</h5>
+                </div>
+            `;
+        }
+    } catch (e) {
+        console.error('Erreur chargement historique:', e);
+        document.getElementById('export-history').innerHTML = `
+            <div class="empty-history">
+                <i class="fas fa-wifi-slash"></i>
+                <h5 style="color: #718096; font-weight: 600;">Erreur de connexion</h5>
+                <p style="font-size: 0.9rem;">Impossible de charger l'historique</p>
+            </div>
+        `;
+    }
+}
+
+// Initialiser les dates et charger l'historique au chargement de la page
+const today = new Date();
+const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, today.getDate());
+
+const salesEndDate = document.getElementById('sales_end_date');
+const salesStartDate = document.getElementById('sales_start_date');
+
+if (salesEndDate) salesEndDate.valueAsDate = today;
+if (salesStartDate) salesStartDate.valueAsDate = lastMonth;
+
+// Charger l'historique
+loadExportHistory();
+
+})(); // Fin de l'IIFE
+</script>

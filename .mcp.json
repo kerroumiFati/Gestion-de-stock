@@ -1,0 +1,25 @@
+{
+  "mcpServers": {
+    "gestion-stock": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["C:\\Users\\KB\\Documents\\autre\\GestionStock-django-master\\GestionStock-django-master\\mcp-server\\server.py"],
+      "env": {
+        "DJANGO_API_URL": "http://192.168.0.150:8000",
+        "DJANGO_USERNAME": "admin",
+        "DJANGO_PASSWORD": "admin"
+      }
+    },
+    "gestion-stock-ui": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["C:\\Users\\KB\\Documents\\autre\\GestionStock-django-master\\GestionStock-django-master\\mcp-server\\ui_test_server.py"],
+      "env": {
+        "APP_URL": "http://192.168.0.150:8000",
+        "APP_USERNAME": "admin",
+        "APP_PASSWORD": "admin",
+        "HEADLESS": "false"
+      }
+    }
+  }
+}

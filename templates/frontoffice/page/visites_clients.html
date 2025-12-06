@@ -1,0 +1,434 @@
+{% load static %}
+{% load i18n %}
+<script>
+// Load script only once
+console.log('[VISITES PAGE] Template visites_clients.html loaded');
+if (!window.__visites_clients_script_loaded__) {
+    console.log('[VISITES PAGE] Loading visites_clients.js for the first time');
+    window.__visites_clients_script_loaded__ = true;
+    var script = document.createElement('script');
+    script.src = "{% static 'script/visites_clients.js' %}";
+    script.type = 'text/javascript';
+    script.onload = function() {
+        console.log('[VISITES PAGE] visites_clients.js loaded');
+        setTimeout(function() {
+            document.dispatchEvent(new CustomEvent('fragment:loaded', {
+                detail: { name: 'visites_clients', container: document.getElementById('main-content') }
+            }));
+        }, 100);
+    };
+    document.head.appendChild(script);
+} else {
+    console.log('[VISITES PAGE] visites_clients.js already loaded');
+    setTimeout(function() {
+        document.dispatchEvent(new CustomEvent('fragment:loaded', {
+            detail: { name: 'visites_clients', container: document.getElementById('main-content') }
+        }));
+    }, 50);
+}
+</script>
+
+<style>
+.page-container { padding: 20px 0; }
+
+.page-title {
+    font-size: 1.8rem;
+    font-weight: 600;
+    color: #2d3748;
+    margin-bottom: 25px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.page-title i { color: #10b981; font-size: 2rem; }
+
+.filter-bar {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 25px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    align-items: center;
+}
+
+.filter-bar label {
+    font-weight: 500;
+    color: #4a5568;
+}
+
+.filter-bar select,
+.filter-bar input {
+    padding: 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    min-width: 150px;
+}
+
+.filter-bar button {
+    padding: 10px 20px;
+    background: #10b981;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.filter-bar button:hover {
+    background: #059669;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-bottom: 25px;
+}
+
+.stat-card {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.stat-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    color: white;
+}
+
+.stat-icon.green { background: linear-gradient(135deg, #10b981, #059669); }
+.stat-icon.blue { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+.stat-icon.orange { background: linear-gradient(135deg, #f59e0b, #d97706); }
+.stat-icon.red { background: linear-gradient(135deg, #ef4444, #dc2626); }
+.stat-icon.purple { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
+
+.stat-info .stat-value {
+    font-size: 1.8rem;
+    font-weight: bold;
+    color: #1f2937;
+}
+
+.stat-info .stat-label {
+    color: #6b7280;
+    font-size: 0.85rem;
+}
+
+.visites-table-container {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.table-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.table-header h3 {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #1f2937;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.table-header h3 i { color: #10b981; }
+
+.visites-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.visites-table thead th {
+    background: #f7fafc;
+    padding: 12px;
+    text-align: left;
+    font-weight: 600;
+    color: #4a5568;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 2px solid #e2e8f0;
+}
+
+.visites-table tbody td {
+    padding: 12px;
+    border-bottom: 1px solid #e2e8f0;
+    color: #2d3748;
+}
+
+.visites-table tbody tr:hover {
+    background: #f7fafc;
+}
+
+.badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.badge-vente { background: #d1fae5; color: #065f46; }
+.badge-commande { background: #dbeafe; color: #1e40af; }
+.badge-absent { background: #fef3c7; color: #92400e; }
+.badge-ferme { background: #fee2e2; color: #991b1b; }
+.badge-refuse { background: #fce7f3; color: #9d174d; }
+.badge-autre { background: #e2e8f0; color: #4a5568; }
+
+.client-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.client-name {
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.client-address {
+    font-size: 0.85rem;
+    color: #6b7280;
+}
+
+.livreur-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.livreur-avatar {
+    width: 35px;
+    height: 35px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 0.9rem;
+}
+
+.loading-spinner {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 40px;
+    color: #6b7280;
+}
+
+.loading-spinner i {
+    font-size: 2rem;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.empty-state {
+    text-align: center;
+    padding: 40px;
+    color: #9ca3af;
+}
+
+.empty-state i {
+    font-size: 3rem;
+    margin-bottom: 15px;
+}
+
+.pagination-container {
+    display: flex;
+    justify-content: center;
+    margin-top: 20px;
+    gap: 5px;
+}
+
+.pagination-btn {
+    padding: 8px 12px;
+    border: 1px solid #e2e8f0;
+    background: white;
+    border-radius: 6px;
+    cursor: pointer;
+    color: #4a5568;
+}
+
+.pagination-btn:hover {
+    background: #f7fafc;
+}
+
+.pagination-btn.active {
+    background: #10b981;
+    color: white;
+    border-color: #10b981;
+}
+
+.gps-link {
+    color: #3b82f6;
+    text-decoration: none;
+    font-size: 0.85rem;
+}
+
+.gps-link:hover {
+    text-decoration: underline;
+}
+</style>
+
+<div class="page-container">
+    <div class="page-title">
+        <i class="fas fa-map-marked-alt"></i>
+        <span>{% trans "Visites Clients" %}</span>
+    </div>
+
+    <!-- Filtres -->
+    <div class="filter-bar">
+        <label>{% trans "Date:" %}</label>
+        <input type="date" id="date-filter" value="">
+
+        <label>{% trans "Livreur:" %}</label>
+        <select id="livreur-filter">
+            <option value="">{% trans "Tous les livreurs" %}</option>
+        </select>
+
+        <label>{% trans "Resultat:" %}</label>
+        <select id="resultat-filter">
+            <option value="">{% trans "Tous" %}</option>
+            <option value="vente">{% trans "Vente" %}</option>
+            <option value="commande">{% trans "Commande" %}</option>
+            <option value="absent">{% trans "Absent" %}</option>
+            <option value="ferme">{% trans "Ferme" %}</option>
+            <option value="refuse">{% trans "Refuse" %}</option>
+            <option value="autre">{% trans "Autre" %}</option>
+        </select>
+
+        <button onclick="loadVisites()">
+            <i class="fas fa-search"></i> {% trans "Rechercher" %}
+        </button>
+
+        <button onclick="exportVisites()" style="background: #3b82f6;">
+            <i class="fas fa-download"></i> {% trans "Exporter" %}
+        </button>
+    </div>
+
+    <!-- Statistiques -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon green">
+                <i class="fas fa-users"></i>
+            </div>
+            <div class="stat-info">
+                <div class="stat-value" id="total-visites">0</div>
+                <div class="stat-label">{% trans "Total Visites" %}</div>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon blue">
+                <i class="fas fa-shopping-cart"></i>
+            </div>
+            <div class="stat-info">
+                <div class="stat-value" id="total-ventes">0</div>
+                <div class="stat-label">{% trans "Ventes" %}</div>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon purple">
+                <i class="fas fa-clipboard-list"></i>
+            </div>
+            <div class="stat-info">
+                <div class="stat-value" id="total-commandes">0</div>
+                <div class="stat-label">{% trans "Commandes" %}</div>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon orange">
+                <i class="fas fa-user-slash"></i>
+            </div>
+            <div class="stat-info">
+                <div class="stat-value" id="total-absents">0</div>
+                <div class="stat-label">{% trans "Absents" %}</div>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon red">
+                <i class="fas fa-ban"></i>
+            </div>
+            <div class="stat-info">
+                <div class="stat-value" id="total-refuses">0</div>
+                <div class="stat-label">{% trans "Refuses" %}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Table des visites -->
+    <div class="visites-table-container">
+        <div class="table-header">
+            <h3>
+                <i class="fas fa-list"></i>
+                {% trans "Liste des Visites" %}
+            </h3>
+            <span id="visites-count"></span>
+        </div>
+
+        <div id="visites-loading" class="loading-spinner">
+            <i class="fas fa-spinner"></i>
+        </div>
+
+        <div id="visites-empty" class="empty-state" style="display: none;">
+            <i class="fas fa-inbox"></i>
+            <p>{% trans "Aucune visite trouvee pour cette date" %}</p>
+        </div>
+
+        <table class="visites-table" id="visites-table" style="display: none;">
+            <thead>
+                <tr>
+                    <th>{% trans "Heure" %}</th>
+                    <th>{% trans "Client" %}</th>
+                    <th>{% trans "Livreur" %}</th>
+                    <th>{% trans "Resultat" %}</th>
+                    <th>{% trans "GPS" %}</th>
+                    <th>{% trans "Notes" %}</th>
+                </tr>
+            </thead>
+            <tbody id="visites-tbody">
+            </tbody>
+        </table>
+
+        <div class="pagination-container" id="pagination">
+        </div>
+    </div>
+</div>

@@ -1,0 +1,19 @@
+Choisir un client...
+optionnel
+Ajouter des produits
+Choisir un produit...
+Ajouter à la vente
+Total HT
+Enregistrer (Brouillon)
+Finaliser la vente
+Détails de la vente
+Chargement des détails...
+Statistiques des Ventes
+CA
+aujourd'hui
+cette semaine
+ce mois
+total
+Prix unitaire
+Total ligne
+Liste des Ventes

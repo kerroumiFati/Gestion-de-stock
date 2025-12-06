@@ -1,0 +1,177 @@
+{% load static %}
+
+<style>
+.nav-test {
+    padding: 20px;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+.test-box {
+    background: #f8f9fa;
+    border: 2px solid #dee2e6;
+    border-radius: 8px;
+    padding: 20px;
+    margin: 15px 0;
+}
+.test-button {
+    display: inline-block;
+    padding: 10px 20px;
+    margin: 5px;
+    background: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    text-decoration: none;
+}
+.test-button:hover {
+    background: #0056b3;
+    color: white;
+}
+.log-entry {
+    font-family: monospace;
+    font-size: 12px;
+    padding: 5px;
+    margin: 2px 0;
+    background: white;
+    border-left: 3px solid #007bff;
+    padding-left: 10px;
+}
+.log-error {
+    border-left-color: #dc3545;
+    color: #dc3545;
+}
+.log-success {
+    border-left-color: #28a745;
+    color: #28a745;
+}
+</style>
+
+<div class="nav-test">
+    <h2>🧪 Test de Navigation</h2>
+
+    <div class="test-box">
+        <h4>1. Informations Système</h4>
+        <div id="system-info"></div>
+    </div>
+
+    <div class="test-box">
+        <h4>2. Test des Liens de Navigation</h4>
+        <p>Cliquez sur ces boutons pour tester le chargement des pages:</p>
+        <div>
+            <button class="test-button" onclick="testNavigate('vente')">Vente</button>
+            <button class="test-button" onclick="testNavigate('achat')">Achat</button>
+            <button class="test-button" onclick="testNavigate('produit')">Produit</button>
+            <button class="test-button" onclick="testNavigate('client')">Client</button>
+            <button class="test-button" onclick="testNavigate('livreurs')">Livreurs</button>
+            <button class="test-button" onclick="testNavigate('statistiques')">Statistiques</button>
+        </div>
+    </div>
+
+    <div class="test-box">
+        <h4>3. Logs de Navigation</h4>
+        <div id="nav-logs" style="max-height: 400px; overflow-y: auto;"></div>
+    </div>
+
+    <div class="test-box">
+        <h4>4. Contenu Chargé</h4>
+        <p>Premier titre (h1-h4) trouvé dans le contenu:</p>
+        <div id="loaded-title" style="font-size: 18px; font-weight: bold; color: #007bff;"></div>
+        <p style="margin-top: 15px;">Premier paragraphe trouvé:</p>
+        <div id="loaded-preview" style="background: white; padding: 10px; border-radius: 4px;"></div>
+    </div>
+</div>
+
+<script>
+const logs = [];
+
+function addLog(message, type = 'info') {
+    const timestamp = new Date().toLocaleTimeString();
+    logs.push({ timestamp, message, type });
+    updateLogs();
+}
+
+function updateLogs() {
+    const container = document.getElementById('nav-logs');
+    container.innerHTML = logs.map(log => {
+        const className = log.type === 'error' ? 'log-error' :
+                         log.type === 'success' ? 'log-success' : 'log-entry';
+        return `<div class="${className}">[${log.timestamp}] ${log.message}</div>`;
+    }).reverse().join('');
+}
+
+function updateSystemInfo() {
+    const info = document.getElementById('system-info');
+    info.innerHTML = `
+        <p><strong>URL actuelle:</strong> ${window.location.href}</p>
+        <p><strong>Pathname:</strong> ${window.location.pathname}</p>
+        <p><strong>Hash:</strong> ${window.location.hash || '(vide)'}</p>
+        <p><strong>show() disponible:</strong> ${typeof window.show === 'function' ? '✅ Oui' : '❌ Non'}</p>
+        <p><strong>main-content:</strong> ${document.getElementById('main-content') ? '✅ Trouvé' : '❌ Non trouvé'}</p>
+    `;
+}
+
+function testNavigate(pageName) {
+    addLog(`Début navigation vers: ${pageName}`);
+
+    if (typeof window.show !== 'function') {
+        addLog('ERREUR: fonction show() non disponible!', 'error');
+        return;
+    }
+
+    // Observer le contenu chargé
+    const container = document.getElementById('main-content');
+    if (!container) {
+        addLog('ERREUR: #main-content non trouvé', 'error');
+        return;
+    }
+
+    // Observer les changements
+    const observer = new MutationObserver((mutations) => {
+        // Attendre un peu pour que le contenu soit complètement chargé
+        setTimeout(() => {
+            const content = container.innerHTML;
+
+            // Chercher le titre
+            const titleMatch = content.match(/<h[1-4][^>]*>(.*?)<\/h[1-4]>/i);
+            if (titleMatch) {
+                const title = titleMatch[1].replace(/<[^>]+>/g, '').trim();
+                document.getElementById('loaded-title').textContent = title;
+                addLog(`Titre chargé: "${title}"`, 'success');
+            }
+
+            // Chercher le premier paragraphe
+            const pMatch = content.match(/<p[^>]*>(.*?)<\/p>/i);
+            if (pMatch) {
+                const text = pMatch[1].replace(/<[^>]+>/g, '').trim();
+                document.getElementById('loaded-preview').textContent = text.substring(0, 200) + '...';
+            }
+
+            // Vérifier si c'est la bonne page
+            if (content.toLowerCase().includes(pageName.toLowerCase())) {
+                addLog(`✓ La page contient bien "${pageName}"`, 'success');
+            } else {
+                addLog(`⚠ ATTENTION: La page ne contient PAS "${pageName}"`, 'error');
+            }
+
+            observer.disconnect();
+        }, 500);
+    });
+
+    observer.observe(container, { childList: true, subtree: true });
+
+    // Appeler show()
+    addLog(`Appel de show('${pageName}')`);
+    try {
+        window.show(pageName);
+        addLog(`show() exécuté avec succès`, 'success');
+    } catch (e) {
+        addLog(`ERREUR lors de show(): ${e.message}`, 'error');
+    }
+}
+
+// Initialiser au chargement
+setTimeout(() => {
+    updateSystemInfo();
+    addLog('Page de test chargée');
+}, 100);
+</script>

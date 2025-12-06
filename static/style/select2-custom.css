@@ -1,0 +1,221 @@
+/**
+ * Styles personnalisés pour Select2
+ */
+
+/* Ajuster la hauteur du select2 pour correspondre aux autres inputs */
+.select2-container--bootstrap4 .select2-selection {
+    min-height: 38px;
+    font-size: 1rem;
+    border: 1px solid #ced4da !important;
+    border-radius: 0.25rem !important;
+    background-color: #fff !important;
+    display: flex !important;
+    align-items: center !important;
+}
+
+.select2-container--bootstrap4 .select2-selection--single {
+    border: 1px solid #ced4da !important;
+    background-color: #fff !important;
+    display: flex !important;
+    align-items: center !important;
+}
+
+.select2-container--bootstrap4 .select2-selection--single .select2-selection__rendered {
+    line-height: 1.5;
+    padding-left: 12px;
+    padding-right: 12px;
+    color: #495057;
+    flex: 1;
+}
+
+.select2-container--bootstrap4 .select2-selection--single .select2-selection__arrow {
+    height: 36px;
+    display: flex;
+    align-items: center;
+}
+
+/* Améliorer le dropdown */
+.select2-container--bootstrap4 .select2-dropdown {
+    border: 1px solid #ced4da !important;
+    border-radius: 0.25rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    background-color: #fff;
+}
+
+/* Résultats de recherche */
+.select2-container--bootstrap4 .select2-results__option {
+    padding: 8px 12px;
+    font-size: 0.95rem;
+    border-bottom: 1px solid #f1f3f5;
+    transition: background-color 0.15s ease-in-out;
+}
+
+.select2-container--bootstrap4 .select2-results__option:last-child {
+    border-bottom: none;
+}
+
+.select2-container--bootstrap4 .select2-results__option--highlighted {
+    background-color: #007bff !important;
+    color: white !important;
+}
+
+.select2-container--bootstrap4 .select2-results__option:hover {
+    background-color: #f8f9fa;
+    cursor: pointer;
+}
+
+.select2-container--bootstrap4 .select2-results__option--selected {
+    background-color: #e7f3ff;
+    color: #004085;
+}
+
+/* Champ de recherche dans le dropdown */
+.select2-container--bootstrap4 .select2-search--dropdown {
+    padding: 8px;
+    border-bottom: 1px solid #ced4da;
+    background-color: #f8f9fa;
+}
+
+.select2-container--bootstrap4 .select2-search--dropdown .select2-search__field {
+    border: 1px solid #ced4da !important;
+    border-radius: 4px;
+    padding: 8px 12px;
+    width: 100%;
+    font-size: 0.95rem;
+}
+
+.select2-container--bootstrap4 .select2-search--dropdown .select2-search__field:focus {
+    border-color: #80bdff !important;
+    outline: 0;
+    box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+}
+
+/* Améliorer l'apparence du placeholder */
+.select2-container--bootstrap4 .select2-selection__placeholder {
+    color: #6c757d;
+}
+
+/* Messages (aucun résultat, recherche, etc.) */
+.select2-container--bootstrap4 .select2-results__message {
+    color: #6c757d;
+    font-style: italic;
+}
+
+/* Select2 en mode "clearing" (avec le X) */
+.select2-container--bootstrap4 .select2-selection__clear {
+    color: #dc3545;
+    font-size: 1.2em;
+    margin-right: 10px;
+}
+
+.select2-container--bootstrap4 .select2-selection__clear:hover {
+    color: #c82333;
+}
+
+/* Améliorer le focus */
+.select2-container--bootstrap4.select2-container--focus .select2-selection,
+.select2-container--bootstrap4.select2-container--open .select2-selection {
+    border-color: #80bdff !important;
+    outline: 0;
+    box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25) !important;
+}
+
+/* Select2 en mode désactivé */
+.select2-container--bootstrap4 .select2-selection--single.select2-selection--disabled {
+    background-color: #e9ecef !important;
+    cursor: not-allowed;
+    border-color: #ced4da !important;
+}
+
+/* Hover state */
+.select2-container--bootstrap4 .select2-selection:hover {
+    border-color: #adb5bd !important;
+}
+
+/* Style pour les longues listes */
+.select2-results__options {
+    max-height: 300px;
+}
+
+/* Améliorer l'icône de la flèche */
+.select2-container--bootstrap4 .select2-selection--single .select2-selection__arrow b {
+    border-color: #495057 transparent transparent transparent;
+    border-style: solid;
+    border-width: 5px 4px 0 4px;
+}
+
+.select2-container--bootstrap4.select2-container--open .select2-selection--single .select2-selection__arrow b {
+    border-color: transparent transparent #495057 transparent;
+    border-width: 0 4px 5px 4px;
+}
+
+/* Améliorer le container principal */
+.select2-container--bootstrap4 {
+    display: block;
+    width: 100% !important;
+}
+
+/* Dropdown list container */
+.select2-container--bootstrap4 .select2-results__options {
+    background-color: #fff;
+    border-radius: 0 0 0.25rem 0.25rem;
+}
+
+/* Empty results message */
+.select2-container--bootstrap4 .select2-results__option--no-results {
+    background-color: #f8f9fa;
+    color: #6c757d;
+    padding: 12px;
+    text-align: center;
+    font-style: italic;
+}
+
+/* Loading message */
+.select2-container--bootstrap4 .select2-results__option--loading {
+    background-color: #f8f9fa;
+    color: #6c757d;
+    padding: 12px;
+    text-align: center;
+}
+
+/* Multiple select styles (si nécessaire) */
+.select2-container--bootstrap4 .select2-selection--multiple {
+    border: 1px solid #ced4da !important;
+    border-radius: 0.25rem !important;
+    min-height: 38px;
+    background-color: #fff !important;
+}
+
+.select2-container--bootstrap4 .select2-selection--multiple .select2-selection__choice {
+    background-color: #007bff;
+    border: 1px solid #0056b3;
+    color: white;
+    padding: 2px 8px;
+    margin: 4px;
+    border-radius: 3px;
+}
+
+.select2-container--bootstrap4 .select2-selection--multiple .select2-selection__choice__remove {
+    color: white;
+    margin-right: 5px;
+}
+
+.select2-container--bootstrap4 .select2-selection--multiple .select2-selection__choice__remove:hover {
+    color: #ffdddd;
+}
+
+/* Responsive - adapter pour les petits écrans */
+@media (max-width: 768px) {
+    .select2-container--bootstrap4 .select2-dropdown {
+        width: 100% !important;
+    }
+
+    .select2-container--bootstrap4 .select2-selection {
+        font-size: 0.9rem;
+    }
+
+    .select2-container--bootstrap4 .select2-results__option {
+        padding: 10px 12px;
+        font-size: 0.9rem;
+    }
+}

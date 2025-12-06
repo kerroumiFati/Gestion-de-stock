@@ -1,0 +1,160 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block extrahead %}
+<style>
+    .charger-van-container {
+        max-width: 800px;
+        margin: 40px auto;
+        padding: 20px;
+    }
+
+    .form-card {
+        background: white;
+        padding: 30px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-group label {
+        display: block;
+        font-weight: bold;
+        margin-bottom: 8px;
+        color: #333;
+    }
+
+    .form-group select,
+    .form-group textarea {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+    }
+
+    .form-group textarea {
+        font-family: monospace;
+        resize: vertical;
+    }
+
+    .help-text {
+        display: block;
+        margin-top: 5px;
+        font-size: 12px;
+        color: #666;
+        font-style: italic;
+    }
+
+    .btn-submit {
+        background: #417690;
+        color: white;
+        border: none;
+        padding: 12px 30px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 16px;
+        font-weight: bold;
+    }
+
+    .btn-submit:hover {
+        background: #2e5568;
+    }
+
+    .btn-cancel {
+        background: #999;
+        color: white;
+        border: none;
+        padding: 12px 30px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 16px;
+        margin-left: 10px;
+        text-decoration: none;
+        display: inline-block;
+    }
+
+    .btn-cancel:hover {
+        background: #777;
+    }
+
+    .error {
+        color: #d32f2f;
+        font-size: 13px;
+        margin-top: 5px;
+    }
+
+    .info-box {
+        background: #e3f2fd;
+        border-left: 4px solid #2196f3;
+        padding: 15px;
+        margin-bottom: 20px;
+        border-radius: 4px;
+    }
+
+    .info-box h3 {
+        margin-top: 0;
+        color: #1976d2;
+    }
+
+    .info-box ul {
+        margin: 10px 0;
+        padding-left: 20px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="charger-van-container">
+    <h1>{{ title }}</h1>
+
+    <div class="info-box">
+        <h3>📦 Comment utiliser ce formulaire</h3>
+        <ul>
+            <li>Sélectionnez le van à charger (entrepôt mobile)</li>
+            <li>Choisissez l'entrepôt source d'où provient le stock</li>
+            <li>Listez les produits à transférer au format: <code>REFERENCE,QUANTITE</code></li>
+            <li>Un transfert sera créé et validé automatiquement</li>
+        </ul>
+    </div>
+
+    <div class="form-card">
+        <form method="post">
+            {% csrf_token %}
+
+            <div class="form-group">
+                <label for="{{ form.van.id_for_label }}">{{ form.van.label }}</label>
+                {{ form.van }}
+                {% if form.van.errors %}
+                    <span class="error">{{ form.van.errors }}</span>
+                {% endif %}
+            </div>
+
+            <div class="form-group">
+                <label for="{{ form.entrepot_source.id_for_label }}">{{ form.entrepot_source.label }}</label>
+                {{ form.entrepot_source }}
+                {% if form.entrepot_source.errors %}
+                    <span class="error">{{ form.entrepot_source.errors }}</span>
+                {% endif %}
+            </div>
+
+            <div class="form-group">
+                <label for="{{ form.produits.id_for_label }}">{{ form.produits.label }}</label>
+                {{ form.produits }}
+                <span class="help-text">{{ form.produits.help_text }}</span>
+                {% if form.produits.errors %}
+                    <span class="error">{{ form.produits.errors }}</span>
+                {% endif %}
+            </div>
+
+            <div style="margin-top: 30px;">
+                <button type="submit" class="btn-submit">🚚 Charger le van</button>
+                <a href="{% url 'admin:API_transfertstock_changelist' %}" class="btn-cancel">Annuler</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

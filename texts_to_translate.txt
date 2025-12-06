@@ -1,0 +1,126 @@
++33 1 23 45 67 89
+0.00
+1.0
+123 Rue Example, 75001 Paris
+Achats
+Actions
+Adresse
+Ajouter
+Auto-généré
+Brouillons
+CA Total
+Carte
+Carte bancaire
+Catégorie
+Chèque
+Client
+Clients
+Code
+Code-barres
+Commentaires sur la vente...
+Confirmer
+Crédit
+Date
+Date d'Achat
+Description
+Description de la catégorie
+Devise
+Défaut
+Désignation
+EUR
+Email
+Entrepôt
+Entrepôt par défaut
+Erreur
+Espèces
+Euro
+Ex: DETAIL
+Ex: Ma Boutique SARL
+Ex: Prix Détaillant
+Ex: Électronique
+Facultatif
+Fermer
+Filtrer par produit
+Filtrer par référence...
+Filtrer par statut
+Finalisées
+Fournisseur
+Fournisseurs
+Gestion des Achats
+Impossible de supprimer ce Achat
+Impossible de supprimer ce client
+Impossible de supprimer ce fournisseur
+Impossible de supprimer cette catégorie
+Laissez vide pour une catégorie principale
+Libellé
+Merci de votre visite !&#10;Au plaisir de vous revoir.
+Message affiché en bas du ticket
+Message de pied de page
+Modifier
+Mot de passe actuel
+Nb Prix
+Nom
+Nom de l'entreprise
+Nouveau mot de passe
+Nouvelle quantité
+Numéro
+Observations
+Ordre
+Ordre d'affichage
+Paiement
+Prix
+Prix U
+Prix d'achat unitaire
+Prix unitaire
+Produit
+Produits
+Prénom
+Qté
+Qté Min
+Quantité
+Quantité actuelle
+Quantité produit
+Rafraîchir
+Référence
+Répartition des Paiements
+Scanner code-barres ou référence...
+Scanner ou saisir...
+Scannez / tapez...
+Select produit
+Statut
+Statut des Stocks
+Stock Alerte
+Stock par entrepôt
+Stocks par entrepôt
+Supprimer
+Symbole
+Sélection manuelle
+Sélectionner un entrepôt
+Sélectionner un fournisseur
+Sélectionner un produit
+Sélectionner un type
+Sélectionner une catégorie
+Tableau de Bord - Statistiques
+Tapez pour filtrer...
+Taux
+Total
+Total TTC
+Total des ventes
+Total ligne
+Tous les entrepôts
+Tous les produits
+Toutes
+Type de Prix
+Type de paiement
+Téléphone
+Valeur
+Validité
+Ventes
+Ventes aujourd'hui
+Ventes ce mois
+Ventes cette semaine
+Ventes par Catégorie
+Vers
+Virement
+quantite
+Évolution des Ventes et du Chiffre d'Affaires

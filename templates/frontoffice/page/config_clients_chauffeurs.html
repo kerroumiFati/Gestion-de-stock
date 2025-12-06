@@ -1,0 +1,3140 @@
+{% load static %}
+{% load i18n %}
+<script>
+// Stocker les permissions utilisateur globalement
+window.userPermissions = null;
+
+// Fonction pour charger les permissions utilisateur
+async function loadUserPermissions() {
+    try {
+        const response = await fetch('/API/my-permissions/');
+        if (response.ok) {
+            window.userPermissions = await response.json();
+            console.log('[CONFIG] Permissions chargées:', window.userPermissions);
+            applyPermissionsToUI();
+        }
+    } catch (error) {
+        console.error('[CONFIG] Erreur chargement permissions:', error);
+        // En cas d'erreur, afficher tous les onglets par défaut
+    }
+}
+
+// Fonction pour vérifier si l'utilisateur a une permission
+function hasPermission(permCodename) {
+    if (!window.userPermissions) return true; // Par défaut, autoriser si pas chargé
+    if (window.userPermissions.is_superuser) return true; // Superuser a tout
+    return window.userPermissions.permissions.includes(permCodename);
+}
+
+// Appliquer les permissions à l'interface
+function applyPermissionsToUI() {
+    // Onglet Assignation Clients
+    const assignationTab = document.querySelector('.config-tab[data-tab="assignation"]');
+    const assignationSection = document.getElementById('assignation-section');
+
+    if (!hasPermission('view_assignation_clients')) {
+        if (assignationTab) assignationTab.style.display = 'none';
+        if (assignationSection) assignationSection.style.display = 'none';
+
+        // Si l'onglet assignation est caché et actif, switcher vers config-jour
+        if (assignationTab && assignationTab.classList.contains('active')) {
+            const configJourTab = document.querySelector('.config-tab[data-tab="config-jour"]');
+            if (configJourTab) {
+                switchConfigTab('config-jour');
+            }
+        }
+    }
+
+    // Onglet Configuration par Jour
+    const configJourTab = document.querySelector('.config-tab[data-tab="config-jour"]');
+    const configJourSection = document.getElementById('config-jour-section');
+
+    if (!hasPermission('view_config_par_jour')) {
+        if (configJourTab) configJourTab.style.display = 'none';
+        if (configJourSection) configJourSection.style.display = 'none';
+    }
+}
+
+// Load script only once
+if (!window.__config_clients_chauffeurs_script_loaded__) {
+    window.__config_clients_chauffeurs_script_loaded__ = true;
+    var script = document.createElement('script');
+    script.src = "{% static 'script/config_clients_chauffeurs.js' %}";
+    script.type = 'text/javascript';
+    document.head.appendChild(script);
+} else {
+    // Script already loaded, just re-initialize
+    if (typeof window.initConfigClientsChauffeursPage === 'function') {
+        window.initConfigClientsChauffeursPage();
+    }
+}
+
+// Charger les permissions au chargement de la page
+loadUserPermissions();
+</script>
+
+<style>
+/* Styles modernes pour la page de configuration clients-chauffeurs */
+.page-container { padding: 20px 0; }
+
+.page-title {
+    font-size: 1.8rem;
+    font-weight: 600;
+    color: #2d3748;
+    margin-bottom: 25px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.page-title i {
+    color: #3b82f6;
+    font-size: 2rem;
+}
+
+/* Tabs styles */
+.config-tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    border-bottom: 2px solid #e2e8f0;
+}
+
+.config-tab {
+    padding: 12px 24px;
+    cursor: pointer;
+    border: none;
+    background: none;
+    color: #6b7280;
+    font-weight: 500;
+    border-bottom: 3px solid transparent;
+    transition: all 0.3s;
+}
+
+.config-tab.active {
+    color: #3b82f6;
+    border-bottom-color: #3b82f6;
+}
+
+.config-tab:hover {
+    color: #3b82f6;
+}
+
+/* Config par jour styles */
+.config-jour-section {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 30px;
+    margin-bottom: 25px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.config-jour-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.config-jour-header h3 {
+    margin: 0;
+    color: #374151;
+    font-size: 1.1rem;
+}
+
+.btn-primary-config {
+    background: #3b82f6;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-primary-config:hover {
+    background: #2563eb;
+}
+
+.filters-row {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.filters-row > div {
+    flex: 1;
+}
+
+.filters-row label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+    color: #374151;
+}
+
+.filters-row select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    background-color: white;
+}
+
+.config-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.config-table th {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 2px solid #e5e7eb;
+    background: #f3f4f6;
+    font-weight: 600;
+    color: #374151;
+}
+
+.config-table td {
+    padding: 12px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.badge-jour {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.badge-actif {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.badge-inactif {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.btn-edit, .btn-delete {
+    padding: 6px 12px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    margin-right: 5px;
+}
+
+.btn-edit {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.btn-edit:hover {
+    background: #fde68a;
+}
+
+.btn-delete {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.btn-delete:hover {
+    background: #fecaca;
+}
+
+/* Modal styles */
+.config-modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
+.config-modal-content {
+    background-color: white;
+    margin: 5% auto;
+    padding: 0;
+    border-radius: 10px;
+    width: 90%;
+    max-width: 600px;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.config-modal-header {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    color: white;
+    padding: 20px 30px;
+    border-radius: 10px 10px 0 0;
+}
+
+.config-modal-body {
+    padding: 30px;
+}
+
+.config-form-group {
+    margin-bottom: 20px;
+}
+
+.config-form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+    color: #374151;
+}
+
+.config-form-group select,
+.config-form-group input:not([type="hidden"]):not([type="checkbox"]) {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    background-color: white !important;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+}
+
+.config-form-group input[type="hidden"] {
+    display: none !important;
+}
+
+.config-form-group select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23374151' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 35px;
+    cursor: pointer;
+    max-height: 45px;
+}
+
+/* Style pour la liste déroulante du select client */
+.config-form-group select#config-jour-client {
+    overflow-y: auto;
+}
+
+.config-form-group select option {
+    padding: 10px;
+    background-color: white !important;
+    color: #374151;
+}
+
+.config-form-group select option:hover,
+.config-form-group select option:checked {
+    background-color: #3b82f6 !important;
+    color: white;
+}
+
+.config-form-group select:focus,
+.config-form-group input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.config-form-group small {
+    color: #6b7280;
+    font-size: 0.85rem;
+    display: block;
+    margin-top: 4px;
+}
+
+.config-modal-close {
+    color: white;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.config-modal-close:hover {
+    opacity: 0.8;
+}
+
+.btn-secondary-config {
+    background: #6b7280;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    font-weight: 500;
+    cursor: pointer;
+    margin-right: 10px;
+}
+
+.btn-secondary-config:hover {
+    background: #4b5563;
+}
+
+/* Custom Select Dropdown Styles */
+.custom-select-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.custom-select-trigger {
+    width: 100%;
+    padding: 10px 35px 10px 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    background-color: white;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    min-height: 45px;
+}
+
+.custom-select-trigger:hover {
+    border-color: #3b82f6;
+}
+
+.custom-select-trigger i {
+    color: #6b7280;
+    transition: transform 0.2s;
+}
+
+.custom-select-trigger.open i {
+    transform: rotate(180deg);
+}
+
+.custom-select-dropdown {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #d1d5db;
+    border-top: none;
+    border-radius: 0 0 6px 6px;
+    z-index: 1000;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.custom-select-dropdown.open {
+    display: block;
+}
+
+.custom-select-search {
+    width: 100%;
+    padding: 10px;
+    border: none;
+    border-bottom: 1px solid #e5e7eb;
+    font-size: 0.9rem;
+    outline: none;
+    background: white;
+}
+
+.custom-select-search:focus {
+    background: #f9fafb;
+}
+
+.custom-select-options {
+    max-height: 200px;
+    overflow-y: auto;
+    background: white;
+}
+
+.custom-select-option {
+    padding: 10px 12px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: #374151;
+    background: white;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.custom-select-option:last-child {
+    border-bottom: none;
+}
+
+.custom-select-option:hover {
+    background: #eff6ff;
+    color: #1d4ed8;
+}
+
+.custom-select-option.selected {
+    background: #3b82f6;
+    color: white;
+}
+
+.custom-select-option .client-name {
+    font-weight: 500;
+}
+
+.custom-select-option .client-address {
+    font-size: 0.8rem;
+    color: #6b7280;
+    margin-top: 2px;
+}
+
+.custom-select-option:hover .client-address {
+    color: #93c5fd;
+}
+
+.custom-select-option.selected .client-address {
+    color: #bfdbfe;
+}
+
+/* Scrollbar styling */
+.custom-select-options::-webkit-scrollbar {
+    width: 8px;
+}
+
+.custom-select-options::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.custom-select-options::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+
+.custom-select-options::-webkit-scrollbar-thumb:hover {
+    background: #a1a1a1;
+}
+
+/* ========== Configuration par Jour - Nouvelle Interface ========== */
+.config-jour-layout {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: 20px;
+    min-height: 600px;
+}
+
+.livreur-list-jour {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.list-title-jour {
+    padding: 15px;
+    background: #f8fafc;
+    font-weight: 600;
+    color: #374151;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.list-title-jour i {
+    color: #3b82f6;
+}
+
+.livreur-items {
+    max-height: 550px;
+    overflow-y: auto;
+}
+
+.livreur-item-jour {
+    padding: 12px 15px;
+    border-bottom: 1px solid #f1f5f9;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.livreur-item-jour:hover {
+    background: #f1f5f9;
+}
+
+.livreur-item-jour.active {
+    background: #eff6ff;
+    border-left: 3px solid #3b82f6;
+}
+
+.livreur-item-jour .livreur-avatar {
+    width: 36px;
+    height: 36px;
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.livreur-item-jour .livreur-info {
+    flex: 1;
+}
+
+.livreur-item-jour .livreur-name {
+    font-weight: 500;
+    color: #1f2937;
+    font-size: 0.9rem;
+}
+
+.livreur-item-jour .livreur-matricule {
+    font-size: 0.75rem;
+    color: #6b7280;
+}
+
+.jours-section {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 20px;
+}
+
+.empty-state-jour {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 20px;
+    color: #9ca3af;
+}
+
+.empty-state-jour i {
+    font-size: 3rem;
+    margin-bottom: 15px;
+    color: #d1d5db;
+}
+
+.jours-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.jours-header h3 {
+    margin: 0;
+    color: #1f2937;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.search-box-jour {
+    position: relative;
+}
+
+.search-box-jour i {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #9ca3af;
+}
+
+.search-box-jour input {
+    padding: 8px 12px 8px 35px;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    width: 250px;
+    font-size: 0.9rem;
+}
+
+.search-box-jour input:focus {
+    outline: none;
+    border-color: #3b82f6;
+}
+
+.jours-content {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 20px;
+}
+
+.clients-disponibles-jour {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.clients-list-jour {
+    max-height: 450px;
+    overflow-y: auto;
+    padding: 10px;
+}
+
+.client-item-jour {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    cursor: grab;
+    transition: all 0.2s;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+}
+
+.client-item-jour:hover {
+    border-color: #3b82f6;
+    box-shadow: 0 2px 4px rgba(59, 130, 246, 0.1);
+}
+
+.client-item-jour:active {
+    cursor: grabbing;
+}
+
+.client-item-jour.dragging {
+    opacity: 0.5;
+    transform: scale(0.95);
+}
+
+.client-item-jour .client-icon {
+    width: 32px;
+    height: 32px;
+    background: #e0e7ff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #4f46e5;
+    font-size: 12px;
+}
+
+.client-item-jour .client-info-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.client-item-jour .client-details {
+    flex: 1;
+    min-width: 0;
+}
+
+.client-item-jour .client-name-jour {
+    font-weight: 500;
+    color: #1f2937;
+    font-size: 0.85rem;
+    word-wrap: break-word;
+    white-space: normal;
+}
+
+.client-item-jour .client-address-jour {
+    font-size: 0.75rem;
+    color: #6b7280;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.client-item-jour .add-btns {
+    display: flex;
+    gap: 3px;
+}
+
+.client-item-jour .add-btn {
+    width: 22px;
+    height: 22px;
+    border: none;
+    border-radius: 4px;
+    font-size: 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.client-item-jour .add-btn:hover {
+    transform: scale(1.1);
+}
+
+/* Boutons avec noms complets des jours */
+.client-item-jour .add-btns-full {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 8px;
+}
+
+.client-item-jour .add-btn-full {
+    padding: 4px 8px;
+    border: none;
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-weight: 500;
+}
+
+.client-item-jour .add-btn-full:hover {
+    transform: scale(1.05);
+    opacity: 0.9;
+}
+
+.badge-count-jour {
+    background: #3b82f6;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.75rem;
+    margin-left: auto;
+}
+
+/* Cartes des jours */
+.jours-cards-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+}
+
+.jour-card {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    overflow: hidden;
+    min-height: 200px;
+}
+
+.jour-card-header {
+    padding: 10px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: white;
+    font-weight: 600;
+    font-size: 0.85rem;
+}
+
+.jour-date {
+    font-weight: 400;
+    opacity: 0.9;
+    margin-left: 4px;
+}
+
+.jour-lundi { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+.jour-mardi { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
+.jour-mercredi { background: linear-gradient(135deg, #06b6d4, #0891b2); }
+.jour-jeudi { background: linear-gradient(135deg, #10b981, #059669); }
+.jour-vendredi { background: linear-gradient(135deg, #f59e0b, #d97706); }
+.jour-samedi { background: linear-gradient(135deg, #ef4444, #dc2626); }
+.jour-dimanche { background: linear-gradient(135deg, #6b7280, #4b5563); }
+
+.jour-count {
+    background: rgba(255,255,255,0.25);
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.75rem;
+}
+
+.jour-card-body {
+    padding: 8px;
+    min-height: 150px;
+    max-height: 250px;
+    overflow-y: auto;
+    background: #fafafa;
+}
+
+.jour-card-body.drag-over {
+    background: #eff6ff;
+    border: 2px dashed #3b82f6;
+}
+
+.empty-jour {
+    text-align: center;
+    color: #9ca3af;
+    font-size: 0.8rem;
+    padding: 30px 10px;
+}
+
+.client-in-jour {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 5px;
+    padding: 6px 8px;
+    margin-bottom: 5px;
+    font-size: 0.75rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 5px;
+}
+
+.client-in-jour .client-name-mini {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #374151;
+    font-weight: 500;
+}
+
+.client-in-jour .remove-btn {
+    width: 18px;
+    height: 18px;
+    border: none;
+    background: #fee2e2;
+    color: #dc2626;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    transition: all 0.2s;
+}
+
+.client-in-jour .remove-btn:hover {
+    background: #dc2626;
+    color: white;
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+    .jours-content {
+        grid-template-columns: 1fr;
+    }
+
+    .clients-disponibles-jour {
+        max-height: 200px;
+    }
+
+    .clients-list-jour {
+        max-height: 150px;
+    }
+}
+
+@media (max-width: 768px) {
+    .config-jour-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .livreur-list-jour {
+        max-height: 200px;
+    }
+
+    .livreur-items {
+        max-height: 150px;
+        display: flex;
+        overflow-x: auto;
+        gap: 10px;
+        padding: 10px;
+    }
+
+    .livreur-item-jour {
+        flex-shrink: 0;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+    }
+
+    .jours-cards-container {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.modern-section {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 30px;
+    margin-bottom: 25px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.section-header {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.two-column-layout {
+    display: grid;
+    grid-template-columns: 350px 1fr;
+    gap: 25px;
+    margin-top: 20px;
+}
+
+.livreur-list {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+.livreur-item {
+    padding: 15px;
+    border-bottom: 1px solid #e5e7eb;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.livreur-item:hover {
+    background: #f3f4f6;
+}
+
+.livreur-item.active {
+    background: #3b82f6;
+    color: white;
+    font-weight: 600;
+}
+
+.livreur-item i {
+    font-size: 1.2rem;
+    color: #6b7280;
+}
+
+.livreur-item.active i {
+    color: white;
+}
+
+.livreur-info {
+    flex: 1;
+}
+
+.livreur-name {
+    font-weight: 500;
+    font-size: 0.95rem;
+}
+
+.livreur-matricule {
+    font-size: 0.8rem;
+    color: #6b7280;
+    margin-top: 2px;
+}
+
+.livreur-item.active .livreur-matricule {
+    color: #e5e7eb;
+}
+
+.clients-section {
+    background: white;
+}
+
+.clients-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.search-box {
+    position: relative;
+    flex: 1;
+    max-width: 400px;
+}
+
+.search-box input {
+    width: 100%;
+    padding: 10px 15px 10px 40px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 0.9rem;
+}
+
+.search-box i {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #9ca3af;
+}
+
+.clients-lists {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 25px;
+}
+
+.client-list-container {
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.list-title {
+    background: #f9fafb;
+    padding: 12px 15px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: #374151;
+    border-bottom: 2px solid #e5e7eb;
+}
+
+.client-list {
+    max-height: 450px;
+    overflow-y: auto;
+    background: white;
+}
+
+.client-item {
+    padding: 12px 15px;
+    border-bottom: 1px solid #f3f4f6;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: background 0.2s;
+}
+
+.client-item:hover {
+    background: #f9fafb;
+}
+
+.client-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+}
+
+.client-info i {
+    color: #6b7280;
+    font-size: 1rem;
+}
+
+.client-name {
+    font-weight: 500;
+    font-size: 0.9rem;
+    color: #1f2937;
+}
+
+.client-details {
+    font-size: 0.8rem;
+    color: #6b7280;
+    margin-top: 2px;
+}
+
+.client-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.btn-icon {
+    background: none;
+    border: none;
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 1rem;
+}
+
+.btn-add {
+    color: #10b981;
+    background: #ecfdf5;
+}
+
+.btn-add:hover {
+    background: #d1fae5;
+}
+
+.btn-remove {
+    color: #ef4444;
+    background: #fef2f2;
+}
+
+.btn-remove:hover {
+    background: #fee2e2;
+}
+
+.empty-state {
+    padding: 60px 20px;
+    text-align: center;
+    color: #9ca3af;
+}
+
+.empty-state i {
+    font-size: 3rem;
+    margin-bottom: 15px;
+    opacity: 0.5;
+}
+
+.empty-state p {
+    font-size: 0.95rem;
+}
+
+.badge-count {
+    background: #3b82f6;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-left: 8px;
+}
+
+.loading-spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #3b82f6;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-right: 10px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.alert {
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.alert-success {
+    background: #ecfdf5;
+    color: #065f46;
+    border: 1px solid #a7f3d0;
+}
+
+.alert-error {
+    background: #fef2f2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+    .two-column-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .clients-lists {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Week Navigation Buttons */
+.btn-week-nav {
+    background: #f3f4f6;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: #374151;
+}
+
+.btn-week-nav:hover {
+    background: #e5e7eb;
+    border-color: #9ca3af;
+}
+
+/* Excel Import/Export Styles */
+.excel-sections {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 25px;
+    margin-bottom: 25px;
+}
+
+.excel-box {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 25px;
+}
+
+.excel-box h4 {
+    color: #1f2937;
+    margin: 0 0 12px 0;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.excel-box h4 i {
+    color: #3b82f6;
+}
+
+.excel-desc {
+    color: #6b7280;
+    font-size: 0.9rem;
+    margin-bottom: 20px;
+}
+
+.export-options, .import-options {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.export-row, .import-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.export-row label, .import-row label {
+    min-width: 120px;
+    font-weight: 500;
+    color: #374151;
+}
+
+.btn-excel {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s;
+}
+
+.btn-export {
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: white;
+}
+
+.btn-export:hover {
+    background: linear-gradient(135deg, #059669, #047857);
+}
+
+.btn-import {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: white;
+}
+
+.btn-import:hover {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+}
+
+.btn-template {
+    background: #6b7280;
+    color: white;
+}
+
+.btn-template:hover {
+    background: #4b5563;
+}
+
+.btn-cancel {
+    background: #ef4444;
+    color: white;
+}
+
+.btn-cancel:hover {
+    background: #dc2626;
+}
+
+.btn-confirm {
+    background: #10b981;
+    color: white;
+}
+
+.btn-confirm:hover {
+    background: #059669;
+}
+
+.import-buttons {
+    display: flex;
+    gap: 12px;
+}
+
+.import-preview {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 25px;
+    margin-bottom: 25px;
+}
+
+.import-preview h4 {
+    margin: 0 0 15px 0;
+    color: #1f2937;
+}
+
+.preview-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.preview-table th, .preview-table td {
+    padding: 10px;
+    border: 1px solid #e5e7eb;
+    text-align: left;
+    font-size: 0.85rem;
+}
+
+.preview-table th {
+    background: #f3f4f6;
+    font-weight: 600;
+    color: #374151;
+}
+
+.preview-actions {
+    margin-top: 20px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+.excel-format-info {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 10px;
+    padding: 20px;
+}
+
+.excel-format-info h4 {
+    color: #1e40af;
+    margin: 0 0 12px 0;
+}
+
+.excel-format-info p {
+    color: #3b82f6;
+    margin-bottom: 15px;
+}
+
+.format-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.format-table th, .format-table td {
+    padding: 10px 15px;
+    border: 1px solid #e5e7eb;
+    text-align: left;
+    font-size: 0.85rem;
+}
+
+.format-table th {
+    background: #3b82f6;
+    color: white;
+    font-weight: 500;
+}
+
+.format-table td:last-child {
+    text-align: center;
+}
+
+@media (max-width: 900px) {
+    .excel-sections {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+
+<div class="page-container">
+    <div class="page-title">
+        <i class="fas fa-users-cog"></i>
+        <span>Configuration Clients / Chauffeurs</span>
+    </div>
+
+    <!-- Onglets -->
+    <div class="config-tabs">
+        <button class="config-tab active" data-tab="assignation" onclick="switchConfigTab('assignation')">
+            <i class="fas fa-user-plus"></i> Assignation Clients
+        </button>
+        <button class="config-tab" data-tab="config-jour" onclick="switchConfigTab('config-jour')">
+            <i class="fas fa-calendar-week"></i> Configuration par Jour
+        </button>
+        <button class="config-tab" data-tab="import-export" onclick="switchConfigTab('import-export')">
+            <i class="fas fa-file-excel"></i> Import/Export Excel
+        </button>
+    </div>
+
+    <!-- Section Assignation des clients (existante) -->
+    <div id="assignation-section" class="modern-section">
+        <div class="section-header">
+            Assignation des clients aux chauffeurs de l'application mobile
+        </div>
+
+        <div id="alert-container"></div>
+
+        <div class="two-column-layout">
+            <!-- Liste des livreurs -->
+            <div class="livreur-list" id="livreurList">
+                <div class="empty-state">
+                    <i class="fas fa-truck"></i>
+                    <p>Chargement des chauffeurs...</p>
+                </div>
+            </div>
+
+            <!-- Gestion des clients -->
+            <div class="clients-section">
+                <div id="noLivreurSelected" class="empty-state">
+                    <i class="fas fa-hand-pointer"></i>
+                    <p>Sélectionnez un chauffeur pour gérer ses clients</p>
+                </div>
+
+                <div id="clientsManagement" style="display: none;">
+                    <div class="clients-header">
+                        <h3 id="selectedLivreurName" style="margin: 0; color: #374151; font-size: 1.1rem;"></h3>
+                        <div class="search-box">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="searchClient" placeholder="Rechercher un client...">
+                        </div>
+                    </div>
+
+                    <div class="clients-lists">
+                        <!-- Clients disponibles -->
+                        <div class="client-list-container">
+                            <div class="list-title">
+                                Clients disponibles
+                                <span class="badge-count" id="availableCount">0</span>
+                            </div>
+                            <div class="client-list" id="availableClientsList">
+                                <div class="empty-state">
+                                    <i class="fas fa-user-friends"></i>
+                                    <p>Aucun client disponible</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Clients assignés -->
+                        <div class="client-list-container">
+                            <div class="list-title">
+                                Clients assignés
+                                <span class="badge-count" id="assignedCount">0</span>
+                            </div>
+                            <div class="client-list" id="assignedClientsList">
+                                <div class="empty-state">
+                                    <i class="fas fa-user-check"></i>
+                                    <p>Aucun client assigné</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section Configuration Clients/Livreurs par Jour -->
+    <div id="config-jour-section" class="config-jour-section" style="display: none;">
+        <div class="section-header" style="display: flex; justify-content: space-between; align-items: center;">
+            <span><i class="fas fa-calendar-alt"></i> Configuration des clients par jour de la semaine</span>
+            <div class="week-selector" style="display: flex; align-items: center; gap: 15px;">
+                <button class="btn-week-nav" onclick="changeWeek(-1)" title="Semaine précédente">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                <div style="text-align: center;">
+                    <input type="week" id="weekSelector" onchange="onWeekChange()" style="padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.95rem;">
+                    <div id="weekDateRange" style="font-size: 0.8rem; color: #6b7280; margin-top: 4px;"></div>
+                </div>
+                <button class="btn-week-nav" onclick="changeWeek(1)" title="Semaine suivante">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+
+        <div id="alert-container-jour"></div>
+
+        <div class="config-jour-layout">
+            <!-- Liste des livreurs -->
+            <div class="livreur-list-jour">
+                <div class="list-title-jour">
+                    <i class="fas fa-truck"></i> Chauffeurs
+                </div>
+                <div id="livreurListJour" class="livreur-items">
+                    <div class="empty-state">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <p>Chargement...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section centrale : jours de la semaine et clients -->
+            <div class="jours-section">
+                <!-- Sélection du livreur actif -->
+                <div id="noLivreurSelectedJour" class="empty-state-jour">
+                    <i class="fas fa-hand-pointer"></i>
+                    <p>Sélectionnez un chauffeur pour configurer ses jours de livraison</p>
+                </div>
+
+                <div id="joursManagement" style="display: none;">
+                    <div class="jours-header">
+                        <h3 id="selectedLivreurNameJour"></h3>
+                        <div class="search-box-jour">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="searchClientJour" placeholder="Rechercher un client..." oninput="filterClientsJour()">
+                        </div>
+                    </div>
+
+                    <div class="jours-content">
+                        <!-- Clients disponibles -->
+                        <div class="clients-disponibles-jour">
+                            <div class="list-title-jour">
+                                <i class="fas fa-users"></i> Clients disponibles
+                                <span class="badge-count-jour" id="availableCountJour">0</span>
+                            </div>
+                            <!-- Filtre par secteur -->
+                            <div class="secteur-filter-jour" style="padding: 10px;">
+                                <select id="secteurFilterJour" class="form-control form-control-sm" onchange="filterClientsJour()">
+                                    <option value="">Tous les secteurs</option>
+                                </select>
+                            </div>
+                            <div id="availableClientsListJour" class="clients-list-jour">
+                                <!-- Clients chargés dynamiquement -->
+                            </div>
+                        </div>
+
+                        <!-- Cartes des jours -->
+                        <div class="jours-cards-container">
+                            <div class="jour-card" data-jour="1">
+                                <div class="jour-card-header jour-lundi">
+                                    <span class="jour-name">Lundi <span class="jour-date" id="date-jour-1"></span></span>
+                                    <span class="jour-count" id="count-jour-1">0</span>
+                                </div>
+                                <div class="jour-card-body" id="clients-jour-1" ondrop="dropClient(event, 1)" ondragover="allowDrop(event)">
+                                    <div class="empty-jour">Aucun client</div>
+                                </div>
+                            </div>
+
+                            <div class="jour-card" data-jour="2">
+                                <div class="jour-card-header jour-mardi">
+                                    <span class="jour-name">Mardi <span class="jour-date" id="date-jour-2"></span></span>
+                                    <span class="jour-count" id="count-jour-2">0</span>
+                                </div>
+                                <div class="jour-card-body" id="clients-jour-2" ondrop="dropClient(event, 2)" ondragover="allowDrop(event)">
+                                    <div class="empty-jour">Aucun client</div>
+                                </div>
+                            </div>
+
+                            <div class="jour-card" data-jour="3">
+                                <div class="jour-card-header jour-mercredi">
+                                    <span class="jour-name">Mercredi <span class="jour-date" id="date-jour-3"></span></span>
+                                    <span class="jour-count" id="count-jour-3">0</span>
+                                </div>
+                                <div class="jour-card-body" id="clients-jour-3" ondrop="dropClient(event, 3)" ondragover="allowDrop(event)">
+                                    <div class="empty-jour">Aucun client</div>
+                                </div>
+                            </div>
+
+                            <div class="jour-card" data-jour="4">
+                                <div class="jour-card-header jour-jeudi">
+                                    <span class="jour-name">Jeudi <span class="jour-date" id="date-jour-4"></span></span>
+                                    <span class="jour-count" id="count-jour-4">0</span>
+                                </div>
+                                <div class="jour-card-body" id="clients-jour-4" ondrop="dropClient(event, 4)" ondragover="allowDrop(event)">
+                                    <div class="empty-jour">Aucun client</div>
+                                </div>
+                            </div>
+
+                            <div class="jour-card" data-jour="5">
+                                <div class="jour-card-header jour-vendredi">
+                                    <span class="jour-name">Vendredi <span class="jour-date" id="date-jour-5"></span></span>
+                                    <span class="jour-count" id="count-jour-5">0</span>
+                                </div>
+                                <div class="jour-card-body" id="clients-jour-5" ondrop="dropClient(event, 5)" ondragover="allowDrop(event)">
+                                    <div class="empty-jour">Aucun client</div>
+                                </div>
+                            </div>
+
+                            <div class="jour-card" data-jour="6">
+                                <div class="jour-card-header jour-samedi">
+                                    <span class="jour-name">Samedi <span class="jour-date" id="date-jour-6"></span></span>
+                                    <span class="jour-count" id="count-jour-6">0</span>
+                                </div>
+                                <div class="jour-card-body" id="clients-jour-6" ondrop="dropClient(event, 6)" ondragover="allowDrop(event)">
+                                    <div class="empty-jour">Aucun client</div>
+                                </div>
+                            </div>
+
+                            <div class="jour-card" data-jour="7">
+                                <div class="jour-card-header jour-dimanche">
+                                    <span class="jour-name">Dimanche <span class="jour-date" id="date-jour-7"></span></span>
+                                    <span class="jour-count" id="count-jour-7">0</span>
+                                </div>
+                                <div class="jour-card-body" id="clients-jour-7" ondrop="dropClient(event, 7)" ondragover="allowDrop(event)">
+                                    <div class="empty-jour">Aucun client</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section Import/Export Excel -->
+    <div id="import-export-section" class="config-jour-section" style="display: none;">
+        <div class="section-header">
+            <i class="fas fa-file-excel"></i> Import / Export Excel - Planning Clients par Chauffeur
+        </div>
+
+        <div id="alert-container-excel"></div>
+
+        <div class="excel-sections">
+            <!-- Export Section -->
+            <div class="excel-box">
+                <h4><i class="fas fa-download"></i> Exporter le planning</h4>
+                <p class="excel-desc">Téléchargez le planning des clients par chauffeur au format Excel. Vous pouvez filtrer par semaine ou exporter tout le planning.</p>
+
+                <div class="export-options">
+                    <div class="export-row">
+                        <label>Semaine:</label>
+                        <input type="week" id="exportWeek" style="padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px;">
+                        <span style="color: #6b7280; font-size: 0.85rem;">ou laisser vide pour tout exporter</span>
+                    </div>
+                    <div class="export-row">
+                        <label>Chauffeur:</label>
+                        <select id="exportLivreur" style="padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 200px;">
+                            <option value="">Tous les chauffeurs</option>
+                        </select>
+                    </div>
+                </div>
+
+                <button class="btn-excel btn-export" onclick="exportExcel()">
+                    <i class="fas fa-file-download"></i> Télécharger Excel
+                </button>
+            </div>
+
+            <!-- Import Section -->
+            <div class="excel-box">
+                <h4><i class="fas fa-upload"></i> Importer un planning</h4>
+                <p class="excel-desc">Importez un fichier Excel pour mettre à jour le planning des clients par chauffeur. Le fichier doit respecter le format du template.</p>
+
+                <div class="import-options">
+                    <div class="import-row">
+                        <label>Semaine cible:</label>
+                        <input type="week" id="importWeek" required style="padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px;">
+                    </div>
+                    <div class="import-row">
+                        <label>Mode d'import:</label>
+                        <select id="importMode" style="padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px;">
+                            <option value="merge">Fusionner (ajouter aux existants)</option>
+                            <option value="replace">Remplacer (supprimer et recréer)</option>
+                        </select>
+                    </div>
+                    <div class="import-row">
+                        <label>Fichier Excel:</label>
+                        <input type="file" id="importFile" accept=".xlsx,.xls" style="padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; background: white;">
+                    </div>
+                </div>
+
+                <div class="import-buttons">
+                    <button class="btn-excel btn-template" onclick="downloadTemplate()">
+                        <i class="fas fa-file-alt"></i> Télécharger le template
+                    </button>
+                    <button class="btn-excel btn-import" onclick="importExcel()">
+                        <i class="fas fa-file-upload"></i> Importer
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Preview des données à importer -->
+        <div id="importPreview" class="import-preview" style="display: none;">
+            <h4><i class="fas fa-eye"></i> Aperçu des données à importer</h4>
+            <div class="table-responsive">
+                <table class="preview-table">
+                    <thead id="previewHeader"></thead>
+                    <tbody id="previewBody"></tbody>
+                </table>
+            </div>
+            <div class="preview-actions">
+                <button class="btn-excel btn-cancel" onclick="cancelImport()">
+                    <i class="fas fa-times"></i> Annuler
+                </button>
+                <button class="btn-excel btn-confirm" onclick="confirmImport()">
+                    <i class="fas fa-check"></i> Confirmer l'import
+                </button>
+            </div>
+        </div>
+
+        <!-- Format du fichier Excel -->
+        <div class="excel-format-info">
+            <h4><i class="fas fa-info-circle"></i> Format du fichier Excel</h4>
+            <p>Le fichier Excel doit contenir les colonnes suivantes:</p>
+            <table class="format-table">
+                <thead>
+                    <tr>
+                        <th>Colonne</th>
+                        <th>Description</th>
+                        <th>Obligatoire</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>client_id</td><td>ID du client dans le système</td><td>Oui</td></tr>
+                    <tr><td>client_nom</td><td>Nom du client (informatif)</td><td>Non</td></tr>
+                    <tr><td>livreur_id</td><td>ID du chauffeur</td><td>Oui</td></tr>
+                    <tr><td>livreur_nom</td><td>Nom du chauffeur (informatif)</td><td>Non</td></tr>
+                    <tr><td>jour_semaine</td><td>Jour (1=Lundi, 2=Mardi... 7=Dimanche)</td><td>Oui</td></tr>
+                    <tr><td>ordre_passage</td><td>Ordre de visite (1, 2, 3...)</td><td>Non</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Configuration Client/Livreur par Jour -->
+<div id="configJourModal" class="config-modal">
+    <div class="config-modal-content">
+        <div class="config-modal-header">
+            <span class="config-modal-close" onclick="closeConfigJourModal()">&times;</span>
+            <h2 id="config-jour-modal-title">Nouvelle Configuration Client/Livreur</h2>
+        </div>
+        <div class="config-modal-body">
+            <form id="config-jour-form">
+                <input type="hidden" id="config-jour-id">
+
+                <div class="config-form-group">
+                    <label for="config-jour-client">Client *</label>
+                    <div class="custom-select-wrapper">
+                        <input type="hidden" id="config-jour-client" required>
+                        <div class="custom-select-trigger" id="client-select-trigger" onclick="toggleClientDropdown()">
+                            <span id="client-select-text">Sélectionner un client...</span>
+                            <i class="fas fa-chevron-down"></i>
+                        </div>
+                        <div class="custom-select-dropdown" id="client-dropdown">
+                            <input type="text" class="custom-select-search" id="client-search" placeholder="Rechercher un client..." oninput="filterClients()">
+                            <div class="custom-select-options" id="client-options-list">
+                                <!-- Options will be loaded dynamically -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="config-form-group">
+                    <label for="config-jour-livreur">Livreur *</label>
+                    <select id="config-jour-livreur" required>
+                        <option value="">Sélectionner un livreur...</option>
+                    </select>
+                </div>
+
+                <div class="config-form-group">
+                    <label for="config-jour-day">Jour de la semaine *</label>
+                    <select id="config-jour-day" required>
+                        <option value="">Sélectionner un jour...</option>
+                        <option value="1">Lundi</option>
+                        <option value="2">Mardi</option>
+                        <option value="3">Mercredi</option>
+                        <option value="4">Jeudi</option>
+                        <option value="5">Vendredi</option>
+                        <option value="6">Samedi</option>
+                        <option value="7">Dimanche</option>
+                    </select>
+                </div>
+
+                <div class="config-form-group">
+                    <label for="config-jour-ordre">Ordre de passage</label>
+                    <input type="number" id="config-jour-ordre" min="1" placeholder="Ex: 1, 2, 3...">
+                    <small>Ordre dans lequel le livreur visite ce client (optionnel)</small>
+                </div>
+
+                <div class="config-form-group">
+                    <label>
+                        <input type="checkbox" id="config-jour-actif" checked> Actif
+                    </label>
+                    <small>Si coché, cette configuration sera utilisée lors de la génération des tournées</small>
+                </div>
+
+                <div style="margin-top: 30px; text-align: right;">
+                    <button type="button" class="btn-secondary-config" onclick="closeConfigJourModal()">
+                        Annuler
+                    </button>
+                    <button type="submit" class="btn-primary-config">
+                        Enregistrer
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+// Variables globales pour la semaine sélectionnée
+let selectedWeekStart = null;
+let selectedWeekEnd = null;
+let importDataToConfirm = [];
+
+// Fonction pour changer d'onglet
+function switchConfigTab(tabName) {
+    // Mettre à jour les classes des onglets
+    document.querySelectorAll('.config-tab').forEach(tab => {
+        tab.classList.remove('active');
+        if (tab.dataset.tab === tabName) {
+            tab.classList.add('active');
+        }
+    });
+
+    // Afficher/masquer les sections
+    document.getElementById('assignation-section').style.display = tabName === 'assignation' ? 'block' : 'none';
+    document.getElementById('config-jour-section').style.display = tabName === 'config-jour' ? 'block' : 'none';
+    document.getElementById('import-export-section').style.display = tabName === 'import-export' ? 'block' : 'none';
+
+    // Charger les données si nécessaire
+    if (tabName === 'config-jour') {
+        initWeekSelector();
+        loadLivreursJour();
+        loadAllClientsJour();
+    } else if (tabName === 'import-export') {
+        initExportSection();
+    }
+}
+
+// ========== WEEK SELECTOR ==========
+function initWeekSelector() {
+    const weekInput = document.getElementById('weekSelector');
+    if (!weekInput.value) {
+        // Set to current week
+        const now = new Date();
+        const year = now.getFullYear();
+        const weekNum = getWeekNumber(now);
+        weekInput.value = `${year}-W${weekNum.toString().padStart(2, '0')}`;
+    }
+    updateWeekDateRange();
+}
+
+function getWeekNumber(d) {
+    d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+    return weekNo;
+}
+
+function getWeekDates(weekValue) {
+    // weekValue format: "2024-W01"
+    const [year, weekStr] = weekValue.split('-W');
+    const week = parseInt(weekStr);
+
+    // Calculate the first day of the year
+    const firstDayOfYear = new Date(year, 0, 1);
+
+    // Find the first Monday of the year
+    const daysUntilMonday = (8 - firstDayOfYear.getDay()) % 7;
+    const firstMonday = new Date(year, 0, 1 + daysUntilMonday);
+
+    // If week 1 is before first monday, adjust
+    if (firstDayOfYear.getDay() <= 4 && firstDayOfYear.getDay() !== 0) {
+        firstMonday.setDate(firstMonday.getDate() - 7);
+    }
+
+    // Calculate start of selected week
+    const weekStart = new Date(firstMonday);
+    weekStart.setDate(weekStart.getDate() + (week - 1) * 7);
+
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 6);
+
+    return { start: weekStart, end: weekEnd };
+}
+
+function formatDate(date) {
+    return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function updateWeekDateRange() {
+    const weekInput = document.getElementById('weekSelector');
+    const rangeDiv = document.getElementById('weekDateRange');
+
+    if (weekInput.value) {
+        const dates = getWeekDates(weekInput.value);
+        selectedWeekStart = dates.start;
+        selectedWeekEnd = dates.end;
+        rangeDiv.textContent = `Du ${formatDate(dates.start)} au ${formatDate(dates.end)}`;
+
+        // Mettre à jour les dates sur les cartes des jours
+        updateJourCardsDates(dates.start);
+    }
+}
+
+function updateJourCardsDates(weekStart) {
+    // weekStart est le lundi de la semaine
+    for (let i = 1; i <= 7; i++) {
+        const dateEl = document.getElementById(`date-jour-${i}`);
+        if (dateEl) {
+            const jourDate = new Date(weekStart);
+            jourDate.setDate(weekStart.getDate() + (i - 1)); // i-1 car Lundi=1
+            const day = jourDate.getDate().toString().padStart(2, '0');
+            const month = (jourDate.getMonth() + 1).toString().padStart(2, '0');
+            dateEl.textContent = `${day}/${month}`;
+        }
+    }
+}
+
+function onWeekChange() {
+    updateWeekDateRange();
+    // Reload data for selected week if a livreur is selected
+    if (selectedLivreurJourId) {
+        loadConfigurationsForLivreur(selectedLivreurJourId);
+    }
+}
+
+function changeWeek(delta) {
+    const weekInput = document.getElementById('weekSelector');
+    if (!weekInput.value) {
+        initWeekSelector();
+        return;
+    }
+
+    const [year, weekStr] = weekInput.value.split('-W');
+    let week = parseInt(weekStr) + delta;
+    let newYear = parseInt(year);
+
+    if (week < 1) {
+        newYear--;
+        week = 52;
+    } else if (week > 52) {
+        newYear++;
+        week = 1;
+    }
+
+    weekInput.value = `${newYear}-W${week.toString().padStart(2, '0')}`;
+    onWeekChange();
+}
+
+// ========== IMPORT/EXPORT EXCEL ==========
+function initExportSection() {
+    // Set current week for import
+    const importWeek = document.getElementById('importWeek');
+    if (!importWeek.value) {
+        const now = new Date();
+        const year = now.getFullYear();
+        const weekNum = getWeekNumber(now);
+        importWeek.value = `${year}-W${weekNum.toString().padStart(2, '0')}`;
+    }
+
+    // Load livreurs for export dropdown
+    loadLivreursForExport();
+}
+
+async function loadLivreursForExport() {
+    try {
+        const response = await fetch('/API/distribution/livreurs/');
+        const data = await response.json();
+        const livreurs = Array.isArray(data) ? data : (data.results || []);
+
+        const select = document.getElementById('exportLivreur');
+        select.innerHTML = '<option value="">Tous les chauffeurs</option>';
+        livreurs.forEach(l => {
+            select.innerHTML += `<option value="${l.id}">${l.nom || l.username}</option>`;
+        });
+    } catch (error) {
+        console.error('Error loading livreurs:', error);
+    }
+}
+
+async function exportExcel() {
+    const weekValue = document.getElementById('exportWeek').value;
+    const livreurId = document.getElementById('exportLivreur').value;
+
+    let url = '/API/distribution/clients-livreurs-hebdo/export-excel/?';
+    const params = new URLSearchParams();
+
+    if (weekValue) {
+        const dates = getWeekDates(weekValue);
+        params.append('date_debut', dates.start.toISOString().split('T')[0]);
+        params.append('date_fin', dates.end.toISOString().split('T')[0]);
+    }
+    if (livreurId) {
+        params.append('livreur', livreurId);
+    }
+
+    url += params.toString();
+
+    try {
+        showAlertExcel('Génération du fichier en cours...', 'info');
+        const response = await fetch(url, {
+            headers: { 'X-CSRFToken': getCookie('csrftoken') }
+        });
+
+        if (response.ok) {
+            const blob = await response.blob();
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = downloadUrl;
+            a.download = `planning_clients_chauffeurs_${weekValue || 'all'}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(downloadUrl);
+            showAlertExcel('Export réussi!', 'success');
+        } else {
+            const error = await response.json();
+            showAlertExcel('Erreur: ' + (error.detail || error.error || 'Export échoué'), 'error');
+        }
+    } catch (error) {
+        console.error('Export error:', error);
+        showAlertExcel('Erreur lors de l\'export', 'error');
+    }
+}
+
+function downloadTemplate() {
+    window.location.href = '/API/distribution/clients-livreurs-hebdo/template-excel/';
+}
+
+async function importExcel() {
+    const weekValue = document.getElementById('importWeek').value;
+    const mode = document.getElementById('importMode').value;
+    const fileInput = document.getElementById('importFile');
+
+    if (!weekValue) {
+        showAlertExcel('Veuillez sélectionner une semaine cible', 'error');
+        return;
+    }
+
+    if (!fileInput.files || !fileInput.files[0]) {
+        showAlertExcel('Veuillez sélectionner un fichier Excel', 'error');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+    formData.append('week', weekValue);
+    formData.append('mode', mode);
+
+    try {
+        showAlertExcel('Analyse du fichier en cours...', 'info');
+
+        const response = await fetch('/API/distribution/clients-livreurs-hebdo/preview-import/', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            body: formData
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            importDataToConfirm = data.data || [];
+            showImportPreview(data);
+        } else {
+            const error = await response.json();
+            showAlertExcel('Erreur: ' + (error.detail || error.error || 'Fichier invalide'), 'error');
+        }
+    } catch (error) {
+        console.error('Import preview error:', error);
+        showAlertExcel('Erreur lors de l\'analyse du fichier', 'error');
+    }
+}
+
+function showImportPreview(data) {
+    const previewDiv = document.getElementById('importPreview');
+    const headerEl = document.getElementById('previewHeader');
+    const bodyEl = document.getElementById('previewBody');
+
+    // Build header
+    headerEl.innerHTML = `
+        <tr>
+            <th>Chauffeur</th>
+            <th>Client</th>
+            <th>Jours assignés</th>
+            <th>Statut</th>
+        </tr>
+    `;
+
+    // Build body - utiliser data.preview (pas data.data)
+    const joursNoms = ['', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+    const previewData = data.preview || [];
+
+    if (previewData.length === 0) {
+        bodyEl.innerHTML = `
+            <tr>
+                <td colspan="4" style="text-align: center; color: #6b7280;">
+                    Aucune ligne à importer (ajoutez des numéros ou 'X' dans les colonnes des jours)
+                </td>
+            </tr>
+        `;
+    } else {
+        bodyEl.innerHTML = previewData.map(row => {
+            const statusClass = row.valid ? 'badge-actif' : 'badge-inactif';
+            const statusText = row.valid ? 'Valide' : 'Erreur';
+
+            // Formater les jours avec leurs ordres
+            const joursFormates = row.jours.map(j => {
+                const ordre = row.ordres && row.ordres[j] ? ` (${row.ordres[j]})` : '';
+                return joursNoms[j] + ordre;
+            }).join(', ');
+
+            return `
+                <tr style="${!row.valid ? 'background-color: #fef2f2;' : ''}">
+                    <td>${row.livreur_nom || row.livreur_id}</td>
+                    <td>${row.client_nom || row.client_id}</td>
+                    <td>${joursFormates || '-'}</td>
+                    <td>
+                        <span class="${statusClass}">${statusText}</span>
+                        ${row.errors && row.errors.length > 0 ? `<br><small style="color: #dc2626;">${row.errors.join(', ')}</small>` : ''}
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    previewDiv.style.display = 'block';
+
+    // Message de résumé
+    const validCount = data.valid_rows || 0;
+    const errorCount = data.error_rows || 0;
+    const totalCount = data.total_rows || 0;
+
+    if (errorCount > 0) {
+        showAlertExcel(`${totalCount} lignes détectées: ${validCount} valides, ${errorCount} avec erreurs`, 'error');
+    } else if (validCount > 0) {
+        showAlertExcel(`${validCount} lignes prêtes à être importées`, 'success');
+    } else {
+        showAlertExcel('Aucune ligne à importer. Ajoutez des valeurs dans les colonnes des jours.', 'info');
+    }
+}
+
+function cancelImport() {
+    document.getElementById('importPreview').style.display = 'none';
+    importDataToConfirm = [];
+    document.getElementById('importFile').value = '';
+}
+
+async function confirmImport() {
+    const weekValue = document.getElementById('importWeek').value;
+    const mode = document.getElementById('importMode').value;
+    const fileInput = document.getElementById('importFile');
+
+    if (!fileInput.files || !fileInput.files[0]) {
+        showAlertExcel('Fichier non trouvé, veuillez le resélectionner', 'error');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+    // Mode 'replace' = replace_existing=true, 'add' = replace_existing=false
+    formData.append('replace_existing', mode === 'replace' ? 'true' : 'false');
+
+    try {
+        showAlertExcel('Import en cours...', 'info');
+
+        const response = await fetch('/API/distribution/clients-livreurs-hebdo/import-excel/', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            body: formData
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            const totalChanges = (data.created || 0) + (data.updated || 0);
+
+            // Fermer le modal d'import
+            cancelImport();
+
+            // Afficher un message de succès
+            let successMessage = `Import réussi! ${data.created || 0} créés, ${data.updated || 0} mis à jour, ${data.skipped || 0} ignorés.`;
+
+            // Basculer vers l'onglet "Configuration par jour" pour voir les changements
+            if (totalChanges > 0) {
+                switchConfigTab('config-jour');
+
+                // Rafraîchir la liste des livreurs au cas où de nouvelles configurations ont été créées
+                await loadLivreursJour();
+
+                // Rafraîchir les données de la page "Configuration par jour"
+                if (selectedLivreurJourId) {
+                    // Recharger les configurations pour le livreur sélectionné
+                    await loadConfigurationsForLivreur(selectedLivreurJourId);
+                    successMessage += ' Les données ont été mises à jour.';
+                } else {
+                    successMessage += ' Sélectionnez un chauffeur pour voir les changements.';
+                }
+            }
+
+            // Afficher l'alerte dans la section "Configuration par jour"
+            showAlertJour(successMessage, 'success');
+
+            // Rafraîchir aussi la liste des clients assignés si un livreur est sélectionné dans l'autre section
+            if (typeof state !== 'undefined' && state.selectedLivreur) {
+                await loadLivreurClients(state.selectedLivreur.id);
+                await renderClientLists();
+            }
+        } else {
+            const error = await response.json();
+            showAlertExcel('Erreur: ' + (error.detail || error.error || 'Import échoué'), 'error');
+        }
+    } catch (error) {
+        console.error('Import error:', error);
+        showAlertExcel('Erreur lors de l\'import', 'error');
+    }
+}
+
+function showAlertExcel(message, type) {
+    const container = document.getElementById('alert-container-excel');
+    const iconMap = { success: 'check-circle', error: 'exclamation-circle', info: 'info-circle' };
+    const classMap = { success: 'alert-success', error: 'alert-error', info: 'alert-success' };
+
+    container.innerHTML = `
+        <div class="alert ${classMap[type] || 'alert-success'}">
+            <i class="fas fa-${iconMap[type] || 'info-circle'}"></i>
+            ${message}
+        </div>
+    `;
+
+    if (type !== 'info') {
+        setTimeout(() => { container.innerHTML = ''; }, 5000);
+    }
+}
+
+// Variables globales pour la configuration par jour
+let configJourData = [];
+let livreursListConfig = [];
+let clientsListConfig = [];
+let selectedLivreurJourId = null;
+let allClientsJour = [];
+let clientsParJour = {1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 7: []};
+
+// ========== NOUVELLE INTERFACE PAR JOUR ==========
+
+// Charger les livreurs pour la nouvelle interface
+async function loadLivreursJour() {
+    try {
+        const response = await fetch('/API/distribution/livreurs/');
+        const data = await response.json();
+        livreursListConfig = Array.isArray(data) ? data : (data.results || []);
+
+        renderLivreursJour();
+
+        // Aussi remplir le modal select
+        const modalSelect = document.getElementById('config-jour-livreur');
+        if (modalSelect) {
+            modalSelect.innerHTML = '<option value="">Sélectionner un livreur...</option>';
+            livreursListConfig.forEach(l => {
+                modalSelect.innerHTML += `<option value="${l.id}">${l.nom || l.username}</option>`;
+            });
+        }
+    } catch (error) {
+        console.error('Erreur chargement livreurs:', error);
+    }
+}
+
+// Afficher la liste des livreurs
+function renderLivreursJour() {
+    const container = document.getElementById('livreurListJour');
+
+    if (livreursListConfig.length === 0) {
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-user-slash"></i><p>Aucun chauffeur</p></div>';
+        return;
+    }
+
+    container.innerHTML = livreursListConfig.map(l => `
+        <div class="livreur-item-jour ${selectedLivreurJourId === l.id ? 'active' : ''}" onclick="selectLivreurJour(${l.id}, '${(l.nom || l.username).replace(/'/g, "\\'")}')">
+            <div class="livreur-avatar">${(l.nom || l.username || '?').charAt(0).toUpperCase()}</div>
+            <div class="livreur-info">
+                <div class="livreur-name">${l.nom || l.username}</div>
+                <div class="livreur-matricule">${l.matricule || ''}</div>
+            </div>
+        </div>
+    `).join('');
+}
+
+// Sélectionner un livreur
+async function selectLivreurJour(livreurId, livreurNom) {
+    selectedLivreurJourId = livreurId;
+
+    // Mettre à jour la liste des livreurs
+    document.querySelectorAll('.livreur-item-jour').forEach(item => {
+        item.classList.remove('active');
+    });
+    event.currentTarget.classList.add('active');
+
+    // Afficher la section de gestion
+    document.getElementById('noLivreurSelectedJour').style.display = 'none';
+    document.getElementById('joursManagement').style.display = 'block';
+    document.getElementById('selectedLivreurNameJour').innerHTML = `<i class="fas fa-user"></i> ${livreurNom}`;
+
+    // Charger les configurations pour ce livreur
+    await loadConfigurationsForLivreur(livreurId);
+}
+
+// Charger tous les clients (avec gestion de la pagination)
+async function loadAllClientsJour() {
+    try {
+        let allClients = [];
+        let nextUrl = '/API/clients/';
+
+        // Charger toutes les pages
+        while (nextUrl) {
+            const response = await fetch(nextUrl);
+            const data = await response.json();
+
+            if (Array.isArray(data)) {
+                // Pas de pagination
+                allClients = data;
+                nextUrl = null;
+            } else {
+                // Pagination DRF
+                allClients = allClients.concat(data.results || []);
+                nextUrl = data.next;
+            }
+        }
+
+        allClientsJour = allClients;
+        clientsListConfig = allClientsJour; // Pour le modal aussi
+        console.log('[CONFIG] Clients chargés:', allClientsJour.length, 'Premier client:', allClientsJour[0]);
+
+        // Charger et remplir les secteurs
+        await loadSecteursJour();
+    } catch (error) {
+        console.error('Erreur chargement clients:', error);
+    }
+}
+
+// Charger les secteurs et remplir le select
+async function loadSecteursJour() {
+    try {
+        console.log('[CONFIG] Chargement des secteurs...');
+        const response = await fetch('/API/secteurs/');
+        console.log('[CONFIG] Réponse secteurs:', response.status);
+        const data = await response.json();
+        console.log('[CONFIG] Data secteurs:', data);
+        const secteurs = Array.isArray(data) ? data : (data.results || []);
+
+        const select = document.getElementById('secteurFilterJour');
+        if (select) {
+            // Garder l'option "Tous les secteurs"
+            if (secteurs.length === 0) {
+                select.innerHTML = '<option value="">Aucun secteur configuré</option>';
+            } else {
+                select.innerHTML = '<option value="">Tous les secteurs</option>';
+
+                // Ajouter les secteurs
+                secteurs.forEach(s => {
+                    const option = document.createElement('option');
+                    option.value = s.id;
+                    option.textContent = s.nom || s.code || `Secteur #${s.id}`;
+                    if (s.couleur) {
+                        option.style.backgroundColor = s.couleur + '20';
+                        option.style.borderLeft = `4px solid ${s.couleur}`;
+                    }
+                    select.appendChild(option);
+                });
+            }
+
+            console.log('[CONFIG] Secteurs chargés:', secteurs.length);
+        }
+    } catch (error) {
+        console.error('Erreur chargement secteurs:', error);
+        const select = document.getElementById('secteurFilterJour');
+        if (select) {
+            select.innerHTML = '<option value="">Erreur chargement secteurs</option>';
+        }
+    }
+}
+
+// Charger les configurations pour un livreur
+async function loadConfigurationsForLivreur(livreurId) {
+    try {
+        const response = await fetch(`/API/distribution/clients-livreurs-hebdo/?livreur=${livreurId}`);
+        const data = await response.json();
+        const configs = Array.isArray(data) ? data : (data.results || []);
+
+        // Réinitialiser
+        clientsParJour = {1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 7: []};
+
+        // Remplir les jours
+        configs.forEach(config => {
+            if (config.is_active && clientsParJour[config.jour_semaine]) {
+                clientsParJour[config.jour_semaine].push({
+                    configId: config.id,
+                    clientId: config.client,
+                    clientNom: config.client_nom,
+                    ordre: config.ordre_passage
+                });
+            }
+        });
+
+        // Afficher
+        renderClientsDisponiblesJour();
+        renderJoursCards();
+    } catch (error) {
+        console.error('Erreur chargement configs:', error);
+    }
+}
+
+// Afficher les clients disponibles
+function renderClientsDisponiblesJour() {
+    const container = document.getElementById('availableClientsListJour');
+    const searchValue = document.getElementById('searchClientJour')?.value.toLowerCase() || '';
+    const selectedSecteur = document.getElementById('secteurFilterJour')?.value || '';
+
+    // Clients déjà assignés à au moins un jour
+    const clientsAssignes = new Set();
+    Object.values(clientsParJour).forEach(jour => {
+        jour.forEach(c => clientsAssignes.add(c.clientId));
+    });
+
+    // Filtrer les clients par recherche et secteur
+    let clientsDispos = allClientsJour.filter(c => {
+        // Filtre par texte
+        const fullName = `${c.nom || ''} ${c.prenom || ''} ${c.adresse || ''} ${c.telephone || ''} ${c.email || ''}`.toLowerCase();
+        const matchSearch = fullName.includes(searchValue);
+
+        // Filtre par secteur
+        const matchSecteur = !selectedSecteur || (c.secteur && c.secteur.toString() === selectedSecteur);
+
+        return matchSearch && matchSecteur;
+    });
+
+    document.getElementById('availableCountJour').textContent = clientsDispos.length;
+
+    if (clientsDispos.length === 0) {
+        container.innerHTML = '<div class="empty-state" style="padding: 20px;"><i class="fas fa-search"></i><p>Aucun client trouvé</p></div>';
+        return;
+    }
+
+    container.innerHTML = clientsDispos.map(c => {
+        // Construire le nom complet avec plusieurs fallbacks
+        let displayName = '';
+
+        // Essayer nom + prenom
+        const nomPrenom = ((c.nom || '') + ' ' + (c.prenom || '')).trim();
+        if (nomPrenom) {
+            displayName = nomPrenom;
+        }
+        // Sinon essayer email
+        else if (c.email) {
+            displayName = c.email;
+        }
+        // Sinon essayer telephone
+        else if (c.telephone) {
+            displayName = 'Tél: ' + c.telephone;
+        }
+        // Sinon essayer adresse (premiers 30 chars)
+        else if (c.adresse) {
+            displayName = c.adresse.substring(0, 30);
+        }
+        // Dernier recours: ID
+        else {
+            displayName = `Client #${c.id}`;
+        }
+
+        const escapedName = displayName.replace(/'/g, "\\'").replace(/"/g, '\\"');
+
+        // Construire la ligne secondaire (adresse ou téléphone)
+        let secondLine = '';
+        if (c.adresse) {
+            secondLine = c.adresse;
+        } else if (c.telephone) {
+            secondLine = c.telephone;
+        } else if (c.email) {
+            secondLine = c.email;
+        } else {
+            secondLine = 'Aucune info';
+        }
+
+        // Badge secteur
+        let secteurBadge = '';
+        if (c.secteur_nom) {
+            const couleur = c.secteur_couleur || '#6b7280';
+            secteurBadge = `<span class="secteur-badge" style="background: ${couleur}; color: white; padding: 2px 6px; border-radius: 3px; font-size: 10px; margin-left: 8px;">${c.secteur_nom}</span>`;
+        }
+
+        return `
+        <div class="client-item-jour" draggable="true" ondragstart="dragStart(event, ${c.id}, '${escapedName}')">
+            <div class="client-info-row">
+                <div class="client-icon"><i class="fas fa-user"></i></div>
+                <div class="client-details">
+                    <div class="client-name-jour">${displayName}${secteurBadge}</div>
+                    <div class="client-address-jour">${secondLine}</div>
+                </div>
+            </div>
+            <div class="add-btns-full">
+                <button class="add-btn-full" style="background: #dbeafe; color: #1d4ed8;" onclick="addClientToJour(${c.id}, '${escapedName}', 1)">Lundi</button>
+                <button class="add-btn-full" style="background: #ede9fe; color: #6d28d9;" onclick="addClientToJour(${c.id}, '${escapedName}', 2)">Mardi</button>
+                <button class="add-btn-full" style="background: #cffafe; color: #0891b2;" onclick="addClientToJour(${c.id}, '${escapedName}', 3)">Mercredi</button>
+                <button class="add-btn-full" style="background: #d1fae5; color: #059669;" onclick="addClientToJour(${c.id}, '${escapedName}', 4)">Jeudi</button>
+                <button class="add-btn-full" style="background: #fef3c7; color: #d97706;" onclick="addClientToJour(${c.id}, '${escapedName}', 5)">Vendredi</button>
+                <button class="add-btn-full" style="background: #fee2e2; color: #dc2626;" onclick="addClientToJour(${c.id}, '${escapedName}', 6)">Samedi</button>
+                <button class="add-btn-full" style="background: #e5e7eb; color: #4b5563;" onclick="addClientToJour(${c.id}, '${escapedName}', 7)">Dimanche</button>
+            </div>
+        </div>
+    `}).join('');
+}
+
+// Afficher les cartes des jours
+function renderJoursCards() {
+    for (let jour = 1; jour <= 7; jour++) {
+        const container = document.getElementById(`clients-jour-${jour}`);
+        const countEl = document.getElementById(`count-jour-${jour}`);
+        const clients = clientsParJour[jour] || [];
+
+        countEl.textContent = clients.length;
+
+        if (clients.length === 0) {
+            container.innerHTML = '<div class="empty-jour">Aucun client</div>';
+        } else {
+            container.innerHTML = clients.map(c => `
+                <div class="client-in-jour">
+                    <span class="client-name-mini">${c.clientNom}</span>
+                    <button class="remove-btn" onclick="removeClientFromJour(${c.configId}, ${jour})" title="Retirer">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `).join('');
+        }
+    }
+}
+
+// Filtrer les clients disponibles
+function filterClientsJour() {
+    renderClientsDisponiblesJour();
+}
+
+// Drag and Drop
+function dragStart(event, clientId, clientNom) {
+    event.dataTransfer.setData('clientId', clientId);
+    event.dataTransfer.setData('clientNom', clientNom);
+    event.currentTarget.classList.add('dragging');
+}
+
+function allowDrop(event) {
+    event.preventDefault();
+    event.currentTarget.classList.add('drag-over');
+}
+
+function dropClient(event, jour) {
+    event.preventDefault();
+    event.currentTarget.classList.remove('drag-over');
+
+    const clientId = event.dataTransfer.getData('clientId');
+    const clientNom = event.dataTransfer.getData('clientNom');
+
+    if (clientId && clientNom) {
+        addClientToJour(parseInt(clientId), clientNom, jour);
+    }
+
+    // Enlever la classe dragging
+    document.querySelectorAll('.client-item-jour').forEach(el => el.classList.remove('dragging'));
+}
+
+// Ajouter un client à un jour
+async function addClientToJour(clientId, clientNom, jour) {
+    if (!selectedLivreurJourId) {
+        showAlertJour('Veuillez sélectionner un chauffeur', 'error');
+        return;
+    }
+
+    // Vérifier si déjà assigné pour ce jour (même chauffeur)
+    const dejaAssigne = clientsParJour[jour].some(c => c.clientId === clientId);
+    if (dejaAssigne) {
+        showAlertJour('Ce client est déjà assigné pour ce jour', 'warning');
+        return;
+    }
+
+    try {
+        // Vérifier si le client est déjà assigné à un autre chauffeur pour ce jour
+        const checkResponse = await fetch(`/API/distribution/clients-livreurs-hebdo/?client=${clientId}&jour_semaine=${jour}`);
+        const existingConfigs = await checkResponse.json();
+        const configs = Array.isArray(existingConfigs) ? existingConfigs : (existingConfigs.results || []);
+
+        // Filtrer les configs actives d'autres chauffeurs
+        const autresChauffeurs = configs.filter(c => c.livreur !== selectedLivreurJourId && c.is_active);
+
+        if (autresChauffeurs.length > 0) {
+            const existingConfig = autresChauffeurs[0];
+            const autreChauffeurNom = existingConfig.livreur_nom || 'un autre chauffeur';
+            const jourNom = getJourName(jour);
+
+            // Afficher une modale de confirmation pour transférer
+            showTransferConfirmation(clientId, clientNom, jour, existingConfig.id, autreChauffeurNom, jourNom);
+            return;
+        }
+
+        // Pas de conflit, ajouter directement
+        await createClientAssignment(clientId, clientNom, jour);
+
+    } catch (error) {
+        console.error('Erreur ajout client:', error);
+        showAlertJour('Erreur lors de l\'ajout', 'error');
+    }
+}
+
+// Afficher la modale de confirmation pour transférer un client
+function showTransferConfirmation(clientId, clientNom, jour, existingConfigId, autreChauffeurNom, jourNom) {
+    const selectedLivreurNom = document.getElementById('selectLivreurJour')?.options[document.getElementById('selectLivreurJour').selectedIndex]?.text || 'ce chauffeur';
+
+    // Créer la modale si elle n'existe pas
+    let modal = document.getElementById('transferModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'transferModal';
+        modal.className = 'modal';
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width: 500px;">
+                <div class="modal-header" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);">
+                    <span class="close" onclick="closeTransferModal()">&times;</span>
+                    <h2><i class="fas fa-exclamation-triangle"></i> Client déjà assigné</h2>
+                </div>
+                <div class="modal-body" style="padding: 25px;">
+                    <div id="transferModalContent"></div>
+                    <div style="display: flex; gap: 10px; margin-top: 25px; justify-content: flex-end;">
+                        <button class="btn-secondary" onclick="closeTransferModal()">
+                            <i class="fas fa-times"></i> Annuler
+                        </button>
+                        <button class="btn-warning" id="btnTransferClient">
+                            <i class="fas fa-exchange-alt"></i> Transférer
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+
+    // Remplir le contenu
+    document.getElementById('transferModalContent').innerHTML = `
+        <div style="background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 15px; margin-bottom: 20px;">
+            <p style="margin: 0; color: #92400e;">
+                <strong>${clientNom}</strong> est actuellement assigné à <strong>${autreChauffeurNom}</strong> pour le <strong>${jourNom}</strong>.
+            </p>
+        </div>
+        <p style="color: #4b5563;">Voulez-vous transférer ce client vers <strong>${selectedLivreurNom}</strong> ?</p>
+        <p style="color: #6b7280; font-size: 0.9rem;">
+            <i class="fas fa-info-circle"></i> L'ancienne assignation sera supprimée et le client sera assigné au nouveau chauffeur.
+        </p>
+    `;
+
+    // Configurer le bouton de transfert
+    document.getElementById('btnTransferClient').onclick = async function() {
+        await transferClient(clientId, clientNom, jour, existingConfigId);
+    };
+
+    modal.style.display = 'block';
+}
+
+// Fermer la modale de transfert
+function closeTransferModal() {
+    const modal = document.getElementById('transferModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+// Transférer un client d'un chauffeur à un autre
+async function transferClient(clientId, clientNom, jour, existingConfigId) {
+    try {
+        // 1. Supprimer l'ancienne assignation
+        const deleteResponse = await fetch(`/API/distribution/clients-livreurs-hebdo/${existingConfigId}/`, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        });
+
+        if (!deleteResponse.ok) {
+            showAlertJour('Erreur lors de la suppression de l\'ancienne assignation', 'error');
+            closeTransferModal();
+            return;
+        }
+
+        // 2. Créer la nouvelle assignation
+        await createClientAssignment(clientId, clientNom, jour);
+
+        closeTransferModal();
+        showAlertJour(`Client transféré avec succès pour le ${getJourName(jour)}`, 'success');
+
+    } catch (error) {
+        console.error('Erreur transfert client:', error);
+        showAlertJour('Erreur lors du transfert', 'error');
+        closeTransferModal();
+    }
+}
+
+// Créer une assignation client
+async function createClientAssignment(clientId, clientNom, jour) {
+    const response = await fetch('/API/distribution/clients-livreurs-hebdo/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({
+            client: clientId,
+            livreur: selectedLivreurJourId,
+            jour_semaine: jour,
+            is_active: true
+        })
+    });
+
+    if (response.ok) {
+        const newConfig = await response.json();
+        clientsParJour[jour].push({
+            configId: newConfig.id,
+            clientId: clientId,
+            clientNom: clientNom,
+            ordre: null
+        });
+        renderJoursCards();
+        showAlertJour(`Client ajouté pour le ${getJourName(jour)}`, 'success');
+    } else {
+        const error = await response.json();
+        if (error.non_field_errors && error.non_field_errors[0] && error.non_field_errors[0].includes('unique')) {
+            showAlertJour('Ce client est déjà assigné à un chauffeur pour ce jour', 'error');
+        } else {
+            showAlertJour('Erreur: ' + JSON.stringify(error), 'error');
+        }
+    }
+}
+
+// Retirer un client d'un jour
+async function removeClientFromJour(configId, jour) {
+    try {
+        const response = await fetch(`/API/distribution/clients-livreurs-hebdo/${configId}/`, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        });
+
+        if (response.ok || response.status === 204) {
+            clientsParJour[jour] = clientsParJour[jour].filter(c => c.configId !== configId);
+            renderJoursCards();
+            showAlertJour('Client retiré', 'success');
+        } else {
+            showAlertJour('Erreur lors de la suppression', 'error');
+        }
+    } catch (error) {
+        console.error('Erreur suppression:', error);
+        showAlertJour('Erreur lors de la suppression', 'error');
+    }
+}
+
+// Obtenir le nom du jour
+function getJourName(jour) {
+    const jours = ['', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+    return jours[jour] || '';
+}
+
+// Afficher une alerte
+function showAlertJour(message, type) {
+    const container = document.getElementById('alert-container-jour');
+    container.innerHTML = `
+        <div class="alert alert-${type === 'success' ? 'success' : 'error'}">
+            <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i>
+            ${message}
+        </div>
+    `;
+
+    setTimeout(() => {
+        container.innerHTML = '';
+    }, 3000);
+}
+
+// Enlever effet drag-over quand on quitte
+document.addEventListener('dragleave', function(e) {
+    if (e.target.classList) {
+        e.target.classList.remove('drag-over');
+    }
+});
+
+// ========== FIN NOUVELLE INTERFACE ==========
+
+// Charger les livreurs pour le filtre (ancien code - conservé pour compatibilité)
+async function loadLivreursForFilter() {
+    await loadLivreursJour();
+}
+
+// Charger les clients pour le modal (custom dropdown)
+async function loadClientsForModal() {
+    try {
+        const response = await fetch('/API/clients/');
+        const data = await response.json();
+        clientsListConfig = Array.isArray(data) ? data : (data.results || []);
+
+        renderClientOptions(clientsListConfig);
+    } catch (error) {
+        console.error('Erreur chargement clients:', error);
+    }
+}
+
+// Afficher les options du dropdown client
+function renderClientOptions(clients) {
+    const optionsList = document.getElementById('client-options-list');
+    const selectedValue = document.getElementById('config-jour-client').value;
+
+    if (clients.length === 0) {
+        optionsList.innerHTML = '<div class="custom-select-option" style="color: #9ca3af; cursor: default;">Aucun client trouvé</div>';
+        return;
+    }
+
+    optionsList.innerHTML = clients.map(c => {
+        const clientNom = (c.nom || '') + ' ' + (c.prenom || '');
+        const displayName = clientNom.trim() || `Client #${c.id}`;
+        const escapedName = displayName.replace(/'/g, "\\'");
+
+        return `
+        <div class="custom-select-option ${c.id == selectedValue ? 'selected' : ''}"
+             data-value="${c.id}"
+             onclick="selectClient(${c.id}, '${escapedName}')">
+            <div class="client-name">${displayName}</div>
+            <div class="client-address">${c.adresse || c.telephone || 'Pas d\'adresse'}</div>
+        </div>
+    `}).join('');
+}
+
+// Toggle dropdown client
+function toggleClientDropdown() {
+    const trigger = document.getElementById('client-select-trigger');
+    const dropdown = document.getElementById('client-dropdown');
+    const isOpen = dropdown.classList.contains('open');
+
+    if (isOpen) {
+        closeClientDropdown();
+    } else {
+        trigger.classList.add('open');
+        dropdown.classList.add('open');
+        document.getElementById('client-search').focus();
+    }
+}
+
+// Fermer dropdown client
+function closeClientDropdown() {
+    document.getElementById('client-select-trigger').classList.remove('open');
+    document.getElementById('client-dropdown').classList.remove('open');
+    document.getElementById('client-search').value = '';
+    renderClientOptions(clientsListConfig);
+}
+
+// Sélectionner un client
+function selectClient(id, name) {
+    document.getElementById('config-jour-client').value = id;
+    document.getElementById('client-select-text').textContent = name;
+    closeClientDropdown();
+
+    // Mettre à jour la classe selected
+    document.querySelectorAll('#client-options-list .custom-select-option').forEach(opt => {
+        opt.classList.remove('selected');
+        if (opt.dataset.value == id) {
+            opt.classList.add('selected');
+        }
+    });
+}
+
+// Filtrer les clients
+function filterClients() {
+    const searchValue = document.getElementById('client-search').value.toLowerCase();
+    const filteredClients = clientsListConfig.filter(c => {
+        const fullName = `${c.nom || ''} ${c.prenom || ''} ${c.adresse || ''} ${c.telephone || ''}`.toLowerCase();
+        return fullName.includes(searchValue);
+    });
+    renderClientOptions(filteredClients);
+}
+
+// Fermer dropdown si clic en dehors
+document.addEventListener('click', function(e) {
+    const wrapper = document.querySelector('.custom-select-wrapper');
+    if (wrapper && !wrapper.contains(e.target)) {
+        closeClientDropdown();
+    }
+});
+
+// Charger les configurations clients/livreurs
+async function loadConfigClientsLivreurs() {
+    const livreurId = document.getElementById('filter-livreur-config').value;
+    const jour = document.getElementById('filter-jour-config').value;
+
+    const tbody = document.getElementById('config-table-body');
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px;"><i class="fas fa-spinner fa-spin"></i> Chargement...</td></tr>';
+
+    try {
+        let url = '/API/distribution/clients-livreurs-hebdo/';
+        const params = new URLSearchParams();
+        if (livreurId) params.append('livreur', livreurId);
+        if (jour) params.append('jour_semaine', jour);
+        if (params.toString()) url += '?' + params.toString();
+
+        const response = await fetch(url);
+        const data = await response.json();
+        configJourData = Array.isArray(data) ? data : (data.results || []);
+
+        renderConfigTable();
+    } catch (error) {
+        console.error('Erreur chargement config:', error);
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px; color: #ef4444;">Erreur de chargement</td></tr>';
+    }
+}
+
+// Afficher le tableau de configuration
+function renderConfigTable() {
+    const tbody = document.getElementById('config-table-body');
+
+    if (configJourData.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px; color: #6b7280;">Aucune configuration trouvée</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = configJourData.map(config => `
+        <tr>
+            <td>${config.client_nom || 'N/A'}</td>
+            <td>${config.livreur_nom || 'N/A'}</td>
+            <td style="text-align: center;"><span class="badge-jour">${config.jour_semaine_display || config.jour_semaine}</span></td>
+            <td style="text-align: center;">${config.ordre_passage || '-'}</td>
+            <td style="text-align: center;">
+                <span class="badge-${config.is_active ? 'actif' : 'inactif'}">${config.is_active ? 'Actif' : 'Inactif'}</span>
+            </td>
+            <td style="text-align: center;">
+                <button class="btn-edit" onclick="editConfigJour(${config.id})">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn-delete" onclick="deleteConfigJour(${config.id})">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+// Ouvrir le modal de configuration
+function openConfigJourModal(id = null) {
+    loadClientsForModal();
+
+    const modal = document.getElementById('configJourModal');
+    const title = document.getElementById('config-jour-modal-title');
+    const form = document.getElementById('config-jour-form');
+
+    // Reset form
+    form.reset();
+    document.getElementById('config-jour-id').value = '';
+    document.getElementById('config-jour-client').value = '';
+    document.getElementById('client-select-text').textContent = 'Sélectionner un client...';
+    document.getElementById('config-jour-actif').checked = true;
+    closeClientDropdown();
+
+    if (id) {
+        title.textContent = 'Modifier Configuration Client/Livreur';
+        const config = configJourData.find(c => c.id === id);
+        if (config) {
+            document.getElementById('config-jour-id').value = config.id;
+            document.getElementById('config-jour-client').value = config.client;
+            document.getElementById('client-select-text').textContent = config.client_nom || 'Client sélectionné';
+            document.getElementById('config-jour-livreur').value = config.livreur;
+            document.getElementById('config-jour-day').value = config.jour_semaine;
+            document.getElementById('config-jour-ordre').value = config.ordre_passage || '';
+            document.getElementById('config-jour-actif').checked = config.is_active;
+        }
+    } else {
+        title.textContent = 'Nouvelle Configuration Client/Livreur';
+    }
+
+    modal.style.display = 'block';
+}
+
+// Fermer le modal
+function closeConfigJourModal() {
+    document.getElementById('configJourModal').style.display = 'none';
+}
+
+// Éditer une configuration
+function editConfigJour(id) {
+    openConfigJourModal(id);
+}
+
+// Supprimer une configuration
+async function deleteConfigJour(id) {
+    if (!confirm('Êtes-vous sûr de vouloir supprimer cette configuration ?')) return;
+
+    try {
+        const response = await fetch(`/API/distribution/clients-livreurs-hebdo/${id}/`, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        });
+
+        if (response.ok || response.status === 204) {
+            loadConfigClientsLivreurs();
+        } else {
+            alert('Erreur lors de la suppression');
+        }
+    } catch (error) {
+        console.error('Erreur suppression:', error);
+        alert('Erreur lors de la suppression');
+    }
+}
+
+// Soumission du formulaire
+document.getElementById('config-jour-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const id = document.getElementById('config-jour-id').value;
+    const data = {
+        client: parseInt(document.getElementById('config-jour-client').value),
+        livreur: parseInt(document.getElementById('config-jour-livreur').value),
+        jour_semaine: parseInt(document.getElementById('config-jour-day').value),
+        ordre_passage: document.getElementById('config-jour-ordre').value ? parseInt(document.getElementById('config-jour-ordre').value) : null,
+        is_active: document.getElementById('config-jour-actif').checked
+    };
+
+    try {
+        const url = id ? `/API/distribution/clients-livreurs-hebdo/${id}/` : '/API/distribution/clients-livreurs-hebdo/';
+        const method = id ? 'PUT' : 'POST';
+
+        const response = await fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify(data)
+        });
+
+        if (response.ok) {
+            closeConfigJourModal();
+            loadConfigClientsLivreurs();
+        } else {
+            const error = await response.json();
+            alert('Erreur: ' + JSON.stringify(error));
+        }
+    } catch (error) {
+        console.error('Erreur sauvegarde:', error);
+        alert('Erreur lors de la sauvegarde');
+    }
+});
+
+// Utilitaire pour obtenir le cookie CSRF
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// Fermer le modal en cliquant à l'extérieur
+window.onclick = function(event) {
+    const modal = document.getElementById('configJourModal');
+    if (event.target === modal) {
+        modal.style.display = 'none';
+    }
+}
+</script>

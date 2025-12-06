@@ -1,0 +1,39 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(copy /Y \"C:\\Users\\KB\\Documents\\autre\\GestionStock-django-master\\GestionStock-django-master\\static\\script\\redirect.js\" \"C:\\Users\\KB\\Documents\\autre\\GestionStock-django-master\\GestionStock-django-master\\staticfiles\\script\\redirect.js\")",
+      "Bash(copy /Y \"C:\\Users\\KB\\Documents\\autre\\GestionStock-django-master\\GestionStock-django-master\\static\\script\\client.js\" \"C:\\Users\\KB\\Documents\\autre\\GestionStock-django-master\\GestionStock-django-master\\staticfiles\\script\\client.js\")",
+      "Bash(cmd /c copy:*)",
+      "mcp__gestion-stock__list_categories",
+      "Bash(python:*)",
+      "Bash(copy /Y \"static\\script\\vente.js\" \"staticfiles\\script\\vente.js\")",
+      "Bash(copy /Y \"C:\\Users\\KB\\Documents\\autre\\GestionStock-django-master\\GestionStock-django-master\\static\\script\\vente.js\" \"C:\\Users\\KB\\Documents\\autre\\GestionStock-django-master\\GestionStock-django-master\\staticfiles\\script\\vente.js\")",
+      "Bash(for file in caisse.html entrepots_list.html facture.html parametres.html promotions.html)",
+      "Bash(do sed -i \"s/€/DA/g\" \"$file\")",
+      "Bash(done)",
+      "Bash(copy /Y \"C:\\Users\\KB\\Documents\\autre\\GestionStock-django-master\\GestionStock-django-master\\static\\script\\achat.js\" \"C:\\Users\\KB\\Documents\\autre\\GestionStock-django-master\\GestionStock-django-master\\staticfiles\\script\\achat.js\")",
+      "Bash(cmd /c \"dir /B C:\\Users\\KB\\Documents\\autre\\GestionStock-django-master\\GestionStock-django-master\\staticfiles\\script\\vente.js\")",
+      "Bash(grep:*)",
+      "mcp__gestion-stock__list_products",
+      "mcp__gestion-stock__list_clients",
+      "mcp__gestion-stock__list_warehouses",
+      "Bash(cmd /c \"git diff --name-only\")",
+      "Bash(cmd /c \"git status\")",
+      "Bash(del \"C:\\Users\\KB\\Documents\\autre\\GestionStock-django-master\\GestionStock-django-master\\update_promo.py\")",
+      "Bash(cmd /c del \"C:\\Users\\KB\\Documents\\autre\\GestionStock-django-master\\GestionStock-django-master\\update_promo.py\")",
+      "Bash(cmd /c del \"C:\\Users\\KB\\Documents\\autre\\GestionStock-django-master\\GestionStock-django-master\\check_produit.py\")",
+      "Bash(cmd /c del \"C:\\Users\\KB\\Documents\\autre\\GestionStock-django-master\\GestionStock-django-master\\check_prix.py\")",
+      "Bash(cmd /c del \"C:\\Users\\KB\\Documents\\autre\\GestionStock-django-master\\GestionStock-django-master\\check_ventes.py\")",
+      "Bash(copy /Y \"C:\\Users\\KB\\Documents\\autre\\GestionStock-django-master\\GestionStock-django-master\\static\\script\\tournees.js\" \"C:\\Users\\KB\\Documents\\autre\\GestionStock-django-master\\GestionStock-django-master\\staticfiles\\script\\tournees.js\")",
+      "Bash(cmd /c dir \"C:\\Users\\KB\\Documents\\autre\\GestionStock-django-master\\GestionStock-django-master\\staticfiles\\script\\tournees.js\")",
+      "mcp__gestion-stock__list_routes"
+    ],
+    "deny": [],
+    "ask": []
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "gestion-stock",
+    "gestion-stock-ui"
+  ]
+}

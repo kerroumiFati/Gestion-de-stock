@@ -1,0 +1,1107 @@
+{% load static %}
+{% load i18n %}
+
+<div class="container-fluid">
+    <div class="card bg-white">
+        <div class="card-header card-color">
+            <p class="h4 text-center text-uppercase font-weight-bold pt-2">
+                <i class="fa fa-truck-loading"></i> {% trans "Charger un Van" %}
+            </p>
+        </div>
+        <div class="card-body">
+            <form method="post" id="chargerVanForm">
+                {% csrf_token %}
+
+                <!-- Sélection Van et Entrepôt Source -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label><i class="fa fa-truck"></i> {% trans "Van à charger" %} *</label>
+                            <select name="van" id="van" class="form-control" required>
+                                <option value="">{% trans "-- Sélectionner un van --" %}</option>
+                                {% for van in vans %}
+                                <option value="{{ van.id }}">{{ van.code }} - {{ van.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label><i class="fa fa-warehouse"></i> {% trans "Entrepôt source" %} *</label>
+                            <select name="entrepot_source" id="entrepot_source" class="form-control" required>
+                                <option value="">{% trans "-- Sélectionner l'entrepôt --" %}</option>
+                                {% for source in sources %}
+                                <option value="{{ source.id }}">{{ source.code }} - {{ source.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Onglets pour les méthodes de saisie -->
+                <ul class="nav nav-tabs mb-3" role="tablist">
+                    <li class="nav-item">
+                        <a class="nav-link active" data-toggle="tab" href="#tab-table" role="tab">
+                            <i class="fa fa-table"></i> {% trans "Tableau dynamique" %}
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" data-toggle="tab" href="#tab-scanner" role="tab">
+                            <i class="fa fa-barcode"></i> {% trans "Scanner" %}
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" data-toggle="tab" href="#tab-checkbox" role="tab">
+                            <i class="fa fa-check-square"></i> {% trans "Liste rapide" %}
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" data-toggle="tab" href="#tab-import" role="tab">
+                            <i class="fa fa-file-import"></i> {% trans "Import texte" %}
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" data-toggle="tab" href="#tab-stock-van" role="tab" id="tab-stock-van-link">
+                            <i class="fa fa-truck"></i> {% trans "Stock actuel du Van" %}
+                        </a>
+                    </li>
+                </ul>
+
+                <!-- Contenu des onglets -->
+                <div class="tab-content">
+                    <!-- Tab 1: Tableau dynamique -->
+                    <div class="tab-pane fade show active" id="tab-table" role="tabpanel">
+                        <div class="table-responsive">
+                            <table class="table table-bordered" id="productsTable" data-no-datatable="true">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th width="50%">{% trans "Produit" %}</th>
+                                        <th width="20%">{% trans "Stock dispo" %}</th>
+                                        <th width="20%">{% trans "Quantité" %}</th>
+                                        <th width="10%">{% trans "Action" %}</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="productsTableBody">
+                                    <tr>
+                                        <td colspan="4" class="text-center text-muted">
+                                            <i class="fa fa-info-circle"></i> {% trans "Cliquez sur 'Ajouter une ligne' pour commencer" %}
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-success" onclick="addProductRow()">
+                            <i class="fa fa-plus"></i> {% trans "Ajouter une ligne" %}
+                        </button>
+                    </div>
+
+                    <!-- Tab 2: Scanner -->
+                    <div class="tab-pane fade" id="tab-scanner" role="tabpanel">
+                        <div class="form-group">
+                            <label><i class="fa fa-barcode"></i> {% trans "Scanner le code-barres" %}</label>
+                            <input type="text" class="form-control form-control-lg" id="barcodeInput"
+                                   placeholder="{% trans 'Scannez ou tapez le code-barres puis Entrée' %}"
+                                   autocomplete="off">
+                        </div>
+                        <div id="scannedProducts" class="mt-3">
+                            <!-- Les produits scannés apparaîtront ici -->
+                        </div>
+                    </div>
+
+                    <!-- Tab 3: Liste avec checkboxes (Liste rapide améliorée) -->
+                    <div class="tab-pane fade" id="tab-checkbox" role="tabpanel">
+                        <!-- Barre d'outils -->
+                        <div class="mb-3">
+                            <div class="row">
+                                <div class="col-md-8">
+                                    <div class="input-group">
+                                        <div class="input-group-prepend">
+                                            <span class="input-group-text"><i class="fa fa-search"></i></span>
+                                        </div>
+                                        <input type="text" class="form-control" id="searchProduct"
+                                               placeholder="{% trans 'Rechercher un produit par nom ou référence...' %}">
+                                        <div class="input-group-append">
+                                            <button class="btn btn-outline-secondary" type="button" onclick="clearSearch()">
+                                                <i class="fa fa-times"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="btn-group w-100" role="group">
+                                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="selectAllProducts()">
+                                            <i class="fa fa-check-square"></i> {% trans "Tout sélectionner" %}
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="deselectAllProducts()">
+                                            <i class="fa fa-square"></i> {% trans "Tout désélectionner" %}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Compteur de sélection -->
+                            <div class="mt-2">
+                                <small class="text-muted">
+                                    <span id="selectedCount">0</span> {% trans "produit(s) sélectionné(s)" %}
+                                    <span id="totalQuantity" class="ml-2"></span>
+                                </small>
+                            </div>
+                        </div>
+
+                        <!-- Liste des produits -->
+                        <div style="max-height: 500px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 0.25rem; padding: 10px;" id="productCheckboxList">
+                            <p class="text-muted text-center">
+                                <i class="fa fa-spinner fa-spin"></i> {% trans "Chargement des produits..." %}
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Tab 4: Import texte -->
+                    <div class="tab-pane fade" id="tab-import" role="tabpanel">
+                        <div class="alert alert-info">
+                            <i class="fa fa-info-circle"></i> {% trans "Format" %}: <code>REFERENCE,QUANTITE</code> {% trans "(une ligne par produit)" %}
+                        </div>
+                        <textarea id="importText" class="form-control" rows="10"
+                                  style="font-family: monospace;"
+                                  placeholder="PROD-001,50&#10;PROD-002,30&#10;PROD-003,100"></textarea>
+                        <button type="button" class="btn btn-primary mt-2" onclick="importFromText()">
+                            <i class="fa fa-upload"></i> {% trans "Importer" %}
+                        </button>
+                    </div>
+
+                    <!-- Tab 5: Stock actuel du Van -->
+                    <div class="tab-pane fade" id="tab-stock-van" role="tabpanel">
+                        <div class="alert alert-info">
+                            <i class="fa fa-info-circle"></i> {% trans "Sélectionnez un van ci-dessus pour voir son stock actuel" %}
+                        </div>
+
+                        <!-- Statistiques du stock -->
+                        <div class="row mb-3" id="vanStockStats" style="display:none;">
+                            <div class="col-md-4">
+                                <div class="card bg-primary text-white">
+                                    <div class="card-body text-center">
+                                        <h4 id="totalProducts">0</h4>
+                                        <p class="mb-0">{% trans "Produits différents" %}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card bg-success text-white">
+                                    <div class="card-body text-center">
+                                        <h4 id="totalQuantity">0</h4>
+                                        <p class="mb-0">{% trans "Unités totales" %}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card bg-info text-white">
+                                    <div class="card-body text-center">
+                                        <h4 id="lowStockCount">0</h4>
+                                        <p class="mb-0">{% trans "Produits stock faible" %}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Barre de recherche -->
+                        <div class="row mb-3" id="vanStockSearch" style="display:none;">
+                            <div class="col-md-8">
+                                <div class="input-group">
+                                    <div class="input-group-prepend">
+                                        <span class="input-group-text"><i class="fa fa-search"></i></span>
+                                    </div>
+                                    <input type="text" class="form-control" id="searchVanStock"
+                                           placeholder="{% trans 'Rechercher dans le stock du van...' %}">
+                                    <div class="input-group-append">
+                                        <button class="btn btn-outline-secondary" type="button" onclick="clearVanStockSearch()">
+                                            <i class="fa fa-times"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <button type="button" class="btn btn-outline-primary btn-block" onclick="loadVanStock()">
+                                    <i class="fa fa-sync"></i> {% trans "Rafraîchir" %}
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Tableau du stock du van -->
+                        <div class="table-responsive">
+                            <table class="table table-hover table-bordered" id="vanStockTable" data-no-datatable="true">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th width="15%">{% trans "Référence" %}</th>
+                                        <th width="35%">{% trans "Désignation" %}</th>
+                                        <th width="15%">{% trans "Code-barres" %}</th>
+                                        <th width="15%" class="text-center">{% trans "Quantité" %}</th>
+                                        <th width="20%" class="text-center">{% trans "Statut" %}</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="vanStockTableBody">
+                                    <tr>
+                                        <td colspan="5" class="text-center text-muted py-4">
+                                            <i class="fa fa-truck"></i> {% trans "Sélectionnez un van pour voir son stock" %}
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Message vide -->
+                        <div id="emptyVanStock" style="display:none;" class="text-center text-muted py-5">
+                            <i class="fa fa-box-open fa-3x mb-3"></i>
+                            <h5>{% trans "Ce van est vide" %}</h5>
+                            <p>{% trans "Aucun produit dans ce van actuellement" %}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Récapitulatif -->
+                <div class="card mt-4 border-primary" id="summaryCard" style="display:none;">
+                    <div class="card-header bg-primary text-white">
+                        <h6 class="mb-0"><i class="fa fa-shopping-cart"></i> {% trans "Récapitulatif du chargement" %}</h6>
+                    </div>
+                    <div class="card-body">
+                        <div id="summaryContent"></div>
+                    </div>
+                </div>
+
+                <!-- Hidden input pour les données -->
+                <input type="hidden" name="produits" id="produitsData">
+
+                <!-- Boutons d'action -->
+                <div class="mt-4">
+                    <button type="submit" class="btn btn-primary btn-lg">
+                        <i class="fa fa-check"></i> {% trans "Charger le van" %}
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-lg" onclick="show('stock_dashboard')">
+                        <i class="fa fa-times"></i> {% trans "Annuler" %}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    'use strict';
+
+    // Fonction d'échappement HTML pour éviter les erreurs de syntaxe
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // Fonction d'échappement pour les attributs HTML (guillemets doubles)
+    function escapeAttr(text) {
+        if (!text) return '';
+        return String(text)
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+    }
+
+    // Convertir une référence en ID HTML valide
+    function refToId(reference) {
+        return escapeAttr(reference).replace(/[^a-zA-Z0-9_-]/g, '_');
+    }
+
+    // Données globales (scoped to this IIFE to avoid redeclaration errors)
+    let selectedProducts = [];
+    let allProducts = [];
+
+    // Charger tous les produits au chargement de la page
+    document.addEventListener('fragment:loaded', function(e) {
+        console.log('[CHARGER_VAN] Event fragment:loaded déclenché:', e.detail.name);
+        if (e.detail.name === 'charger_van') {
+            console.log('[CHARGER_VAN] Page charger_van détectée, chargement des produits...');
+            loadProducts();
+        }
+    });
+
+    // Charger immédiatement si la page est déjà affichée
+    if (document.getElementById('productsTableBody')) {
+        console.log('[CHARGER_VAN] Page déjà présente, chargement immédiat des produits');
+        loadProducts();
+    }
+
+// Charger la liste des produits
+function loadProducts() {
+    console.log('[CHARGER_VAN] Chargement des produits...');
+    const container = document.getElementById('productCheckboxList');
+
+    fetch('/API/distribution/produits/')
+        .then(res => {
+            console.log('[CHARGER_VAN] Réponse API status:', res.status);
+            if (res.status === 401 || res.status === 403) {
+                throw new Error('Non authentifié - Veuillez vous connecter');
+            }
+            if (!res.ok) {
+                throw new Error('Erreur HTTP ' + res.status + ' - ' + res.statusText);
+            }
+            return res.json();
+        })
+        .then(data => {
+            console.log('[CHARGER_VAN] Données reçues:', data);
+            console.log('[CHARGER_VAN] Type de données:', Array.isArray(data) ? 'Array' : 'Object');
+
+            // Gérer la réponse paginée ou directe
+            allProducts = Array.isArray(data) ? data : (data.results || []);
+            console.log('[CHARGER_VAN] Produits chargés:', allProducts.length);
+
+            if (allProducts.length === 0) {
+                console.warn('[CHARGER_VAN] Aucun produit disponible');
+                if (container) {
+                    container.innerHTML = '<div class="alert alert-warning m-3"><i class="fa fa-exclamation-triangle"></i> Aucun produit disponible. Vérifiez que des produits sont actifs dans le système.</div>';
+                }
+                return;
+            }
+
+            renderCheckboxList();
+            console.log('[CHARGER_VAN] renderCheckboxList() terminé');
+        })
+        .catch(err => {
+            console.error('[CHARGER_VAN] Erreur chargement produits:', err);
+            if (container) {
+                let errorMsg = '<div class="alert alert-danger m-3"><strong>Erreur de chargement:</strong> ' + err.message;
+                if (err.message.includes('Non authentifié')) {
+                    errorMsg += '<br><br>Veuillez vous connecter pour accéder à cette fonctionnalité.';
+                }
+                errorMsg += '</div>';
+                container.innerHTML = errorMsg;
+            }
+        });
+}
+
+// Ajouter une ligne au tableau
+let rowCounter = 0;
+function addProductRow() {
+    const tbody = document.getElementById('productsTableBody');
+    if (tbody.querySelector('td[colspan]')) {
+        tbody.innerHTML = '';
+    }
+
+    const row = document.createElement('tr');
+    row.id = 'row-' + rowCounter;
+    row.innerHTML = `
+        <td>
+            <select class="form-control product-select" onchange="updateStock(this, ${rowCounter})">
+                <option value="">-- {% trans "Sélectionner" %} --</option>
+                ${allProducts.map(p => `<option value="${escapeAttr(p.reference)}" data-stock="${p.stock || 0}">${escapeHtml(p.reference)} - ${escapeHtml(p.designation)}</option>`).join('')}
+            </select>
+        </td>
+        <td><span id="stock-${rowCounter}" class="badge badge-info">-</span></td>
+        <td><input type="number" class="form-control quantity-input" min="1" placeholder="0"></td>
+        <td><button type="button" class="btn btn-sm btn-danger" onclick="removeRow(${rowCounter})"><i class="fa fa-trash"></i></button></td>
+    `;
+    tbody.appendChild(row);
+    rowCounter++;
+    updateSummary();
+}
+
+// Mettre à jour le stock disponible
+function updateStock(select, rowId) {
+    const option = select.selectedOptions[0];
+    const stock = option.dataset.stock || 0;
+    document.getElementById('stock-' + rowId).textContent = stock + ' unités';
+    updateSummary();
+}
+
+// Supprimer une ligne
+function removeRow(rowId) {
+    document.getElementById('row-' + rowId).remove();
+    updateSummary();
+}
+
+// Scanner de code-barres
+document.getElementById('barcodeInput')?.addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        const barcode = this.value.trim();
+        if (barcode) {
+            addScannedProduct(barcode);
+            this.value = '';
+        }
+    }
+});
+
+function addScannedProduct(barcode) {
+    const product = allProducts.find(p => p.reference === barcode || p.code_barre === barcode);
+    if (product) {
+        const existing = selectedProducts.find(p => p.reference === product.reference);
+        if (existing) {
+            existing.quantity++;
+        } else {
+            selectedProducts.push({
+                reference: product.reference,
+                designation: product.designation,
+                quantity: 1
+            });
+        }
+        renderScannedProducts();
+        updateSummary();
+    } else {
+        alert("{% trans 'Produit non trouvé' %}: " + barcode);
+    }
+}
+
+function renderScannedProducts() {
+    const container = document.getElementById('scannedProducts');
+    if (selectedProducts.length === 0) {
+        container.innerHTML = "<p class=\"text-muted\">{% trans 'Aucun produit scanné' %}</p>";
+        return;
+    }
+
+    container.innerHTML = selectedProducts.map((p, idx) => `
+        <div class="card mb-2">
+            <div class="card-body p-2">
+                <div class="row align-items-center">
+                    <div class="col-md-5"><strong>${escapeHtml(p.reference)}</strong> - ${escapeHtml(p.designation)}</div>
+                    <div class="col-md-3">
+                        <input type="number" class="form-control form-control-sm" value="${p.quantity}"
+                               onchange="updateScannedQuantity(${idx}, this.value)" min="1">
+                    </div>
+                    <div class="col-md-2 text-right">
+                        <button class="btn btn-sm btn-danger" onclick="removeScannedProduct(${idx})">
+                            <i class="fa fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function updateScannedQuantity(idx, qty) {
+    selectedProducts[idx].quantity = parseInt(qty) || 1;
+    updateSummary();
+}
+
+function removeScannedProduct(idx) {
+    selectedProducts.splice(idx, 1);
+    renderScannedProducts();
+    updateSummary();
+}
+
+// Liste avec checkboxes - Version améliorée
+function renderCheckboxList() {
+    console.log('[CHARGER_VAN] renderCheckboxList() appelée, nombre de produits:', allProducts.length);
+    const container = document.getElementById('productCheckboxList');
+
+    if (!container) {
+        console.error('[CHARGER_VAN] Container productCheckboxList introuvable');
+        return;
+    }
+
+    if (!allProducts || allProducts.length === 0) {
+        console.warn('[CHARGER_VAN] Aucun produit à afficher');
+        container.innerHTML = '<p class="text-center text-muted"><i class="fa fa-inbox"></i> Aucun produit disponible</p>';
+        return;
+    }
+
+    try {
+        container.innerHTML = allProducts.map(p => {
+        const stock = p.stock || 0;
+        const stockBadgeClass = stock > 50 ? 'badge-success' : stock > 10 ? 'badge-warning' : 'badge-danger';
+        const refEscaped = escapeAttr(p.reference);
+        const refId = escapeAttr(p.reference).replace(/[^a-zA-Z0-9_-]/g, '_'); // ID HTML valide
+
+        return `
+        <div class="card mb-2 product-checkbox-item" data-name="${escapeAttr((p.designation + ' ' + p.reference).toLowerCase())}" style="border-left: 3px solid ${stock > 10 ? '#28a745' : '#ffc107'};">
+            <div class="card-body p-2">
+                <div class="row align-items-center">
+                    <div class="col-auto">
+                        <div class="custom-control custom-checkbox">
+                            <input type="checkbox" class="custom-control-input" id="check-${refId}"
+                                   value="${refEscaped}" onchange='toggleProduct(this.value, this.checked)'>
+                            <label class="custom-control-label" for="check-${refId}"></label>
+                        </div>
+                    </div>
+                    <div class="col">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong style="font-size: 0.9rem;">${escapeHtml(p.reference)}</strong>
+                                <div class="text-muted small">${escapeHtml(p.designation)}</div>
+                            </div>
+                            <div class="text-right">
+                                <span class="badge ${stockBadgeClass}" style="font-size: 0.85rem;">
+                                    <i class="fa fa-boxes"></i> ${stock}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Contrôles de quantité -->
+                <div id="qty-controls-${refId}" class="mt-2" style="display:none;">
+                    <div class="row align-items-center">
+                        <div class="col-auto">
+                            <label class="mb-0 small text-muted">Quantité:</label>
+                        </div>
+                        <div class="col">
+                            <div class="input-group input-group-sm">
+                                <div class="input-group-prepend">
+                                    <button class="btn btn-outline-secondary" type="button" onclick='adjustQuantity("${refEscaped}", -1)'>
+                                        <i class="fa fa-minus"></i>
+                                    </button>
+                                </div>
+                                <input type="number" class="form-control text-center" id="qty-${refId}"
+                                       value="1" min="1" data-max="${stock}" style="max-width: 80px;"
+                                       onchange='updateCheckboxQuantity("${refEscaped}")'>
+                                <div class="input-group-append">
+                                    <button class="btn btn-outline-secondary" type="button" onclick='adjustQuantity("${refEscaped}", 1)'>
+                                        <i class="fa fa-plus"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <div class="btn-group btn-group-sm" role="group">
+                                <button type="button" class="btn btn-outline-primary" onclick='setQuantity("${refEscaped}", 5)' title="x5">
+                                    <small>x5</small>
+                                </button>
+                                <button type="button" class="btn btn-outline-primary" onclick='setQuantity("${refEscaped}", 10)' title="x10">
+                                    <small>x10</small>
+                                </button>
+                                <button type="button" class="btn btn-outline-primary" onclick='setQuantity("${refEscaped}", 20)' title="x20">
+                                    <small>x20</small>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        `;
+    }).join('');
+
+        console.log('[CHARGER_VAN] HTML généré, mise à jour de l\'interface...');
+        updateSelectionCounter();
+        console.log('[CHARGER_VAN] renderCheckboxList() terminée avec succès');
+    } catch (error) {
+        console.error('[CHARGER_VAN] Erreur dans renderCheckboxList():', error);
+        container.innerHTML = '<div class="alert alert-danger m-3">Erreur lors de l\'affichage des produits: ' + error.message + '</div>';
+    }
+}
+
+// Recherche produits améliorée
+document.getElementById('searchProduct')?.addEventListener('input', function() {
+    const search = this.value.toLowerCase();
+    let visibleCount = 0;
+    document.querySelectorAll('.product-checkbox-item').forEach(item => {
+        const name = item.dataset.name;
+        const isVisible = name.includes(search);
+        item.style.display = isVisible ? '' : 'none';
+        if (isVisible) visibleCount++;
+    });
+
+    // Afficher un message si aucun résultat
+    const container = document.getElementById('productCheckboxList');
+    const existingMsg = container.querySelector('.no-results-msg');
+    if (existingMsg) existingMsg.remove();
+
+    if (visibleCount === 0 && search) {
+        const msg = document.createElement('p');
+        msg.className = 'text-center text-muted mt-3 no-results-msg';
+        msg.innerHTML = '<i class="fa fa-search"></i> Aucun produit trouvé pour "' + search + '"';
+        container.insertBefore(msg, container.firstChild);
+    }
+});
+
+function clearSearch() {
+    document.getElementById('searchProduct').value = '';
+    document.getElementById('searchProduct').dispatchEvent(new Event('input'));
+}
+
+function toggleProduct(reference, checked) {
+    const refId = refToId(reference);
+    const qtyControls = document.getElementById('qty-controls-' + refId);
+    const qtyInput = document.getElementById('qty-' + refId);
+
+    if (!qtyControls || !qtyInput) {
+        console.error('[CHARGER_VAN] Elements not found for reference:', reference, 'id:', refId);
+        return;
+    }
+
+    qtyControls.style.display = checked ? 'block' : 'none';
+
+    if (checked) {
+        qtyInput.value = 1;
+    }
+
+    updateSummary();
+    updateSelectionCounter();
+}
+
+// Nouvelle fonction: Ajuster la quantité avec +/-
+function adjustQuantity(reference, delta) {
+    const refId = refToId(reference);
+    const qtyInput = document.getElementById('qty-' + refId);
+
+    if (!qtyInput) {
+        console.error('[CHARGER_VAN] Quantity input not found for reference:', reference, 'id:', refId);
+        return;
+    }
+
+    let currentQty = parseInt(qtyInput.value) || 1;
+    let newQty = currentQty + delta;
+
+    // Respecter min et max (utiliser data-max au lieu de max)
+    const min = parseInt(qtyInput.min) || 1;
+    const max = parseInt(qtyInput.dataset.max) || 9999;
+    newQty = Math.max(min, Math.min(max, newQty));
+
+    qtyInput.value = newQty;
+    updateSummary();
+    updateSelectionCounter();
+}
+
+// Nouvelle fonction: Définir une quantité prédéfinie
+function setQuantity(reference, quantity) {
+    const refId = refToId(reference);
+    const qtyInput = document.getElementById('qty-' + refId);
+
+    if (!qtyInput) {
+        console.error('[CHARGER_VAN] Quantity input not found for reference:', reference, 'id:', refId);
+        return;
+    }
+
+    const max = parseInt(qtyInput.dataset.max) || 9999;
+    qtyInput.value = Math.min(quantity, max);
+    updateSummary();
+    updateSelectionCounter();
+}
+
+// Nouvelle fonction: Mettre à jour la quantité depuis l'input
+function updateCheckboxQuantity(reference) {
+    updateSummary();
+    updateSelectionCounter();
+}
+
+// Nouvelle fonction: Sélectionner tous les produits visibles
+function selectAllProducts() {
+    document.querySelectorAll('.product-checkbox-item').forEach(item => {
+        if (item.style.display !== 'none') {
+            const checkbox = item.querySelector('input[type="checkbox"]');
+            if (checkbox && !checkbox.checked) {
+                checkbox.checked = true;
+                toggleProduct(checkbox.value, true);
+            }
+        }
+    });
+}
+
+// Nouvelle fonction: Désélectionner tous les produits
+function deselectAllProducts() {
+    document.querySelectorAll('.product-checkbox-item input[type="checkbox"]').forEach(checkbox => {
+        if (checkbox.checked) {
+            checkbox.checked = false;
+            toggleProduct(checkbox.value, false);
+        }
+    });
+}
+
+// Nouvelle fonction: Mettre à jour le compteur de sélection
+function updateSelectionCounter() {
+    const checkedBoxes = document.querySelectorAll('#productCheckboxList input[type="checkbox"]:checked');
+    const count = checkedBoxes.length;
+    document.getElementById('selectedCount').textContent = count;
+
+    // Calculer la quantité totale
+    let totalQty = 0;
+    checkedBoxes.forEach(checkbox => {
+        const refId = refToId(checkbox.value);
+        const qtyInput = document.getElementById('qty-' + refId);
+        if (qtyInput) {
+            totalQty += parseInt(qtyInput.value) || 0;
+        }
+    });
+
+    const totalQtySpan = document.getElementById('totalQuantity');
+    if (count > 0) {
+        totalQtySpan.innerHTML = '| <strong>' + totalQty + '</strong> unité(s) au total';
+    } else {
+        totalQtySpan.innerHTML = '';
+    }
+}
+
+// Import depuis texte
+function importFromText() {
+    const text = document.getElementById('importText').value.trim();
+    const lines = text.split('\n');
+    selectedProducts = [];
+
+    lines.forEach(line => {
+        const [ref, qty] = line.split(',').map(s => s.trim());
+        if (ref && qty) {
+            const product = allProducts.find(p => p.reference === ref);
+            if (product) {
+                selectedProducts.push({
+                    reference: ref,
+                    designation: product.designation,
+                    quantity: parseInt(qty)
+                });
+            }
+        }
+    });
+
+    updateSummary();
+    alert("{% trans 'Importé' %}: " + selectedProducts.length + " {% trans 'produits' %}");
+}
+
+// Mettre à jour le récapitulatif
+function updateSummary() {
+    // Collecter les produits de toutes les sources
+    const products = [];
+
+    // Depuis le tableau
+    document.querySelectorAll('#productsTableBody tr').forEach(row => {
+        const select = row.querySelector('.product-select');
+        const qtyInput = row.querySelector('.quantity-input');
+        if (select && qtyInput && select.value && qtyInput.value) {
+            const product = allProducts.find(p => p.reference === select.value);
+            products.push({
+                reference: select.value,
+                designation: product?.designation || '',
+                quantity: parseInt(qtyInput.value)
+            });
+        }
+    });
+
+    // Depuis les checkboxes
+    document.querySelectorAll('.product-checkbox-item input[type="checkbox"]:checked').forEach(cb => {
+        const refId = refToId(cb.value);
+        const qtyInput = document.getElementById('qty-' + refId);
+        if (qtyInput && qtyInput.value) {
+            const product = allProducts.find(p => p.reference === cb.value);
+            products.push({
+                reference: cb.value,
+                designation: product?.designation || '',
+                quantity: parseInt(qtyInput.value)
+            });
+        }
+    });
+
+    // Fusionner avec les produits scannés
+    selectedProducts.forEach(sp => {
+        const existing = products.find(p => p.reference === sp.reference);
+        if (existing) {
+            existing.quantity += sp.quantity;
+        } else {
+            products.push(sp);
+        }
+    });
+
+    // Afficher le récapitulatif
+    const summaryCard = document.getElementById('summaryCard');
+    const summaryContent = document.getElementById('summaryContent');
+
+    if (products.length === 0) {
+        summaryCard.style.display = 'none';
+        return;
+    }
+
+    summaryCard.style.display = 'block';
+    const totalQty = products.reduce((sum, p) => sum + p.quantity, 0);
+
+    summaryContent.innerHTML = `
+        <p><strong>{% trans "Nombre de produits" %}:</strong> ${products.length}</p>
+        <p><strong>{% trans "Total unités" %}:</strong> ${totalQty}</p>
+        <div class="table-responsive">
+            <table class="table table-sm">
+                <thead><tr><th>Référence</th><th>Produit</th><th class="text-right">Quantité</th></tr></thead>
+                <tbody>
+                    ${products.map(p => `<tr><td><code>${escapeHtml(p.reference)}</code></td><td>${escapeHtml(p.designation)}</td><td class="text-right"><strong>${p.quantity}</strong></td></tr>`).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+
+    // Préparer les données pour soumission
+    const data = products.map(p => `${p.reference},${p.quantity}`).join('\n');
+    document.getElementById('produitsData').value = data;
+}
+
+// Validation et soumission AJAX
+document.getElementById('chargerVanForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    updateSummary();
+
+    const data = document.getElementById('produitsData').value;
+    if (!data || data.trim() === '') {
+        alert("{% trans 'Veuillez ajouter au moins un produit' %}");
+        return false;
+    }
+
+    const van = document.getElementById('van').value;
+    const source = document.getElementById('entrepot_source').value;
+
+    if (!van || !source) {
+        alert("{% trans 'Veuillez sélectionner un van et un entrepôt source' %}");
+        return false;
+    }
+
+    // Désactiver le bouton pendant la soumission
+    const submitBtn = this.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = "<i class=\"fa fa-spinner fa-spin\"></i> {% trans 'Chargement en cours...' %}";
+
+    // Soumettre en AJAX
+    const formData = new FormData(this);
+
+    fetch('/page/charger_van/', {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            // Naviguer vers la liste des transferts
+            show('transferts_list');
+        } else {
+            alert('Erreur: ' + data.message);
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalText;
+        }
+    })
+    .catch(err => {
+        console.error('Erreur:', err);
+        alert('Erreur lors de la soumission du formulaire');
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalText;
+    });
+
+    return false;
+});
+
+// ============================================
+// FONCTIONS STOCK DU VAN
+// ============================================
+
+let vanStockData = [];
+
+// Charger le stock du van sélectionné
+async function loadVanStock() {
+    const vanId = document.getElementById('van').value;
+
+    if (!vanId) {
+        alert("{% trans 'Veuillez sélectionner un van en premier' %}");
+        // Revenir au premier onglet
+        document.querySelector('a[href="#tab-table"]').click();
+        return;
+    }
+
+    const tbody = document.getElementById('vanStockTableBody');
+    tbody.innerHTML = `
+        <tr>
+            <td colspan="5" class="text-center py-4">
+                <i class="fa fa-spinner fa-spin fa-2x"></i>
+                <p class="mt-2">{% trans 'Chargement du stock du van...' %}</p>
+            </td>
+        </tr>
+    `;
+
+    try {
+        // Récupérer les informations du van pour obtenir le warehouse_id
+        const vanResponse = await fetch(`/API/warehouses/${vanId}/`);
+        if (!vanResponse.ok) throw new Error('Van non trouvé');
+
+        const vanData = await vanResponse.json();
+
+        // Récupérer le stock du van
+        const stockResponse = await fetch(`/API/stocks/?warehouse=${vanId}`);
+        if (!stockResponse.ok) throw new Error('Erreur lors du chargement du stock');
+
+        vanStockData = await stockResponse.json();
+
+        // Afficher les données
+        displayVanStock();
+
+    } catch (error) {
+        console.error('Erreur:', error);
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="5" class="text-center text-danger py-4">
+                    <i class="fa fa-exclamation-triangle fa-2x"></i>
+                    <p class="mt-2">{% trans 'Erreur lors du chargement du stock' %}: ${error.message}</p>
+                </td>
+            </tr>
+        `;
+    }
+}
+
+// Afficher le stock du van
+function displayVanStock() {
+    const tbody = document.getElementById('vanStockTableBody');
+    const emptyMsg = document.getElementById('emptyVanStock');
+    const statsDiv = document.getElementById('vanStockStats');
+    const searchDiv = document.getElementById('vanStockSearch');
+
+    if (!vanStockData || vanStockData.length === 0) {
+        tbody.innerHTML = '';
+        emptyMsg.style.display = 'block';
+        statsDiv.style.display = 'none';
+        searchDiv.style.display = 'none';
+        return;
+    }
+
+    emptyMsg.style.display = 'none';
+    statsDiv.style.display = 'flex';
+    searchDiv.style.display = 'flex';
+
+    // Calculer les statistiques
+    let totalProducts = vanStockData.length;
+    let totalQuantity = vanStockData.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0);
+    let lowStockCount = vanStockData.filter(item => (parseFloat(item.quantity) || 0) < 10).length;
+
+    document.getElementById('totalProducts').textContent = totalProducts;
+    document.getElementById('totalQuantity').textContent = Math.round(totalQuantity);
+    document.getElementById('lowStockCount').textContent = lowStockCount;
+
+    // Afficher les produits
+    tbody.innerHTML = vanStockData.map(item => {
+        const quantity = parseFloat(item.quantity) || 0;
+        let statusBadge, statusClass;
+
+        if (quantity === 0) {
+            statusBadge = '<span class="badge badge-danger">{% trans "Épuisé" %}</span>';
+            statusClass = 'table-danger';
+        } else if (quantity < 10) {
+            statusBadge = '<span class="badge badge-warning">{% trans "Stock faible" %}</span>';
+            statusClass = 'table-warning';
+        } else if (quantity < 50) {
+            statusBadge = '<span class="badge badge-info">{% trans "Stock moyen" %}</span>';
+            statusClass = '';
+        } else {
+            statusBadge = '<span class="badge badge-success">{% trans "En stock" %}</span>';
+            statusClass = '';
+        }
+
+        return `
+            <tr class="${statusClass} van-stock-item"
+                data-search="${(item.produit_reference + ' ' + item.produit_designation).toLowerCase()}">
+                <td><strong>${item.produit_reference || '-'}</strong></td>
+                <td>${item.produit_designation || '-'}</td>
+                <td><code>${item.produit_code_barre || '-'}</code></td>
+                <td class="text-center">
+                    <span class="badge badge-primary" style="font-size: 1rem; padding: 0.5rem 1rem;">
+                        ${Math.round(quantity)}
+                    </span>
+                </td>
+                <td class="text-center">${statusBadge}</td>
+            </tr>
+        `;
+    }).join('');
+
+    // Activer la recherche
+    setupVanStockSearch();
+}
+
+// Configurer la recherche dans le stock du van
+function setupVanStockSearch() {
+    const searchInput = document.getElementById('searchVanStock');
+    if (!searchInput) return;
+
+    searchInput.addEventListener('input', function() {
+        const search = this.value.toLowerCase();
+        let visibleCount = 0;
+
+        document.querySelectorAll('.van-stock-item').forEach(row => {
+            const searchText = row.dataset.search;
+            const isVisible = searchText.includes(search);
+            row.style.display = isVisible ? '' : 'none';
+            if (isVisible) visibleCount++;
+        });
+
+        // Afficher un message si aucun résultat
+        const tbody = document.getElementById('vanStockTableBody');
+        const existingMsg = tbody.querySelector('.no-results-msg');
+        if (existingMsg) existingMsg.remove();
+
+        if (visibleCount === 0 && search) {
+            const row = document.createElement('tr');
+            row.className = 'no-results-msg';
+            row.innerHTML = `
+                <td colspan="5" class="text-center text-muted py-4">
+                    <i class="fa fa-search"></i> {% trans "Aucun produit trouvé pour" %} "${search}"
+                </td>
+            `;
+            tbody.appendChild(row);
+        }
+    });
+}
+
+// Effacer la recherche du stock du van
+function clearVanStockSearch() {
+    const searchInput = document.getElementById('searchVanStock');
+    if (searchInput) {
+        searchInput.value = '';
+        searchInput.dispatchEvent(new Event('input'));
+    }
+}
+
+// Charger automatiquement le stock quand le van change
+document.getElementById('van')?.addEventListener('change', function() {
+    // Si l'utilisateur est sur l'onglet "Stock actuel du Van", recharger automatiquement
+    const stockTab = document.getElementById('tab-stock-van');
+    if (stockTab && stockTab.classList.contains('active')) {
+        loadVanStock();
+    }
+});
+
+// Ajouter event listener pour l'onglet "Stock actuel du Van"
+document.getElementById('tab-stock-van-link')?.addEventListener('click', function() {
+    loadVanStock();
+});
+
+// Exposer les fonctions nécessaires globalement pour les event handlers inline
+window.addProductRow = addProductRow;
+window.updateStock = updateStock;
+window.removeRow = removeRow;
+window.addScannedProduct = addScannedProduct;
+window.updateScannedQuantity = updateScannedQuantity;
+window.removeScannedProduct = removeScannedProduct;
+window.toggleProduct = toggleProduct;
+window.adjustQuantity = adjustQuantity;
+window.setQuantity = setQuantity;
+window.updateCheckboxQuantity = updateCheckboxQuantity;
+window.selectAllProducts = selectAllProducts;
+window.deselectAllProducts = deselectAllProducts;
+window.clearSearch = clearSearch;
+window.importFromText = importFromText;
+window.loadVanStock = loadVanStock;
+window.clearVanStockSearch = clearVanStockSearch;
+
+})(); // End of IIFE
+</script>
+
+<style>
+.nav-tabs .nav-link {
+    color: #495057;
+    border: 1px solid transparent;
+}
+.nav-tabs .nav-link.active {
+    color: #2563eb;
+    background-color: #fff;
+    border-color: #dee2e6 #dee2e6 #fff;
+    font-weight: 600;
+}
+.nav-tabs .nav-link:hover {
+    border-color: #e9ecef #e9ecef #dee2e6;
+}
+.custom-control-label {
+    cursor: pointer;
+    user-select: none;
+}
+</style>

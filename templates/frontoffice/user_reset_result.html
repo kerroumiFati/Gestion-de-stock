@@ -1,0 +1,22 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Nouveau mot de passe généré</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="p-4">
+  <div class="container">
+    <h1>Nouveau mot de passe généré</h1>
+    <p>Le mot de passe de l'utilisateur <strong>{{ user.username }}</strong> a été réinitialisé.</p>
+    <div class="alert alert-info">
+      <strong>Mot de passe:</strong>
+      <code id="pwd">{{ new_password }}</code>
+      <button class="btn btn-sm btn-outline-primary" onclick="navigator.clipboard.writeText(document.getElementById('pwd').textContent)">Copier</button>
+    </div>
+    <p>Veuillez le communiquer à l'utilisateur par un canal sécurisé et lui demander de le changer lors de sa prochaine connexion.</p>
+    <a class="btn btn-primary" href="/users-admin/">Retour</a>
+  </div>
+</body>
+</html>

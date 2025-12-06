@@ -1,0 +1,388 @@
+{% load static %}
+{% load i18n %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// Load script only once and log
+console.log('[DISTRIBUTION PAGE] Template distribution_dashboard.html loaded');
+if (!window.__distribution_dashboard_script_loaded__) {
+    console.log('[DISTRIBUTION PAGE] Loading distribution_dashboard.js for the first time');
+    window.__distribution_dashboard_script_loaded__ = true;
+    var script = document.createElement('script');
+    script.src = "{% static 'script/distribution_dashboard.js' %}";
+    script.type = 'text/javascript';
+    script.onload = function() {
+        console.log('[DISTRIBUTION PAGE] distribution_dashboard.js loaded, dispatching fragment:loaded event');
+        // Déclencher l'événement fragment:loaded après que le script soit chargé
+        setTimeout(function() {
+            document.dispatchEvent(new CustomEvent('fragment:loaded', {
+                detail: { name: 'distribution_dashboard', container: document.getElementById('main-content') }
+            }));
+        }, 100);
+    };
+    document.head.appendChild(script);
+} else {
+    console.log('[DISTRIBUTION PAGE] distribution_dashboard.js already loaded, re-dispatching fragment:loaded event');
+    // Script already loaded, re-trigger fragment:loaded event
+    setTimeout(function() {
+        document.dispatchEvent(new CustomEvent('fragment:loaded', {
+            detail: { name: 'distribution_dashboard', container: document.getElementById('main-content') }
+        }));
+    }, 50);
+}
+</script>
+
+<style>
+.page-container { padding: 20px 0; }
+
+.page-title {
+    font-size: 1.8rem;
+    font-weight: 600;
+    color: #2d3748;
+    margin-bottom: 25px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.page-title i { color: #8b5cf6; font-size: 2rem; }
+
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.stat-card {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 25px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    transition: transform 0.2s;
+}
+
+.stat-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.stat-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.stat-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    color: white;
+}
+
+.stat-icon.purple { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
+.stat-icon.green { background: linear-gradient(135deg, #10b981, #059669); }
+.stat-icon.blue { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+.stat-icon.orange { background: linear-gradient(135deg, #f59e0b, #d97706); }
+.stat-icon.red { background: linear-gradient(135deg, #ef4444, #dc2626); }
+
+.stat-value {
+    font-size: 2rem;
+    font-weight: bold;
+    color: #1f2937;
+}
+
+.stat-label {
+    color: #6b7280;
+    font-size: 0.9rem;
+    margin-top: 5px;
+}
+
+.stat-change {
+    font-size: 0.85rem;
+    margin-top: 10px;
+}
+
+.stat-change.positive {
+    color: #10b981;
+}
+
+.stat-change.negative {
+    color: #ef4444;
+}
+
+.chart-container {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 25px;
+    margin-bottom: 25px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.chart-header {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #1f2937;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #e2e8f0;
+}
+
+.charts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 25px;
+}
+
+.performance-table {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 25px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.performance-header {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #1f2937;
+    margin-bottom: 20px;
+}
+
+.performance-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+    border-bottom: 1px solid #f3f4f6;
+    transition: background 0.2s;
+}
+
+.performance-item:hover {
+    background: #f9fafb;
+}
+
+.performance-item:last-child {
+    border-bottom: none;
+}
+
+.livreur-info {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.livreur-avatar {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 1.1rem;
+}
+
+.livreur-details h4 {
+    margin: 0;
+    font-size: 0.95rem;
+    color: #1f2937;
+}
+
+.livreur-details p {
+    margin: 3px 0 0 0;
+    font-size: 0.85rem;
+    color: #6b7280;
+}
+
+.performance-stats {
+    text-align: right;
+}
+
+.performance-stats .value {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.performance-stats .label {
+    font-size: 0.8rem;
+    color: #6b7280;
+    margin-top: 3px;
+}
+
+.badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.badge-success { background: #d1fae5; color: #065f46; }
+.badge-warning { background: #fef3c7; color: #92400e; }
+.badge-danger { background: #fee2e2; color: #991b1b; }
+
+.filter-bar {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 25px;
+    display: flex;
+    gap: 15px;
+    align-items: center;
+}
+
+.filter-bar select,
+.filter-bar input {
+    padding: 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 0.9rem;
+}
+
+.filter-bar button {
+    padding: 10px 20px;
+    background: #8b5cf6;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.filter-bar button:hover {
+    background: #7c3aed;
+}
+</style>
+
+<div class="page-container">
+    <div class="page-title">
+        <i class="fas fa-chart-line"></i>
+        <span>{% trans "Tableau de Bord Distribution" %}</span>
+    </div>
+
+    <!-- Filtres -->
+    <div class="filter-bar">
+        <label>{% trans "Période:" %}</label>
+        <select id="period-filter" onchange="loadDashboardData()">
+            <option value="7">7 derniers jours</option>
+            <option value="30" selected>30 derniers jours</option>
+            <option value="90">90 derniers jours</option>
+        </select>
+
+        <label>{% trans "Du:" %}</label>
+        <input type="date" id="date-from" onchange="loadDashboardData()">
+
+        <label>{% trans "Au:" %}</label>
+        <input type="date" id="date-to" onchange="loadDashboardData()">
+
+        <button onclick="loadDashboardData()">
+            <i class="fas fa-sync"></i> {% trans "Actualiser" %}
+        </button>
+    </div>
+
+    <!-- Statistiques principales -->
+    <div class="dashboard-grid">
+        <div class="stat-card">
+            <div class="stat-card-header">
+                <div>
+                    <div class="stat-value" id="total-tournees">0</div>
+                    <div class="stat-label">{% trans "Total Tournées" %}</div>
+                </div>
+                <div class="stat-icon purple">
+                    <i class="fas fa-route"></i>
+                </div>
+            </div>
+            <div class="stat-change positive" id="tournees-change">
+                <i class="fas fa-arrow-up"></i> +0% vs période précédente
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-card-header">
+                <div>
+                    <div class="stat-value" id="total-livraisons">0</div>
+                    <div class="stat-label">{% trans "Total Livraisons" %}</div>
+                </div>
+                <div class="stat-icon blue">
+                    <i class="fas fa-box"></i>
+                </div>
+            </div>
+            <div class="stat-change positive" id="livraisons-change">
+                <i class="fas fa-arrow-up"></i> +0%
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-card-header">
+                <div>
+                    <div class="stat-value" id="taux-reussite">0%</div>
+                    <div class="stat-label">{% trans "Taux de Réussite" %}</div>
+                </div>
+                <div class="stat-icon green">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+            </div>
+            <div class="stat-change positive" id="reussite-change">
+                <i class="fas fa-arrow-up"></i> +0%
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-card-header">
+                <div>
+                    <div class="stat-value" id="distance-totale">0</div>
+                    <div class="stat-label">{% trans "Distance Totale (km)" %}</div>
+                </div>
+                <div class="stat-icon orange">
+                    <i class="fas fa-road"></i>
+                </div>
+            </div>
+            <div class="stat-change" id="distance-change">
+                <i class="fas fa-minus"></i> 0%
+            </div>
+        </div>
+    </div>
+
+    <!-- Graphiques -->
+    <div class="charts-grid">
+        <div class="chart-container">
+            <div class="chart-header">{% trans "Évolution des Tournées" %}</div>
+            <canvas id="tournees-chart"></canvas>
+        </div>
+
+        <div class="chart-container">
+            <div class="chart-header">{% trans "Statut des Livraisons" %}</div>
+            <canvas id="livraisons-chart"></canvas>
+        </div>
+    </div>
+
+    <div class="chart-container">
+        <div class="chart-header">{% trans "Performance par Livreur" %}</div>
+        <canvas id="livreurs-chart"></canvas>
+    </div>
+
+    <!-- Top Performers -->
+    <div class="performance-table">
+        <div class="performance-header">
+            <i class="fas fa-trophy"></i> {% trans "Top Performers du Mois" %}
+        </div>
+        <div id="top-performers">
+            <div style="text-align: center; padding: 20px; color: #9ca3af;">
+                <i class="fas fa-spinner fa-spin"></i> {% trans "Chargement..." %}
+            </div>
+        </div>
+    </div>
+</div>

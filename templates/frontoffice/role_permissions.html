@@ -1,0 +1,440 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Permissions - {{ role.name }} - UltraThink</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+  <link rel="stylesheet" href="{% static 'style/modern-pages.css' %}">
+  <style>
+    body {
+      background: #f7fafc;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+
+    /* Sidebar */
+    .admin-sidebar {
+      position: fixed;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 260px;
+      background: #2d3748;
+      color: white;
+      padding: 20px 0;
+      overflow-y: auto;
+      z-index: 1000;
+      box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+    }
+
+    .admin-sidebar-header {
+      padding: 0 20px 20px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      margin-bottom: 20px;
+    }
+
+    .admin-sidebar-header h4 {
+      color: white;
+      font-weight: 600;
+      margin: 0;
+      font-size: 1.2rem;
+    }
+
+    .sidebar-menu {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .sidebar-menu-link {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 20px;
+      color: #cbd5e0;
+      text-decoration: none;
+      transition: all 0.2s;
+      border-left: 3px solid transparent;
+    }
+
+    .sidebar-menu-link:hover {
+      background: rgba(255,255,255,0.05);
+      color: white;
+      text-decoration: none;
+    }
+
+    .sidebar-menu-link.active {
+      background: rgba(255,255,255,0.1);
+      color: white;
+      border-left-color: #4299e1;
+      font-weight: 600;
+    }
+
+    .sidebar-menu-link i {
+      width: 20px;
+      text-align: center;
+    }
+
+    .admin-content {
+      margin-left: 260px;
+      padding: 30px;
+      min-height: 100vh;
+    }
+
+    .page-header {
+      background: white;
+      border-radius: 10px;
+      padding: 25px 30px;
+      margin-bottom: 30px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      border: 1px solid #e2e8f0;
+    }
+
+    .page-title {
+      font-size: 1.8rem;
+      font-weight: 600;
+      color: #2d3748;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .modern-section {
+      background: white;
+      border-radius: 10px;
+      padding: 30px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      border: 1px solid #e2e8f0;
+      margin-bottom: 20px;
+    }
+
+    .permission-group {
+      background: #f7fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    .permission-group-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #2d3748;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #cbd5e0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .permission-checkbox {
+      display: flex;
+      align-items: center;
+      padding: 10px 15px;
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      margin-bottom: 10px;
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+
+    .permission-checkbox:hover {
+      background: #edf2f7;
+      border-color: #cbd5e0;
+      transform: translateX(3px);
+    }
+
+    .permission-checkbox input[type="checkbox"] {
+      margin-right: 12px;
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+      accent-color: #667eea;
+    }
+
+    .permission-checkbox label {
+      margin: 0;
+      flex: 1;
+      cursor: pointer;
+      font-size: 0.95rem;
+      color: #4a5568;
+      font-weight: 500;
+    }
+
+    .permission-checkbox.checked {
+      background: #e6fffa;
+      border-color: #38b2ac;
+    }
+
+    .permission-checkbox.checked label {
+      color: #234e52;
+      font-weight: 600;
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 15px;
+      padding-top: 20px;
+      border-top: 2px solid #e2e8f0;
+      margin-top: 30px;
+      position: sticky;
+      bottom: 0;
+      background: white;
+      padding: 20px;
+      box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
+    }
+
+    .modern-btn {
+      border-radius: 8px;
+      padding: 12px 30px;
+      font-weight: 600;
+      font-size: 1rem;
+      transition: all 0.3s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      border: none;
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    .modern-btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    }
+
+    .modern-btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+      color: white;
+      text-decoration: none;
+    }
+
+    .modern-btn-secondary {
+      background: #e2e8f0;
+      color: #2d3748;
+      border: 2px solid #cbd5e0;
+    }
+
+    .modern-btn-secondary:hover {
+      background: #cbd5e0;
+      color: #2d3748;
+      text-decoration: none;
+    }
+
+    .modern-btn-success {
+      background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+      color: white;
+      box-shadow: 0 4px 15px rgba(67, 233, 123, 0.4);
+    }
+
+    .modern-btn-success:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(67, 233, 123, 0.6);
+      color: white;
+    }
+
+    .select-all-container {
+      background: #edf2f7;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      display: flex;
+      gap: 15px;
+    }
+
+    .counter-badge {
+      background: #667eea;
+      color: white;
+      padding: 5px 15px;
+      border-radius: 20px;
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <!-- Sidebar -->
+  <div class="admin-sidebar">
+    <div class="admin-sidebar-header">
+      <h4><i class="fa fa-shield-alt"></i> Administration</h4>
+      <small>Gestion des accès</small>
+    </div>
+    <ul class="sidebar-menu">
+      <li class="sidebar-menu-item">
+        <a href="/users-admin/" class="sidebar-menu-link">
+          <i class="fa fa-users"></i>
+          <span>Utilisateurs</span>
+        </a>
+      </li>
+      <li class="sidebar-menu-item">
+        <a href="/roles-admin/" class="sidebar-menu-link active">
+          <i class="fa fa-user-tag"></i>
+          <span>Rôles</span>
+        </a>
+      </li>
+      <li class="sidebar-menu-item">
+        <a href="/audit-logs/" class="sidebar-menu-link">
+          <i class="fa fa-history"></i>
+          <span>Journal d'audit</span>
+        </a>
+      </li>
+      <li class="sidebar-menu-item" style="margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px;">
+        <a href="/admindash/" class="sidebar-menu-link">
+          <i class="fa fa-arrow-left"></i>
+          <span>Retour au dashboard</span>
+        </a>
+      </li>
+    </ul>
+  </div>
+
+  <!-- Main Content -->
+  <div class="admin-content">
+    <div class="page-header">
+      <h1 class="page-title">
+        <i class="fa fa-key"></i>
+        Permissions du rôle : <span style="color: #667eea;">{{ role.name }}</span>
+      </h1>
+    </div>
+
+    <div class="modern-section">
+      <div class="modern-alert modern-alert-info mb-4">
+        <i class="fa fa-info-circle"></i>
+        <div>
+          <strong>Gérer les permissions :</strong> Cochez les permissions que vous souhaitez accorder à ce rôle.
+          Les utilisateurs ayant ce rôle hériteront de toutes les permissions cochées.
+        </div>
+      </div>
+
+      <form method="post" id="permissions_form">
+        {% csrf_token %}
+
+        <!-- Actions rapides -->
+        <div class="select-all-container">
+          <button type="button" class="modern-btn modern-btn-success" id="select_all">
+            <i class="fa fa-check-double"></i> Tout sélectionner
+          </button>
+          <button type="button" class="modern-btn modern-btn-secondary" id="deselect_all">
+            <i class="fa fa-times"></i> Tout désélectionner
+          </button>
+          <div class="ml-auto">
+            <span class="counter-badge">
+              <span id="selected_count">0</span> / <span id="total_count">0</span> sélectionnées
+            </span>
+          </div>
+        </div>
+
+        {% regroup all_permissions by content_type.model as permissions_by_model %}
+
+        <div class="row">
+          {% for model_group in permissions_by_model %}
+            <div class="col-md-6">
+              <div class="permission-group">
+                <div class="permission-group-title">
+                  <i class="fa fa-cube"></i>
+                  {{ model_group.grouper|title }}
+                </div>
+
+                {% for perm in model_group.list %}
+                  <div class="permission-checkbox {% if perm in role.permissions.all %}checked{% endif %}" onclick="toggleCheckbox(this)">
+                    <input type="checkbox"
+                           name="permissions"
+                           value="{{ perm.id }}"
+                           id="perm_{{ perm.id }}"
+                           {% if perm in role.permissions.all %}checked{% endif %}
+                           onchange="updateCounter()">
+                    <label for="perm_{{ perm.id }}">
+                      {{ perm.name }}
+                      <small class="text-muted">({{ perm.codename }})</small>
+                    </label>
+                  </div>
+                {% endfor %}
+              </div>
+            </div>
+
+            {% if forloop.counter|divisibleby:2 %}
+              </div><div class="row">
+            {% endif %}
+          {% endfor %}
+        </div>
+
+        <div class="action-buttons">
+          <button class="modern-btn modern-btn-primary" type="submit">
+            <i class="fa fa-save"></i> Enregistrer les permissions
+          </button>
+          <a class="modern-btn modern-btn-secondary" href="/roles-admin/">
+            <i class="fa fa-arrow-left"></i> Retour aux rôles
+          </a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    function toggleCheckbox(container) {
+      const checkbox = container.querySelector('input[type="checkbox"]');
+      if(!checkbox) return;
+
+      checkbox.checked = !checkbox.checked;
+
+      if(checkbox.checked){
+        container.classList.add('checked');
+      } else {
+        container.classList.remove('checked');
+      }
+
+      updateCounter();
+    }
+
+    function updateCounter(){
+      const total = document.querySelectorAll('input[name="permissions"]').length;
+      const selected = document.querySelectorAll('input[name="permissions"]:checked').length;
+
+      document.getElementById('total_count').textContent = total;
+      document.getElementById('selected_count').textContent = selected;
+    }
+
+    $(document).ready(function(){
+      // Initialiser le compteur
+      updateCounter();
+
+      // Bouton tout sélectionner
+      $('#select_all').on('click', function(){
+        $('input[name="permissions"]').prop('checked', true);
+        $('.permission-checkbox').addClass('checked');
+        updateCounter();
+      });
+
+      // Bouton tout désélectionner
+      $('#deselect_all').on('click', function(){
+        $('input[name="permissions"]').prop('checked', false);
+        $('.permission-checkbox').removeClass('checked');
+        updateCounter();
+      });
+
+      // Empêcher le double-clic sur le container de déclencher le checkbox
+      $('.permission-checkbox input').on('click', function(e){
+        e.stopPropagation();
+      });
+
+      // Confirmation avant sauvegarde
+      $('#permissions_form').on('submit', function(e){
+        const count = $('input[name="permissions"]:checked').length;
+        if(!confirm('Voulez-vous enregistrer ' + count + ' permissions pour le rôle "{{ role.name }}" ?')){
+          e.preventDefault();
+        }
+      });
+    });
+  </script>
+</body>
+</html>
