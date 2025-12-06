@@ -147,7 +147,7 @@
         <div class="sidebar-user">
             <img src="{% static 'img/no-photo.png' %}" alt="Avatar" class="sidebar-user-avatar">
             <div class="sidebar-user-info">
-                <p class="sidebar-user-name">{{ user.get_full_name|default:"Admin" }}</p>
+                <p class="sidebar-user-name">{{ user.get_full_name|default:user.username }}</p>
                 <p class="sidebar-user-role">{{ user.groups.first.name|default:"Administrateur" }}</p>
             </div>
         </div>
@@ -363,7 +363,7 @@
                 <div class="dropdown">
                     <button class="btn btn-outline-secondary" type="button" data-bs-toggle="dropdown">
                         <img src="{% static 'img/no-photo.png' %}" alt="Avatar" class="rounded-circle me-2" width="24" height="24">
-                        {{ user.get_full_name|default:"Admin" }}
+                        {{ user.get_full_name|default:user.username }}
                         <i class="fas fa-chevron-down ms-2"></i>
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end">

@@ -561,13 +561,19 @@ def charger_van(request):
             messages.error(request, f'Erreur: {str(e)}')
 
     # GET - afficher le formulaire
-    # Filtrer par company si disponible
+    # Filtrer par company si disponible (inclure aussi les entrepôts sans company)
+    from django.db.models import Q
     vans_qs = Warehouse.objects.filter(code__icontains='van', is_active=True)
     sources_qs = Warehouse.objects.exclude(code__icontains='van').filter(is_active=True)
 
     if company:
-        vans_qs = vans_qs.filter(company=company)
-        sources_qs = sources_qs.filter(company=company)
+        # Afficher les entrepôts de la company de l'utilisateur + ceux sans company
+        vans_qs = vans_qs.filter(Q(company=company) | Q(company__isnull=True))
+        sources_qs = sources_qs.filter(Q(company=company) | Q(company__isnull=True))
+    else:
+        # Si pas de company, afficher uniquement les entrepôts sans company
+        vans_qs = vans_qs.filter(company__isnull=True)
+        sources_qs = sources_qs.filter(company__isnull=True)
 
     vans = vans_qs.order_by('code')
     sources = sources_qs.order_by('code')

@@ -28,12 +28,12 @@ from rest_framework.decorators import api_view, permission_classes
 def categories_raw(request):
     """Retourne les catégories de l'entreprise de l'utilisateur connecté"""
     try:
-        # Filtrer par company de l'utilisateur
+        # Filtrer par company de l'utilisateur OU données sans company (null)
         if hasattr(request, 'company') and request.company is not None:
-            categories = Categorie.objects.filter(company=request.company)
+            categories = Categorie.objects.filter(Q(company=request.company) | Q(company__isnull=True))
         else:
-            # Si l'utilisateur n'a pas de company, retourner une liste vide
-            categories = Categorie.objects.none()
+            # Si l'utilisateur n'a pas de company, afficher les données sans company
+            categories = Categorie.objects.filter(company__isnull=True)
 
         rows = []
         for cat in categories:
@@ -278,7 +278,11 @@ class ProduitViewSet(TenantFilterMixin, viewsets.ModelViewSet):
         return Response(serializer.data)
 
     def perform_create(self, serializer):
-        obj = serializer.save()
+        # Assigner la company de l'utilisateur connecté
+        if hasattr(self.request, 'company') and self.request.company is not None:
+            obj = serializer.save(company=self.request.company)
+        else:
+            obj = serializer.save()
         try:
             log_event(self.request, 'produit.create', target=obj, metadata={'id': obj.id, 'reference': getattr(obj, 'reference', None)})
         except Exception:
@@ -390,7 +394,11 @@ class BonLivraisonViewSet(TenantFilterMixin, viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def perform_create(self, serializer):
-        obj = serializer.save()
+        # Assigner la company de l'utilisateur connecté
+        if hasattr(self.request, 'company') and self.request.company is not None:
+            obj = serializer.save(company=self.request.company)
+        else:
+            obj = serializer.save()
         try:
             log_event(self.request, 'bonlivraison.create', target=obj, metadata={'id': obj.id, 'numero': getattr(obj, 'numero', None)})
         except Exception:
@@ -444,7 +452,11 @@ class FactureViewSet(TenantFilterMixin, viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def perform_create(self, serializer):
-        obj = serializer.save()
+        # Assigner la company de l'utilisateur connecté
+        if hasattr(self.request, 'company') and self.request.company is not None:
+            obj = serializer.save(company=self.request.company)
+        else:
+            obj = serializer.save()
         try:
             log_event(self.request, 'facture.create', target=obj, metadata={'id': obj.id, 'numero': getattr(obj, 'numero', None)})
         except Exception:
@@ -1964,7 +1976,11 @@ class WarehouseViewSet(TenantFilterMixin, viewsets.ModelViewSet):
         return [IsAuthenticated()]
 
     def perform_create(self, serializer):
-        obj = serializer.save()
+        # Assigner la company de l'utilisateur connecté
+        if hasattr(self.request, 'company') and self.request.company is not None:
+            obj = serializer.save(company=self.request.company)
+        else:
+            obj = serializer.save()
         try:
             log_event(self.request, 'warehouse.create', target=obj, metadata={'id': obj.id, 'code': getattr(obj, 'code', None)})
         except Exception:
