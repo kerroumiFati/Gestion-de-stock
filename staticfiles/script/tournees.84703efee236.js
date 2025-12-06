@@ -1341,17 +1341,7 @@ async function syncTourneeArrets(tourneeId) {
         const data = await response.json();
 
         if (response.ok) {
-            const added = data.arrets_ajoutes || 0;
-            const removed = data.arrets_supprimes || 0;
-            const updated = data.arrets_mis_a_jour || 0;
-            let message = 'Synchronisation réussie ! ';
-            const parts = [];
-            if (added > 0) parts.push(`${added} arrêt(s) ajouté(s)`);
-            if (removed > 0) parts.push(`${removed} supprimé(s)`);
-            if (updated > 0) parts.push(`${updated} adresse(s) mise(s) à jour`);
-            if (parts.length === 0) parts.push('Aucun changement');
-            message += parts.join(', ');
-            showMessage(message, 'success');
+            showMessage(`Synchronisation réussie ! ${data.arrets_ajoutes || 0} arrêt(s) ajouté(s), ${data.arrets_supprimes || 0} supprimé(s)`, 'success');
             // Recharger les tournées pour voir les changements
             loadTournees();
         } else {

@@ -719,61 +719,90 @@ class TourneeViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def sync_arrets(self, request, pk=None):
         """Synchroniser les arrêts d'une tournée avec les clients assignés"""
-        tournee = self.get_object()
+        try:
+            tournee = self.get_object()
 
-        # Vérifier que la tournée n'est pas terminée ou clôturée
-        if tournee.statut in ['terminee', 'cloturee', 'annulee']:
-            return Response(
-                {'error': 'Impossible de synchroniser une tournée terminée ou clôturée'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # Obtenir le jour de la semaine de la tournée
-        date_tournee = tournee.date_tournee
-        jour_semaine = date_tournee.weekday() + 1  # Python: 0=Lundi, donc +1 pour avoir 1=Lundi
-
-        # Récupérer les clients assignés au livreur pour ce jour
-        from .distribution_models import ClientLivreurHebdo
-        configs = ClientLivreurHebdo.objects.filter(
-            livreur=tournee.livreur,
-            jour_semaine=jour_semaine,
-            is_active=True
-        ).select_related('client').order_by('ordre_passage')
-
-        # Récupérer les arrêts existants
-        arrets_existants = {arret.client_id: arret for arret in tournee.arrets.all()}
-        clients_config = {config.client_id for config in configs}
-
-        arrets_ajoutes = 0
-        arrets_supprimes = 0
-
-        # Supprimer les arrêts qui ne sont plus dans la config (sauf s'ils sont déjà livrés)
-        for client_id, arret in arrets_existants.items():
-            if client_id not in clients_config and arret.statut == 'en_attente':
-                arret.delete()
-                arrets_supprimes += 1
-
-        # Ajouter les nouveaux clients
-        for config in configs:
-            if config.client_id not in arrets_existants:
-                ArretTourneeMobile.objects.create(
-                    tournee=tournee,
-                    client=config.client,
-                    ordre_passage=config.ordre_passage or 1,
-                    latitude=getattr(config.client, 'lat', None),
-                    longitude=getattr(config.client, 'lng', None),
-                    statut='en_attente',
-                    notes=config.notes or ''
+            # Vérifier que la tournée n'est pas terminée ou clôturée
+            if tournee.statut in ['terminee', 'cloturee', 'annulee']:
+                return Response(
+                    {'error': 'Impossible de synchroniser une tournée terminée ou clôturée'},
+                    status=status.HTTP_400_BAD_REQUEST
                 )
-                arrets_ajoutes += 1
 
-        return Response({
-            'message': 'Synchronisation terminée',
-            'arrets_ajoutes': arrets_ajoutes,
-            'arrets_supprimes': arrets_supprimes,
-            'total_arrets': tournee.arrets.count(),
-            'tournee': TourneeSerializer(tournee).data
-        })
+            # Obtenir le jour de la semaine de la tournée
+            date_tournee = tournee.date_tournee
+            jour_semaine = date_tournee.weekday() + 1  # Python: 0=Lundi, donc +1 pour avoir 1=Lundi
+
+            # Récupérer les clients assignés au livreur pour ce jour
+            from .distribution_models import ClientLivreurHebdo
+            configs = ClientLivreurHebdo.objects.filter(
+                livreur=tournee.livreur,
+                jour_semaine=jour_semaine,
+                is_active=True
+            ).select_related('client').order_by('ordre_passage')
+
+            # Récupérer les arrêts existants
+            arrets_existants = {arret.client_id: arret for arret in tournee.arrets.all()}
+            clients_config = {config.client_id: config for config in configs}
+
+            arrets_ajoutes = 0
+            arrets_supprimes = 0
+            arrets_mis_a_jour = 0
+
+            # Mettre à jour les arrêts existants avec les nouvelles coordonnées du client
+            for config in configs:
+                if config.client_id in arrets_existants:
+                    arret = arrets_existants[config.client_id]
+                    # Mettre à jour l'adresse si elle a changé
+                    new_lat = getattr(config.client, 'lat', None)
+                    new_lng = getattr(config.client, 'lng', None)
+                    if (new_lat and new_lng and
+                        (arret.latitude != new_lat or arret.longitude != new_lng)):
+                        arret.latitude = new_lat
+                        arret.longitude = new_lng
+                        arret.save()
+                        arrets_mis_a_jour += 1
+
+            # Supprimer les arrêts qui ne sont plus dans la config (sauf s'ils sont déjà livrés)
+            for client_id, arret in arrets_existants.items():
+                if client_id not in clients_config and arret.statut == 'en_attente':
+                    arret.delete()
+                    arrets_supprimes += 1
+
+            # Ajouter les nouveaux clients
+            ordre_counter = 1
+            for config in configs:
+                if config.client_id not in arrets_existants:
+                    # Trouver le prochain ordre_passage disponible
+                    while ArretTourneeMobile.objects.filter(tournee=tournee, ordre_passage=ordre_counter).exists():
+                        ordre_counter += 1
+
+                    ArretTourneeMobile.objects.create(
+                        tournee=tournee,
+                        client=config.client,
+                        ordre_passage=ordre_counter,
+                        latitude=getattr(config.client, 'lat', None),
+                        longitude=getattr(config.client, 'lng', None),
+                        statut='en_attente',
+                        notes=config.notes or ''
+                    )
+                    arrets_ajoutes += 1
+                    ordre_counter += 1
+
+            return Response({
+                'message': 'Synchronisation terminée',
+                'arrets_ajoutes': arrets_ajoutes,
+                'arrets_supprimes': arrets_supprimes,
+                'arrets_mis_a_jour': arrets_mis_a_jour,
+                'total_arrets': tournee.arrets.count(),
+                'tournee': TourneeSerializer(tournee).data
+            })
+        except Exception as e:
+            import traceback
+            return Response({
+                'error': str(e),
+                'traceback': traceback.format_exc()
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=False, methods=['post'])
     def sync_all_en_cours(self, request):

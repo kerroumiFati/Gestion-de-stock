@@ -1341,7 +1341,17 @@ async function syncTourneeArrets(tourneeId) {
         const data = await response.json();
 
         if (response.ok) {
-            showMessage(`Synchronisation réussie ! ${data.arrets_ajoutes || 0} arrêt(s) ajouté(s), ${data.arrets_supprimes || 0} supprimé(s)`, 'success');
+            const added = data.arrets_ajoutes || 0;
+            const removed = data.arrets_supprimes || 0;
+            const updated = data.arrets_mis_a_jour || 0;
+            let message = 'Synchronisation réussie ! ';
+            const parts = [];
+            if (added > 0) parts.push(`${added} arrêt(s) ajouté(s)`);
+            if (removed > 0) parts.push(`${removed} supprimé(s)`);
+            if (updated > 0) parts.push(`${updated} adresse(s) mise(s) à jour`);
+            if (parts.length === 0) parts.push('Aucun changement');
+            message += parts.join(', ');
+            showMessage(message, 'success');
             // Recharger les tournées pour voir les changements
             loadTournees();
         } else {
@@ -1860,8 +1870,25 @@ window.onclick = function(event) {
 
 // Fonction pour formater la date
 function formatDate(dateStr) {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    if (!dateStr) {
+        console.warn('[TOURNEES] formatDate: dateStr est vide ou undefined');
+        return 'Date non définie';
+    }
+
+    try {
+        const date = new Date(dateStr);
+
+        // Vérifier si la date est valide
+        if (isNaN(date.getTime())) {
+            console.warn('[TOURNEES] formatDate: Date invalide:', dateStr);
+            return dateStr; // Retourner la chaîne originale
+        }
+
+        return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    } catch (error) {
+        console.error('[TOURNEES] formatDate: Erreur:', error, 'dateStr:', dateStr);
+        return dateStr || 'Date invalide';
+    }
 }
 
 // Fonction pour afficher les messages

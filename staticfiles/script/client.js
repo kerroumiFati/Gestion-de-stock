@@ -30,6 +30,8 @@
       $adresse: $('#adresse'),
       $telephone: $('#telephone'),
       $secteur: $('#secteur'),
+      $lat: $('#lat'),
+      $lng: $('#lng'),
       $nif: $('#nif'),
       $nis: $('#nis'),
       $ai: $('#ai'),
@@ -40,7 +42,7 @@
   }
 
   function resetForm(){
-    const { $id, $nom, $prenom, $email, $adresse, $telephone, $secteur, $nif, $nis, $ai, $rc, $btn } = els();
+    const { $id, $nom, $prenom, $email, $adresse, $telephone, $secteur, $lat, $lng, $nif, $nis, $ai, $rc, $btn } = els();
     $id.val('');
     $nom.val('');
     $prenom.val('');
@@ -49,6 +51,8 @@
     $telephone.val('');
     // Reset secteur select to first option (empty value)
     $secteur.prop('selectedIndex', 0);
+    $lat.val('');
+    $lng.val('');
     $nif.val('');
     $nis.val('');
     $ai.val('');
@@ -89,7 +93,7 @@
         const { $tableBody } = els();
         $tableBody.empty();
         if(!list || !list.length){
-          $tableBody.append('<tr><td colspan="12" class="text-center text-muted">Aucun client</td></tr>');
+          $tableBody.append('<tr><td colspan="14" class="text-center text-muted">Aucun client</td></tr>');
           return;
         }
         list.forEach(function(c){
@@ -105,6 +109,11 @@
             ? `<span class="badge" style="background-color: ${c.secteur_couleur || '#6c757d'}; color: white;">${c.secteur_code || ''} - ${c.secteur_nom}</span>`
             : '<span class="text-muted">-</span>';
           $tr.append(`<td>${secteurHtml}</td>`);
+          // Coordonnées GPS
+          const latDisplay = c.lat != null ? parseFloat(c.lat).toFixed(7) : '<span class="text-muted">-</span>';
+          const lngDisplay = c.lng != null ? parseFloat(c.lng).toFixed(7) : '<span class="text-muted">-</span>';
+          $tr.append(`<td class="text-right"><small>${latDisplay}</small></td>`);
+          $tr.append(`<td class="text-right"><small>${lngDisplay}</small></td>`);
           // Champs fiscaux
           $tr.append(`<td>${c.nif || '<span class="text-muted">-</span>'}</td>`);
           $tr.append(`<td>${c.nis || '<span class="text-muted">-</span>'}</td>`);
@@ -119,14 +128,16 @@
       })
       .fail(function(xhr){
         const { $tableBody } = els();
-        $tableBody.empty().append('<tr><td colspan="12" class="text-center text-danger">Erreur de chargement</td></tr>');
+        $tableBody.empty().append('<tr><td colspan="14" class="text-center text-danger">Erreur de chargement</td></tr>');
         dbg('loadClients: fail', xhr.status, xhr.responseText || xhr.statusText);
       });
   }
 
   function payloadFromForm(){
-    const { $nom, $prenom, $email, $adresse, $telephone, $secteur, $nif, $nis, $ai, $rc } = els();
+    const { $nom, $prenom, $email, $adresse, $telephone, $secteur, $lat, $lng, $nif, $nis, $ai, $rc } = els();
     const secteurVal = $secteur.val();
+    const latVal = $lat.val();
+    const lngVal = $lng.val();
     return {
       nom: ($nom.val()||'').trim(),
       prenom: ($prenom.val()||'').trim(),
@@ -134,6 +145,8 @@
       adresse: ($adresse.val()||'').trim(),
       telephone: ($telephone.val()||'').trim(),
       secteur: secteurVal ? parseInt(secteurVal, 10) : null,
+      lat: latVal ? parseFloat(latVal) : null,
+      lng: lngVal ? parseFloat(lngVal) : null,
       nif: ($nif.val()||'').trim(),
       nis: ($nis.val()||'').trim(),
       ai: ($ai.val()||'').trim(),
@@ -190,7 +203,7 @@
         dbg('editClient loaded - FULL CLIENT DATA:', JSON.stringify(c, null, 2));
         dbg('Client secteur value:', c.secteur, 'Type:', typeof c.secteur);
 
-        const { $id, $nom, $prenom, $email, $adresse, $telephone, $secteur, $nif, $nis, $ai, $rc, $btn } = els();
+        const { $id, $nom, $prenom, $email, $adresse, $telephone, $secteur, $lat, $lng, $nif, $nis, $ai, $rc, $btn } = els();
 
         // Log all select options
         dbg('Available secteur options in select:');
@@ -205,6 +218,8 @@
         $email.val(c.email || '');
         $adresse.val(c.adresse || '');
         $telephone.val(c.telephone || '');
+        $lat.val(c.lat || '');
+        $lng.val(c.lng || '');
         $nif.val(c.nif || '');
         $nis.val(c.nis || '');
         $ai.val(c.ai || '');
