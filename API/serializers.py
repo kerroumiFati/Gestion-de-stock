@@ -811,7 +811,7 @@ class ArretLivraisonSerializer(serializers.ModelSerializer):
 class TourneeSerializer(serializers.ModelSerializer):
     """Serializer pour le modèle Tournee"""
     livreur_nom = serializers.SerializerMethodField()
-    warehouse_nom = serializers.CharField(source='warehouse.nom', read_only=True, allow_null=True)
+    warehouse_nom = serializers.CharField(source='warehouse.name', read_only=True, allow_null=True)
     statut_display = serializers.CharField(source='get_statut_display', read_only=True)
     code_prix_libelle = serializers.CharField(source='code_prix.libelle', read_only=True, allow_null=True)
     code_prix_code = serializers.CharField(source='code_prix.code', read_only=True, allow_null=True)
@@ -880,7 +880,7 @@ class TourneeSerializer(serializers.ModelSerializer):
 class TourneeListSerializer(serializers.ModelSerializer):
     """Serializer simplifié pour la liste des tournées (sans les arrêts)"""
     livreur_nom = serializers.SerializerMethodField()
-    warehouse_nom = serializers.CharField(source='warehouse.nom', read_only=True, allow_null=True)
+    warehouse_nom = serializers.CharField(source='warehouse.name', read_only=True, allow_null=True)
     statut_display = serializers.CharField(source='get_statut_display', read_only=True)
     code_prix_libelle = serializers.CharField(source='code_prix.libelle', read_only=True, allow_null=True)
     code_prix_code = serializers.CharField(source='code_prix.code', read_only=True, allow_null=True)

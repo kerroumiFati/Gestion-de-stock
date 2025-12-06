@@ -107,7 +107,7 @@ class LivreurSerializer(serializers.ModelSerializer):
     """Serializer pour LivreurDistribution"""
     username = serializers.SerializerMethodField()
     has_user_account = serializers.SerializerMethodField()
-    entrepot_nom = serializers.CharField(source='entrepot.nom', read_only=True, allow_null=True)
+    entrepot_nom = serializers.CharField(source='entrepot.name', read_only=True, allow_null=True)
     tournees_actives_count = serializers.SerializerMethodField()
 
     # Champs de compatibilité avec l'ancien frontend
@@ -445,11 +445,11 @@ class VenteMobileCreateSerializer(serializers.Serializer):
                     )
                     stock.quantity = max(0, stock.quantity - quantite)
                     stock.save()
-                    logger.debug(f"Stock décrémenté: {produit.designation} -{quantite} dans {livreur.entrepot.nom}")
+                    logger.debug(f"Stock décrémenté: {produit.designation} -{quantite} dans {livreur.entrepot.name}")
                 except ProductStock.DoesNotExist:
                     logger.warning(
                         f"Stock non trouvé pour produit {produit.id} ({produit.designation}) "
-                        f"dans entrepôt {livreur.entrepot.id} ({livreur.entrepot.nom})"
+                        f"dans entrepôt {livreur.entrepot.id} ({livreur.entrepot.name})"
                     )
             elif not livreur:
                 logger.warning(f"Pas de livreur - stock non décrémenté pour produit {produit.id}")

@@ -951,16 +951,34 @@ class VenteTourneeViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         """Override create pour gérer le format mobile"""
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        vente = serializer.save()
+        import logging
+        logger = logging.getLogger(__name__)
 
-        # Retourner la vente créée
-        return Response({
-            'id': vente.id,
-            'message': 'Vente créée avec succès',
-            'montant_total': float(vente.montant_total) if vente.montant_total else 0
-        }, status=status.HTTP_201_CREATED)
+        try:
+            logger.info(f"[VenteTourneeViewSet] Données reçues: {request.data}")
+
+            serializer = self.get_serializer(data=request.data)
+            if not serializer.is_valid():
+                logger.error(f"[VenteTourneeViewSet] Erreurs de validation: {serializer.errors}")
+                return Response({
+                    'error': 'Données invalides',
+                    'details': serializer.errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            vente = serializer.save()
+
+            # Retourner la vente créée
+            return Response({
+                'id': vente.id,
+                'message': 'Vente créée avec succès',
+                'montant_total': float(vente.montant_total) if vente.montant_total else 0
+            }, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            logger.exception(f"[VenteTourneeViewSet] Erreur lors de la création de vente: {str(e)}")
+            return Response({
+                'error': 'Erreur serveur lors de la création de la vente',
+                'details': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def get_queryset(self):
         queryset = super().get_queryset()
