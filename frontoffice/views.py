@@ -6,11 +6,7 @@ from django.conf import settings
 from django.contrib import messages
 from .forms import *
 from .forms_users import UserAdminForm, GroupAdminForm
-<<<<<<< HEAD
 from API.models import Produit, UserProfile
-=======
-from API.models import Produit
->>>>>>> 636ca312577497c064474164394be989bbd92d16
 from django.contrib.auth.models import User, Group
 from django.contrib.auth.decorators import user_passes_test
 from API.audit import log_event
@@ -128,7 +124,6 @@ def user_create(request):
                 user.set_unusable_password()
             user.save()
             form.save_m2m()
-<<<<<<< HEAD
 
             # Créer le UserProfile avec la company de l'utilisateur connecté
             if hasattr(request.user, 'profile') and request.user.profile.company:
@@ -138,8 +133,6 @@ def user_create(request):
                     role='employee'
                 )
 
-=======
->>>>>>> 636ca312577497c064474164394be989bbd92d16
             messages.success(request, 'Utilisateur créé avec succès')
             log_event(request, 'user.create', target=user, metadata={'username': user.username})
             return redirect('users_list')
@@ -159,7 +152,6 @@ def user_edit(request, user_id):
                 user.set_password(pwd)
             user.save()
             form.save_m2m()
-<<<<<<< HEAD
 
             # Créer le UserProfile si l'utilisateur n'en a pas
             if not hasattr(user, 'profile'):
@@ -170,8 +162,6 @@ def user_edit(request, user_id):
                         role='employee'
                     )
 
-=======
->>>>>>> 636ca312577497c064474164394be989bbd92d16
             messages.success(request, 'Utilisateur mis à jour')
             log_event(request, 'user.update', target=user, metadata={'username': user.username})
             return redirect('users_list')
@@ -571,17 +561,12 @@ def charger_van(request):
             messages.error(request, f'Erreur: {str(e)}')
 
     # GET - afficher le formulaire
-<<<<<<< HEAD
     # Filtrer par company si disponible (inclure aussi les entrepôts sans company)
     from django.db.models import Q
-=======
-    # Filtrer par company si disponible
->>>>>>> 636ca312577497c064474164394be989bbd92d16
     vans_qs = Warehouse.objects.filter(code__icontains='van', is_active=True)
     sources_qs = Warehouse.objects.exclude(code__icontains='van').filter(is_active=True)
 
     if company:
-<<<<<<< HEAD
         # Afficher les entrepôts de la company de l'utilisateur + ceux sans company
         vans_qs = vans_qs.filter(Q(company=company) | Q(company__isnull=True))
         sources_qs = sources_qs.filter(Q(company=company) | Q(company__isnull=True))
@@ -589,10 +574,6 @@ def charger_van(request):
         # Si pas de company, afficher uniquement les entrepôts sans company
         vans_qs = vans_qs.filter(company__isnull=True)
         sources_qs = sources_qs.filter(company__isnull=True)
-=======
-        vans_qs = vans_qs.filter(company=company)
-        sources_qs = sources_qs.filter(company=company)
->>>>>>> 636ca312577497c064474164394be989bbd92d16
 
     vans = vans_qs.order_by('code')
     sources = sources_qs.order_by('code')

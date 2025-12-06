@@ -289,13 +289,8 @@
                          alt="User picture">
                 </div>
                 <div class="user-info">
-<<<<<<< HEAD
 						<span class="user-name"> <strong>{{ user.get_full_name|default:user.username }}</strong>
-						</span> <span class="user-role">{{ user.groups.first.name|default:"Administrateur" }}</span> 
-=======
-						<span class="user-name"> <strong>Admin </strong>
-						</span> <span class="user-role">Admin</span> 
->>>>>>> 636ca312577497c064474164394be989bbd92d16
+						</span> <span class="user-role">{{ user.groups.first.name|default:"Administrateur" }}</span>
                 </div>
                 <div class="user-actions ml-auto">
                   <div class="dropdown">
