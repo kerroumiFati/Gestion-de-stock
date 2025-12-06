@@ -797,10 +797,13 @@
       dbg('renderSalesList: Finished rendering. tbody children count:', $tbody.children().length);
     }
 
-    // Reinitialize DataTable
-    if($.fn.DataTable){
+    // Only initialize DataTable if the tab is visible
+    const $tabPane = $table.closest('.tab-pane');
+    const isTabVisible = $tabPane.length === 0 || ($tabPane.hasClass('active') && $tabPane.hasClass('show'));
+
+    if($.fn.DataTable && isTabVisible){
       try {
-        dbg('renderSalesList: Initializing DataTable...');
+        dbg('renderSalesList: Initializing DataTable (tab is visible)...');
         $table.DataTable({
           language: {
             "sProcessing": "Traitement en cours...",
@@ -838,6 +841,8 @@
       } catch(e) {
         dbg('DataTable init failed:', e);
       }
+    } else if(!isTabVisible) {
+      dbg('renderSalesList: Skipping DataTable init (tab not visible yet)');
     } else {
       dbg('renderSalesList: $.fn.DataTable not available!');
     }
@@ -876,6 +881,72 @@
         // Afficher des 0 en cas d'erreur
         $('.card-body h4[id^="stat_"]').text('N/A');
       });
+
+    // Charger les clients avec reste à payer
+    loadClientsAvecReste();
+  }
+
+  function loadClientsAvecReste(){
+    const $tbody = $('#clients_reste_body');
+    if(!$tbody.length) return;
+
+    $.ajax({ url:'/API/ventes/clients_avec_reste/', method:'GET', dataType:'json' })
+      .done(function(data){
+        dbg('loadClientsAvecReste success', data);
+        renderClientsAvecReste(data);
+      })
+      .fail(function(xhr){
+        dbg('loadClientsAvecReste fail', xhr.status, xhr.responseText || xhr.statusText);
+        $tbody.html('<tr><td colspan="6" class="text-center text-danger py-4"><i class="fa fa-exclamation-triangle"></i> Erreur de chargement</td></tr>');
+      });
+  }
+
+  function renderClientsAvecReste(clients){
+    const $tbody = $('#clients_reste_body');
+    if(!$tbody.length) return;
+
+    $tbody.empty();
+
+    if(!clients || clients.length === 0){
+      $tbody.html('<tr><td colspan="6" class="text-center text-success py-4"><i class="fa fa-check-circle"></i> Aucun client avec reste à payer</td></tr>');
+      $('#clients_reste_count').text('0');
+      $('#total_ttc_global').text('0.00 ' + DEFAULT_CURRENCY_SYMBOL);
+      $('#total_paye_global').text('0.00 ' + DEFAULT_CURRENCY_SYMBOL);
+      $('#total_reste_global').text('0.00 ' + DEFAULT_CURRENCY_SYMBOL);
+      return;
+    }
+
+    let totalTTC = 0;
+    let totalPaye = 0;
+    let totalReste = 0;
+
+    clients.forEach(function(c){
+      const nom = ((c.client_nom || '') + ' ' + (c.client_prenom || '')).trim() || 'Client #' + c.client_id;
+      const tel = c.telephone || '-';
+      const nbVentes = c.nombre_ventes || 0;
+      const ttc = parseFloat(c.total_ttc) || 0;
+      const paye = parseFloat(c.total_paye) || 0;
+      const reste = parseFloat(c.reste_a_payer) || 0;
+
+      totalTTC += ttc;
+      totalPaye += paye;
+      totalReste += reste;
+
+      const tr = $('<tr>');
+      tr.append('<td><strong>' + nom + '</strong></td>');
+      tr.append('<td>' + tel + '</td>');
+      tr.append('<td class="text-center"><span class="badge badge-secondary">' + nbVentes + '</span></td>');
+      tr.append('<td class="text-right">' + ttc.toFixed(2) + ' ' + DEFAULT_CURRENCY_SYMBOL + '</td>');
+      tr.append('<td class="text-right text-success">' + paye.toFixed(2) + ' ' + DEFAULT_CURRENCY_SYMBOL + '</td>');
+      tr.append('<td class="text-right text-danger"><strong>' + reste.toFixed(2) + ' ' + DEFAULT_CURRENCY_SYMBOL + '</strong></td>');
+      $tbody.append(tr);
+    });
+
+    // Mettre à jour le compteur et les totaux
+    $('#clients_reste_count').text(clients.length);
+    $('#total_ttc_global').text(totalTTC.toFixed(2) + ' ' + DEFAULT_CURRENCY_SYMBOL);
+    $('#total_paye_global').text(totalPaye.toFixed(2) + ' ' + DEFAULT_CURRENCY_SYMBOL);
+    $('#total_reste_global').text(totalReste.toFixed(2) + ' ' + DEFAULT_CURRENCY_SYMBOL);
   }
 
   function loadSaleDetails(saleId){
@@ -1186,7 +1257,8 @@
       loadWarehouses();
       bindProduitFilters();
       renderLines();
-      loadSalesList();
+      // Ne pas charger loadSalesList ici, seulement quand l'onglet est visible
+      // loadStats() ne pose pas de problème car il n'initialise pas de DataTable
       loadStats(); // Load initial stats
     });
 

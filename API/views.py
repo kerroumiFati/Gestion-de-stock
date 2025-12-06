@@ -172,12 +172,29 @@ class ClientViewSet(TenantFilterMixin, viewsets.ModelViewSet):
         if hasattr(self.request, 'company') and self.request.company is not None:
             queryset = queryset.filter(company=self.request.company)
         else:
-            # Utilisateur mobile (livreur) - retourner uniquement les clients assignés
-            from .distribution_models import LivreurDistribution
+            # Utilisateur mobile (livreur) - retourner les clients assignés + clients des tournées
+            from .distribution_models import LivreurDistribution, TourneeMobile
             try:
                 livreur = LivreurDistribution.objects.get(user=self.request.user)
-                # Filtrer par les clients assignés à ce livreur
-                queryset = livreur.clients_assignes.all().order_by('nom')
+
+                # Clients directement assignés au livreur
+                clients_assignes_ids = livreur.clients_assignes.values_list('id', flat=True)
+
+                # Clients des tournées actives (planifiée, en_cours) du livreur
+                tournees_actives = TourneeMobile.objects.filter(
+                    livreur=livreur,
+                    statut__in=['planifiee', 'en_cours']
+                )
+                clients_tournees_ids = set()
+                for tournee in tournees_actives:
+                    clients_tournees_ids.update(
+                        tournee.arrets.values_list('client_id', flat=True)
+                    )
+
+                # Combiner les deux listes
+                all_client_ids = set(clients_assignes_ids) | clients_tournees_ids
+                queryset = Client.objects.filter(id__in=all_client_ids).order_by('nom')
+
             except LivreurDistribution.DoesNotExist:
                 # Si pas de profil livreur, retourner aucun client
                 return queryset.none()
@@ -1784,6 +1801,49 @@ class VenteViewSet(TenantFilterMixin, viewsets.ModelViewSet):
         }
 
         return Response(stats)
+
+    @action(detail=False, methods=['get'])
+    def clients_avec_reste(self, request):
+        """Liste des clients ayant un reste à payer sur leurs ventes"""
+        from django.db.models import Sum, F, Value, DecimalField
+        from django.db.models.functions import Coalesce
+
+        # Récupérer toutes les ventes complétées avec reste à payer
+        base_qs = self.get_queryset().filter(statut='completed')
+
+        # Calculer le montant payé et le reste pour chaque vente
+        ventes_avec_reste = []
+        clients_data = {}
+
+        for vente in base_qs.select_related('client'):
+            montant_paye = vente.get_montant_paye()
+            reste = vente.get_reste_a_payer()
+
+            if reste > 0:
+                client_id = vente.client_id
+                if client_id not in clients_data:
+                    clients_data[client_id] = {
+                        'client_id': client_id,
+                        'client_nom': vente.client.nom if vente.client else '',
+                        'client_prenom': vente.client.prenom if vente.client else '',
+                        'telephone': getattr(vente.client, 'telephone', '') or '',
+                        'total_ventes': 0,
+                        'total_ttc': 0,
+                        'total_paye': 0,
+                        'reste_a_payer': 0,
+                        'nombre_ventes': 0,
+                    }
+
+                clients_data[client_id]['total_ttc'] += float(vente.total_ttc or 0)
+                clients_data[client_id]['total_paye'] += float(montant_paye)
+                clients_data[client_id]['reste_a_payer'] += float(reste)
+                clients_data[client_id]['nombre_ventes'] += 1
+
+        # Convertir en liste et trier par reste à payer décroissant
+        result = list(clients_data.values())
+        result.sort(key=lambda x: x['reste_a_payer'], reverse=True)
+
+        return Response(result)
 
     @action(detail=True, methods=['get'])
     def printable(self, request, pk=None):

@@ -753,15 +753,24 @@ class TourneeViewSet(viewsets.ModelViewSet):
             for config in configs:
                 if config.client_id in arrets_existants:
                     arret = arrets_existants[config.client_id]
-                    # Mettre à jour l'adresse si elle a changé
+                    # Mettre à jour les coordonnées GPS si le client en a
                     new_lat = getattr(config.client, 'lat', None)
                     new_lng = getattr(config.client, 'lng', None)
-                    if (new_lat and new_lng and
-                        (arret.latitude != new_lat or arret.longitude != new_lng)):
-                        arret.latitude = new_lat
-                        arret.longitude = new_lng
-                        arret.save()
-                        arrets_mis_a_jour += 1
+
+                    # Comparer les valeurs (convertir en float pour éviter les problèmes Decimal)
+                    current_lat = float(arret.latitude) if arret.latitude else None
+                    current_lng = float(arret.longitude) if arret.longitude else None
+                    new_lat_float = float(new_lat) if new_lat else None
+                    new_lng_float = float(new_lng) if new_lng else None
+
+                    # Mettre à jour si les coordonnées du client existent et sont différentes
+                    if new_lat_float is not None and new_lng_float is not None:
+                        if current_lat != new_lat_float or current_lng != new_lng_float:
+                            arret.latitude = new_lat
+                            arret.longitude = new_lng
+                            arret.save(update_fields=['latitude', 'longitude'])
+                            arrets_mis_a_jour += 1
+                            logger.info(f"Arrêt {arret.id} mis à jour avec GPS: {new_lat}, {new_lng}")
 
             # Supprimer les arrêts qui ne sont plus dans la config (sauf s'ils sont déjà livrés)
             for client_id, arret in arrets_existants.items():

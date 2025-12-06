@@ -176,13 +176,17 @@ class ArretTourneeSerializer(serializers.ModelSerializer):
     client_nom = serializers.CharField(source='client.nom', read_only=True)
     client_adresse = serializers.CharField(source='client.adresse', read_only=True)
     client_telephone = serializers.CharField(source='client.telephone', read_only=True)
-    client_code = serializers.CharField(source='client.code_client', read_only=True)
+    client_code = serializers.CharField(source='client.code', read_only=True, allow_null=True)
+    # Coordonnées GPS du client
+    client_lat = serializers.DecimalField(source='client.lat', max_digits=10, decimal_places=7, read_only=True, allow_null=True)
+    client_lng = serializers.DecimalField(source='client.lng', max_digits=10, decimal_places=7, read_only=True, allow_null=True)
 
     class Meta:
         model = ArretTourneeMobile
         fields = [
             'id', 'tournee', 'client', 'client_nom', 'client_code',
             'client_adresse', 'client_telephone',
+            'client_lat', 'client_lng',
             'ordre_passage', 'statut',
             'heure_prevue', 'heure_arrivee', 'heure_depart',
             'latitude', 'longitude',
@@ -300,40 +304,88 @@ class LigneVenteMobileSerializer(serializers.Serializer):
 class VenteMobileCreateSerializer(serializers.Serializer):
     """Serializer pour création de vente depuis l'app mobile (format simplifié)"""
     app_id = serializers.CharField(max_length=200, required=False)
-    client = serializers.IntegerField()
-    mode_paiement = serializers.ChoiceField(choices=['especes', 'credit', 'cheque'])
+    # Accepter string ou int pour client (le mobile peut envoyer une string)
+    client = serializers.CharField(max_length=50)
+    mode_paiement = serializers.ChoiceField(choices=['especes', 'credit', 'cheque', 'virement'])
     montant_total = serializers.DecimalField(max_digits=10, decimal_places=2)
     lignes_vente = LigneVenteMobileSerializer(many=True)
 
     def create(self, validated_data):
+        import logging
+        import uuid
         from API.models import ProductStock, Client as ClientModel
-        from .distribution_models import LivreurDistribution
+        from .distribution_models import LivreurDistribution, TourneeMobile, ClientLivreurHebdo
+
+        logger = logging.getLogger(__name__)
 
         lignes_data = validated_data.pop('lignes_vente')
-        client_id = validated_data.pop('client')
+        client_id_str = validated_data.pop('client')
         mode_paiement = validated_data.pop('mode_paiement')
         montant_total = validated_data.pop('montant_total')
         app_id = validated_data.pop('app_id', None)
+
+        # Convertir client_id en int (le mobile peut envoyer une string)
+        try:
+            client_id = int(str(client_id_str).strip())
+        except (ValueError, TypeError):
+            raise serializers.ValidationError({'client': f'ID client invalide: {client_id_str}'})
+
+        # Vérifier si une vente avec cet app_id existe déjà (déduplication)
+        if app_id:
+            existing_vente = VenteTourneeMobile.objects.filter(numero_vente__contains=app_id).first()
+            if existing_vente:
+                logger.info(f"Vente déjà synchronisée avec app_id={app_id}, retour de la vente existante")
+                return existing_vente
 
         # Récupérer le client
         try:
             client = ClientModel.objects.get(id=client_id)
         except ClientModel.DoesNotExist:
-            raise serializers.ValidationError({'client': 'Client introuvable'})
+            raise serializers.ValidationError({'client': f'Client introuvable avec ID: {client_id}'})
 
         # Trouver le livreur assigné à ce client
+        # 1. D'abord chercher dans clients_assignes (assignation directe)
         livreur = LivreurDistribution.objects.filter(clients_assignes=client).first()
+
+        # 2. Si pas trouvé, chercher via le planning hebdomadaire
+        if not livreur:
+            jour_semaine = timezone.now().weekday()  # 0=lundi, 6=dimanche
+            client_hebdo = ClientLivreurHebdo.objects.filter(
+                client=client,
+                jour_semaine=jour_semaine,
+                is_active=True
+            ).select_related('livreur').first()
+            if client_hebdo:
+                livreur = client_hebdo.livreur
+                logger.info(f"Livreur trouvé via planning hebdomadaire: {livreur.nom}")
+
+        # 3. Si toujours pas trouvé, chercher via les tournées actives du jour
+        if not livreur:
+            today = timezone.now().date()
+            arret = ArretTourneeMobile.objects.filter(
+                client=client,
+                tournee__date_tournee=today,
+                tournee__statut__in=['en_cours', 'planifiee']
+            ).select_related('tournee__livreur').first()
+            if arret and arret.tournee and arret.tournee.livreur:
+                livreur = arret.tournee.livreur
+                logger.info(f"Livreur trouvé via tournée active: {livreur.nom}")
+
+        if not livreur:
+            logger.warning(f"Aucun livreur trouvé pour le client {client.id} ({client.nom}). Le stock ne sera pas décrémenté.")
 
         # Mapper mode_paiement vers type_paiement
         type_paiement_map = {
             'especes': 'especes',
             'credit': 'credit',
-            'cheque': 'cheque'
+            'cheque': 'cheque',
+            'virement': 'virement'
         }
 
-        # Générer un numéro de vente unique
-        import uuid
+        # Générer un numéro de vente unique (inclure app_id pour traçabilité)
         numero_vente = f"VM-{timezone.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:6].upper()}"
+        if app_id:
+            numero_vente = f"{numero_vente}-{app_id[-8:]}"  # Ajouter les 8 derniers caractères de app_id
 
         # Créer la vente
         vente = VenteTourneeMobile.objects.create(
@@ -348,13 +400,21 @@ class VenteMobileCreateSerializer(serializers.Serializer):
 
         # Créer les lignes et décrémenter le stock
         for ligne_data in lignes_data:
-            produit_id = ligne_data['produit']
+            produit_id_raw = ligne_data['produit']
             quantite = ligne_data['quantite']
             prix_unitaire = ligne_data['prix_unitaire']
+
+            # Convertir produit_id en int (le mobile peut envoyer une string)
+            try:
+                produit_id = int(str(produit_id_raw).strip())
+            except (ValueError, TypeError):
+                logger.error(f"ID produit invalide: {produit_id_raw}, ligne ignorée")
+                continue
 
             try:
                 produit = Produit.objects.get(id=produit_id)
             except Produit.DoesNotExist:
+                logger.error(f"Produit introuvable avec ID: {produit_id}, ligne ignorée")
                 continue
 
             # Créer la ligne de vente
@@ -375,8 +435,14 @@ class VenteMobileCreateSerializer(serializers.Serializer):
                     )
                     stock.quantity = max(0, stock.quantity - quantite)
                     stock.save()
+                    logger.debug(f"Stock décrémenté: {produit.designation} -{quantite} dans {livreur.entrepot.nom}")
                 except ProductStock.DoesNotExist:
-                    pass
+                    logger.warning(
+                        f"Stock non trouvé pour produit {produit.id} ({produit.designation}) "
+                        f"dans entrepôt {livreur.entrepot.id} ({livreur.entrepot.nom})"
+                    )
+            elif not livreur:
+                logger.warning(f"Pas de livreur - stock non décrémenté pour produit {produit.id}")
 
         return vente
 

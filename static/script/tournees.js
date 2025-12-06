@@ -743,7 +743,12 @@ function showTourneeDetailsModal(tournee) {
                 statut: arret.statut || 'en_attente',
                 heure_arrivee: arret.heure_arrivee || null,
                 nom_receptionnaire: arret.nom_receptionnaire || '',
-                motif_echec: arret.motif_echec || ''
+                motif_echec: arret.motif_echec || '',
+                // Coordonnées GPS (priorité: arrêt > client)
+                latitude: arret.latitude || arret.client_lat || null,
+                longitude: arret.longitude || arret.client_lng || null,
+                client_lat: arret.client_lat || null,
+                client_lng: arret.client_lng || null
             };
 
             if (arret.statut === 'livre' || arret.statut === 'echec') {
@@ -870,6 +875,12 @@ function showTourneeDetailsModal(tournee) {
                                 <i class="fas fa-clock"></i> ${arret.heure_prevue || '-'}
                                 ${arret.heure_arrivee ? ` → ${arret.heure_arrivee}` : ''}
                                 ${arret.adresse ? `<br><i class="fas fa-map-marker-alt"></i> ${arret.adresse}` : ''}
+                                ${(arret.latitude && arret.longitude) || (arret.client_lat && arret.client_lng) ? `
+                                    <br><i class="fas fa-globe"></i> GPS: ${arret.latitude || arret.client_lat}, ${arret.longitude || arret.client_lng}
+                                    <a href="https://www.google.com/maps?q=${arret.latitude || arret.client_lat},${arret.longitude || arret.client_lng}" target="_blank" style="margin-left: 5px; color: #2563eb;">
+                                        <i class="fas fa-external-link-alt"></i> Voir sur carte
+                                    </a>
+                                ` : '<br><i class="fas fa-globe" style="color: #ef4444;"></i> <span style="color: #ef4444;">GPS non disponible</span>'}
                                 ${arret.nom_receptionnaire ? `<br><i class="fas fa-user"></i> ${arret.nom_receptionnaire}` : ''}
                                 ${arret.motif_echec ? `<br><i class="fas fa-exclamation-triangle"></i> ${arret.motif_echec}` : ''}
                             </div>
@@ -890,6 +901,12 @@ function showTourneeDetailsModal(tournee) {
                             <div style="font-size: 0.9rem; color: #6b7280;">
                                 <i class="fas fa-clock"></i> ${arret.heure_prevue || '-'}
                                 ${arret.adresse ? `<br><i class="fas fa-map-marker-alt"></i> ${arret.adresse}` : ''}
+                                ${(arret.latitude && arret.longitude) || (arret.client_lat && arret.client_lng) ? `
+                                    <br><i class="fas fa-globe"></i> GPS: ${arret.latitude || arret.client_lat}, ${arret.longitude || arret.client_lng}
+                                    <a href="https://www.google.com/maps?q=${arret.latitude || arret.client_lat},${arret.longitude || arret.client_lng}" target="_blank" style="margin-left: 5px; color: #2563eb;">
+                                        <i class="fas fa-external-link-alt"></i> Voir sur carte
+                                    </a>
+                                ` : '<br><i class="fas fa-globe" style="color: #ef4444;"></i> <span style="color: #ef4444;">GPS non disponible</span>'}
                             </div>
                         </div>
                         <span class="badge badge-en_attente">En attente</span>
