@@ -505,7 +505,8 @@ class LivreurViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'])
     def stock_van(self, request, pk=None):
         """Récupérer le stock du van assigné au livreur"""
-        from API.models import ProductStock, Currency
+        from API.models import ProductStock, Currency, CodePrix, PrixProduit, TypePrix
+        from datetime import date
 
         livreur = self.get_object()
 
@@ -522,10 +523,22 @@ class LivreurViewSet(viewsets.ModelViewSet):
             currency = Currency.objects.filter(is_active=True).first()
         currency_symbol = currency.symbol if currency else 'DA'
 
+        # Récupérer le CodePrix actif (promotion en cours)
+        today = date.today()
+        code_prix_actif = CodePrix.objects.filter(
+            is_active=True,
+            date_debut__lte=today,
+            date_fin__gte=today
+        ).first()
+
+        # Si aucune promotion en cours, utiliser le code par défaut
+        if not code_prix_actif:
+            code_prix_actif = CodePrix.get_default()
+
         # Récupérer tous les stocks du van
         stocks = ProductStock.objects.filter(
             warehouse=livreur.entrepot
-        ).select_related('produit', 'produit__categorie').order_by('produit__reference')
+        ).select_related('produit', 'produit__categorie').prefetch_related('produit__prix_multiples').order_by('produit__reference')
 
         # Filtrer les stocks vides si demandé
         hide_empty = request.query_params.get('hide_empty', 'false').lower() == 'true'
@@ -540,7 +553,37 @@ class LivreurViewSet(viewsets.ModelViewSet):
 
         for stock in stocks:
             if stock.quantity > 0 or not hide_empty:
-                product_value = float(stock.quantity * stock.produit.prixU if stock.produit.prixU else 0)
+                # Prix de base
+                prix_base = float(stock.produit.prixU) if stock.produit.prixU else 0
+
+                # Construire les prix par type (DETAIL, SUPERETTE, GROS)
+                prix_par_type = {}
+
+                # Récupérer tous les types de prix disponibles
+                types_prix = TypePrix.objects.filter(is_active=True)
+
+                for type_prix in types_prix:
+                    # Chercher un prix promotionnel actif pour ce produit + code_prix + type_prix
+                    prix_promo = None
+                    if code_prix_actif:
+                        prix_promo = PrixProduit.objects.filter(
+                            produit=stock.produit,
+                            code_prix=code_prix_actif,
+                            type_prix=type_prix,
+                            is_active=True
+                        ).first()
+
+                    # Utiliser le prix promo si existe, sinon prix de base
+                    prix_final = float(prix_promo.prix) if prix_promo else prix_base
+
+                    prix_par_type[type_prix.code] = {
+                        'prix': prix_final,
+                        'prix_original': prix_base,
+                        'has_promotion': prix_promo is not None,
+                        'quantite_min': prix_promo.quantite_min if prix_promo else 1
+                    }
+
+                product_value = float(stock.quantity * prix_base)
 
                 # Déterminer le statut du stock
                 if stock.quantity <= 0:
@@ -564,7 +607,9 @@ class LivreurViewSet(viewsets.ModelViewSet):
                     'designation': stock.produit.designation,
                     'categorie': stock.produit.categorie.nom if stock.produit.categorie else None,
                     'quantite': stock.quantity,
-                    'prix_unitaire': float(stock.produit.prixU) if stock.produit.prixU else 0,
+                    'prix_unitaire': prix_base,  # Prix de base pour compatibilité
+                    'prix_par_type': prix_par_type,  # NOUVEAU: Prix par type de client
+                    'code_prix_actif': code_prix_actif.code if code_prix_actif else None,  # NOUVEAU
                     'valeur': product_value,
                     'unite_mesure': stock.produit.get_unite_mesure_display(),
                     'seuil_alerte': stock.produit.seuil_alerte,
@@ -865,6 +910,170 @@ class TourneeViewSet(viewsets.ModelViewSet):
             'message': f'{tournees_synced} tournée(s) synchronisée(s)',
             'tournees_synced': tournees_synced,
             'errors': errors if errors else None
+        })
+
+    @action(detail=False, methods=['get'])
+    def historique_complet(self, request):
+        """Retourne l'historique complet des tournées avec livreurs, ventes et arrêts"""
+        from decimal import Decimal
+
+        # Filtres
+        date_debut = request.GET.get('date_debut')
+        date_fin = request.GET.get('date_fin')
+        livreur_id = request.GET.get('livreur_id')
+        statut = request.GET.get('statut')
+
+        # Query de base
+        tournees = self.get_queryset()
+
+        # Appliquer les filtres
+        if date_debut:
+            tournees = tournees.filter(date_tournee__gte=date_debut)
+        if date_fin:
+            tournees = tournees.filter(date_tournee__lte=date_fin)
+        if livreur_id:
+            tournees = tournees.filter(livreur_id=livreur_id)
+        if statut:
+            tournees = tournees.filter(statut=statut)
+
+        # Limiter aux 100 dernières tournées par défaut
+        tournees = tournees.select_related('livreur', 'rapport_caisse').prefetch_related(
+            'arrets__client',
+            'ventes__client'
+        )[:100]
+
+        # Construire la réponse
+        data = []
+        for tournee in tournees:
+            # Calculer les statistiques de la tournée
+            arrets = tournee.arrets.all()
+            total_arrets = arrets.count()
+            arrets_livres = arrets.filter(statut='livre').count()
+            arrets_echec = arrets.filter(statut='echec').count()
+            arrets_en_attente = arrets.filter(statut='en_attente').count()
+
+            # Calculer le taux de réussite
+            taux_reussite = round((arrets_livres / total_arrets) * 100, 2) if total_arrets > 0 else 0
+
+            # Calculer le total des ventes et récupérer les informations
+            ventes = tournee.ventes.all()
+            total_ventes = sum(vente.montant_total for vente in ventes)
+            ventes_list = []
+            arrets_list = []
+
+            # Ajouter les ventes si elles existent
+            for vente in ventes:
+                client_nom = ''
+                client_prenom = ''
+                client_tel = ''
+                if vente.client:
+                    client_nom = getattr(vente.client, 'nom', '')
+                    client_prenom = getattr(vente.client, 'prenom', '')
+                    client_tel = getattr(vente.client, 'telephone', '')
+
+                ventes_list.append({
+                    'id': vente.id,
+                    'numero': vente.numero_vente or f"V-{vente.id}",
+                    'client': {
+                        'id': vente.client.id,
+                        'nom': client_nom,
+                        'prenom': client_prenom,
+                        'telephone': client_tel
+                    } if vente.client else None,
+                    'date_vente': vente.date_vente.isoformat() if vente.date_vente else timezone.now().isoformat(),
+                    'total_ttc': float(vente.montant_total),
+                    'type_paiement': vente.type_paiement,
+                    'statut': 'completed',
+                    'statut_arret': 'livre'
+                })
+
+            # Ajouter les arrêts (clients visités) avec leurs informations
+            for arret in arrets:
+                if arret.client:
+                    arrets_list.append({
+                        'id': arret.id,
+                        'ordre': arret.ordre_passage,
+                        'client': {
+                            'id': arret.client.id,
+                            'nom': getattr(arret.client, 'nom', ''),
+                            'prenom': getattr(arret.client, 'prenom', ''),
+                            'telephone': getattr(arret.client, 'telephone', ''),
+                            'adresse': getattr(arret.client, 'adresse', '')
+                        },
+                        'statut': arret.statut,
+                        'heure_arrivee': arret.heure_arrivee.isoformat() if arret.heure_arrivee else None,
+                        'heure_depart': arret.heure_depart.isoformat() if arret.heure_depart else None,
+                        'notes': arret.notes or '',
+                        'latitude': float(arret.latitude) if arret.latitude else None,
+                        'longitude': float(arret.longitude) if arret.longitude else None
+                    })
+
+            # Récupérer le rapport de caisse s'il existe
+            rapport_caisse = None
+            if hasattr(tournee, 'rapport_caisse') and tournee.rapport_caisse:
+                rapport = tournee.rapport_caisse
+                rapport_caisse = {
+                    'fonds_depart': float(rapport.fonds_depart),
+                    'total_especes': float(rapport.total_especes),
+                    'total_cartes': float(rapport.total_cartes),
+                    'total_cheques': float(rapport.total_cheques),
+                    'total_credits': float(rapport.total_credits),
+                    'total_encaissements': float(rapport.total_encaissements),
+                    'total_depenses': float(rapport.total_depenses),
+                    'carburant': float(rapport.carburant),
+                    'reparations': float(rapport.reparations),
+                    'autres_depenses': float(rapport.autres_depenses),
+                    'solde_final_theorique': float(rapport.solde_final_theorique),
+                    'solde_final_reel': float(rapport.solde_final_reel),
+                    'ecart': float(rapport.ecart),
+                    'detail_billets': rapport.detail_billets if rapport.detail_billets else {},
+                    'justification_ecart': rapport.justification_ecart,
+                    'statut': rapport.statut,
+                    'a_des_anomalies': rapport.a_des_anomalies,
+                    'notes_anomalies': rapport.notes_anomalies
+                }
+
+            tournee_data = {
+                'id': tournee.id,
+                'numero': tournee.numero_tournee or f"T-{tournee.id}",
+                'date': tournee.date_tournee.isoformat(),
+                'statut': tournee.statut,
+                'livreur': {
+                    'id': tournee.livreur.id,
+                    'nom': tournee.livreur.nom,
+                    'prenom': '',
+                    'telephone': tournee.livreur.telephone or '',
+                    'vehicule_type': tournee.livreur.vehicule_marque or '',
+                    'immatriculation': tournee.livreur.vehicule_immatriculation or ''
+                } if tournee.livreur else None,
+                'warehouse': None,
+                'code_prix': None,
+                'heure_depart_prevue': tournee.heure_debut.isoformat() if tournee.heure_debut else None,
+                'heure_depart_reelle': tournee.heure_debut.isoformat() if tournee.heure_debut else None,
+                'heure_retour_prevue': tournee.heure_fin.isoformat() if tournee.heure_fin else None,
+                'heure_retour_reelle': tournee.heure_fin.isoformat() if tournee.heure_fin else None,
+                'distance_km': float(tournee.distance_km) if tournee.distance_km else None,
+                'commentaire': tournee.notes or '',
+                'statistiques': {
+                    'total_arrets': total_arrets,
+                    'arrets_livres': arrets_livres,
+                    'arrets_echec': arrets_echec,
+                    'arrets_en_attente': arrets_en_attente,
+                    'taux_reussite': taux_reussite,
+                    'total_ventes': float(total_ventes)
+                },
+                'ventes': ventes_list,
+                'arrets': arrets_list,
+                'rapport_caisse': rapport_caisse,
+                'created_at': tournee.created_at.isoformat(),
+                'updated_at': tournee.updated_at.isoformat()
+            }
+
+            data.append(tournee_data)
+
+        return Response({
+            'count': len(data),
+            'results': data
         })
 
 

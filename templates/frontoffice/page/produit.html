@@ -526,12 +526,17 @@ input[type="number"].form-control-product::-webkit-outer-spin-button {
                                 <i class="fa fa-tag"></i> {% trans "Afficher les prix" %} :
                             </label>
                             <select id="display_price_type" class="form-control form-control-product">
-                                <option value="">{% trans "Prix de base (prixU)" %}</option>
+                                <option value="">{% trans "Produits sans prix multiples" %}</option>
+                                <option value="ALL">{% trans "Tous les produits" %}</option>
                             </select>
                         </div>
                         <div class="col-md-8">
                             <div class="alert alert-info mb-0" style="padding: 10px;">
-                                <i class="fa fa-info-circle"></i> <small>{% trans "Sélectionnez un type de prix pour afficher les prix correspondants dans le tableau ci-dessous" %}</small>
+                                <i class="fa fa-info-circle"></i> <small>
+                                    <strong>Sans prix multiples :</strong> produits non configurés.
+                                    <strong>Tous :</strong> tous les produits sans redondance.
+                                    <strong>Type spécifique :</strong> produits avec ce type de prix.
+                                </small>
                             </div>
                         </div>
                     </div>
@@ -714,7 +719,7 @@ input[type="number"].form-control-product::-webkit-outer-spin-button {
                         </div>
                     </div>
 
-                    <!-- Filtre par produit -->
+                    <!-- Filtres -->
                     <div class="row mb-3">
                         <div class="col-md-4">
                             <label class="form-label-product">{% trans "Filtrer par produit" %}</label>
@@ -737,6 +742,54 @@ input[type="number"].form-control-product::-webkit-outer-spin-button {
                             <div style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">
                                 <select id="prix_prod_filter">
                                     <option value="">{% trans "Tous les produits" %}</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label-product">{% trans "Filtrer par code prix" %}</label>
+                            <!-- Custom Select pour Filtre Code Prix -->
+                            <div class="custom-select-container" id="customSelectFilterCodePrix">
+                                <div class="custom-select-trigger" onclick="toggleCustomSelect('customSelectFilterCodePrix')">
+                                    <span class="selected-text placeholder">{% trans "Tous les codes prix" %}</span>
+                                    <i class="fas fa-chevron-down arrow"></i>
+                                </div>
+                                <div class="custom-select-dropdown">
+                                    <div class="custom-select-search">
+                                        <input type="text" placeholder="{% trans 'Rechercher...' %}" oninput="filterCustomSelectOptions('customSelectFilterCodePrix', this.value)">
+                                    </div>
+                                    <div class="custom-select-options">
+                                        <!-- Options seront ajoutées via JS -->
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Select caché pour compatibilité avec produit.js -->
+                            <div style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">
+                                <select id="prix_prod_filter_code">
+                                    <option value="">{% trans "Tous les codes prix" %}</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label-product">{% trans "Filtrer par type prix" %}</label>
+                            <!-- Custom Select pour Filtre Type Prix -->
+                            <div class="custom-select-container" id="customSelectFilterTypePrix">
+                                <div class="custom-select-trigger" onclick="toggleCustomSelect('customSelectFilterTypePrix')">
+                                    <span class="selected-text placeholder">{% trans "Tous les types prix" %}</span>
+                                    <i class="fas fa-chevron-down arrow"></i>
+                                </div>
+                                <div class="custom-select-dropdown">
+                                    <div class="custom-select-search">
+                                        <input type="text" placeholder="{% trans 'Rechercher...' %}" oninput="filterCustomSelectOptions('customSelectFilterTypePrix', this.value)">
+                                    </div>
+                                    <div class="custom-select-options">
+                                        <!-- Options seront ajoutées via JS -->
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Select caché pour compatibilité avec produit.js -->
+                            <div style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">
+                                <select id="prix_prod_filter_type">
+                                    <option value="">{% trans "Tous les types prix" %}</option>
                                 </select>
                             </div>
                         </div>

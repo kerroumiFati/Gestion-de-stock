@@ -281,6 +281,11 @@
                 <i class="fas fa-map-marker-alt"></i> Secteurs
             </button>
         </li>
+        <li class="nav-item">
+            <button class="settings-tab" data-tab="typesprix">
+                <i class="fas fa-tags"></i> Types Prix
+            </button>
+        </li>
         {% endif %}
     </ul>
 
@@ -688,6 +693,85 @@
                 <span id="secteurs_status" class="ml-3"></span>
             </div>
         </div>
+
+        <!-- Section Types Prix -->
+        <div id="section-typesprix" class="settings-section">
+            <div class="section-card">
+                <h5 class="section-header">
+                    <i class="fas fa-tags"></i> Gestion des Types de Prix
+                </h5>
+
+                <div class="info-alert mb-4">
+                    <i class="fas fa-info-circle"></i> <strong>Types de Prix :</strong>
+                    Définissez les différents types de prix pour vos clients (ex: DETAIL, SUPERETTE, GROS).
+                    <strong>Note :</strong> Chaque code ne peut être créé qu'une seule fois. Utilisez le bouton "Modifier" pour changer un type existant.
+                </div>
+
+                <!-- Formulaire d'ajout/modification de type prix -->
+                <div class="row mb-4">
+                    <input type="hidden" id="typeprix_edit_id" value="">
+                    <div class="col-md-2 mb-2">
+                        <label class="form-label-modern">Code *</label>
+                        <input id="typeprix_code" type="text" class="form-control form-control-sm form-control-modern" placeholder="Ex: DETAIL" maxlength="20" style="text-transform: uppercase;">
+                        <small class="form-text text-muted" style="font-size: 0.75rem;">Ex: DETAIL, SUPERETTE, GROS</small>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <label class="form-label-modern">Libellé *</label>
+                        <input id="typeprix_libelle" type="text" class="form-control form-control-sm form-control-modern" placeholder="Ex: Prix Détail">
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <label class="form-label-modern">Description</label>
+                        <input id="typeprix_description" type="text" class="form-control form-control-sm form-control-modern" placeholder="Description (optionnel)">
+                    </div>
+                    <div class="col-md-2 mb-2">
+                        <label class="form-label-modern">Ordre</label>
+                        <input id="typeprix_ordre" type="number" class="form-control form-control-sm form-control-modern" value="0" min="0">
+                    </div>
+                    <div class="col-md-2 mb-2">
+                        <label class="form-label-modern">&nbsp;</label>
+                        <button id="save_typeprix" class="btn btn-modern-success btn-sm w-100" style="height: 38px;">
+                            <i class="fa fa-save"></i> <span id="save_typeprix_text">Ajouter</span>
+                        </button>
+                        <button id="cancel_edit_typeprix" class="btn btn-modern-secondary btn-sm w-100 mt-1" style="height: 38px; display: none;">
+                            <i class="fa fa-times"></i> Annuler
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Statistiques -->
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <span id="typesprix_stats" class="text-muted"></span>
+                    </div>
+                </div>
+
+                <!-- Tableau des types prix -->
+                <div class="table-responsive">
+                    <table class="table table-sm table-modern">
+                        <thead>
+                            <tr>
+                                <th>Code</th>
+                                <th>Libellé</th>
+                                <th>Description</th>
+                                <th>Ordre</th>
+                                <th>Défaut</th>
+                                <th>Statut</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="typesprix_body">
+                            <tr>
+                                <td colspan="7" class="text-center text-muted">
+                                    <i class="fas fa-spinner fa-spin"></i> Chargement...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <span id="typesprix_status" class="ml-3"></span>
+            </div>
+        </div>
         {% endif %}
     </div>
 </div>
@@ -978,6 +1062,226 @@
       }, 100);
     } catch(e) {
       console.warn('init devises from paramètres failed', e);
+    }
+
+    // ==========================================
+    // GESTION DES TYPES PRIX
+    // ==========================================
+    const API_TYPESPRIX = '/API/types-prix/';
+
+    function loadTypesPrix() {
+      $.getJSON(API_TYPESPRIX + '?page_size=1000').done(function(data) {
+        const list = Array.isArray(data) ? data : (data && data.results ? data.results : []);
+        renderTypesPrix(list);
+        updateTypesPrixStats(list);
+      }).fail(function() {
+        $('#typesprix_body').html('<tr><td colspan="7" class="text-center text-danger">Erreur de chargement</td></tr>');
+      });
+    }
+
+    function renderTypesPrix(list) {
+      const $tbody = $('#typesprix_body');
+      $tbody.empty();
+
+      if (!list || list.length === 0) {
+        $tbody.append('<tr><td colspan="7" class="text-center text-muted">Aucun type de prix défini</td></tr>');
+        return;
+      }
+
+      list.forEach(function(tp) {
+        const statusBadge = tp.is_active
+          ? '<span class="badge badge-success">Actif</span>'
+          : '<span class="badge badge-secondary">Inactif</span>';
+
+        const defaultBadge = tp.is_default
+          ? '<i class="fas fa-star text-warning" title="Type par défaut"></i>'
+          : '<button class="btn btn-sm btn-link text-muted btn-set-default-typeprix" data-id="' + tp.id + '" title="Définir par défaut"><i class="far fa-star"></i></button>';
+
+        const editBtn = `<button class="btn btn-sm btn-outline-primary btn-edit-typeprix" data-id="${tp.id}" data-code="${tp.code}" data-libelle="${tp.libelle || ''}" data-description="${tp.description || ''}" data-ordre="${tp.ordre || 0}" title="Modifier">
+                <i class="fas fa-edit"></i>
+              </button>`;
+
+        const row = `
+          <tr data-id="${tp.id}">
+            <td><strong>${tp.code || ''}</strong></td>
+            <td>${tp.libelle || ''}</td>
+            <td><small class="text-muted">${tp.description || '-'}</small></td>
+            <td><span class="badge badge-info">${tp.ordre || 0}</span></td>
+            <td class="text-center">${defaultBadge}</td>
+            <td>${statusBadge}</td>
+            <td>
+              ${editBtn}
+              <button class="btn btn-sm btn-outline-secondary btn-toggle-typeprix" data-id="${tp.id}" data-active="${tp.is_active}" title="${tp.is_active ? 'Désactiver' : 'Activer'}">
+                <i class="fas fa-${tp.is_active ? 'eye-slash' : 'eye'}"></i>
+              </button>
+              <button class="btn btn-sm btn-outline-danger btn-delete-typeprix" data-id="${tp.id}" title="Supprimer">
+                <i class="fas fa-trash"></i>
+              </button>
+            </td>
+          </tr>
+        `;
+        $tbody.append(row);
+      });
+    }
+
+    function updateTypesPrixStats(list) {
+      const total = list.length;
+      const actifs = list.filter(tp => tp.is_active).length;
+      $('#typesprix_stats').html('<i class="fas fa-chart-bar"></i> ' + total + ' type(s) de prix au total, ' + actifs + ' actif(s)');
+    }
+
+    function setTypePrixStatus(msg, isErr) {
+      $('#typesprix_status').html(isErr
+        ? '<i class="fas fa-exclamation-circle text-danger"></i> <span class="text-danger">' + msg + '</span>'
+        : '<i class="fas fa-check-circle text-success"></i> <span class="text-success">' + msg + '</span>'
+      );
+      setTimeout(function() { $('#typesprix_status').html(''); }, 3000);
+    }
+
+    // Sauvegarder (ajouter ou modifier) un type prix
+    $('#save_typeprix').on('click', function() {
+      const editId = $('#typeprix_edit_id').val();
+      const code = ($('#typeprix_code').val() || '').trim();
+      const libelle = ($('#typeprix_libelle').val() || '').trim();
+      const description = ($('#typeprix_description').val() || '').trim();
+      const ordre = parseInt($('#typeprix_ordre').val() || '0', 10);
+
+      if (!code || !libelle) {
+        setTypePrixStatus('Le code et le libellé sont obligatoires', true);
+        return;
+      }
+
+      const csrftoken = getCookie('csrftoken');
+      const isEdit = editId && editId !== '';
+      const url = isEdit ? API_TYPESPRIX + editId + '/' : API_TYPESPRIX;
+      const method = isEdit ? 'PUT' : 'POST';
+
+      $.ajax({
+        url: url,
+        method: method,
+        contentType: 'application/json',
+        headers: csrftoken ? { 'X-CSRFToken': csrftoken } : {},
+        data: JSON.stringify({
+          code: code,
+          libelle: libelle,
+          description: description,
+          ordre: ordre,
+          is_active: true,
+          is_default: false
+        })
+      }).done(function() {
+        setTypePrixStatus(isEdit ? 'Type de prix modifié avec succès' : 'Type de prix ajouté avec succès', false);
+        resetTypePrixForm();
+        loadTypesPrix();
+      }).fail(function(xhr) {
+        const msg = (xhr.responseJSON && (xhr.responseJSON.detail || xhr.responseJSON.code || JSON.stringify(xhr.responseJSON))) || 'Erreur lors de l\'enregistrement';
+        setTypePrixStatus(msg, true);
+      });
+    });
+
+    // Réinitialiser le formulaire
+    function resetTypePrixForm() {
+      $('#typeprix_edit_id').val('');
+      $('#typeprix_code').val('').prop('readonly', false).css('background-color', '');
+      $('#typeprix_libelle, #typeprix_description').val('');
+      $('#typeprix_ordre').val('0');
+      $('#save_typeprix_text').text('Ajouter');
+      $('#cancel_edit_typeprix').hide();
+    }
+
+    // Éditer un type prix
+    $(document).on('click', '.btn-edit-typeprix', function() {
+      const id = $(this).data('id');
+      const code = $(this).data('code');
+      const libelle = $(this).data('libelle');
+      const description = $(this).data('description');
+      const ordre = $(this).data('ordre');
+
+      $('#typeprix_edit_id').val(id);
+      $('#typeprix_code').val(code).prop('readonly', true).css('background-color', '#e9ecef');
+      $('#typeprix_libelle').val(libelle);
+      $('#typeprix_description').val(description);
+      $('#typeprix_ordre').val(ordre);
+      $('#save_typeprix_text').text('Modifier');
+      $('#cancel_edit_typeprix').show();
+
+      // Scroller vers le formulaire
+      $('html, body').animate({
+        scrollTop: $('#typeprix_code').offset().top - 100
+      }, 500);
+    });
+
+    // Annuler l'édition
+    $('#cancel_edit_typeprix').on('click', function() {
+      resetTypePrixForm();
+      loadTypesPrix();
+    });
+
+    // Toggle actif/inactif
+    $(document).on('click', '.btn-toggle-typeprix', function() {
+      const id = $(this).data('id');
+      const isActive = $(this).data('active');
+      const csrftoken = getCookie('csrftoken');
+
+      $.ajax({
+        url: API_TYPESPRIX + id + '/',
+        method: 'PATCH',
+        contentType: 'application/json',
+        headers: csrftoken ? { 'X-CSRFToken': csrftoken } : {},
+        data: JSON.stringify({ is_active: !isActive })
+      }).done(function() {
+        setTypePrixStatus(isActive ? 'Type de prix désactivé' : 'Type de prix activé', false);
+        loadTypesPrix();
+      }).fail(function() {
+        setTypePrixStatus('Erreur lors de la modification', true);
+      });
+    });
+
+    // Définir par défaut
+    $(document).on('click', '.btn-set-default-typeprix', function() {
+      const id = $(this).data('id');
+      const csrftoken = getCookie('csrftoken');
+
+      $.ajax({
+        url: API_TYPESPRIX + id + '/',
+        method: 'PATCH',
+        contentType: 'application/json',
+        headers: csrftoken ? { 'X-CSRFToken': csrftoken } : {},
+        data: JSON.stringify({ is_default: true })
+      }).done(function() {
+        setTypePrixStatus('Type de prix défini par défaut', false);
+        loadTypesPrix();
+      }).fail(function() {
+        setTypePrixStatus('Erreur lors de la modification', true);
+      });
+    });
+
+    // Supprimer un type prix
+    $(document).on('click', '.btn-delete-typeprix', function() {
+      const id = $(this).data('id');
+      if (!confirm('Êtes-vous sûr de vouloir supprimer ce type de prix ?')) return;
+
+      const csrftoken = getCookie('csrftoken');
+      $.ajax({
+        url: API_TYPESPRIX + id + '/',
+        method: 'DELETE',
+        headers: csrftoken ? { 'X-CSRFToken': csrftoken } : {}
+      }).done(function() {
+        setTypePrixStatus('Type de prix supprimé', false);
+        loadTypesPrix();
+      }).fail(function() {
+        setTypePrixStatus('Erreur lors de la suppression', true);
+      });
+    });
+
+    // Convertir automatiquement le code en majuscules lors de la saisie
+    $('#typeprix_code').on('input', function() {
+      this.value = this.value.toUpperCase();
+    });
+
+    // Charger les types prix au démarrage si la section existe
+    if ($('#section-typesprix').length) {
+      loadTypesPrix();
     }
 
     // ==========================================

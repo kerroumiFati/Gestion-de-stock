@@ -2,6 +2,7 @@
 (function($){
   const API_BASE = '/API/clients/';
   const API_SECTEURS = '/API/secteurs/';
+  const API_TYPES_PRIX = '/API/types-prix/';
   const DEBUG = true; function dbg(...a){ if(DEBUG) try{ console.log('[Client]', ...a);}catch(e){} }
 
   function getCookie(name){
@@ -30,6 +31,7 @@
       $adresse: $('#adresse'),
       $telephone: $('#telephone'),
       $secteur: $('#secteur'),
+      $type_prix: $('#type_prix'),
       $lat: $('#lat'),
       $lng: $('#lng'),
       $nif: $('#nif'),
@@ -42,7 +44,7 @@
   }
 
   function resetForm(){
-    const { $id, $nom, $prenom, $email, $adresse, $telephone, $secteur, $lat, $lng, $nif, $nis, $ai, $rc, $btn } = els();
+    const { $id, $nom, $prenom, $email, $adresse, $telephone, $secteur, $type_prix, $lat, $lng, $nif, $nis, $ai, $rc, $btn } = els();
     $id.val('');
     $nom.val('');
     $prenom.val('');
@@ -51,6 +53,7 @@
     $telephone.val('');
     // Reset secteur select to first option (empty value)
     $secteur.prop('selectedIndex', 0);
+    $type_prix.prop('selectedIndex', 0);
     $lat.val('');
     $lng.val('');
     $nif.val('');
@@ -85,6 +88,23 @@
       });
   }
 
+  // Load types de prix into select
+  function loadTypesPrix(){
+    return $.ajax({ url: API_TYPES_PRIX + '?is_active=true', method: 'GET', dataType: 'json' })
+      .done(function(data){
+        const list = asList(data);
+        dbg('loadTypesPrix: list size =', list.length);
+        const $type_prix = $('#type_prix');
+        $type_prix.find('option:not(:first)').remove();
+        list.forEach(function(tp){
+          $type_prix.append(`<option value="${tp.id}">${tp.code} - ${tp.libelle}</option>`);
+        });
+      })
+      .fail(function(xhr){
+        dbg('loadTypesPrix: fail', xhr.status);
+      });
+  }
+
   function loadClients(){
     return $.ajax({ url: API_BASE + '?page_size=1000', method: 'GET', dataType: 'json' })
       .done(function(data){
@@ -93,7 +113,7 @@
         const { $tableBody } = els();
         $tableBody.empty();
         if(!list || !list.length){
-          $tableBody.append('<tr><td colspan="14" class="text-center text-muted">Aucun client</td></tr>');
+          $tableBody.append('<tr><td colspan="15" class="text-center text-muted">Aucun client</td></tr>');
           return;
         }
         list.forEach(function(c){
@@ -109,6 +129,11 @@
             ? `<span class="badge" style="background-color: ${c.secteur_couleur || '#6c757d'}; color: white;">${c.secteur_code || ''} - ${c.secteur_nom}</span>`
             : '<span class="text-muted">-</span>';
           $tr.append(`<td>${secteurHtml}</td>`);
+          // Type de prix avec badge
+          const typePrixHtml = c.type_prix_code
+            ? `<span class="badge badge-info">${c.type_prix_code}</span>`
+            : '<span class="text-muted">-</span>';
+          $tr.append(`<td>${typePrixHtml}</td>`);
           // Coordonnées GPS
           const latDisplay = c.lat != null ? parseFloat(c.lat).toFixed(7) : '<span class="text-muted">-</span>';
           const lngDisplay = c.lng != null ? parseFloat(c.lng).toFixed(7) : '<span class="text-muted">-</span>';
@@ -128,14 +153,15 @@
       })
       .fail(function(xhr){
         const { $tableBody } = els();
-        $tableBody.empty().append('<tr><td colspan="14" class="text-center text-danger">Erreur de chargement</td></tr>');
+        $tableBody.empty().append('<tr><td colspan="15" class="text-center text-danger">Erreur de chargement</td></tr>');
         dbg('loadClients: fail', xhr.status, xhr.responseText || xhr.statusText);
       });
   }
 
   function payloadFromForm(){
-    const { $nom, $prenom, $email, $adresse, $telephone, $secteur, $lat, $lng, $nif, $nis, $ai, $rc } = els();
+    const { $nom, $prenom, $email, $adresse, $telephone, $secteur, $type_prix, $lat, $lng, $nif, $nis, $ai, $rc } = els();
     const secteurVal = $secteur.val();
+    const typePrixVal = $type_prix.val();
     const latVal = $lat.val();
     const lngVal = $lng.val();
     return {
@@ -145,6 +171,7 @@
       adresse: ($adresse.val()||'').trim(),
       telephone: ($telephone.val()||'').trim(),
       secteur: secteurVal ? parseInt(secteurVal, 10) : null,
+      type_prix: typePrixVal ? parseInt(typePrixVal, 10) : null,
       lat: latVal ? parseFloat(latVal) : null,
       lng: lngVal ? parseFloat(lngVal) : null,
       nif: ($nif.val()||'').trim(),
@@ -203,7 +230,7 @@
         dbg('editClient loaded - FULL CLIENT DATA:', JSON.stringify(c, null, 2));
         dbg('Client secteur value:', c.secteur, 'Type:', typeof c.secteur);
 
-        const { $id, $nom, $prenom, $email, $adresse, $telephone, $secteur, $lat, $lng, $nif, $nis, $ai, $rc, $btn } = els();
+        const { $id, $nom, $prenom, $email, $adresse, $telephone, $secteur, $type_prix, $lat, $lng, $nif, $nis, $ai, $rc, $btn } = els();
 
         // Log all select options
         dbg('Available secteur options in select:');
@@ -238,6 +265,15 @@
             dbg('Value did not set, checking if option exists...');
             const optionExists = $secteur.find('option[value="' + c.secteur + '"]').length > 0;
             dbg('Option exists:', optionExists);
+
+        // Set type_prix value
+        dbg('Attempting to set type_prix to:', c.type_prix);
+        if(c.type_prix){
+          $type_prix.val(c.type_prix);
+          dbg('After setting, type_prix value is:', $type_prix.val());
+        } else {
+          $type_prix.prop('selectedIndex', 0);
+        }
 
             if(!optionExists){
               dbg('Option does not exist, reloading secteurs...');
@@ -302,6 +338,7 @@
     if(!document.getElementById('tclient')){ dbg('init client: table not found, skip'); return; }
     bind();
     loadSecteurs();
+    loadTypesPrix();
     loadClients();
   }
 

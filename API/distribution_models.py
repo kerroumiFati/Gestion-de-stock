@@ -366,6 +366,10 @@ class RapportCaisseMobile(models.Model):
     solde_final_reel = models.DecimalField('Solde réel', max_digits=12, decimal_places=2, default=0)
     ecart = models.DecimalField('Écart', max_digits=12, decimal_places=2, default=0)
 
+    # Détail des billets retournés (JSON)
+    detail_billets = models.JSONField('Détail des billets', blank=True, null=True,
+                                      help_text='Détail des billets et pièces retournés: {\"2000\": 5, \"1000\": 3, \"500\": 10, ...}')
+
     # Justification écart
     justification_ecart = models.TextField('Justification écart', blank=True)
 

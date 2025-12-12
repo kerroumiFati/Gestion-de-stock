@@ -318,13 +318,8 @@ class CodePrix(models.Model):
 
 
 class TypePrix(models.Model):
-    """Types de prix par client : Détail, Supérette, Gros"""
-    TYPE_CHOICES = [
-        ('DETAIL', 'Détail'),
-        ('SUPERETTE', 'Supérette'),
-        ('GROS', 'Gros'),
-    ]
-    code = models.CharField(max_length=20, unique=True, choices=TYPE_CHOICES, help_text="Type de client (DETAIL, SUPERETTE, GROS)")
+    """Types de prix par client : Détail, Supérette, Gros, etc."""
+    code = models.CharField(max_length=20, unique=True, help_text="Code du type de prix (ex: DETAIL, SUPERETTE, GROS)")
     libelle = models.CharField(max_length=100, help_text="Libellé du type de prix")
     description = models.TextField(blank=True, help_text="Description du type de prix")
     ordre = models.IntegerField(default=0, help_text="Ordre d'affichage")
@@ -568,6 +563,16 @@ class Client(models.Model):
                              help_text="Latitude GPS")
     lng = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True,
                              help_text="Longitude GPS")
+
+    # Type de prix pour les promotions
+    type_prix = models.ForeignKey(
+        'TypePrix',
+        on_delete=models.SET_NULL,
+        related_name='clients',
+        null=True,
+        blank=True,
+        help_text="Type de prix appliqué à ce client (Détail, Supérette, Gros)"
+    )
 
     # Informations fiscales (optionnelles)
     nif = models.CharField("NIF (Numéro d'Identification Fiscale)", max_length=20, blank=True,
@@ -2046,6 +2051,16 @@ class Promotion(models.Model):
         related_name='promotions',
         blank=True,
         help_text="Types de clients éligibles (vide = tous)"
+    )
+
+    # Code de prix (période promotionnelle)
+    code_prix = models.ForeignKey(
+        'CodePrix',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='promotions_detail',
+        help_text="Code de prix (période) auquel cette promotion est liée (ex: RAMADAN, STANDARD)"
     )
 
     # Statut

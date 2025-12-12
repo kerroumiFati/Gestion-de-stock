@@ -1,0 +1,1161 @@
+{% load static %}
+{% load i18n %}
+
+<style>
+.historique-container {
+    padding: 20px 0;
+}
+
+.page-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 30px;
+    border-radius: 15px;
+    margin-bottom: 30px;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+}
+
+.page-header h1 {
+    margin: 0 0 10px 0;
+    font-size: 2rem;
+    font-weight: 600;
+}
+
+.page-header p {
+    margin: 0;
+    opacity: 0.9;
+    font-size: 1rem;
+}
+
+/* Filtres */
+.filters-section {
+    background: white;
+    border-radius: 12px;
+    padding: 25px;
+    margin-bottom: 25px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    border: 1px solid #e9ecef;
+}
+
+.filters-section h5 {
+    margin-bottom: 20px;
+    color: #2d3748;
+    font-weight: 600;
+}
+
+.filter-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.form-group {
+    margin-bottom: 0;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+    color: #4a5568;
+    font-size: 0.9rem;
+}
+
+.form-control {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    transition: all 0.2s;
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+/* Boutons */
+.btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.btn-secondary {
+    background: #6c757d;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: #5a6268;
+}
+
+/* Cartes de statistiques */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.stat-card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    border: 1px solid #e9ecef;
+    transition: transform 0.2s;
+}
+
+.stat-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.12);
+}
+
+.stat-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    margin-bottom: 15px;
+}
+
+.stat-icon.purple { background: rgba(102, 126, 234, 0.15); color: #667eea; }
+.stat-icon.green { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+.stat-icon.orange { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+.stat-icon.blue { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
+
+.stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #1f2937;
+    margin-bottom: 5px;
+}
+
+.stat-label {
+    color: #6b7280;
+    font-size: 0.9rem;
+}
+
+/* Liste des tournées */
+.tournees-list {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    border: 1px solid #e9ecef;
+    overflow: hidden;
+}
+
+.tournees-list-header {
+    background: #f8f9fa;
+    padding: 20px 25px;
+    border-bottom: 1px solid #e9ecef;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.tournees-list-header h5 {
+    margin: 0;
+    font-weight: 600;
+    color: #2d3748;
+}
+
+.tournees-list-body {
+    padding: 0;
+}
+
+.tournee-item {
+    padding: 25px;
+    border-bottom: 1px solid #e9ecef;
+    transition: background 0.2s;
+    cursor: pointer;
+}
+
+.tournee-item:last-child {
+    border-bottom: none;
+}
+
+.tournee-item:hover {
+    background: #f8f9fa;
+}
+
+.tournee-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 15px;
+}
+
+.tournee-title {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.tournee-numero {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.tournee-date {
+    font-size: 0.9rem;
+    color: #6b7280;
+}
+
+.badge {
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.badge-planifiee { background: #dbeafe; color: #1e40af; }
+.badge-en_cours { background: #fef3c7; color: #92400e; }
+.badge-terminee { background: #d1fae5; color: #065f46; }
+.badge-annulee { background: #fee2e2; color: #991b1b; }
+
+.tournee-details {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+    margin-bottom: 15px;
+}
+
+.detail-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.detail-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(102, 126, 234, 0.1);
+    color: #667eea;
+}
+
+.detail-content h6 {
+    margin: 0 0 2px 0;
+    font-size: 0.85rem;
+    color: #6b7280;
+    font-weight: 500;
+}
+
+.detail-content p {
+    margin: 0;
+    font-size: 0.95rem;
+    color: #1f2937;
+    font-weight: 600;
+}
+
+.tournee-stats {
+    display: flex;
+    gap: 20px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    margin-bottom: 15px;
+}
+
+.stat-item {
+    flex: 1;
+    text-align: center;
+}
+
+.stat-item-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #1f2937;
+}
+
+.stat-item-label {
+    font-size: 0.8rem;
+    color: #6b7280;
+    margin-top: 2px;
+}
+
+.ventes-section {
+    margin-top: 15px;
+}
+
+.ventes-toggle {
+    background: none;
+    border: none;
+    color: #667eea;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 8px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s;
+}
+
+.ventes-toggle:hover {
+    color: #5568d3;
+}
+
+.ventes-toggle i {
+    transition: transform 0.3s;
+}
+
+.ventes-toggle.expanded i {
+    transform: rotate(180deg);
+}
+
+.ventes-list {
+    display: none;
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid #e9ecef;
+}
+
+.ventes-list.show {
+    display: block;
+}
+
+.vente-item {
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 10px;
+}
+
+.vente-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.vente-numero {
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.vente-montant {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #10b981;
+}
+
+.vente-info {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+    font-size: 0.85rem;
+}
+
+.vente-info-item {
+    color: #6b7280;
+}
+
+.vente-info-item strong {
+    color: #1f2937;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #6b7280;
+}
+
+.empty-state i {
+    font-size: 4rem;
+    margin-bottom: 20px;
+    color: #d1d5db;
+}
+
+.empty-state h4 {
+    margin-bottom: 10px;
+    color: #4b5563;
+}
+
+.loading-state {
+    text-align: center;
+    padding: 60px 20px;
+}
+
+.loading-state i {
+    font-size: 3rem;
+    color: #667eea;
+    margin-bottom: 20px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .tournee-details {
+        grid-template-columns: 1fr;
+    }
+
+    .filter-row {
+        grid-template-columns: 1fr;
+    }
+
+    .tournee-header {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .tournee-stats {
+        flex-direction: column;
+        gap: 10px;
+    }
+}
+</style>
+
+<div class="historique-container">
+    <!-- En-tête -->
+    <div class="page-header">
+        <h1><i class="fas fa-history"></i> {% trans "Historique des Tournées" %}</h1>
+        <p>{% trans "Consultez l'historique complet des tournées avec les livreurs, ventes et commandes" %}</p>
+    </div>
+
+    <!-- Filtres -->
+    <div class="filters-section">
+        <h5><i class="fas fa-filter"></i> {% trans "Filtres" %}</h5>
+        <div class="filter-row">
+            <div class="form-group">
+                <label>{% trans "Date début" %}</label>
+                <input type="date" id="dateDebut" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>{% trans "Date fin" %}</label>
+                <input type="date" id="dateFin" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>{% trans "Livreur" %}</label>
+                <select id="filterLivreur" class="form-control">
+                    <option value="">{% trans "Tous les livreurs" %}</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>{% trans "Statut" %}</label>
+                <select id="filterStatut" class="form-control">
+                    <option value="">{% trans "Tous les statuts" %}</option>
+                    <option value="planifiee">{% trans "Planifiée" %}</option>
+                    <option value="en_cours">{% trans "En cours" %}</option>
+                    <option value="terminee">{% trans "Terminée" %}</option>
+                    <option value="annulee">{% trans "Annulée" %}</option>
+                </select>
+            </div>
+        </div>
+        <div style="text-align: right; margin-top: 15px;">
+            <button class="btn btn-secondary" onclick="resetFilters()">
+                <i class="fas fa-redo"></i> {% trans "Réinitialiser" %}
+            </button>
+            <button class="btn btn-primary" onclick="loadHistorique()">
+                <i class="fas fa-search"></i> {% trans "Rechercher" %}
+            </button>
+        </div>
+    </div>
+
+    <!-- Statistiques -->
+    <div class="stats-grid" id="statsGrid">
+        <div class="stat-card">
+            <div class="stat-icon purple">
+                <i class="fas fa-route"></i>
+            </div>
+            <div class="stat-value" id="totalTournees">0</div>
+            <div class="stat-label">{% trans "Tournées" %}</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon green">
+                <i class="fas fa-check-circle"></i>
+            </div>
+            <div class="stat-value" id="tourneesTerminees">0</div>
+            <div class="stat-label">{% trans "Terminées" %}</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon orange">
+                <i class="fas fa-shopping-cart"></i>
+            </div>
+            <div class="stat-value" id="totalVentes">0</div>
+            <div class="stat-label">{% trans "Ventes" %}</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon blue">
+                <i class="fas fa-coins"></i>
+            </div>
+            <div class="stat-value" id="montantTotal">0 DA</div>
+            <div class="stat-label">{% trans "Montant total" %}</div>
+        </div>
+    </div>
+
+    <!-- Liste des tournées -->
+    <div class="tournees-list">
+        <div class="tournees-list-header">
+            <h5>{% trans "Liste des Tournées" %}</h5>
+            <span id="resultCount" style="color: #6b7280;">0 {% trans "résultats" %}</span>
+        </div>
+        <div class="tournees-list-body" id="tourneesListBody">
+            <div class="loading-state">
+                <i class="fas fa-spinner fa-spin"></i>
+                <p>{% trans "Chargement de l'historique..." %}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    'use strict';
+
+    let livreurs = [];
+    let historique = [];
+
+    // Initialisation
+    document.addEventListener('DOMContentLoaded', init);
+    document.addEventListener('fragment:loaded', function(e) {
+        if (e.detail.name === 'historique_tournees') {
+            init();
+        }
+    });
+
+    function init() {
+        // Définir les dates par défaut (dernier mois)
+        const today = new Date();
+        const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, today.getDate());
+
+        document.getElementById('dateDebut').value = formatDate(lastMonth);
+        document.getElementById('dateFin').value = formatDate(today);
+
+        // Charger les livreurs pour le filtre
+        loadLivreurs();
+
+        // Charger l'historique
+        loadHistorique();
+    }
+
+    function formatDate(date) {
+        return date.toISOString().split('T')[0];
+    }
+
+    function formatNumber(num) {
+        return new Intl.NumberFormat('fr-DZ').format(num || 0);
+    }
+
+    function formatMoney(num) {
+        return formatNumber(Math.round(num || 0)) + ' DA';
+    }
+
+    function formatDateTime(dateString) {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('fr-FR', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    }
+
+    function formatTime(timeString) {
+        if (!timeString) return '-';
+        // Si c'est un format ISO complet (avec date)
+        if (timeString.includes('T')) {
+            const date = new Date(timeString);
+            return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+        }
+        // Si c'est juste l'heure
+        const parts = timeString.split(':');
+        return `${parts[0]}:${parts[1]}`;
+    }
+
+    // Charger les livreurs
+    async function loadLivreurs() {
+        try {
+            const response = await fetch('/API/distribution/livreurs/');
+            if (!response.ok) throw new Error('Erreur API');
+            livreurs = await response.json();
+
+            const select = document.getElementById('filterLivreur');
+            select.innerHTML = '<option value="">{% trans "Tous les livreurs" %}</option>';
+            livreurs.forEach(l => {
+                const nom = `${l.nom} ${l.prenom}`;
+                select.innerHTML += `<option value="${l.id}">${nom}</option>`;
+            });
+        } catch (error) {
+            console.error('Erreur chargement livreurs:', error);
+        }
+    }
+
+    // Charger l'historique
+    window.loadHistorique = async function() {
+        const dateDebut = document.getElementById('dateDebut').value;
+        const dateFin = document.getElementById('dateFin').value;
+        const livreurId = document.getElementById('filterLivreur').value;
+        const statut = document.getElementById('filterStatut').value;
+
+        // Construire l'URL
+        let url = '/API/distribution/tournees/historique_complet/?';
+        if (dateDebut) url += `date_debut=${dateDebut}&`;
+        if (dateFin) url += `date_fin=${dateFin}&`;
+        if (livreurId) url += `livreur_id=${livreurId}&`;
+        if (statut) url += `statut=${statut}`;
+
+        // Afficher le loading
+        document.getElementById('tourneesListBody').innerHTML = `
+            <div class="loading-state">
+                <i class="fas fa-spinner fa-spin"></i>
+                <p>{% trans "Chargement de l'historique..." %}</p>
+            </div>
+        `;
+
+        try {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error('Erreur API');
+            const data = await response.json();
+
+            historique = data.results;
+            updateStats(historique);
+            displayHistorique(historique);
+        } catch (error) {
+            console.error('Erreur chargement historique:', error);
+            document.getElementById('tourneesListBody').innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <h4>{% trans "Erreur de chargement" %}</h4>
+                    <p>{% trans "Impossible de charger l'historique des tournées" %}</p>
+                </div>
+            `;
+        }
+    }
+
+    // Mettre à jour les statistiques
+    function updateStats(data) {
+        let totalTournees = data.length;
+        let tourneesTerminees = data.filter(t => t.statut === 'terminee').length;
+        let totalVentes = 0;
+        let montantTotal = 0;
+
+        data.forEach(tournee => {
+            totalVentes += tournee.ventes.length;
+            montantTotal += tournee.statistiques.total_ventes;
+        });
+
+        document.getElementById('totalTournees').textContent = formatNumber(totalTournees);
+        document.getElementById('tourneesTerminees').textContent = formatNumber(tourneesTerminees);
+        document.getElementById('totalVentes').textContent = formatNumber(totalVentes);
+        document.getElementById('montantTotal').textContent = formatMoney(montantTotal);
+        document.getElementById('resultCount').textContent = `${formatNumber(totalTournees)} {% trans "résultats" %}`;
+    }
+
+    // Afficher l'historique
+    function displayHistorique(data) {
+        const container = document.getElementById('tourneesListBody');
+
+        if (!data || data.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-inbox"></i>
+                    <h4>{% trans "Aucune tournée trouvée" %}</h4>
+                    <p>{% trans "Aucune tournée ne correspond à vos critères de recherche" %}</p>
+                </div>
+            `;
+            return;
+        }
+
+        let html = '';
+        data.forEach(tournee => {
+            const livreurNom = tournee.livreur ? `${tournee.livreur.nom} ${tournee.livreur.prenom}` : '{% trans "Non assigné" %}';
+            const vehicule = tournee.livreur && tournee.livreur.vehicule_type ? tournee.livreur.vehicule_type : '-';
+            const immatriculation = tournee.livreur && tournee.livreur.immatriculation ? tournee.livreur.immatriculation : '-';
+
+            html += `
+                <div class="tournee-item">
+                    <div class="tournee-header">
+                        <div class="tournee-title">
+                            <div>
+                                <div class="tournee-numero">${tournee.numero}</div>
+                                <div class="tournee-date">${formatDateTime(tournee.date)}</div>
+                            </div>
+                        </div>
+                        <span class="badge badge-${tournee.statut}">${getStatutLabel(tournee.statut)}</span>
+                    </div>
+
+                    <div class="tournee-details">
+                        <div class="detail-item">
+                            <div class="detail-icon">
+                                <i class="fas fa-user"></i>
+                            </div>
+                            <div class="detail-content">
+                                <h6>{% trans "Livreur" %}</h6>
+                                <p>${livreurNom}</p>
+                            </div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-icon">
+                                <i class="fas fa-truck"></i>
+                            </div>
+                            <div class="detail-content">
+                                <h6>{% trans "Véhicule" %}</h6>
+                                <p>${vehicule} - ${immatriculation}</p>
+                            </div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-icon">
+                                <i class="fas fa-clock"></i>
+                            </div>
+                            <div class="detail-content">
+                                <h6>{% trans "Départ / Retour" %}</h6>
+                                <p>${formatTime(tournee.heure_depart_reelle || tournee.heure_depart_prevue)} / ${formatTime(tournee.heure_retour_reelle || tournee.heure_retour_prevue)}</p>
+                            </div>
+                        </div>
+                        ${tournee.distance_km ? `
+                            <div class="detail-item">
+                                <div class="detail-icon">
+                                    <i class="fas fa-road"></i>
+                                </div>
+                                <div class="detail-content">
+                                    <h6>{% trans "Distance" %}</h6>
+                                    <p>${tournee.distance_km} km</p>
+                                </div>
+                            </div>
+                        ` : ''}
+                    </div>
+
+                    <div class="tournee-stats">
+                        <div class="stat-item">
+                            <div class="stat-item-value">${tournee.statistiques.total_arrets}</div>
+                            <div class="stat-item-label">{% trans "Arrêts" %}</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-item-value" style="color: #10b981;">${tournee.statistiques.arrets_livres}</div>
+                            <div class="stat-item-label">{% trans "Livrés" %}</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-item-value" style="color: #ef4444;">${tournee.statistiques.arrets_echec}</div>
+                            <div class="stat-item-label">{% trans "Échecs" %}</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-item-value" style="color: #667eea;">${tournee.statistiques.taux_reussite}%</div>
+                            <div class="stat-item-label">{% trans "Taux réussite" %}</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-item-value" style="color: #10b981;">${formatMoney(tournee.statistiques.total_ventes)}</div>
+                            <div class="stat-item-label">{% trans "Total ventes" %}</div>
+                        </div>
+                    </div>
+
+                    ${tournee.ventes.length > 0 ? `
+                        <div class="ventes-section">
+                            <button class="ventes-toggle" onclick="toggleVentes(${tournee.id})">
+                                <i class="fas fa-chevron-down"></i>
+                                <span>{% trans "Voir les ventes" %} (${tournee.ventes.length})</span>
+                            </button>
+                            <div class="ventes-list" id="ventes-${tournee.id}">
+                                ${renderVentes(tournee.ventes)}
+                            </div>
+                        </div>
+                    ` : ''}
+                    ${tournee.arrets && tournee.arrets.length > 0 ? `
+                        <div class="ventes-section">
+                            <button class="ventes-toggle" onclick="toggleArrets(${tournee.id})">
+                                <i class="fas fa-chevron-down"></i>
+                                <span>{% trans "Voir les arrêts/clients" %} (${tournee.arrets.length})</span>
+                            </button>
+                            <div class="ventes-list" id="arrets-${tournee.id}">
+                                ${renderArrets(tournee.arrets)}
+                            </div>
+                        </div>
+                    ` : ''}
+                    ${tournee.statut === 'terminee' && tournee.rapport_caisse ? `
+                        <div class="ventes-section">
+                            <button class="ventes-toggle" onclick="toggleRapportCaisse(${tournee.id})">
+                                <i class="fas fa-chevron-down"></i>
+                                <span><i class="fas fa-money-bill-wave"></i> {% trans "Rapport de caisse" %}</span>
+                            </button>
+                            <div class="ventes-list" id="rapport-${tournee.id}">
+                                ${renderRapportCaisse(tournee.rapport_caisse)}
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        });
+
+        container.innerHTML = html;
+    }
+
+    // Rendre les ventes
+    function renderVentes(ventes) {
+        let html = '';
+        ventes.forEach(vente => {
+            const clientNom = vente.client ? `${vente.client.nom} ${vente.client.prenom}` : '{% trans "Client inconnu" %}';
+            const clientTel = vente.client ? vente.client.telephone : '-';
+
+            html += `
+                <div class="vente-item">
+                    <div class="vente-header">
+                        <div>
+                            <div class="vente-numero">${vente.numero}</div>
+                            <small style="color: #6b7280;">${formatDateTime(vente.date_vente)}</small>
+                        </div>
+                        <div class="vente-montant">${formatMoney(vente.total_ttc)}</div>
+                    </div>
+                    <div class="vente-info">
+                        <div class="vente-info-item">
+                            <i class="fas fa-user"></i> <strong>{% trans "Client:" %}</strong> ${clientNom}
+                        </div>
+                        <div class="vente-info-item">
+                            <i class="fas fa-phone"></i> <strong>{% trans "Tél:" %}</strong> ${clientTel}
+                        </div>
+                        <div class="vente-info-item">
+                            <i class="fas fa-credit-card"></i> <strong>{% trans "Paiement:" %}</strong> ${getPaiementLabel(vente.type_paiement)}
+                        </div>
+                        <div class="vente-info-item">
+                            <i class="fas fa-shipping-fast"></i> <strong>{% trans "Livraison:" %}</strong> ${getStatutArretLabel(vente.statut_arret)}
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        return html;
+    }
+
+    // Toggle ventes
+    window.toggleVentes = function(tourneeId) {
+        const ventesList = document.getElementById(`ventes-${tourneeId}`);
+        const toggle = ventesList.previousElementSibling;
+
+        ventesList.classList.toggle('show');
+        toggle.classList.toggle('expanded');
+    }
+
+    // Toggle arrêts
+    window.toggleArrets = function(tourneeId) {
+        const arretsList = document.getElementById(`arrets-${tourneeId}`);
+        const toggle = arretsList.previousElementSibling;
+
+        arretsList.classList.toggle('show');
+        toggle.classList.toggle('expanded');
+    }
+
+    // Rendre les arrêts (clients visités)
+    function renderArrets(arrets) {
+        let html = '';
+        arrets.forEach(arret => {
+            const clientNom = arret.client ? `${arret.client.nom} ${arret.client.prenom || ''}`.trim() : '{% trans "Client inconnu" %}';
+            const clientTel = arret.client ? arret.client.telephone : '-';
+            const clientAdresse = arret.client ? arret.client.adresse : '-';
+
+            html += `
+                <div class="vente-item">
+                    <div class="vente-header">
+                        <div>
+                            <div class="vente-numero">
+                                <i class="fas fa-map-marker-alt"></i> {% trans "Arrêt" %} #${arret.ordre}
+                            </div>
+                            <small style="color: #6b7280;">${clientNom}</small>
+                        </div>
+                        <span class="badge badge-${arret.statut}">${getStatutArretLabel(arret.statut)}</span>
+                    </div>
+                    <div class="vente-info">
+                        <div class="vente-info-item">
+                            <i class="fas fa-phone"></i> <strong>{% trans "Tél:" %}</strong> ${clientTel}
+                        </div>
+                        <div class="vente-info-item">
+                            <i class="fas fa-map-marker-alt"></i> <strong>{% trans "Adresse:" %}</strong> ${clientAdresse || '-'}
+                        </div>
+                        ${arret.heure_arrivee ? `
+                            <div class="vente-info-item">
+                                <i class="fas fa-clock"></i> <strong>{% trans "Arrivée:" %}</strong> ${formatTime(arret.heure_arrivee)}
+                            </div>
+                        ` : ''}
+                        ${arret.notes ? `
+                            <div class="vente-info-item" style="grid-column: 1 / -1;">
+                                <i class="fas fa-sticky-note"></i> <strong>{% trans "Notes:" %}</strong> ${arret.notes}
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        });
+        return html;
+    }
+
+    // Toggle rapport de caisse
+    window.toggleRapportCaisse = function(tourneeId) {
+        const rapportList = document.getElementById(`rapport-${tourneeId}`);
+        const toggle = rapportList.previousElementSibling;
+
+        rapportList.classList.toggle('show');
+        toggle.classList.toggle('expanded');
+    }
+
+    // Rendre le détail des billets
+    function renderDetailBillets(detailBillets) {
+        // Dénominations algériennes (billets et pièces)
+        const denominations = [2000, 1000, 500, 200, 100, 50, 20, 10, 5];
+
+        let html = '';
+        denominations.forEach(denom => {
+            const quantite = detailBillets[denom.toString()] || 0;
+            if (quantite > 0) {
+                const total = denom * quantite;
+                const isBillet = denom >= 100;
+                const icon = isBillet ? 'money-bill-wave' : 'coins';
+                const color = denom >= 1000 ? '#10b981' : denom >= 500 ? '#3b82f6' : denom >= 100 ? '#f59e0b' : '#6b7280';
+
+                html += `
+                    <div style="background: linear-gradient(135deg, ${color}15 0%, ${color}05 100%);
+                                padding: 12px; border-radius: 8px; border-left: 3px solid ${color};">
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                            <i class="fas fa-${icon}" style="color: ${color}; font-size: 1.2rem;"></i>
+                            <span style="font-weight: 700; color: #1f2937; font-size: 1.1rem;">${formatNumber(denom)} DA</span>
+                        </div>
+                        <div style="color: #6b7280; font-size: 0.85rem; margin-bottom: 4px;">
+                            <span style="font-weight: 600;">${quantite}</span> × ${formatNumber(denom)} DA
+                        </div>
+                        <div style="font-weight: 700; color: ${color}; font-size: 1rem;">
+                            = ${formatMoney(total)}
+                        </div>
+                    </div>
+                `;
+            }
+        });
+
+        return html || '<div style="color: #6b7280; text-align: center; padding: 20px;">{% trans "Aucun détail de billets disponible" %}</div>';
+    }
+
+    // Calculer le total des billets
+    function calculateTotalBillets(detailBillets) {
+        let total = 0;
+        for (const [denom, quantite] of Object.entries(detailBillets)) {
+            total += parseInt(denom) * quantite;
+        }
+        return total;
+    }
+
+    // Rendre le rapport de caisse
+    function renderRapportCaisse(rapport) {
+        const ecartClass = rapport.ecart === 0 ? 'success' : rapport.ecart > 0 ? 'info' : 'danger';
+        const ecartIcon = rapport.ecart === 0 ? 'check-circle' : rapport.ecart > 0 ? 'arrow-up' : 'arrow-down';
+
+        return `
+            <div style="padding: 20px; background: #f8f9fa; border-radius: 8px;">
+                <!-- Encaissements -->
+                <div style="margin-bottom: 25px;">
+                    <h4 style="color: #2d3748; margin-bottom: 15px; font-size: 1.1rem;">
+                        <i class="fas fa-cash-register" style="color: #10b981;"></i> {% trans "Encaissements" %}
+                    </h4>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                        <div style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid #10b981;">
+                            <div style="color: #6b7280; font-size: 0.85rem; margin-bottom: 5px;">{% trans "Fonds de départ" %}</div>
+                            <div style="font-size: 1.3rem; font-weight: 700; color: #1f2937;">${formatMoney(rapport.fonds_depart)}</div>
+                        </div>
+                        <div style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid #10b981;">
+                            <div style="color: #6b7280; font-size: 0.85rem; margin-bottom: 5px;">
+                                <i class="fas fa-money-bill-wave"></i> {% trans "Espèces" %}
+                            </div>
+                            <div style="font-size: 1.3rem; font-weight: 700; color: #10b981;">${formatMoney(rapport.total_especes)}</div>
+                        </div>
+                        <div style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid #3b82f6;">
+                            <div style="color: #6b7280; font-size: 0.85rem; margin-bottom: 5px;">
+                                <i class="fas fa-credit-card"></i> {% trans "Cartes" %}
+                            </div>
+                            <div style="font-size: 1.3rem; font-weight: 700; color: #3b82f6;">${formatMoney(rapport.total_cartes)}</div>
+                        </div>
+                        <div style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid #f59e0b;">
+                            <div style="color: #6b7280; font-size: 0.85rem; margin-bottom: 5px;">
+                                <i class="fas fa-money-check"></i> {% trans "Chèques" %}
+                            </div>
+                            <div style="font-size: 1.3rem; font-weight: 700; color: #f59e0b;">${formatMoney(rapport.total_cheques)}</div>
+                        </div>
+                        <div style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid #ef4444;">
+                            <div style="color: #6b7280; font-size: 0.85rem; margin-bottom: 5px;">
+                                <i class="fas fa-clock"></i> {% trans "À crédit" %}
+                            </div>
+                            <div style="font-size: 1.3rem; font-weight: 700; color: #ef4444;">${formatMoney(rapport.total_credits)}</div>
+                        </div>
+                        <div style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid #8b5cf6;">
+                            <div style="color: #6b7280; font-size: 0.85rem; margin-bottom: 5px;">{% trans "Total encaissements" %}</div>
+                            <div style="font-size: 1.3rem; font-weight: 700; color: #8b5cf6;">${formatMoney(rapport.total_encaissements)}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Dépenses -->
+                <div style="margin-bottom: 25px;">
+                    <h4 style="color: #2d3748; margin-bottom: 15px; font-size: 1.1rem;">
+                        <i class="fas fa-receipt" style="color: #ef4444;"></i> {% trans "Dépenses" %}
+                    </h4>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                        <div style="background: white; padding: 15px; border-radius: 8px;">
+                            <div style="color: #6b7280; font-size: 0.85rem; margin-bottom: 5px;">
+                                <i class="fas fa-gas-pump"></i> {% trans "Carburant" %}
+                            </div>
+                            <div style="font-size: 1.2rem; font-weight: 600; color: #ef4444;">${formatMoney(rapport.carburant)}</div>
+                        </div>
+                        <div style="background: white; padding: 15px; border-radius: 8px;">
+                            <div style="color: #6b7280; font-size: 0.85rem; margin-bottom: 5px;">
+                                <i class="fas fa-tools"></i> {% trans "Réparations" %}
+                            </div>
+                            <div style="font-size: 1.2rem; font-weight: 600; color: #ef4444;">${formatMoney(rapport.reparations)}</div>
+                        </div>
+                        <div style="background: white; padding: 15px; border-radius: 8px;">
+                            <div style="color: #6b7280; font-size: 0.85rem; margin-bottom: 5px;">
+                                <i class="fas fa-ellipsis-h"></i> {% trans "Autres" %}
+                            </div>
+                            <div style="font-size: 1.2rem; font-weight: 600; color: #ef4444;">${formatMoney(rapport.autres_depenses)}</div>
+                        </div>
+                        <div style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid #ef4444;">
+                            <div style="color: #6b7280; font-size: 0.85rem; margin-bottom: 5px;">{% trans "Total dépenses" %}</div>
+                            <div style="font-size: 1.2rem; font-weight: 700; color: #ef4444;">${formatMoney(rapport.total_depenses)}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Solde final -->
+                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 8px; margin-bottom: 15px;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
+                        <div>
+                            <div style="opacity: 0.9; font-size: 0.85rem; margin-bottom: 5px;">{% trans "Solde théorique" %}</div>
+                            <div style="font-size: 1.5rem; font-weight: 700;">${formatMoney(rapport.solde_final_theorique)}</div>
+                        </div>
+                        <div>
+                            <div style="opacity: 0.9; font-size: 0.85rem; margin-bottom: 5px;">{% trans "Solde réel (argent retourné)" %}</div>
+                            <div style="font-size: 1.5rem; font-weight: 700;">${formatMoney(rapport.solde_final_reel)}</div>
+                        </div>
+                        <div>
+                            <div style="opacity: 0.9; font-size: 0.85rem; margin-bottom: 5px;">
+                                <i class="fas fa-${ecartIcon}"></i> {% trans "Écart" %}
+                            </div>
+                            <div style="font-size: 1.5rem; font-weight: 700;">
+                                ${rapport.ecart > 0 ? '+' : ''}${formatMoney(rapport.ecart)}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Détail des billets retournés -->
+                ${rapport.detail_billets && Object.keys(rapport.detail_billets).length > 0 ? `
+                    <div style="margin-bottom: 25px;">
+                        <h4 style="color: #2d3748; margin-bottom: 15px; font-size: 1.1rem;">
+                            <i class="fas fa-money-bill-wave" style="color: #10b981;"></i> {% trans "Détail des billets et pièces retournés" %}
+                        </h4>
+                        <div style="background: white; padding: 20px; border-radius: 8px; border: 1px solid #e5e7eb;">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px;">
+                                ${renderDetailBillets(rapport.detail_billets)}
+                            </div>
+                            <div style="margin-top: 20px; padding-top: 15px; border-top: 2px solid #10b981; text-align: right;">
+                                <span style="color: #6b7280; margin-right: 10px; font-weight: 600;">{% trans "Total:" %}</span>
+                                <span style="font-size: 1.3rem; font-weight: 700; color: #10b981;">${formatMoney(calculateTotalBillets(rapport.detail_billets))}</span>
+                            </div>
+                        </div>
+                    </div>
+                ` : ''}
+
+                ${rapport.a_des_anomalies ? `
+                    <div style="background: #fee2e2; border-left: 4px solid #ef4444; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                        <div style="display: flex; align-items: center; gap: 10px; color: #991b1b; font-weight: 600; margin-bottom: 8px;">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <span>{% trans "Anomalies détectées" %}</span>
+                        </div>
+                        ${rapport.notes_anomalies ? `
+                            <div style="color: #7f1d1d; font-size: 0.9rem;">${rapport.notes_anomalies}</div>
+                        ` : ''}
+                    </div>
+                ` : ''}
+
+                ${rapport.justification_ecart ? `
+                    <div style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid #f59e0b;">
+                        <div style="color: #92400e; font-weight: 600; margin-bottom: 8px;">
+                            <i class="fas fa-comment"></i> {% trans "Justification de l'écart" %}
+                        </div>
+                        <div style="color: #78350f;">${rapport.justification_ecart}</div>
+                    </div>
+                ` : ''}
+
+                <div style="text-align: center; margin-top: 15px; padding-top: 15px; border-top: 1px solid #e5e7eb;">
+                    <span class="badge badge-${rapport.statut}" style="padding: 8px 16px; font-size: 0.9rem;">
+                        {% trans "Statut:" %} ${rapport.statut.charAt(0).toUpperCase() + rapport.statut.slice(1)}
+                    </span>
+                </div>
+            </div>
+        `;
+    }
+
+    // Réinitialiser les filtres
+    window.resetFilters = function() {
+        const today = new Date();
+        const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, today.getDate());
+
+        document.getElementById('dateDebut').value = formatDate(lastMonth);
+        document.getElementById('dateFin').value = formatDate(today);
+        document.getElementById('filterLivreur').value = '';
+        document.getElementById('filterStatut').value = '';
+
+        loadHistorique();
+    }
+
+    // Helpers
+    function getStatutLabel(statut) {
+        const labels = {
+            'planifiee': '{% trans "Planifiée" %}',
+            'en_cours': '{% trans "En cours" %}',
+            'terminee': '{% trans "Terminée" %}',
+            'annulee': '{% trans "Annulée" %}'
+        };
+        return labels[statut] || statut;
+    }
+
+    function getPaiementLabel(type) {
+        const labels = {
+            'cash': '{% trans "Espèces" %}',
+            'card': '{% trans "Carte" %}',
+            'check': '{% trans "Chèque" %}',
+            'transfer': '{% trans "Virement" %}',
+            'credit': '{% trans "Crédit" %}'
+        };
+        return labels[type] || type;
+    }
+
+    function getStatutArretLabel(statut) {
+        const labels = {
+            'livre': '{% trans "Livré" %}',
+            'echec': '{% trans "Échec" %}',
+            'en_attente': '{% trans "En attente" %}',
+            'en_cours': '{% trans "En cours" %}',
+            'reporte': '{% trans "Reporté" %}'
+        };
+        return labels[statut] || statut;
+    }
+
+    // Initialiser si la page est déjà chargée
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        setTimeout(init, 100);
+    }
+
+})();
+</script>

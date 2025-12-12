@@ -217,6 +217,20 @@
 
         return produit;
     }
+    // Fonction pour calculer le prix avec promotion
+    function calculatePriceWithPromotion(produitId, quantite){
+        return $.ajax({
+            url: '/API/promotions/calculer_prix/',
+            method: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            data: JSON.stringify({
+                produit_id: produitId,
+                quantite: quantite
+            }),
+            dataType: 'json'
+        });
+    }
 
     // Ajouter un article au panier
     function ajouterAuPanier(produit, quantite) {
@@ -234,19 +248,76 @@
 
         // Chercher si le produit existe déjà dans le panier
         const existant = panier.find(item => item.produit.id === produit.id);
-        if (existant) {
-            existant.quantite += quantite;
-        } else {
-            panier.push({
-                produit: produit,
-                quantite: quantite,
-                prixU: parseFloat(produit.prixU) || 0
-            });
-        }
+        const prixOriginal = parseFloat(produit.prixU) || 0;
 
-        afficherPanier();
-        $('#caisse_search').val('').focus();
-        $('#caisse_qte').val(1);
+        if (existant) {
+            // Produit déjà dans le panier - recalculer avec nouvelle quantité
+            const newQty = existant.quantite + quantite;
+
+            calculatePriceWithPromotion(produit.id, newQty)
+                .done(function(result){
+                    existant.quantite = newQty;
+                    existant.prix_original = prixOriginal;
+                    existant.promotion = result.promotion ? result.promotion.id : null;
+                    existant.promotion_code = result.promotion ? result.promotion.code : null;
+                    existant.promotion_nom = result.promotion ? result.promotion.nom : null;
+                    existant.economie = result.economie_montant || 0;
+                    existant.quantite_offerte = result.quantite_offerte || 0;
+
+                    if (result.promotion) {
+                        existant.prixU = result.prix_total_avec_promo / newQty;
+                    } else {
+                        existant.prixU = prixOriginal;
+                    }
+
+                    afficherPanier();
+                    $('#caisse_search').val('').focus();
+                    $('#caisse_qte').val(1);
+                })
+                .fail(function(){
+                    // En cas d'erreur, juste mettre à jour la quantité sans promo
+                    existant.quantite += quantite;
+                    afficherPanier();
+                    $('#caisse_search').val('').focus();
+                    $('#caisse_qte').val(1);
+                });
+        } else {
+            // Nouveau produit - calculer avec promotion
+            calculatePriceWithPromotion(produit.id, quantite)
+                .done(function(result){
+                    const item = {
+                        produit: produit,
+                        quantite: quantite,
+                        prixU: prixOriginal,
+                        prix_original: prixOriginal,
+                        promotion: result.promotion ? result.promotion.id : null,
+                        promotion_code: result.promotion ? result.promotion.code : null,
+                        promotion_nom: result.promotion ? result.promotion.nom : null,
+                        economie: result.economie_montant || 0,
+                        quantite_offerte: result.quantite_offerte || 0
+                    };
+
+                    if (result.promotion) {
+                        item.prixU = result.prix_total_avec_promo / quantite;
+                    }
+
+                    panier.push(item);
+                    afficherPanier();
+                    $('#caisse_search').val('').focus();
+                    $('#caisse_qte').val(1);
+                })
+                .fail(function(){
+                    // En cas d'erreur, ajouter sans promo
+                    panier.push({
+                        produit: produit,
+                        quantite: quantite,
+                        prixU: prixOriginal
+                    });
+                    afficherPanier();
+                    $('#caisse_search').val('').focus();
+                    $('#caisse_qte').val(1);
+                });
+        }
     }
 
     // Afficher le contenu du panier
@@ -273,13 +344,31 @@
             totalArticles += quantite;
 
             const currSymbol = currencyData ? currencyData.symbol : 'DA';
+
+            // Générer le HTML de désignation avec badges promo
+            let designationHtml = `<strong>${item.produit.designation}</strong><br>
+                                  <small class="text-muted">${item.produit.reference}</small>`;
+            if (item.promotion_code) {
+                designationHtml += `<br><span class="badge badge-success" title="${item.promotion_nom || ''}">
+                                    <i class="fa fa-tag"></i> ${item.promotion_code}</span>`;
+                if (item.quantite_offerte > 0) {
+                    designationHtml += ` <span class="badge badge-info">+${item.quantite_offerte} offert(s)</span>`;
+                }
+            }
+
+            // Générer le HTML du prix unitaire (barré si promo)
+            let prixHtml = '';
+            if (item.promotion_code && item.prix_original && item.prix_original !== prixU) {
+                prixHtml = `<span style="text-decoration: line-through; color: #999;">${item.prix_original.toFixed(2)}</span><br>
+                           <span style="color: #28a745; font-weight: bold;">${prixU.toFixed(2)} ${currSymbol}</span>`;
+            } else {
+                prixHtml = `${prixU.toFixed(2)} ${currSymbol}`;
+            }
+
             $tbody.append(`
                 <tr>
-                    <td>
-                        <strong>${item.produit.designation}</strong><br>
-                        <small class="text-muted">${item.produit.reference}</small>
-                    </td>
-                    <td class="text-right">${prixU.toFixed(2)} ${currSymbol}</td>
+                    <td>${designationHtml}</td>
+                    <td class="text-right">${prixHtml}</td>
                     <td class="text-center">
                         <input type="number" class="form-control form-control-sm qte-input text-center"
                                data-index="${index}" value="${quantite}"
@@ -463,8 +552,34 @@
                 $(this).val(panier[index].quantite);
                 return;
             }
-            panier[index].quantite = newQte;
-            afficherPanier();
+
+            const item = panier[index];
+            const prixOriginal = item.prix_original || parseFloat(item.produit.prixU) || 0;
+
+            // Recalculer la promotion avec la nouvelle quantité
+            calculatePriceWithPromotion(item.produit.id, newQte)
+                .done(function(result){
+                    item.quantite = newQte;
+                    item.promotion = result.promotion ? result.promotion.id : null;
+                    item.promotion_code = result.promotion ? result.promotion.code : null;
+                    item.promotion_nom = result.promotion ? result.promotion.nom : null;
+                    item.economie = result.economie_montant || 0;
+                    item.quantite_offerte = result.quantite_offerte || 0;
+
+                    if (result.promotion) {
+                        item.prixU = result.prix_total_avec_promo / newQte;
+                    } else {
+                        item.prixU = prixOriginal;
+                    }
+
+                    afficherPanier();
+                })
+                .fail(function(){
+                    // En cas d'erreur, juste mettre à jour la quantité
+                    item.quantite = newQte;
+                    item.prixU = prixOriginal;
+                    afficherPanier();
+                });
         }
     });
 

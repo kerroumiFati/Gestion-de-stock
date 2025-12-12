@@ -257,12 +257,14 @@ class ClientSerializer(serializers.ModelSerializer):
     secteur_nom = serializers.CharField(source='secteur.nom', read_only=True, allow_null=True)
     secteur_code = serializers.CharField(source='secteur.code', read_only=True, allow_null=True)
     secteur_couleur = serializers.CharField(source='secteur.couleur', read_only=True, allow_null=True)
+    type_prix_code = serializers.CharField(source='type_prix.code', read_only=True, allow_null=True)
+    type_prix_libelle = serializers.CharField(source='type_prix.libelle', read_only=True, allow_null=True)
 
     class Meta:
         model = Client
         fields = ('id', 'nom', 'prenom', 'email', 'telephone', 'adresse', 'lat', 'lng',
                   'secteur', 'secteur_nom', 'secteur_code', 'secteur_couleur', 'produits',
-                  'nif', 'nis', 'ai', 'rc')
+                  'nif', 'nis', 'ai', 'rc', 'type_prix', 'type_prix_code', 'type_prix_libelle')
 
 class AchatSerializer(serializers.ModelSerializer):
     fournisseur_nom = serializers.CharField(source='fournisseur.libelle', read_only=True)
@@ -1003,6 +1005,8 @@ class PromotionSerializer(serializers.ModelSerializer):
     categorie_nom = serializers.CharField(source='categorie.nom', read_only=True, allow_null=True)
     currency_code = serializers.CharField(source='currency.code', read_only=True, allow_null=True)
     currency_symbol = serializers.CharField(source='currency.symbol', read_only=True, allow_null=True)
+    code_prix_code = serializers.CharField(source='code_prix.code', read_only=True, allow_null=True)
+    code_prix_libelle = serializers.CharField(source='code_prix.libelle', read_only=True, allow_null=True)
     type_promotion_display = serializers.CharField(source='get_type_promotion_display', read_only=True)
     unite_application_display = serializers.CharField(source='get_unite_application_display', read_only=True)
     conditionnement_minimum_display = serializers.CharField(source='get_conditionnement_minimum_display', read_only=True)
@@ -1022,6 +1026,7 @@ class PromotionSerializer(serializers.ModelSerializer):
             'quantite_achat', 'quantite_offerte',
             'unite_application', 'unite_application_display',
             'currency', 'currency_code', 'currency_symbol',
+            'code_prix', 'code_prix_code', 'code_prix_libelle',
             'produit', 'produit_reference', 'produit_designation', 'produit_prix',
             'categorie', 'categorie_nom',
             'date_debut', 'date_fin', 'jours_restants',

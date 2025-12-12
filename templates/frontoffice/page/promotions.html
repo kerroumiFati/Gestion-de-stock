@@ -211,21 +211,16 @@ if (!window.__promotions_script_loaded__) {
 }
 
 select.form-control-promo {
-    appearance: auto;
-    -webkit-appearance: menulist;
-    -moz-appearance: menulist;
     cursor: pointer;
     height: auto;
     min-height: 44px;
-    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
-    background-position: right 10px center;
-    background-repeat: no-repeat;
-    background-size: 20px;
-    padding-right: 35px;
+    appearance: auto;
+    -webkit-appearance: menulist;
+    -moz-appearance: menulist;
 }
 
 select.form-control-promo option {
-    padding: 10px;
+    padding: 8px;
     background-color: #fff;
     color: #2d3748;
 }
@@ -751,6 +746,26 @@ input:checked + .slider:before {
                     </div>
                 </div>
                 <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label-promo">
+                            <i class="fas fa-pricetag"></i> Code de Prix (Période)
+                        </label>
+                        <select class="form-control-promo" id="promo-code-prix">
+                            <option value="">-- Sélectionner un code de prix --</option>
+                        </select>
+                        <small class="form-text text-muted" style="font-size: 0.8rem;">Période promotionnelle (ex: RAMADAN, STANDARD). Laissez vide si non applicable.</small>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label-promo">
+                            <i class="fas fa-users"></i> Types de clients éligibles
+                        </label>
+                        <select class="form-control-promo" id="promo-types-prix" multiple style="height: 80px;">
+                            <!-- Options chargées dynamiquement -->
+                        </select>
+                        <small class="form-text text-muted" style="font-size: 0.8rem;">Maintenez Ctrl pour sélectionner plusieurs. Vide = tous les clients.</small>
+                    </div>
+                </div>
+                <div class="row">
                     <div class="col-12 mb-3">
                         <label class="form-label-promo">Description</label>
                         <textarea class="form-control-promo" id="promo-description" rows="2" placeholder="Description de la promotion"></textarea>
@@ -1004,6 +1019,7 @@ input:checked + .slider:before {
                         <th>Code</th>
                         <th>Nom</th>
                         <th>Type</th>
+                        <th><i class="fas fa-pricetag"></i> Code Prix</th>
                         <th>Produit/Catégorie</th>
                         <th>Réduction</th>
                         <th>Période</th>

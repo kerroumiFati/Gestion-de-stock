@@ -287,6 +287,16 @@ if (!window.__client_script_loaded__) {
                         <option value="">-- Sélectionner un secteur --</option>
                     </select>
                 </div>
+
+                <div class="col-md-4 mb-3">
+                    <label class="modern-label" for="type_prix">
+                        <i class="fa fa-tags"></i> {% trans "Type de Prix" %}
+                    </label>
+                    <select class="form-control modern-input" id="type_prix">
+                        <option value="">-- Sélectionner un type de prix --</option>
+                    </select>
+                    <small class="form-text text-muted">{% trans "Définit les tarifs appliqués pour ce client" %}</small>
+                </div>
             </div>
 
             <!-- Coordonnées GPS -->
@@ -386,6 +396,7 @@ if (!window.__client_script_loaded__) {
                         <th>{% trans "Téléphone" %}</th>
                         <th>{% trans "Adresse" %}</th>
                         <th>{% trans "Secteur" %}</th>
+                        <th><i class="fa fa-tags"></i> {% trans "Type Prix" %}</th>
                         <th><i class="fa fa-map-pin"></i> {% trans "Latitude" %}</th>
                         <th><i class="fa fa-map-pin"></i> {% trans "Longitude" %}</th>
                         <th>{% trans "NIF" %}</th>
@@ -397,7 +408,7 @@ if (!window.__client_script_loaded__) {
                 </thead>
                 <tbody id="table-content">
                     <tr>
-                        <td colspan="14" class="text-center text-muted">{% trans "Chargement..." %}</td>
+                        <td colspan="15" class="text-center text-muted">{% trans "Chargement..." %}</td>
                     </tr>
                 </tbody>
             </table>

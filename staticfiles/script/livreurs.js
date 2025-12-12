@@ -194,9 +194,19 @@ function updateStats(livreursData) {
     const disponibles = livreursData.filter(l => l.is_disponible && l.is_active).length;
     const enTournee = livreursData.filter(l => !l.is_disponible && l.is_active).length;
 
-    document.getElementById('total-livreurs').textContent = total;
-    document.getElementById('livreurs-disponibles').textContent = disponibles;
-    document.getElementById('livreurs-en-tournee').textContent = enTournee;
+    // Vérifier si les éléments existent avant de les mettre à jour
+    const totalElement = document.getElementById('total-livreurs');
+    const disponiblesElement = document.getElementById('livreurs-disponibles');
+    const enTourneeElement = document.getElementById('livreurs-en-tournee');
+
+    if (totalElement) totalElement.textContent = total;
+    if (disponiblesElement) disponiblesElement.textContent = disponibles;
+    if (enTourneeElement) enTourneeElement.textContent = enTournee;
+
+    // Log pour debug
+    if (!totalElement || !disponiblesElement || !enTourneeElement) {
+        console.warn('[LIVREURS] Certains éléments de statistiques sont manquants dans le DOM');
+    }
 }
 
 // Filtrer les livreurs

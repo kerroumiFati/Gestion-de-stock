@@ -10,7 +10,8 @@ const PromoConfig = {
         produits: [],
         categories: [],
         conditionnements: {},
-        typesPrix: []
+        typesPrix: [],
+        codesPrix: []
     },
     initialized: false
 };
@@ -44,6 +45,7 @@ async function initPromotions() {
             loadProduits(),
             loadCategories(),
             loadTypesPrix(),
+            loadCodesPrix(),
             loadStats()
         ]);
 
@@ -82,7 +84,30 @@ function initEventListeners() {
     const produitSelect = document.getElementById('promo-produit');
     if (produitSelect) {
         produitSelect.addEventListener('change', function() {
+            console.log('[PROMOTIONS] Produit sélectionné:', this.value);
             onProductChange(this.value);
+            // Désélectionner la catégorie si un produit est sélectionné
+            if (this.value) {
+                const categorieSelect = document.getElementById('promo-categorie');
+                if (categorieSelect) categorieSelect.value = '';
+            }
+        });
+    }
+
+    // Changement de catégorie
+    const categorieSelect = document.getElementById('promo-categorie');
+    if (categorieSelect) {
+        categorieSelect.addEventListener('change', function() {
+            console.log('[PROMOTIONS] Catégorie sélectionnée:', this.value);
+            // Désélectionner le produit si une catégorie est sélectionnée
+            if (this.value) {
+                const produitSelect = document.getElementById('promo-produit');
+                if (produitSelect) produitSelect.value = '';
+                // Cacher l'affichage du conditionnement
+                const condDisplay = document.getElementById('conditionnement-display');
+                if (condDisplay) condDisplay.style.display = 'none';
+            }
+            updatePreview();
         });
     }
 
@@ -173,10 +198,55 @@ async function loadTypesPrix() {
         const response = await fetch(`${PromoConfig.apiUrl}types-prix/`);
         if (response.ok) {
             PromoConfig.cache.typesPrix = await response.json();
+            // Peupler le select des types de prix
+            populateTypesPrixSelect();
         }
     } catch (error) {
         console.error('Erreur chargement types prix:', error);
     }
+}
+
+async function loadCodesPrix() {
+    try {
+        const response = await fetch(`${PromoConfig.apiUrl}codes-prix/`);
+        if (response.ok) {
+            PromoConfig.cache.codesPrix = await response.json();
+            // Peupler le select des codes prix
+            populateCodesPrixSelect();
+        }
+    } catch (error) {
+        console.error('Erreur chargement codes prix:', error);
+    }
+}
+
+function populateTypesPrixSelect() {
+    const select = document.getElementById('promo-types-prix');
+    if (!select) return;
+
+    select.innerHTML = '';
+    PromoConfig.cache.typesPrix.forEach(tp => {
+        const option = document.createElement('option');
+        option.value = tp.id;
+        option.textContent = `${tp.code} - ${tp.libelle}`;
+        select.appendChild(option);
+    });
+}
+
+function populateCodesPrixSelect() {
+    const select = document.getElementById('promo-code-prix');
+    if (!select) return;
+
+    select.innerHTML = '<option value="">-- Sélectionner un code de prix --</option>';
+    PromoConfig.cache.codesPrix.forEach(cp => {
+        const option = document.createElement('option');
+        option.value = cp.id;
+        const dateInfo = cp.date_debut && cp.date_fin
+            ? ` (${formatDate(cp.date_debut)} - ${formatDate(cp.date_fin)})`
+            : '';
+        const activeInfo = cp.is_active ? ' ✓' : '';
+        option.textContent = `${cp.code} - ${cp.libelle}${dateInfo}${activeInfo}`;
+        select.appendChild(option);
+    });
 }
 
 async function loadStats() {
@@ -268,6 +338,7 @@ function renderPromotionsTable(promotions) {
             <td><strong>${escapeHtml(p.code)}</strong></td>
             <td>${escapeHtml(p.nom)}</td>
             <td><span class="type-badge">${escapeHtml(p.type_promotion_display || p.type_promotion)}</span></td>
+            <td>${p.code_prix_code ? `<span class="badge badge-info" style="background: #4a5568; color: white; padding: 4px 8px; border-radius: 4px;">${escapeHtml(p.code_prix_code)}</span>` : '<span class="text-muted">-</span>'}</td>
             <td>${escapeHtml(p.produit_designation || p.categorie_nom || '-')}</td>
             <td class="promo-summary">${escapeHtml(p.resume || '-')}</td>
             <td>
@@ -289,7 +360,7 @@ function renderPromotionsTable(promotions) {
                 <button class="action-btn-promo duplicate" onclick="duplicatePromotion(${p.id})" title="Dupliquer">
                     <i class="fas fa-copy"></i>
                 </button>
-                ${p.statut === 'brouillon' ? `
+                ${p.statut === 'brouillon' || p.statut === 'planifiee' ? `
                     <button class="action-btn-promo btn-promo-success" onclick="activatePromotion(${p.id})" title="Activer" style="background: #d1fae5; color: #059669;">
                         <i class="fas fa-check"></i>
                     </button>
@@ -297,6 +368,11 @@ function renderPromotionsTable(promotions) {
                 ${p.statut === 'active' ? `
                     <button class="action-btn-promo" onclick="suspendPromotion(${p.id})" title="Suspendre" style="background: #fef3c7; color: #d97706;">
                         <i class="fas fa-pause"></i>
+                    </button>
+                ` : ''}
+                ${p.statut === 'suspendue' ? `
+                    <button class="action-btn-promo" onclick="resumePromotion(${p.id})" title="Reprendre" style="background: #dbeafe; color: #1d4ed8;">
+                        <i class="fas fa-play"></i>
                     </button>
                 ` : ''}
                 <button class="action-btn-promo delete" onclick="deletePromotion(${p.id})" title="Supprimer">
@@ -423,6 +499,20 @@ async function editPromotion(id) {
         document.getElementById('promo-usage-client').value = promo.usage_par_client || '';
         document.getElementById('promo-carton-complet').checked = promo.carton_complet_requis || false;
         document.getElementById('promo-cumulable').checked = promo.est_cumulable || false;
+
+        // Code de prix
+        const codePrixSelect = document.getElementById('promo-code-prix');
+        if (codePrixSelect && promo.code_prix) {
+            codePrixSelect.value = promo.code_prix;
+        }
+
+        // Types de prix éligibles
+        const typesPrixSelect = document.getElementById('promo-types-prix');
+        if (typesPrixSelect && promo.types_prix_eligibles && Array.isArray(promo.types_prix_eligibles)) {
+            Array.from(typesPrixSelect.options).forEach(option => {
+                option.selected = promo.types_prix_eligibles.includes(parseInt(option.value));
+            });
+        }
 
         // Afficher le formulaire
         document.getElementById('promo-form-section').style.display = 'block';
@@ -727,6 +817,19 @@ async function savePromotion(statut) {
     const usageClient = document.getElementById('promo-usage-client').value;
     if (usageClient) data.usage_par_client = parseInt(usageClient);
 
+    // Code de prix (optionnel)
+    const codePrix = document.getElementById('promo-code-prix').value;
+    if (codePrix) data.code_prix = parseInt(codePrix);
+
+    // Types de prix éligibles (optionnel - multiple select)
+    const typesPrixSelect = document.getElementById('promo-types-prix');
+    if (typesPrixSelect) {
+        const selectedOptions = Array.from(typesPrixSelect.selectedOptions);
+        if (selectedOptions.length > 0) {
+            data.types_prix_eligibles = selectedOptions.map(opt => parseInt(opt.value));
+        }
+    }
+
     // Valeurs selon le type
     switch (type) {
         case 'pourcentage':
@@ -791,23 +894,39 @@ async function savePromotion(statut) {
 // ============================================================
 
 async function activatePromotion(id) {
-    if (!confirm('Activer cette promotion ?')) return;
+    console.log('[ACTIVATION] Tentative activation promotion ID:', id);
+
+    if (!confirm('Activer cette promotion ?')) {
+        console.log('[ACTIVATION] Annulé par utilisateur');
+        return;
+    }
 
     try {
-        const response = await fetch(`${PromoConfig.apiUrl}promotions/${id}/activer/`, {
+        const url = `${PromoConfig.apiUrl}promotions/${id}/activer/`;
+        console.log('[ACTIVATION] URL:', url);
+
+        const response = await fetch(url, {
             method: 'POST',
             headers: {
-                'X-CSRFToken': getCsrfToken()
+                'X-CSRFToken': getCsrfToken(),
+                'Content-Type': 'application/json'
             }
         });
 
-        if (!response.ok) throw new Error('Erreur activation');
+        console.log('[ACTIVATION] Response status:', response.status);
+        const data = await response.json();
+        console.log('[ACTIVATION] Response data:', data);
 
-        showNotification('Promotion activée', 'success');
+        if (!response.ok) {
+            throw new Error(data.error || 'Erreur activation');
+        }
+
+        showNotification('✅ Promotion activée avec succès', 'success');
         await loadPromotions();
         await loadStats();
     } catch (error) {
-        showNotification('Erreur lors de l\'activation', 'error');
+        console.error('[ACTIVATION] Erreur:', error);
+        showNotification('❌ Erreur: ' + error.message, 'error');
     }
 }
 
@@ -829,6 +948,27 @@ async function suspendPromotion(id) {
         await loadStats();
     } catch (error) {
         showNotification('Erreur lors de la suspension', 'error');
+    }
+}
+
+async function resumePromotion(id) {
+    if (!confirm('Reprendre cette promotion ?')) return;
+
+    try {
+        const response = await fetch(`${PromoConfig.apiUrl}promotions/${id}/reprendre/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCsrfToken()
+            }
+        });
+
+        if (!response.ok) throw new Error('Erreur reprise');
+
+        showNotification('Promotion reprise avec succès', 'success');
+        await loadPromotions();
+        await loadStats();
+    } catch (error) {
+        showNotification('Erreur lors de la reprise de la promotion', 'error');
     }
 }
 

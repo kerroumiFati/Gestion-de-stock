@@ -10,7 +10,8 @@ from .models import (
     Company, UserProfile, SystemConfig,
     Client, Fournisseur, Produit, Achat,
     Vente, LigneVente, Warehouse, ProductStock,
-    TransfertStock, LigneTransfertStock, StockMove, Currency
+    TransfertStock, LigneTransfertStock, StockMove, Currency,
+    CodePrix, TypePrix, PrixProduit
 )
 from .distribution_models import (
     LivreurDistribution, TourneeMobile, ArretTourneeMobile,
@@ -75,10 +76,10 @@ from .models import Categorie
 
 @admin.register(Client)
 class ClientAdmin(admin.ModelAdmin):
-    list_display = ['nom', 'prenom', 'telephone', 'adresse', 'lat', 'lng']
-    list_filter = ['company']
+    list_display = ['nom', 'prenom', 'telephone', 'adresse', 'type_prix', 'lat', 'lng']
+    list_filter = ['company', 'type_prix', 'secteur']
     search_fields = ['nom', 'prenom', 'telephone', 'adresse']
-    fields = ['company', 'nom', 'prenom', 'email', 'telephone', 'adresse', 'lat', 'lng']
+    fields = ['company', 'secteur', 'nom', 'prenom', 'email', 'telephone', 'adresse', 'lat', 'lng', 'type_prix', 'nif', 'nis', 'ai', 'rc']
 
 admin.site.register(Achat)
 
@@ -655,3 +656,62 @@ class TransfertStockAdmin(admin.ModelAdmin):
             'currency': currency
         }
         return render(request, 'admin/stock_dashboard.html', context)
+
+
+# ===========================
+# Gestion des Prix et Promotions
+# ===========================
+
+@admin.register(CodePrix)
+class CodePrixAdmin(admin.ModelAdmin):
+    list_display = ['code', 'libelle', 'date_debut', 'date_fin', 'is_default', 'is_active', 'ordre']
+    list_filter = ['is_active', 'is_default']
+    search_fields = ['code', 'libelle']
+    ordering = ['ordre', 'code']
+    fieldsets = (
+        ('Informations générales', {
+            'fields': ('code', 'libelle', 'description', 'ordre')
+        }),
+        ('Période de validité', {
+            'fields': ('date_debut', 'date_fin')
+        }),
+        ('Statut', {
+            'fields': ('is_default', 'is_active')
+        }),
+    )
+
+
+@admin.register(TypePrix)
+class TypePrixAdmin(admin.ModelAdmin):
+    list_display = ['code', 'libelle', 'is_default', 'is_active', 'ordre']
+    list_filter = ['is_active', 'is_default', 'code']
+    search_fields = ['code', 'libelle']
+    ordering = ['ordre', 'code']
+    fieldsets = (
+        ('Informations générales', {
+            'fields': ('code', 'libelle', 'description', 'ordre')
+        }),
+        ('Statut', {
+            'fields': ('is_default', 'is_active')
+        }),
+    )
+
+
+@admin.register(PrixProduit)
+class PrixProduitAdmin(admin.ModelAdmin):
+    list_display = ['produit', 'code_prix', 'type_prix', 'prix', 'quantite_min', 'is_active']
+    list_filter = ['code_prix', 'type_prix', 'is_active']
+    search_fields = ['produit__designation', 'produit__reference']
+    autocomplete_fields = ['produit']
+    ordering = ['produit', 'code_prix', 'type_prix']
+    fieldsets = (
+        ('Produit et conditions', {
+            'fields': ('produit', 'code_prix', 'type_prix', 'quantite_min')
+        }),
+        ('Prix', {
+            'fields': ('prix', 'currency')
+        }),
+        ('Statut', {
+            'fields': ('is_active',)
+        }),
+    )

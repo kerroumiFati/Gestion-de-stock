@@ -67,6 +67,8 @@ def page(request, name: str):
         return render(request, 'frontoffice/page/stats_livreurs.html')
     elif name == 'visites_clients':
         return render(request, 'frontoffice/page/visites_clients.html')
+    elif name == 'historique_tournees':
+        return render(request, 'frontoffice/page/historique_tournees.html')
 
     # Protect currency management under paramètres: page accessible but section is guarded in template
     template_path = f'frontoffice/page/{name}.html'

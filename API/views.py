@@ -1561,6 +1561,38 @@ class StatisticsChartsViewSet(APIView):
                     'total': float(row.get('total') or 0)
                 })
 
+            # Clients avec reste à payer
+            clients_reste = []
+            # Récupérer toutes les ventes non entièrement payées
+            ventes_impayees = Vente.objects.filter(
+                statut='completed'
+            ).select_related('client')
+
+            clients_dict = {}
+            for vente in ventes_impayees:
+                reste = vente.get_reste_a_payer()
+                if reste > 0:
+                    client_id = vente.client.id if vente.client else None
+                    client_nom = vente.client.nom if vente.client else "Client inconnu"
+
+                    if client_id not in clients_dict:
+                        clients_dict[client_id] = {
+                            'client_id': client_id,
+                            'client_nom': client_nom,
+                            'reste_total': 0,
+                            'nb_ventes': 0
+                        }
+
+                    clients_dict[client_id]['reste_total'] += float(reste)
+                    clients_dict[client_id]['nb_ventes'] += 1
+
+            # Convertir en liste et trier par montant restant décroissant
+            clients_reste = sorted(
+                clients_dict.values(),
+                key=lambda x: x['reste_total'],
+                reverse=True
+            )
+
             # Récupérer la devise par défaut
             default_currency = Currency.get_default()
             currency_symbol = default_currency.symbol if default_currency else ''
@@ -1572,6 +1604,7 @@ class StatisticsChartsViewSet(APIView):
                 'mouvements_stock': mouvements_stock,
                 'stock_status': stock_status,
                 'ventes_paiement': ventes_paiement,
+                'clients_reste_payer': clients_reste,
                 'currency_symbol': currency_symbol
             })
         except Exception as e:
@@ -1582,7 +1615,8 @@ class StatisticsChartsViewSet(APIView):
                 'ventes_par_categorie': [],
                 'mouvements_stock': [],
                 'stock_status': {'normal':0,'alerte':0,'critique':0,'rupture':0},
-                'ventes_paiement': []
+                'ventes_paiement': [],
+                'clients_reste_payer': []
             })
 
 class AlertsView(APIView):
@@ -2919,6 +2953,121 @@ class TourneeViewSet(TenantFilterMixin, viewsets.ModelViewSet):
         serializer = TourneeSerializer(tournee)
         return Response(serializer.data)
 
+    @action(detail=False, methods=['get'])
+    def historique_complet(self, request):
+        """Retourne l'historique complet des tournées avec livreurs, ventes et arrêts"""
+        from django.utils import timezone
+        from decimal import Decimal
+
+        # Filtres
+        date_debut = request.GET.get('date_debut')
+        date_fin = request.GET.get('date_fin')
+        livreur_id = request.GET.get('livreur_id')
+        statut = request.GET.get('statut')
+
+        # Query de base
+        tournees = self.get_queryset()
+
+        # Appliquer les filtres
+        if date_debut:
+            tournees = tournees.filter(date__gte=date_debut)
+        if date_fin:
+            tournees = tournees.filter(date__lte=date_fin)
+        if livreur_id:
+            tournees = tournees.filter(livreur_id=livreur_id)
+        if statut:
+            tournees = tournees.filter(statut=statut)
+
+        # Limiter aux 100 dernières tournées par défaut
+        tournees = tournees.select_related('livreur', 'warehouse', 'code_prix').prefetch_related(
+            'arrets__vente',
+            'arrets__vente__lignes',
+            'arrets__vente__client',
+            'arrets__bon_livraison'
+        )[:100]
+
+        # Construire la réponse
+        data = []
+        for tournee in tournees:
+            # Calculer les statistiques de la tournée
+            arrets = tournee.arrets.all()
+            total_arrets = arrets.count()
+            arrets_livres = arrets.filter(statut='livre').count()
+            arrets_echec = arrets.filter(statut='echec').count()
+            arrets_en_attente = arrets.filter(statut='en_attente').count()
+
+            # Calculer le total des ventes
+            total_ventes = Decimal('0')
+            ventes_list = []
+
+            for arret in arrets:
+                if arret.vente:
+                    vente = arret.vente
+                    total_ventes += vente.total_ttc
+                    ventes_list.append({
+                        'id': vente.id,
+                        'numero': vente.numero,
+                        'client': {
+                            'id': vente.client.id,
+                            'nom': vente.client.nom,
+                            'prenom': vente.client.prenom,
+                            'telephone': vente.client.telephone
+                        } if vente.client else None,
+                        'date_vente': vente.date_vente.isoformat(),
+                        'total_ttc': float(vente.total_ttc),
+                        'type_paiement': vente.type_paiement,
+                        'statut': vente.statut,
+                        'statut_arret': arret.statut
+                    })
+
+            tournee_data = {
+                'id': tournee.id,
+                'numero': tournee.numero,
+                'date': tournee.date.isoformat(),
+                'statut': tournee.statut,
+                'livreur': {
+                    'id': tournee.livreur.id,
+                    'nom': tournee.livreur.nom,
+                    'prenom': tournee.livreur.prenom,
+                    'telephone': tournee.livreur.telephone,
+                    'vehicule_type': tournee.livreur.vehicule_type,
+                    'immatriculation': tournee.livreur.immatriculation
+                } if tournee.livreur else None,
+                'warehouse': {
+                    'id': tournee.warehouse.id,
+                    'name': tournee.warehouse.name
+                } if tournee.warehouse else None,
+                'code_prix': {
+                    'id': tournee.code_prix.id,
+                    'code': tournee.code_prix.code,
+                    'nom': tournee.code_prix.nom
+                } if tournee.code_prix else None,
+                'heure_depart_prevue': tournee.heure_depart_prevue.isoformat() if tournee.heure_depart_prevue else None,
+                'heure_depart_reelle': tournee.heure_depart_reelle.isoformat() if tournee.heure_depart_reelle else None,
+                'heure_retour_prevue': tournee.heure_retour_prevue.isoformat() if tournee.heure_retour_prevue else None,
+                'heure_retour_reelle': tournee.heure_retour_reelle.isoformat() if tournee.heure_retour_reelle else None,
+                'distance_km': float(tournee.distance_km) if tournee.distance_km else None,
+                'commentaire': tournee.commentaire,
+                'statistiques': {
+                    'total_arrets': total_arrets,
+                    'arrets_livres': arrets_livres,
+                    'arrets_echec': arrets_echec,
+                    'arrets_en_attente': arrets_en_attente,
+                    'taux_reussite': tournee.get_taux_reussite(),
+                    'total_ventes': float(total_ventes)
+                },
+                'ventes': ventes_list,
+                'created_at': tournee.created_at.isoformat(),
+                'updated_at': tournee.updated_at.isoformat()
+            }
+
+            data.append(tournee_data)
+
+        return Response({
+            'count': len(data),
+            'results': data
+        })
+
 
 class ArretLivraisonViewSet(TenantFilterMixin, viewsets.ModelViewSet):
     """
@@ -3116,11 +3265,11 @@ class PromotionViewSet(TenantFilterMixin, viewsets.ModelViewSet):
     def activer(self, request, pk=None):
         """Active une promotion"""
         promotion = self.get_object()
-        if promotion.statut == 'brouillon':
+        if promotion.statut in ['brouillon', 'planifiee']:
             promotion.statut = 'active'
             promotion.save()
             return Response({'status': 'Promotion activée', 'statut': promotion.statut})
-        return Response({'error': 'Seules les promotions en brouillon peuvent être activées'}, status=400)
+        return Response({'error': 'Seules les promotions en brouillon ou planifiées peuvent être activées'}, status=400)
 
     @action(detail=True, methods=['post'])
     def suspendre(self, request, pk=None):
@@ -3287,12 +3436,23 @@ class PromotionViewSet(TenantFilterMixin, viewsets.ModelViewSet):
         from django.utils import timezone
         now = timezone.now()
 
-        # Trouver les promotions applicables
-        promotions = self.get_queryset().filter(
+        # DEBUG: Info sur l'utilisateur et company
+        print(f"\n[CALCULER_PRIX DEBUG]")
+        print(f"  User: {self.request.user.username}")
+        print(f"  Is staff: {self.request.user.is_staff}")
+        print(f"  Request company: {getattr(self.request, 'company', None)}")
+
+        # Trouver les promotions applicables - SANS filtre company pour debug
+        promotions = Promotion.objects.filter(
             statut='active',
             date_debut__lte=now,
             date_fin__gte=now
         ).order_by('-priorite')
+
+        print(f"  Produit ID: {produit_id}, Quantité: {quantite}")
+        print(f"  Promotions actives trouvées (TOUTES): {promotions.count()}")
+        for p in promotions:
+            print(f"    - {p.code} (produit={p.produit_id}, categorie={p.categorie_id}, company={p.company_id})")
 
         meilleure_promo = None
         meilleur_prix = prix_total_original
@@ -3300,11 +3460,22 @@ class PromotionViewSet(TenantFilterMixin, viewsets.ModelViewSet):
         quantite_offerte = 0
         details_offre = None
 
+        # Liste pour stocker les raisons de rejet (debug)
+        rejets = []
+
         for promo in promotions:
-            if not promo.is_applicable_to_product(produit):
+            print(f"[CALCULER_PRIX] Test promo {promo.code}...")
+            rejets.append(f"Promo {promo.code}:")
+
+            is_applicable = promo.is_applicable_to_product(produit)
+            print(f"  - is_applicable_to_product: {is_applicable}")
+            if not is_applicable:
+                rejets.append(f"  ✗ is_applicable_to_product=False (promo.produit={promo.produit_id}, promo.categorie={promo.categorie_id})")
                 continue
 
+            print(f"  - quantite_minimum: {promo.quantite_minimum} (demandé: {quantite})")
             if quantite < promo.quantite_minimum:
+                rejets.append(f"  ✗ quantite_minimum={promo.quantite_minimum} > quantite={quantite}")
                 continue
 
             # Vérifier limite d'usage
@@ -3346,6 +3517,10 @@ class PromotionViewSet(TenantFilterMixin, viewsets.ModelViewSet):
             'economie_pourcentage': float((meilleure_economie / prix_total_original * 100)) if prix_total_original > 0 else 0,
             'quantite_offerte': quantite_offerte,
             'promotion': None,
+            '_debug_promotions_count': promotions.count(),
+            '_debug_user': self.request.user.username,
+            '_debug_company': str(getattr(self.request, 'company', None)),
+            '_debug_rejets': rejets,
             'details_offre': details_offre
         }
 

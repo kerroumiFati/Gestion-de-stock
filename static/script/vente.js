@@ -11,6 +11,8 @@
 
   // Variable globale pour stocker le symbole de devise par défaut
   let DEFAULT_CURRENCY_SYMBOL = 'DA'; // Valeur par défaut si non configurée
+  // Variable globale pour stocker tous les clients avec reste à payer
+  let allClientsReste = [];
   function asListSafe(data){
     if (Array.isArray(data)) return data;
     if (data && Array.isArray(data.results)) return data.results;
@@ -935,6 +937,7 @@
     $.ajax({ url:'/API/ventes/clients_avec_reste/', method:'GET', dataType:'json' })
       .done(function(data){
         dbg('loadClientsAvecReste success', data);
+        allClientsReste = data || []; // Stocker tous les clients
         renderClientsAvecReste(data);
       })
       .fail(function(xhr){
@@ -989,6 +992,23 @@
     $('#total_ttc_global').text(totalTTC.toFixed(2) + ' ' + DEFAULT_CURRENCY_SYMBOL);
     $('#total_paye_global').text(totalPaye.toFixed(2) + ' ' + DEFAULT_CURRENCY_SYMBOL);
     $('#total_reste_global').text(totalReste.toFixed(2) + ' ' + DEFAULT_CURRENCY_SYMBOL);
+  }
+
+  function filterClientsReste(searchTerm){
+    searchTerm = (searchTerm || '').toLowerCase().trim();
+
+    if(!searchTerm){
+      renderClientsAvecReste(allClientsReste);
+      return;
+    }
+
+    const filtered = allClientsReste.filter(function(client){
+      const nom = ((client.client_nom || '') + ' ' + (client.client_prenom || '')).toLowerCase();
+      const tel = (client.telephone || '').toLowerCase();
+      return nom.indexOf(searchTerm) !== -1 || tel.indexOf(searchTerm) !== -1;
+    });
+
+    renderClientsAvecReste(filtered);
   }
 
   function loadSaleDetails(saleId){
@@ -1500,6 +1520,11 @@
       openAddPaymentModal(venteId, reste);
     });
     $(document).off('click', '#savePaymentBtn').on('click', '#savePaymentBtn', function(e){ e.preventDefault(); savePayment(); });
+
+    // Écouteur pour le champ de recherche des clients avec reste à payer
+    $(document).off('input', '#search_clients_reste').on('input', '#search_clients_reste', function(){
+      filterClientsReste($(this).val());
+    });
 
     // when opening the Devises tab, refresh lists
     $('a[data-toggle="tab"][href="#devises"]').on('shown.bs.tab', function(){ loadCurrencies(); loadRates(); });

@@ -5,6 +5,7 @@
 
   let charts = {};
   let currencySymbol = ''; // Symbole de devise par défaut
+  let allClientsReste = []; // Stocker tous les clients avec reste à payer
 
   function setText(id, value){ var el = document.getElementById(id); if(el) el.textContent = value; }
   function nowStr(){ var d = new Date(); return d.toLocaleString(); }
@@ -113,7 +114,57 @@
           labels: pay.map(x=>x.type_paiement || x.type || '—'),
           datasets:[{ data: pay.map(x=>x.count||0), backgroundColor: pay.map((_,i)=>color(i)) }]
         });
+
+        // Clients avec reste à payer
+        allClientsReste = j.clients_reste_payer || [];
+        displayClientsReste(allClientsReste);
       });
+  }
+
+  function displayClientsReste(clients) {
+    var container = document.getElementById('clients-reste-container');
+    if (!container) return;
+
+    if (clients.length === 0) {
+      container.innerHTML = '<p class="text-center text-muted">Aucun client avec reste à payer</p>';
+      return;
+    }
+
+    var tableHTML = '<div class="table-responsive"><table class="table table-hover table-striped">';
+    tableHTML += '<thead class="thead-dark"><tr>';
+    tableHTML += '<th>#</th>';
+    tableHTML += '<th>Client</th>';
+    tableHTML += '<th class="text-right">Nb Ventes</th>';
+    tableHTML += '<th class="text-right">Reste à Payer</th>';
+    tableHTML += '</tr></thead><tbody>';
+
+    clients.forEach(function(client, index) {
+      tableHTML += '<tr>';
+      tableHTML += '<td>' + (index + 1) + '</td>';
+      tableHTML += '<td>' + (client.client_nom || 'Client inconnu') + '</td>';
+      tableHTML += '<td class="text-right">' + (client.nb_ventes || 0) + '</td>';
+      tableHTML += '<td class="text-right"><strong>' + (client.reste_total || 0).toLocaleString() + ' ' + currencySymbol + '</strong></td>';
+      tableHTML += '</tr>';
+    });
+
+    tableHTML += '</tbody></table></div>';
+    container.innerHTML = tableHTML;
+  }
+
+  function filterClientsReste(searchTerm) {
+    searchTerm = searchTerm.toLowerCase().trim();
+
+    if (!searchTerm) {
+      displayClientsReste(allClientsReste);
+      return;
+    }
+
+    var filtered = allClientsReste.filter(function(client) {
+      var nom = (client.client_nom || '').toLowerCase();
+      return nom.indexOf(searchTerm) !== -1;
+    });
+
+    displayClientsReste(filtered);
   }
 
   function refreshStatistics(){
@@ -130,6 +181,14 @@
     if(document.getElementById('ventesChart')){
       dbg('Initializing statistics...');
       refreshStatistics();
+
+      // Ajouter l'écouteur d'événement pour le champ de recherche
+      var searchInput = document.getElementById('search-clients-reste');
+      if (searchInput) {
+        searchInput.addEventListener('input', function(e) {
+          filterClientsReste(e.target.value);
+        });
+      }
     }
   }
 
