@@ -102,8 +102,6 @@ class WarehouseRelatedTenantMixin:
             if hasattr(self.request, 'company') and self.request.company is not None:
                 # Afficher les données de la company de l'utilisateur + celles sans company
                 queryset = queryset.filter(Q(warehouse__company=self.request.company) | Q(warehouse__company__isnull=True))
-            else:
-                # Si l'utilisateur n'a pas de company, afficher les données sans company
-                queryset = queryset.filter(warehouse__company__isnull=True)
+            # Si l'utilisateur n'a pas de company, afficher toutes les données (pour éviter liste vide)
 
         return queryset

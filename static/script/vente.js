@@ -7,10 +7,13 @@
   const API_EXCHANGE_RATES = '/API/exchange-rates/';
   const API_WAREHOUSES = '/API/entrepots/';
   const API_TYPES_PRIX = '/API/types-prix/';
+  const API_CODES_PRIX = '/API/codes-prix/';
   const API_PROMOTIONS = '/API/promotions/';
 
   // Variable globale pour stocker le symbole de devise par défaut
   let DEFAULT_CURRENCY_SYMBOL = 'DA'; // Valeur par défaut si non configurée
+  // Variable globale pour stocker le CodePrix par défaut
+  let DEFAULT_CODE_PRIX = null;
   // Variable globale pour stocker tous les clients avec reste à payer
   let allClientsReste = [];
   function asListSafe(data){
@@ -163,6 +166,27 @@
         fillTypePrixSelect(list);
       })
       .fail(function(xhr){ dbg('loadTypesPrix fail', xhr.status, xhr.responseText || xhr.statusText); });
+  }
+
+  function loadCodesPrix(){
+    return $.ajax({ url: API_CODES_PRIX + '?page_size=1000', method: 'GET', dataType: 'json' })
+      .done(function(data){
+        const list = asList(data);
+        // Trouver le CodePrix par défaut (is_default=true)
+        const defaultCode = list.find(function(c){ return c.is_default && c.is_active; });
+        if(defaultCode){
+          DEFAULT_CODE_PRIX = defaultCode;
+          dbg('CodePrix par défaut chargé:', defaultCode.code, '(id:', defaultCode.id, ')');
+        } else {
+          // Fallback: prendre le premier actif
+          const firstActive = list.find(function(c){ return c.is_active; });
+          if(firstActive){
+            DEFAULT_CODE_PRIX = firstActive;
+            dbg('CodePrix fallback (premier actif):', firstActive.code);
+          }
+        }
+      })
+      .fail(function(xhr){ dbg('loadCodesPrix fail', xhr.status, xhr.responseText || xhr.statusText); });
   }
 
   function fillTypePrixSelect(list){
@@ -334,6 +358,9 @@
 
   // Fonction pour calculer le prix avec promotion
   function calculatePriceWithPromotion(produitId, quantite, prixOriginal){
+    // Récupérer le type_prix sélectionné
+    const typePrixId = parseInt($('#vente_type_prix').val() || '0', 10) || null;
+
     return $.ajax({
       url: API_PROMOTIONS + 'calculer_prix/',
       method: 'POST',
@@ -341,7 +368,8 @@
       headers: { 'X-CSRFToken': getCSRFToken() },
       data: JSON.stringify({
         produit_id: produitId,
-        quantite: quantite
+        quantite: quantite,
+        type_prix_id: typePrixId  // Envoyer le type de prix sélectionné
       }),
       dataType: 'json'
     });
@@ -387,17 +415,19 @@
         const p = PRODUCTS_CACHE[l.produit] || {};
         const ref = p.reference || '';
         const designation = l.designation || p.designation || ('Produit #'+l.produit);
-        const price = Number(l.prixU_snapshot || p.prixU || 0);
-        const qty = Number(l.quantite || 0);
+        const price = Number(l.prixU_snapshot || p.prixU || 0) || 0;
+        const qty = Number(l.quantite || 0) || 0;
         const total = price * qty;
-        const sym = (p.currency_symbol || p.currency && p.currency.symbol) || 'DA';
+        const sym = (p.currency_symbol || (p.currency && p.currency.symbol)) || 'DA';
+        const prixOriginal = Number(l.prix_original || 0) || 0;
+        const remisePromo = Number(l.remise_promo || 0) || 0;
         const tr = $('<tr>');
         tr.append('<td>'+ref+'</td>');
 
         // Désignation avec badge promo si applicable
         let designationHtml = designation;
         if(l.promotion_code){
-          designationHtml += ' <span class="badge badge-success" title="'+l.promotion_nom+'"><i class="fa fa-tag"></i> '+l.promotion_code+'</span>';
+          designationHtml += ' <span class="badge badge-success" title="'+(l.promotion_nom || '')+'"><i class="fa fa-tag"></i> '+l.promotion_code+'</span>';
           if(l.quantite_offerte > 0){
             designationHtml += ' <span class="badge badge-info">+'+l.quantite_offerte+' offert(s)</span>';
           }
@@ -406,8 +436,8 @@
 
         // Prix avec indication de promo
         let prixHtml = price.toFixed(2)+' '+sym;
-        if(l.promotion && l.prix_original && l.prix_original > price){
-          prixHtml = '<del class="text-muted">'+l.prix_original.toFixed(2)+'</del> <span class="text-success">'+price.toFixed(2)+'</span> '+sym;
+        if(l.promotion && prixOriginal > 0 && prixOriginal > price){
+          prixHtml = '<del class="text-muted">'+prixOriginal.toFixed(2)+'</del> <span class="text-success">'+price.toFixed(2)+'</span> '+sym;
         }
         tr.append('<td class="text-right">'+prixHtml+'</td>');
 
@@ -415,8 +445,8 @@
 
         // Total avec économie
         let totalHtml = '<strong>'+(total.toFixed(2))+' '+sym+'</strong>';
-        if(l.remise_promo && l.remise_promo > 0){
-          totalHtml += '<br><small class="text-success">Économie: -'+l.remise_promo.toFixed(2)+' '+sym+'</small>';
+        if(remisePromo > 0){
+          totalHtml += '<br><small class="text-success">Économie: -'+remisePromo.toFixed(2)+' '+sym+'</small>';
         }
         tr.append('<td class="text-right">'+totalHtml+'</td>');
 
@@ -454,10 +484,11 @@
   }
 
   /**
-   * Récupère le prix selon le type de prix sélectionné dans l'interface
+   * Récupère le prix selon le CodePrix par défaut et le TypePrix sélectionné
+   * Logique: CodePrix par défaut + TypePrix sélectionné → PrixProduit → fallback prixU
    * @param {Object} product - Le produit
    * @param {number} typePrixId - L'ID du type de prix (optionnel, sinon utilise le select)
-   * @returns {number} - Le prix correspondant au type sélectionné
+   * @returns {number} - Le prix correspondant
    */
   function getBestPrice(product, typePrixId){
     if(!product) return 0;
@@ -470,19 +501,45 @@
     // Check if product has prix_multiples (multiple prices)
     if(product.prix_multiples && Array.isArray(product.prix_multiples) && product.prix_multiples.length > 0){
 
-      // Si un type de prix est sélectionné, chercher le prix correspondant
-      if(typePrixId){
+      // 1. Chercher le prix pour CodePrix par défaut + TypePrix sélectionné
+      if(DEFAULT_CODE_PRIX && typePrixId){
         const matchingPrice = product.prix_multiples.find(function(pm){
-          return pm.is_active && pm.type_prix === typePrixId;
+          return pm.is_active &&
+                 pm.code_prix === DEFAULT_CODE_PRIX.id &&
+                 pm.type_prix === typePrixId;
         });
 
         if(matchingPrice){
-          dbg('Using price for type_prix', typePrixId, ':', matchingPrice.prix, 'for product', product.designation);
+          dbg('Using price for code_prix', DEFAULT_CODE_PRIX.code, '+ type_prix', typePrixId, ':', matchingPrice.prix, 'for product', product.designation);
           return Number(matchingPrice.prix || 0);
         }
       }
 
-      // Sinon chercher le prix DETAIL par défaut
+      // 2. Chercher le prix pour CodePrix par défaut + n'importe quel TypePrix
+      if(DEFAULT_CODE_PRIX){
+        const priceForDefaultCode = product.prix_multiples.find(function(pm){
+          return pm.is_active && pm.code_prix === DEFAULT_CODE_PRIX.id;
+        });
+
+        if(priceForDefaultCode){
+          dbg('Using price for default code_prix', DEFAULT_CODE_PRIX.code, ':', priceForDefaultCode.prix, 'for product', product.designation);
+          return Number(priceForDefaultCode.prix || 0);
+        }
+      }
+
+      // 3. Chercher le prix pour TypePrix sélectionné (sans filtre CodePrix)
+      if(typePrixId){
+        const matchingTypePrice = product.prix_multiples.find(function(pm){
+          return pm.is_active && pm.type_prix === typePrixId;
+        });
+
+        if(matchingTypePrice){
+          dbg('Using price for type_prix', typePrixId, ':', matchingTypePrice.prix, 'for product', product.designation);
+          return Number(matchingTypePrice.prix || 0);
+        }
+      }
+
+      // 4. Chercher le prix DETAIL par défaut
       const detailPrice = product.prix_multiples.find(function(pm){
         return pm.is_active && pm.type_prix_code === 'DETAIL';
       });
@@ -492,7 +549,7 @@
         return Number(detailPrice.prix || 0);
       }
 
-      // Sinon prendre le premier prix actif
+      // 5. Prendre le premier prix actif
       const activePrice = product.prix_multiples.find(function(pm){
         return pm.is_active;
       });
@@ -503,9 +560,9 @@
       }
     }
 
-    // Fall back to default prixU
+    // 6. Fall back to default prixU
     dbg('Using default price (prixU):', product.prixU, 'for product', product.designation);
-    return Number(product.prixU || 0);
+    return Number(product.prixU || 0) || 0;
   }
 
   function addCurrentProductLine(){
@@ -523,23 +580,27 @@
       // Produit déjà dans le panier - mettre à jour la quantité
       const existingLine = LINES[existingIndex];
       const newQty = existingLine.quantite + qty;
-      const prixOriginal = existingLine.prix_original || existingLine.prixU_snapshot;
+      const prixOriginal = Number(existingLine.prix_original || existingLine.prixU_snapshot || 0) || 0;
 
       // Recalculer la promotion avec la nouvelle quantité
       calculatePriceWithPromotion(prodId, newQty, prixOriginal)
         .done(function(result){
           dbg('Mise à jour quantité, résultat promo:', result);
 
+          // S'assurer que les valeurs sont des nombres
+          const prixTotalAvecPromo = Number(result.prix_total_avec_promo || 0) || (prixOriginal * newQty);
+          const economieMontant = Number(result.economie_montant || 0) || 0;
+
           existingLine.quantite = newQty;
           existingLine.promotion = result.promotion ? result.promotion.id : null;
           existingLine.promotion_code = result.promotion ? result.promotion.code : null;
-          existingLine.promotion_nom = result.promotion ? result.promotion.nom : null;
-          existingLine.remise_promo = result.economie_montant;
+          existingLine.promotion_nom = result.promotion ? (result.promotion.nom || '') : null;
+          existingLine.remise_promo = economieMontant;
           existingLine.quantite_offerte = result.quantite_offerte || 0;
 
-          if(result.promotion){
-            existingLine.prixU_snapshot = result.prix_total_avec_promo / newQty;
-            existingLine.prix_avec_promo = result.prix_total_avec_promo / newQty;
+          if(result.promotion && prixTotalAvecPromo > 0){
+            existingLine.prixU_snapshot = prixTotalAvecPromo / newQty;
+            existingLine.prix_avec_promo = prixTotalAvecPromo / newQty;
           } else {
             existingLine.prixU_snapshot = prixOriginal;
           }
@@ -556,11 +617,15 @@
         });
     } else {
       // Nouveau produit - ajouter une nouvelle ligne
-      const prixOriginal = getBestPrice(p);
+      const prixOriginal = getBestPrice(p) || 0;
 
       calculatePriceWithPromotion(prodId, qty, prixOriginal)
         .done(function(result){
           dbg('Résultat calcul promo:', result);
+
+          // S'assurer que les valeurs sont des nombres
+          const prixTotalAvecPromo = Number(result.prix_total_avec_promo || 0) || (prixOriginal * qty);
+          const economieMontant = Number(result.economie_montant || 0) || 0;
 
           const line = {
             produit: prodId,
@@ -570,15 +635,15 @@
             currency: p.currency || null,
             promotion: result.promotion ? result.promotion.id : null,
             promotion_code: result.promotion ? result.promotion.code : null,
-            promotion_nom: result.promotion ? result.promotion.nom : null,
+            promotion_nom: result.promotion ? (result.promotion.nom || '') : null,
             prix_original: prixOriginal,
-            prix_avec_promo: result.prix_total_avec_promo / qty,
-            remise_promo: result.economie_montant,
+            prix_avec_promo: prixTotalAvecPromo / qty,
+            remise_promo: economieMontant,
             quantite_offerte: result.quantite_offerte || 0
           };
 
-          if(result.promotion){
-            line.prixU_snapshot = result.prix_total_avec_promo / qty;
+          if(result.promotion && prixTotalAvecPromo > 0){
+            line.prixU_snapshot = prixTotalAvecPromo / qty;
           }
 
           LINES.push(line);
@@ -1429,16 +1494,20 @@
 
     // Charger la configuration système en premier pour obtenir la devise
     loadSystemConfig().always(function(){
-      // Une fois la devise chargée (ou en cas d'erreur), charger le reste
-      loadClients();
-      loadCurrencies();
-      loadTypesPrix();
-      loadWarehouses();
-      bindProduitFilters();
-      renderLines();
-      // Ne pas charger loadSalesList ici, seulement quand l'onglet est visible
-      // loadStats() ne pose pas de problème car il n'initialise pas de DataTable
-      loadStats(); // Load initial stats
+      // Charger le CodePrix par défaut EN PREMIER (nécessaire pour la résolution des prix)
+      loadCodesPrix().always(function(){
+        // Une fois le CodePrix chargé, charger le reste
+        loadClients();
+        loadCurrencies();
+        loadTypesPrix();
+        loadWarehouses();
+        bindProduitFilters(); // Ceci charge les produits
+        renderLines();
+        // Ne pas charger loadSalesList ici, seulement quand l'onglet est visible
+        // loadStats() ne pose pas de problème car il n'initialise pas de DataTable
+        loadStats(); // Load initial stats
+        dbg('Initialisation terminée. DEFAULT_CODE_PRIX:', DEFAULT_CODE_PRIX);
+      });
     });
 
     // apply filter change

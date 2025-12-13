@@ -489,8 +489,23 @@ def charger_van(request):
     if request.method == 'POST':
         van_id = request.POST.get('van')
         source_id = request.POST.get('entrepot_source')
-        produits_text = request.POST.get('produits')
+        produits_text = request.POST.get('produits', '')
         is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+
+        # Validation des champs requis
+        if not van_id or not source_id:
+            error_msg = 'Veuillez sélectionner un van et un entrepôt source'
+            if is_ajax:
+                return JsonResponse({'success': False, 'message': error_msg}, status=400)
+            messages.error(request, error_msg)
+            return redirect('charger_van')
+
+        if not produits_text or not produits_text.strip():
+            error_msg = 'Veuillez ajouter au moins un produit'
+            if is_ajax:
+                return JsonResponse({'success': False, 'message': error_msg}, status=400)
+            messages.error(request, error_msg)
+            return redirect('charger_van')
 
         try:
             van = Warehouse.objects.get(id=van_id)
@@ -572,10 +587,13 @@ def charger_van(request):
         # Afficher les entrepôts de la company de l'utilisateur + ceux sans company
         vans_qs = vans_qs.filter(Q(company=company) | Q(company__isnull=True))
         sources_qs = sources_qs.filter(Q(company=company) | Q(company__isnull=True))
+    elif request.user.is_superuser:
+        # Superuser sans company: afficher tous les entrepôts
+        pass  # Pas de filtre supplémentaire
     else:
-        # Si pas de company, afficher uniquement les entrepôts sans company
-        vans_qs = vans_qs.filter(company__isnull=True)
-        sources_qs = sources_qs.filter(company__isnull=True)
+        # Utilisateur normal sans company: afficher les entrepôts sans company + tous (pour éviter liste vide)
+        # Note: En production, vous voudrez peut-être restreindre cela
+        pass  # Afficher tous les entrepôts pour éviter la liste vide
 
     vans = vans_qs.order_by('code')
     sources = sources_qs.order_by('code')

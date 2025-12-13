@@ -10,7 +10,7 @@ from .distribution_models import (
     CommandeClient, LigneCommandeClient, PlanningHebdomadaire, ClientLivreurHebdo
     # BonLivraisonVan, LigneBonLivraisonVan  # TODO: Models not yet created
 )
-from .models import Client, Produit, Company
+from .models import Client, Produit, Company, CodePrix, PrixProduit, TypePrix
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -39,6 +39,7 @@ class ProduitMobileSerializer(serializers.ModelSerializer):
         """
         Calcule le stock total depuis ProductStock (somme de tous les entrepôts non-van).
         Exclut les vans pour avoir le stock disponible en entrepôt principal.
+        Si ProductStock est vide, utilise le champ quantite du modèle Produit.
         """
         from .models import ProductStock
         # Calculer le stock total depuis ProductStock (entrepôts principaux uniquement, pas les vans)
@@ -48,7 +49,11 @@ class ProduitMobileSerializer(serializers.ModelSerializer):
         ).exclude(
             warehouse__code__icontains='van'
         ).aggregate(total=models.Sum('quantity'))['total']
-        return total_stock or 0
+
+        # Si pas de stock dans ProductStock, utiliser le champ quantite du produit
+        if total_stock is None or total_stock == 0:
+            return obj.quantite or 0
+        return total_stock
 
 
 class ClientMobileSerializer(serializers.ModelSerializer):
@@ -61,13 +66,16 @@ class ClientMobileSerializer(serializers.ModelSerializer):
     visite = serializers.SerializerMethodField()
     ordre_visite = serializers.SerializerMethodField()
     solde_actuel = serializers.SerializerMethodField()
+    type_prix_code = serializers.SerializerMethodField()
+    type_prix_libelle = serializers.SerializerMethodField()
     updated_at = serializers.SerializerMethodField()
 
     class Meta:
         model = Client
         fields = (
             'id', 'nom', 'prenom', 'telephone', 'adresse',
-            'lat', 'lng', 'visite', 'ordre_visite', 'solde_actuel', 'updated_at'
+            'lat', 'lng', 'visite', 'ordre_visite', 'solde_actuel',
+            'type_prix_code', 'type_prix_libelle', 'updated_at'
         )
 
     def get_lat(self, obj):
@@ -93,6 +101,18 @@ class ClientMobileSerializer(serializers.ModelSerializer):
     def get_solde_actuel(self, obj):
         """Solde du compte client - TODO: calculer depuis les ventes"""
         return 0.0
+
+    def get_type_prix_code(self, obj):
+        """Code du type de prix (DETAIL, GROS, SUPERETTE, etc.)"""
+        if obj.type_prix:
+            return obj.type_prix.code
+        return 'DETAIL'  # Valeur par défaut
+
+    def get_type_prix_libelle(self, obj):
+        """Libellé du type de prix"""
+        if obj.type_prix:
+            return obj.type_prix.libelle
+        return 'Détail'
 
     def get_updated_at(self, obj):
         """Timestamp de dernière mise à jour"""
@@ -199,10 +219,20 @@ class ArretTourneeSerializer(serializers.ModelSerializer):
 
 class ArretTourneeSyncSerializer(serializers.ModelSerializer):
     """Serializer simplifié pour synchronisation mobile"""
+    # Informations du client pour affichage
+    client_nom = serializers.CharField(source='client.nom', read_only=True)
+    client_adresse = serializers.CharField(source='client.adresse', read_only=True)
+    client_telephone = serializers.CharField(source='client.telephone', read_only=True)
+    # Coordonnées GPS du client (pour navigation)
+    client_lat = serializers.DecimalField(source='client.lat', max_digits=10, decimal_places=7, read_only=True, allow_null=True)
+    client_lng = serializers.DecimalField(source='client.lng', max_digits=10, decimal_places=7, read_only=True, allow_null=True)
+
     class Meta:
         model = ArretTourneeMobile
         fields = [
-            'id', 'client', 'ordre_passage', 'statut',
+            'id', 'client', 'client_nom', 'client_adresse', 'client_telephone',
+            'client_lat', 'client_lng',
+            'ordre_passage', 'statut',
             'heure_prevue', 'heure_arrivee', 'heure_depart',
             'latitude', 'longitude',
             'signature_base64', 'nom_receptionnaire',
@@ -308,6 +338,8 @@ class VenteMobileCreateSerializer(serializers.Serializer):
     app_id = serializers.CharField(max_length=200, required=False)
     # Accepter string ou int pour client (le mobile peut envoyer une string)
     client = serializers.CharField(max_length=50)
+    # ID du livreur pour décrémenter le stock du van (envoyé par l'app mobile)
+    livreur = serializers.IntegerField(required=False, allow_null=True)
     mode_paiement = serializers.ChoiceField(choices=['especes', 'credit', 'cheque', 'virement'])
     montant_total = serializers.DecimalField(max_digits=10, decimal_places=2)
     montant_paye = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, default=0)
@@ -325,6 +357,7 @@ class VenteMobileCreateSerializer(serializers.Serializer):
 
         lignes_data = validated_data.pop('lignes_vente')
         client_id_str = validated_data.pop('client')
+        livreur_id_from_mobile = validated_data.pop('livreur', None)  # ID du livreur envoyé par l'app mobile
         mode_paiement = validated_data.pop('mode_paiement')
         montant_total = validated_data.pop('montant_total')
         montant_paye = validated_data.pop('montant_paye', 0)
@@ -351,11 +384,22 @@ class VenteMobileCreateSerializer(serializers.Serializer):
         except ClientModel.DoesNotExist:
             raise serializers.ValidationError({'client': f'Client introuvable avec ID: {client_id}'})
 
-        # Trouver le livreur assigné à ce client
-        # 1. D'abord chercher dans clients_assignes (assignation directe)
-        livreur = LivreurDistribution.objects.filter(clients_assignes=client).first()
+        # PRIORITÉ 1: Utiliser le livreur_id envoyé par l'app mobile (le plus fiable)
+        livreur = None
+        if livreur_id_from_mobile:
+            try:
+                livreur = LivreurDistribution.objects.get(id=livreur_id_from_mobile)
+                logger.info(f"Livreur trouvé via ID mobile: {livreur.nom} (ID: {livreur_id_from_mobile})")
+            except LivreurDistribution.DoesNotExist:
+                logger.warning(f"Livreur avec ID {livreur_id_from_mobile} introuvable, recherche alternative...")
 
-        # 2. Si pas trouvé, chercher via le planning hebdomadaire
+        # PRIORITÉ 2: Chercher dans clients_assignes (assignation directe)
+        if not livreur:
+            livreur = LivreurDistribution.objects.filter(clients_assignes=client).first()
+            if livreur:
+                logger.info(f"Livreur trouvé via clients_assignes: {livreur.nom}")
+
+        # PRIORITÉ 3: Chercher via le planning hebdomadaire
         if not livreur:
             jour_semaine = timezone.now().weekday()  # 0=lundi, 6=dimanche
             client_hebdo = ClientLivreurHebdo.objects.filter(
@@ -367,7 +411,7 @@ class VenteMobileCreateSerializer(serializers.Serializer):
                 livreur = client_hebdo.livreur
                 logger.info(f"Livreur trouvé via planning hebdomadaire: {livreur.nom}")
 
-        # 3. Si toujours pas trouvé, chercher via les tournées actives du jour
+        # PRIORITÉ 4: Chercher via les tournées actives du jour
         if not livreur:
             today = timezone.now().date()
             arret = ArretTourneeMobile.objects.filter(
@@ -381,6 +425,8 @@ class VenteMobileCreateSerializer(serializers.Serializer):
 
         if not livreur:
             logger.warning(f"Aucun livreur trouvé pour le client {client.id} ({client.nom}). Le stock ne sera pas décrémenté.")
+        else:
+            logger.info(f"✅ Livreur trouvé: {livreur.nom} (ID: {livreur.id}), entrepot: {livreur.entrepot.name if livreur.entrepot else 'AUCUN'}")
 
         # Mapper mode_paiement vers type_paiement
         type_paiement_map = {
@@ -409,55 +455,95 @@ class VenteMobileCreateSerializer(serializers.Serializer):
         )
 
         # Créer les lignes et décrémenter le stock
-        for ligne_data in lignes_data:
-            produit_id_raw = ligne_data['produit']
-            quantite = ligne_data['quantite']
-            prix_unitaire = ligne_data['prix_unitaire']
+        logger.info(f"Création de {len(lignes_data)} lignes pour vente {vente.numero_vente}")
+        lignes_creees = 0
+
+        for idx, ligne_data in enumerate(lignes_data):
+            produit_id_raw = ligne_data.get('produit')
+            quantite = ligne_data.get('quantite', 0)
+            prix_unitaire = ligne_data.get('prix_unitaire', 0)
+
+            logger.info(f"Ligne {idx}: produit_id_raw={produit_id_raw} (type={type(produit_id_raw).__name__}), quantite={quantite}, prix={prix_unitaire}")
 
             # Convertir produit_id en int (le mobile peut envoyer une string)
             try:
                 produit_id = int(str(produit_id_raw).strip())
-            except (ValueError, TypeError):
-                logger.error(f"ID produit invalide: {produit_id_raw}, ligne ignorée")
+            except (ValueError, TypeError) as e:
+                logger.error(f"ID produit invalide: {produit_id_raw}, erreur: {e}, ligne ignorée")
                 continue
 
             try:
                 produit = Produit.objects.get(id=produit_id)
+                logger.info(f"Produit trouvé: {produit.id} - {produit.designation}")
             except Produit.DoesNotExist:
                 logger.error(f"Produit introuvable avec ID: {produit_id}, ligne ignorée")
                 continue
 
+            # Si prix_unitaire n'est pas fourni ou est 0, utiliser le prix de PrixProduit
+            if not prix_unitaire or prix_unitaire == 0:
+                prix_unitaire = produit.prixU or 0  # Fallback par défaut
+
+                # Essayer de récupérer le prix du CodePrix par défaut
+                type_prix_client = client.type_prix if client else None
+                code_prix_defaut = CodePrix.get_default()
+
+                if code_prix_defaut and type_prix_client:
+                    # Chercher le prix configuré pour ce produit/code_prix/type_prix
+                    prix_produit = PrixProduit.objects.filter(
+                        produit=produit,
+                        code_prix=code_prix_defaut,
+                        type_prix=type_prix_client,
+                        is_active=True
+                    ).first()
+
+                    if prix_produit:
+                        prix_unitaire = float(prix_produit.prix)
+                        logger.info(f"Prix récupéré de PrixProduit: {prix_unitaire} pour {produit.designation}")
+
             # Créer la ligne de vente
-            LigneVenteTourneeMobile.objects.create(
-                vente=vente,
-                produit=produit,
-                quantite=quantite,
-                prix_unitaire=prix_unitaire,
-                montant_ttc=quantite * prix_unitaire
-            )
+            try:
+                ligne = LigneVenteTourneeMobile.objects.create(
+                    vente=vente,
+                    produit=produit,
+                    quantite=quantite,
+                    prix_unitaire=prix_unitaire,
+                    montant_ttc=quantite * prix_unitaire
+                )
+                lignes_creees += 1
+                logger.info(f"Ligne créée: {ligne.id} - {produit.designation} x {quantite}")
+            except Exception as e:
+                logger.error(f"Erreur création ligne: {e}")
 
             # Décrémenter le stock du van du livreur
             if livreur and livreur.entrepot:
                 try:
-                    stock = ProductStock.objects.get(
+                    # Récupérer ou créer le stock dans le van
+                    stock, created = ProductStock.objects.get_or_create(
                         warehouse=livreur.entrepot,
-                        produit=produit
+                        produit=produit,
+                        defaults={'quantity': 0}
                     )
+                    if created:
+                        logger.info(f"Stock créé pour {produit.designation} dans {livreur.entrepot.name}")
+
+                    # Décrémenter le stock
+                    old_qty = stock.quantity
                     stock.quantity = max(0, stock.quantity - quantite)
                     stock.save()
-                    logger.debug(f"Stock décrémenté: {produit.designation} -{quantite} dans {livreur.entrepot.name}")
-                except ProductStock.DoesNotExist:
-                    logger.warning(
-                        f"Stock non trouvé pour produit {produit.id} ({produit.designation}) "
-                        f"dans entrepôt {livreur.entrepot.id} ({livreur.entrepot.name})"
-                    )
+                    logger.info(f"✅ Stock décrémenté: {produit.designation} {old_qty} -> {stock.quantity} (-{quantite}) dans {livreur.entrepot.name}")
+                except Exception as e:
+                    logger.error(f"❌ Erreur décrémentation stock: {e}")
+            elif livreur and not livreur.entrepot:
+                logger.warning(f"⚠️ Livreur {livreur.nom} n'a pas d'entrepôt (van) assigné - stock non décrémenté pour produit {produit.id}")
             elif not livreur:
-                logger.warning(f"Pas de livreur - stock non décrémenté pour produit {produit.id}")
+                logger.warning(f"⚠️ Pas de livreur - stock non décrémenté pour produit {produit.id}")
 
         # Si reste à payer > 0, enregistrer l'info
         if reste_a_payer > 0:
             logger.info(f"Vente avec paiement partiel pour client {client.id} ({client.nom}): reste à payer = {reste_a_payer} DZD")
             # TODO: Ajouter le champ solde_actuel au modèle Client si besoin de suivre les dettes
+
+        logger.info(f"Vente {vente.numero_vente} créée avec {lignes_creees}/{len(lignes_data)} lignes")
 
         return vente
 
@@ -504,6 +590,12 @@ class TourneeSerializer(serializers.ModelSerializer):
                 'client_nom': arret.client.nom if arret.client else 'Client inconnu',
                 'client_prenom': arret.client.prenom if arret.client else '',
                 'adresse': arret.client.adresse if arret.client else '',
+                # Coordonnées GPS du client
+                'client_lat': float(arret.client.lat) if arret.client and arret.client.lat else None,
+                'client_lng': float(arret.client.lng) if arret.client and arret.client.lng else None,
+                # Coordonnées GPS de l'arrêt (capturées lors de la livraison)
+                'latitude': float(arret.latitude) if arret.latitude else None,
+                'longitude': float(arret.longitude) if arret.longitude else None,
                 'ordre': arret.ordre_passage,
                 'heure_prevue': str(arret.heure_prevue) if arret.heure_prevue else None,
                 'statut': arret.statut,

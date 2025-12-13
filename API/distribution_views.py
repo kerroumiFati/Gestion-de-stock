@@ -505,8 +505,10 @@ class LivreurViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'])
     def stock_van(self, request, pk=None):
         """Récupérer le stock du van assigné au livreur"""
-        from API.models import ProductStock, Currency, CodePrix, PrixProduit, TypePrix
+        from API.models import ProductStock, Currency, CodePrix, PrixProduit, TypePrix, Promotion
         from datetime import date
+        from django.utils import timezone
+        from decimal import Decimal
 
         livreur = self.get_object()
 
@@ -523,8 +525,9 @@ class LivreurViewSet(viewsets.ModelViewSet):
             currency = Currency.objects.filter(is_active=True).first()
         currency_symbol = currency.symbol if currency else 'DA'
 
-        # Récupérer le CodePrix actif (promotion en cours)
+        # Récupérer le CodePrix actif (ancien système - pour compatibilité)
         today = date.today()
+        now = timezone.now()
         code_prix_actif = CodePrix.objects.filter(
             is_active=True,
             date_debut__lte=today,
@@ -534,6 +537,12 @@ class LivreurViewSet(viewsets.ModelViewSet):
         # Si aucune promotion en cours, utiliser le code par défaut
         if not code_prix_actif:
             code_prix_actif = CodePrix.get_default()
+
+        # Récupérer les promotions actives (nouveau système)
+        promotions_actives = Promotion.objects.filter(
+            statut='active',
+            date_fin__gte=now
+        ).order_by('-priorite')
 
         # Récupérer tous les stocks du van
         stocks = ProductStock.objects.filter(
@@ -551,10 +560,13 @@ class LivreurViewSet(viewsets.ModelViewSet):
         total_quantity = 0
         total_value = 0
 
+        # Récupérer le CodePrix par défaut (STANDARD)
+        code_prix_default = CodePrix.get_default()
+
         for stock in stocks:
             if stock.quantity > 0 or not hide_empty:
-                # Prix de base
-                prix_base = float(stock.produit.prixU) if stock.produit.prixU else 0
+                # Prix de base du produit (fallback)
+                prix_produit_base = float(stock.produit.prixU) if stock.produit.prixU else 0
 
                 # Construire les prix par type (DETAIL, SUPERETTE, GROS)
                 prix_par_type = {}
@@ -562,28 +574,81 @@ class LivreurViewSet(viewsets.ModelViewSet):
                 # Récupérer tous les types de prix disponibles
                 types_prix = TypePrix.objects.filter(is_active=True)
 
+                # Chercher la meilleure promotion applicable à ce produit
+                meilleure_promo = None
+                for promo in promotions_actives:
+                    if promo.is_applicable_to_product(stock.produit):
+                        meilleure_promo = promo
+                        break  # Prendre la première (plus haute priorité)
+
                 for type_prix in types_prix:
-                    # Chercher un prix promotionnel actif pour ce produit + code_prix + type_prix
-                    prix_promo = None
-                    if code_prix_actif:
-                        prix_promo = PrixProduit.objects.filter(
+                    # 1. D'abord chercher le prix de base dans PrixProduit avec CodePrix par défaut
+                    prix_standard = None
+                    if code_prix_default:
+                        prix_standard = PrixProduit.objects.filter(
+                            produit=stock.produit,
+                            code_prix=code_prix_default,
+                            type_prix=type_prix,
+                            is_active=True
+                        ).first()
+
+                    # Le prix de référence est le prix standard (ou prixU si pas configuré)
+                    prix_base = float(prix_standard.prix) if prix_standard else prix_produit_base
+
+                    # 2. Chercher un prix promotionnel via CodePrix actif (si différent du défaut)
+                    prix_promo_codeprix = None
+                    if code_prix_actif and code_prix_actif != code_prix_default:
+                        prix_promo_codeprix = PrixProduit.objects.filter(
                             produit=stock.produit,
                             code_prix=code_prix_actif,
                             type_prix=type_prix,
                             is_active=True
                         ).first()
 
-                    # Utiliser le prix promo si existe, sinon prix de base
-                    prix_final = float(prix_promo.prix) if prix_promo else prix_base
+                    # 3. Calculer le prix avec le nouveau système de promotions
+                    prix_avec_nouvelle_promo = prix_base
+                    has_nouvelle_promo = False
+                    quantite_min_promo = 1
+                    promo_code = None
+
+                    if meilleure_promo:
+                        # Calculer le prix avec la promotion
+                        prix_decimal = Decimal(str(prix_base))
+                        prix_promo_calc = meilleure_promo.calculer_prix_promotion(prix_decimal, 1)
+                        if float(prix_promo_calc) < prix_base:
+                            prix_avec_nouvelle_promo = float(prix_promo_calc)
+                            has_nouvelle_promo = True
+                            quantite_min_promo = meilleure_promo.quantite_minimum
+                            promo_code = meilleure_promo.code
+
+                    # 4. Choisir le meilleur prix entre les différentes sources
+                    prix_final = prix_base
+                    has_promotion = False
+                    quantite_min = 1
+
+                    # Si un prix promo via CodePrix existe et est moins cher
+                    if prix_promo_codeprix and float(prix_promo_codeprix.prix) < prix_base:
+                        prix_final = float(prix_promo_codeprix.prix)
+                        has_promotion = True
+                        quantite_min = prix_promo_codeprix.quantite_min if prix_promo_codeprix else 1
+
+                    # Si la nouvelle promo offre un meilleur prix, l'utiliser
+                    if has_nouvelle_promo and prix_avec_nouvelle_promo < prix_final:
+                        prix_final = prix_avec_nouvelle_promo
+                        has_promotion = True
+                        quantite_min = quantite_min_promo
 
                     prix_par_type[type_prix.code] = {
                         'prix': prix_final,
-                        'prix_original': prix_base,
-                        'has_promotion': prix_promo is not None,
-                        'quantite_min': prix_promo.quantite_min if prix_promo else 1
+                        'prix_original': prix_base,  # Prix standard (pas prixU)
+                        'has_promotion': has_promotion,
+                        'quantite_min': quantite_min,
+                        'promo_code': promo_code if has_nouvelle_promo else None
                     }
 
-                product_value = float(stock.quantity * prix_base)
+                # Utiliser le prix DETAIL comme prix de référence pour l'affichage
+                prix_affichage = prix_par_type.get('DETAIL', {}).get('prix_original', prix_produit_base)
+                product_value = float(stock.quantity * prix_affichage)
 
                 # Déterminer le statut du stock
                 if stock.quantity <= 0:
@@ -607,9 +672,9 @@ class LivreurViewSet(viewsets.ModelViewSet):
                     'designation': stock.produit.designation,
                     'categorie': stock.produit.categorie.nom if stock.produit.categorie else None,
                     'quantite': stock.quantity,
-                    'prix_unitaire': prix_base,  # Prix de base pour compatibilité
-                    'prix_par_type': prix_par_type,  # NOUVEAU: Prix par type de client
-                    'code_prix_actif': code_prix_actif.code if code_prix_actif else None,  # NOUVEAU
+                    'prix_unitaire': prix_affichage,  # Prix standard DETAIL (pas prixU)
+                    'prix_par_type': prix_par_type,  # Prix par type de client avec promotions
+                    'code_prix_actif': code_prix_actif.code if code_prix_actif else None,
                     'valeur': product_value,
                     'unite_mesure': stock.produit.get_unite_mesure_display(),
                     'seuil_alerte': stock.produit.seuil_alerte,
@@ -2634,9 +2699,12 @@ class ProduitMobileViewSet(viewsets.ReadOnlyModelViewSet):
         # Filtrer par company de l'utilisateur OU produits sans company (null)
         if hasattr(self.request, 'company') and self.request.company:
             queryset = queryset.filter(Q(company=self.request.company) | Q(company__isnull=True))
+        elif hasattr(self.request, 'user') and self.request.user.is_superuser:
+            # Superuser sans company: afficher tous les produits
+            pass
         else:
-            # Si pas de company, afficher uniquement les produits sans company
-            queryset = queryset.filter(company__isnull=True)
+            # Utilisateur sans company: afficher tous les produits pour éviter liste vide
+            pass
 
         return queryset
 

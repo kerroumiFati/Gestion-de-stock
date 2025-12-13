@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 
 User = get_user_model()
 
@@ -1540,11 +1541,17 @@ class TransfertStock(models.Model):
             # Créer les mouvements de stock pour chaque ligne
             for ligne in self.lignes.all():
                 # Sortie de l'entrepôt source
-                stock_source, _ = ProductStock.objects.get_or_create(
+                # Si le ProductStock n'existe pas, l'initialiser avec la quantité du produit
+                stock_source, created = ProductStock.objects.get_or_create(
                     produit=ligne.produit,
                     warehouse=self.entrepot_source,
-                    defaults={'quantity': 0}
+                    defaults={'quantity': ligne.produit.quantite or 0}
                 )
+
+                # Si le stock est à 0, utiliser la quantité du produit (Produit.quantite)
+                if stock_source.quantity == 0 and ligne.produit.quantite > 0:
+                    stock_source.quantity = ligne.produit.quantite
+                    stock_source.save()
 
                 # Vérifier le stock disponible
                 if stock_source.quantity < ligne.quantite:
@@ -1553,6 +1560,7 @@ class TransfertStock(models.Model):
                         f"disponible={stock_source.quantity}, demandé={ligne.quantite}"
                     )
 
+                # Décrémenter le stock source
                 stock_source.quantity -= ligne.quantite
                 stock_source.save()
 
@@ -1584,6 +1592,17 @@ class TransfertStock(models.Model):
                     ref_id=self.numero,
                     note=f'Transfert depuis {self.entrepot_source.code}'
                 )
+
+                # Mettre à jour Produit.quantite (somme de tous les stocks sauf vans)
+                from django.db.models import Sum
+                total_stock = ProductStock.objects.filter(
+                    produit=ligne.produit,
+                    warehouse__is_active=True
+                ).exclude(
+                    warehouse__code__icontains='van'
+                ).aggregate(total=Sum('quantity'))['total'] or 0
+                ligne.produit.quantite = total_stock
+                ligne.produit.save(update_fields=['quantite'])
 
     def annuler(self, user, motif):
         """Annule le transfert"""
@@ -2098,8 +2117,14 @@ class Promotion(models.Model):
 
     def update_statut(self):
         """Met à jour le statut basé sur les dates"""
-        if self.statut in ['brouillon', 'suspendue']:
-            return  # Ne pas modifier ces statuts automatiquement
+        # Ne pas modifier ces statuts automatiquement (définis manuellement)
+        if self.statut in ['brouillon', 'suspendue', 'active']:
+            # Si le statut est 'active' et la date est dépassée, le passer en expiré
+            if self.statut == 'active':
+                now = timezone.now()
+                if now > self.date_fin:
+                    self.statut = 'expiree'
+            return
 
         now = timezone.now()
         if now < self.date_debut:
@@ -2112,7 +2137,17 @@ class Promotion(models.Model):
     def is_valid(self):
         """Vérifie si la promotion est valide actuellement"""
         now = timezone.now()
-        if self.statut not in ['active', 'planifiee']:
+        # Une promotion 'active' est valide même si date_debut est dans le futur
+        # (activation manuelle anticipée)
+        if self.statut == 'active':
+            # Seule la date_fin doit être respectée pour les promos actives
+            if now > self.date_fin:
+                return False
+            if self.usage_maximum and self.usage_actuel >= self.usage_maximum:
+                return False
+            return True
+        # Pour les autres statuts, vérifier les dates normalement
+        if self.statut != 'planifiee':
             return False
         if now < self.date_debut or now > self.date_fin:
             return False

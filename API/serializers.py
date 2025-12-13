@@ -699,9 +699,30 @@ class VenteCreateSerializer(serializers.ModelSerializer):
                 produit = ligne_data['produit']
                 qty = int(ligne_data.get('quantite') or 0)
 
-                # Utiliser le prix de vente du produit si pas spécifié
+                # Utiliser le prix configuré dans PrixProduit si pas spécifié
                 if 'prixU_snapshot' not in ligne_data:
-                    ligne_data['prixU_snapshot'] = produit.prixU
+                    prix_final = produit.prixU  # Fallback par défaut
+
+                    # Essayer de récupérer le prix du CodePrix par défaut
+                    client = vente.client
+                    type_prix_client = client.type_prix if client else None
+
+                    # Récupérer le CodePrix par défaut ou actif
+                    code_prix_defaut = CodePrix.get_default()
+
+                    if code_prix_defaut and type_prix_client:
+                        # Chercher le prix configuré pour ce produit/code_prix/type_prix
+                        prix_produit = PrixProduit.objects.filter(
+                            produit=produit,
+                            code_prix=code_prix_defaut,
+                            type_prix=type_prix_client,
+                            is_active=True
+                        ).first()
+
+                        if prix_produit:
+                            prix_final = prix_produit.prix
+
+                    ligne_data['prixU_snapshot'] = prix_final
 
                 # Utiliser le nom du produit si designation pas spécifiée
                 if 'designation' not in ligne_data:
@@ -739,8 +760,32 @@ class VenteCreateSerializer(serializers.ModelSerializer):
             instance.lignes.all().delete()
             for ligne_data in lignes_data:
                 produit = ligne_data['produit']
+
+                # Utiliser le prix configuré dans PrixProduit si pas spécifié
                 if 'prixU_snapshot' not in ligne_data:
-                    ligne_data['prixU_snapshot'] = produit.prixU
+                    prix_final = produit.prixU  # Fallback par défaut
+
+                    # Essayer de récupérer le prix du CodePrix par défaut
+                    client = instance.client
+                    type_prix_client = client.type_prix if client else None
+
+                    # Récupérer le CodePrix par défaut ou actif
+                    code_prix_defaut = CodePrix.get_default()
+
+                    if code_prix_defaut and type_prix_client:
+                        # Chercher le prix configuré pour ce produit/code_prix/type_prix
+                        prix_produit = PrixProduit.objects.filter(
+                            produit=produit,
+                            code_prix=code_prix_defaut,
+                            type_prix=type_prix_client,
+                            is_active=True
+                        ).first()
+
+                        if prix_produit:
+                            prix_final = prix_produit.prix
+
+                    ligne_data['prixU_snapshot'] = prix_final
+
                 if 'designation' not in ligne_data:
                     ligne_data['designation'] = produit.designation
                 LigneVente.objects.create(vente=instance, **ligne_data)

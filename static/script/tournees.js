@@ -267,9 +267,14 @@ document.addEventListener('fragment:loaded', function(e) {
 
 // Charger les tournées
 function loadTournees() {
-    fetch('/API/tournees/', {
+    // Ajouter timestamp pour éviter le cache navigateur
+    const timestamp = new Date().getTime();
+    fetch(`/API/tournees/?_t=${timestamp}`, {
         credentials: 'same-origin',
-        headers: { 'Accept': 'application/json' }
+        headers: {
+            'Accept': 'application/json',
+            'Cache-Control': 'no-cache, no-store, must-revalidate'
+        }
     })
         .then(response => {
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -673,10 +678,13 @@ function filterTournees(status) {
 
 // Voir les détails d'une tournée
 function viewTourneeDetails(id) {
-    fetch(`/API/tournees/${id}/`, {
+    // Ajouter timestamp pour éviter le cache navigateur
+    const timestamp = new Date().getTime();
+    fetch(`/API/tournees/${id}/?_t=${timestamp}`, {
         credentials: 'same-origin',
         headers: {
-            'Accept': 'application/json'
+            'Accept': 'application/json',
+            'Cache-Control': 'no-cache, no-store, must-revalidate'
         }
     })
         .then(response => {

@@ -1293,6 +1293,8 @@ class VisiteClientViewSet(viewsets.ModelViewSet):
         except LivreurDistribution.DoesNotExist:
             return Response({'error': 'Livreur non trouvé'}, status=400)
 
+        from .distribution_models import ArretTourneeMobile
+
         for visite_data in visites_data:
             app_id = visite_data.get('app_id')
 
@@ -1301,21 +1303,54 @@ class VisiteClientViewSet(viewsets.ModelViewSet):
                 continue  # Skip, déjà synchronisée
 
             try:
+                tournee_id = visite_data.get('tournee_id')
+                client_id = visite_data.get('client_id')
+                resultat = visite_data.get('resultat', 'vente')
+
                 visite = VisiteClient.objects.create(
-                    client_id=visite_data.get('client_id'),
+                    client_id=client_id,
                     livreur=livreur,
-                    tournee_id=visite_data.get('tournee_id'),
+                    tournee_id=tournee_id,
                     date_visite=visite_data.get('date_visite', timezone.now().date()),
                     heure_visite=visite_data.get('heure_visite', timezone.now()),
                     latitude=visite_data.get('latitude'),
                     longitude=visite_data.get('longitude'),
-                    resultat=visite_data.get('resultat', 'vente'),
+                    resultat=resultat,
                     notes=visite_data.get('notes', ''),
                     app_id=app_id,
                     synced_at=timezone.now(),
                     company=livreur.entrepot.company if livreur.entrepot else None
                 )
                 created.append(visite.id)
+
+                # Mettre à jour le statut de l'arrêt correspondant dans la tournée
+                if tournee_id and client_id:
+                    try:
+                        arret = ArretTourneeMobile.objects.filter(
+                            tournee_id=tournee_id,
+                            client_id=client_id
+                        ).first()
+
+                        if arret and arret.statut == 'en_attente':
+                            # Mapper le résultat de la visite vers le statut de l'arrêt
+                            if resultat in ['vente', 'commande', 'paiement']:
+                                arret.statut = 'livre'
+                            elif resultat == 'absent':
+                                arret.statut = 'echec'
+                                arret.motif_echec = 'Client absent'
+                            elif resultat == 'refuse':
+                                arret.statut = 'echec'
+                                arret.motif_echec = 'Refus client'
+                            else:
+                                arret.statut = 'livre'
+
+                            arret.heure_arrivee = visite_data.get('heure_visite', timezone.now())
+                            arret.latitude = visite_data.get('latitude')
+                            arret.longitude = visite_data.get('longitude')
+                            arret.save()
+                    except Exception as arret_error:
+                        print(f"Erreur mise à jour arrêt: {arret_error}")
+
             except Exception as e:
                 errors.append({'app_id': app_id, 'error': str(e)})
 
@@ -3399,9 +3434,10 @@ class PromotionViewSet(TenantFilterMixin, viewsets.ModelViewSet):
         now = timezone.now()
 
         promotions_applicables = []
+        # Les promotions actives sont applicables même si date_debut est dans le futur
+        # (activation manuelle anticipée). Seule la date_fin doit être respectée.
         promotions = self.get_queryset().filter(
             statut='active',
-            date_debut__lte=now,
             date_fin__gte=now
         )
 
@@ -3417,10 +3453,12 @@ class PromotionViewSet(TenantFilterMixin, viewsets.ModelViewSet):
         """
         Calcule le prix avec promotion pour un produit et une quantité donnée.
         Retourne la meilleure promotion applicable.
+        Utilise le prix de PrixProduit (CodePrix par défaut + TypePrix du client) si disponible.
         """
         produit_id = request.data.get('produit_id')
         quantite = int(request.data.get('quantite', 1))
         client_id = request.data.get('client_id')
+        type_prix_id = request.data.get('type_prix_id')  # Optionnel: TypePrix sélectionné
 
         if not produit_id:
             return Response({'error': 'produit_id requis'}, status=400)
@@ -3430,7 +3468,43 @@ class PromotionViewSet(TenantFilterMixin, viewsets.ModelViewSet):
         except Produit.DoesNotExist:
             return Response({'error': 'Produit non trouvé'}, status=404)
 
+        # Résolution du prix: PrixProduit (CodePrix défaut + TypePrix) → fallback prixU
         prix_original = produit.prixU or Decimal('0')
+
+        # Essayer de récupérer le prix du CodePrix par défaut
+        code_prix_defaut = CodePrix.get_default()
+        type_prix_client = None
+
+        # Récupérer le type_prix du client ou celui envoyé
+        if type_prix_id:
+            try:
+                type_prix_client = TypePrix.objects.get(id=type_prix_id)
+            except TypePrix.DoesNotExist:
+                pass
+        elif client_id:
+            try:
+                client = Client.objects.get(id=client_id)
+                type_prix_client = client.type_prix
+            except Client.DoesNotExist:
+                pass
+
+        # Si pas de type_prix, utiliser le défaut
+        if not type_prix_client:
+            type_prix_client = TypePrix.objects.filter(is_default=True, is_active=True).first()
+
+        # Chercher le prix dans PrixProduit
+        if code_prix_defaut and type_prix_client:
+            prix_produit = PrixProduit.objects.filter(
+                produit=produit,
+                code_prix=code_prix_defaut,
+                type_prix=type_prix_client,
+                is_active=True
+            ).first()
+
+            if prix_produit:
+                prix_original = prix_produit.prix
+                print(f"[CALCULER_PRIX] Prix de PrixProduit: {prix_original} (CodePrix: {code_prix_defaut.code}, TypePrix: {type_prix_client.code})")
+
         prix_total_original = prix_original * quantite
 
         from django.utils import timezone
@@ -3443,9 +3517,10 @@ class PromotionViewSet(TenantFilterMixin, viewsets.ModelViewSet):
         print(f"  Request company: {getattr(self.request, 'company', None)}")
 
         # Trouver les promotions applicables - SANS filtre company pour debug
+        # Les promotions actives sont applicables même si date_debut est dans le futur
+        # (activation manuelle anticipée). Seule la date_fin doit être respectée.
         promotions = Promotion.objects.filter(
             statut='active',
-            date_debut__lte=now,
             date_fin__gte=now
         ).order_by('-priorite')
 

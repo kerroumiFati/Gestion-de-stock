@@ -315,6 +315,7 @@
     // Données globales (scoped to this IIFE to avoid redeclaration errors)
     let selectedProducts = [];
     let allProducts = [];
+    let warehouseStocks = {}; // Stock par produit pour l'entrepôt sélectionné
 
     // Charger tous les produits au chargement de la page
     document.addEventListener('fragment:loaded', function(e) {
@@ -322,6 +323,7 @@
         if (e.detail.name === 'charger_van') {
             console.log('[CHARGER_VAN] Page charger_van détectée, chargement des produits...');
             loadProducts();
+            setupWarehouseListener();
         }
     });
 
@@ -329,6 +331,59 @@
     if (document.getElementById('productsTableBody')) {
         console.log('[CHARGER_VAN] Page déjà présente, chargement immédiat des produits');
         loadProducts();
+        setupWarehouseListener();
+    }
+
+    // Écouter le changement d'entrepôt source pour mettre à jour les stocks
+    function setupWarehouseListener() {
+        const warehouseSelect = document.getElementById('entrepot_source');
+        if (warehouseSelect) {
+            warehouseSelect.addEventListener('change', function() {
+                const warehouseId = this.value;
+                if (warehouseId) {
+                    loadWarehouseStock(warehouseId);
+                } else {
+                    // Réinitialiser les stocks à 0 si aucun entrepôt sélectionné
+                    warehouseStocks = {};
+                    updateProductStocks();
+                }
+            });
+        }
+    }
+
+    // Charger le stock de l'entrepôt sélectionné
+    function loadWarehouseStock(warehouseId) {
+        console.log('[CHARGER_VAN] Chargement du stock pour entrepôt:', warehouseId);
+        fetch(`/API/stocks/?warehouse=${warehouseId}`)
+            .then(res => {
+                if (!res.ok) throw new Error('Erreur HTTP ' + res.status);
+                return res.json();
+            })
+            .then(data => {
+                const stocks = Array.isArray(data) ? data : (data.results || []);
+                console.log('[CHARGER_VAN] Stocks reçus:', stocks.length);
+
+                // Créer un mapping produit_id -> quantité
+                warehouseStocks = {};
+                stocks.forEach(s => {
+                    warehouseStocks[s.produit] = s.quantity || 0;
+                });
+
+                // Mettre à jour les stocks affichés
+                updateProductStocks();
+            })
+            .catch(err => {
+                console.error('[CHARGER_VAN] Erreur chargement stocks entrepôt:', err);
+            });
+    }
+
+    // Mettre à jour les stocks des produits avec les données de l'entrepôt
+    function updateProductStocks() {
+        allProducts.forEach(p => {
+            p.stock = warehouseStocks[p.id] || 0;
+        });
+        // Re-render la liste des checkboxes
+        renderCheckboxList();
     }
 
 // Charger la liste des produits
