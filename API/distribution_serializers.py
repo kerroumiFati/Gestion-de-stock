@@ -441,9 +441,43 @@ class VenteMobileCreateSerializer(serializers.Serializer):
         if app_id:
             numero_vente = f"{numero_vente}-{app_id[-8:]}"  # Ajouter les 8 derniers caractères de app_id
 
+        # Trouver la tournée active du livreur pour lier la vente
+        tournee = None
+        arret = None
+        today = timezone.now().date()
+
+        if livreur:
+            # Chercher une tournée active ou en cours pour ce livreur
+            tournee = TourneeMobile.objects.filter(
+                livreur=livreur,
+                date_tournee=today,
+                statut__in=['en_cours', 'planifiee']
+            ).first()
+
+            # Si pas de tournée aujourd'hui, chercher la tournée la plus récente
+            if not tournee:
+                tournee = TourneeMobile.objects.filter(
+                    livreur=livreur,
+                    statut__in=['en_cours', 'planifiee', 'terminee']
+                ).order_by('-date_tournee').first()
+
+            if tournee:
+                logger.info(f"Tournée trouvée pour la vente: {tournee.id} ({tournee.date_tournee})")
+                # Chercher l'arrêt correspondant au client dans cette tournée
+                arret = ArretTourneeMobile.objects.filter(
+                    tournee=tournee,
+                    client=client
+                ).first()
+                if arret:
+                    logger.info(f"Arrêt trouvé: {arret.id}")
+            else:
+                logger.warning(f"Aucune tournée trouvée pour le livreur {livreur.id}")
+
         # Créer la vente
         vente = VenteTourneeMobile.objects.create(
             client=client,
+            tournee=tournee,  # Lier à la tournée
+            arret=arret,      # Lier à l'arrêt
             numero_vente=numero_vente,
             montant_total=montant_total,
             montant_paye=montant_paye,
@@ -781,14 +815,26 @@ class CommandeClientSerializer(serializers.ModelSerializer):
     lignes = LigneCommandeClientSerializer(many=True, read_only=True)
     client_nom = serializers.CharField(source='client.nom', read_only=True)
     client_prenom = serializers.CharField(source='client.prenom', read_only=True)
-    livreur_nom = serializers.CharField(source='livreur.nom', read_only=True)
+    client_telephone = serializers.CharField(source='client.telephone', read_only=True, allow_null=True)
+    client_adresse = serializers.CharField(source='client.adresse', read_only=True, allow_null=True)
+    # Coordonnées GPS du client (pour navigation)
+    client_lat = serializers.DecimalField(source='client.lat', max_digits=10, decimal_places=7, read_only=True, allow_null=True)
+    client_lng = serializers.DecimalField(source='client.lng', max_digits=10, decimal_places=7, read_only=True, allow_null=True)
+    livreur_nom = serializers.SerializerMethodField()
+    # Informations supplémentaires du livreur et du van
+    livreur_matricule = serializers.SerializerMethodField()
+    vehicule_immatriculation = serializers.SerializerMethodField()
+    entrepot_nom = serializers.SerializerMethodField()
 
     class Meta:
         model = CommandeClient
         fields = [
             'id', 'reference', 'company',
             'client', 'client_nom', 'client_prenom',
-            'livreur', 'livreur_nom',
+            'client_telephone', 'client_adresse',
+            'client_lat', 'client_lng',
+            'livreur', 'livreur_nom', 'livreur_matricule',
+            'vehicule_immatriculation', 'entrepot_nom',
             'statut', 'date_commande', 'date_livraison_souhaitee', 'date_livraison_reelle',
             'montant_total_ht', 'montant_total_ttc',
             'notes', 'notes_preparation',
@@ -796,6 +842,30 @@ class CommandeClientSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at'
         ]
         read_only_fields = ['reference', 'created_at', 'updated_at', 'synced_at']
+
+    def get_livreur_nom(self, obj):
+        """Retourne le nom du livreur"""
+        if obj.livreur:
+            return obj.livreur.nom
+        return None
+
+    def get_livreur_matricule(self, obj):
+        """Retourne le matricule du livreur"""
+        if obj.livreur:
+            return obj.livreur.matricule
+        return None
+
+    def get_vehicule_immatriculation(self, obj):
+        """Retourne l'immatriculation du véhicule du livreur"""
+        if obj.livreur:
+            return obj.livreur.vehicule_immatriculation
+        return None
+
+    def get_entrepot_nom(self, obj):
+        """Retourne le nom du van/entrepôt du livreur"""
+        if obj.livreur and obj.livreur.entrepot:
+            return obj.livreur.entrepot.name
+        return None
 
 
 class CommandeClientCreateSerializer(serializers.ModelSerializer):

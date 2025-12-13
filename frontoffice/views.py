@@ -355,7 +355,7 @@ def change_password(request):
 # Gestion de Stock - Vues personnalisées
 # ===========================
 
-from API.models import Warehouse, ProductStock, TransfertStock, LigneTransfertStock, StockMove, Produit, Currency
+from API.models import Warehouse, ProductStock, TransfertStock, LigneTransfertStock, StockMove, Produit, Currency, CodePrix, TypePrix, PrixProduit, Client
 from API.distribution_models import LivreurDistribution
 from django.db.models import Sum, Count, Q
 from django.core.paginator import Paginator
@@ -400,6 +400,7 @@ def entrepots_list(request):
 def stocks_list(request):
     """Liste des stocks par entrepôt"""
     entrepot_id = request.GET.get('entrepot')
+    client_id = request.GET.get('client')
 
     stocks = ProductStock.objects.select_related('produit', 'warehouse').all()
 
@@ -418,16 +419,56 @@ def stocks_list(request):
     page = request.GET.get('page', 1)
     stocks_page = paginator.get_page(page)
 
-    # Ajouter la valeur calculée pour chaque stock de la page
+    # Récupérer le CodePrix par défaut
+    code_prix_defaut = CodePrix.get_default()
+
+    # a. Récupérer le type_prix du client (si client sélectionné)
+    client_selectionne = None
+    type_prix_client = None
+    if client_id:
+        try:
+            client_selectionne = Client.objects.select_related('type_prix').get(id=client_id)
+            type_prix_client = client_selectionne.type_prix
+        except Client.DoesNotExist:
+            pass
+
+    # Fallback vers TypePrix par défaut si pas de client ou client sans type_prix
+    if not type_prix_client:
+        type_prix_client = TypePrix.get_default()
+
+    # Ajouter le prix et la valeur calculée pour chaque stock de la page
     for stock in stocks_page:
-        stock.valeur = stock.quantity * stock.produit.prixU if stock.produit.prixU else 0
+        # c. Chercher PrixProduit(produit, code_prix, type_prix)
+        prix_effectif = None
+        if code_prix_defaut and type_prix_client:
+            prix_produit = PrixProduit.objects.filter(
+                produit=stock.produit,
+                code_prix=code_prix_defaut,
+                type_prix=type_prix_client,
+                is_active=True
+            ).first()
+            # d. Si trouvé → utiliser ce prix
+            if prix_produit:
+                prix_effectif = prix_produit.prix
+
+        # e. Sinon → fallback vers produit.prixU
+        if prix_effectif is None:
+            prix_effectif = stock.produit.prixU
+
+        stock.prix_effectif = prix_effectif
+        stock.valeur = stock.quantity * prix_effectif if prix_effectif else 0
 
     entrepots = Warehouse.objects.all().order_by('code')
+    clients = Client.objects.all().order_by('nom', 'prenom')
 
     context = {
         'stocks': stocks_page,
         'entrepots': entrepots,
+        'clients': clients,
         'selected_entrepot': entrepot_id,
+        'selected_client': client_id,
+        'client_selectionne': client_selectionne,
+        'type_prix_utilise': type_prix_client,
         'hide_empty': hide_empty,
         'title': 'Stocks par Entrepôt',
         'currency': get_default_currency()

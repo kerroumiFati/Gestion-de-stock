@@ -1326,28 +1326,47 @@ class VisiteClientViewSet(viewsets.ModelViewSet):
                 # Mettre à jour le statut de l'arrêt correspondant dans la tournée
                 if tournee_id and client_id:
                     try:
+                        print(f"[SYNC] Recherche arrêt: tournee_id={tournee_id}, client_id={client_id}")
+
+                        # Essayer avec client_id direct d'abord
                         arret = ArretTourneeMobile.objects.filter(
                             tournee_id=tournee_id,
                             client_id=client_id
                         ).first()
 
-                        if arret and arret.statut == 'en_attente':
-                            # Mapper le résultat de la visite vers le statut de l'arrêt
-                            if resultat in ['vente', 'commande', 'paiement']:
-                                arret.statut = 'livre'
-                            elif resultat == 'absent':
-                                arret.statut = 'echec'
-                                arret.motif_echec = 'Client absent'
-                            elif resultat == 'refuse':
-                                arret.statut = 'echec'
-                                arret.motif_echec = 'Refus client'
-                            else:
-                                arret.statut = 'livre'
+                        # Si pas trouvé, essayer avec le client_id comme string
+                        if not arret:
+                            arret = ArretTourneeMobile.objects.filter(
+                                tournee_id=tournee_id,
+                                client__id=client_id
+                            ).first()
 
-                            arret.heure_arrivee = visite_data.get('heure_visite', timezone.now())
-                            arret.latitude = visite_data.get('latitude')
-                            arret.longitude = visite_data.get('longitude')
-                            arret.save()
+                        if arret:
+                            print(f"[SYNC] Arrêt trouvé: id={arret.id}, statut actuel={arret.statut}")
+                            if arret.statut == 'en_attente':
+                                # Mapper le résultat de la visite vers le statut de l'arrêt
+                                if resultat in ['vente', 'commande', 'paiement']:
+                                    arret.statut = 'livre'
+                                elif resultat == 'absent':
+                                    arret.statut = 'echec'
+                                    arret.motif_echec = 'Client absent'
+                                elif resultat == 'refuse':
+                                    arret.statut = 'echec'
+                                    arret.motif_echec = 'Refus client'
+                                else:
+                                    arret.statut = 'livre'
+
+                                arret.heure_arrivee = visite_data.get('heure_visite', timezone.now())
+                                arret.latitude = visite_data.get('latitude')
+                                arret.longitude = visite_data.get('longitude')
+                                arret.save()
+                                print(f"[SYNC] Arrêt mis à jour: nouveau statut={arret.statut}")
+                            else:
+                                print(f"[SYNC] Arrêt déjà traité: statut={arret.statut}")
+                        else:
+                            # Lister les arrêts de la tournée pour debug
+                            arrets_tournee = ArretTourneeMobile.objects.filter(tournee_id=tournee_id).values('id', 'client_id', 'client_nom')
+                            print(f"[SYNC] Arrêt non trouvé. Arrêts de la tournée {tournee_id}: {list(arrets_tournee)}")
                     except Exception as arret_error:
                         print(f"Erreur mise à jour arrêt: {arret_error}")
 
@@ -3057,8 +3076,8 @@ class TourneeViewSet(TenantFilterMixin, viewsets.ModelViewSet):
 
             tournee_data = {
                 'id': tournee.id,
-                'numero': tournee.numero,
-                'date': tournee.date.isoformat(),
+                'numero': tournee.numero_tournee,
+                'date': tournee.date_tournee.isoformat() if tournee.date_tournee else None,
                 'statut': tournee.statut,
                 'livreur': {
                     'id': tournee.livreur.id,

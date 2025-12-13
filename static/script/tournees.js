@@ -529,7 +529,7 @@ function displayTournees(tourneesData) {
             <div class="tournee-info">
                 <div class="info-item">
                     <i class="fas fa-calendar"></i>
-                    <span>${formatDate(tournee.date)}</span>
+                    <span>${formatDate(tournee.date_tournee || tournee.date)}</span>
                 </div>
                 <div class="info-item">
                     <i class="fas fa-user"></i>
