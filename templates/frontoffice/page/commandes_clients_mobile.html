@@ -136,7 +136,7 @@
                     </div>
                 </div>
                 <div class="card-body p-0">
-                    <div class="table-responsive">
+                    <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
                         <table class="table table-hover mb-0" id="commandesTable" data-no-datatable="true">
                             <thead class="thead-light">
                                 <tr>
@@ -147,13 +147,14 @@
                                     <th>{% trans "Date Commande" %}</th>
                                     <th>{% trans "Livraison Souhaitée" %}</th>
                                     <th class="text-right">{% trans "Montant TTC" %}</th>
+                                    <th>{% trans "Paiement" %}</th>
                                     <th>{% trans "Statut" %}</th>
                                     <th class="text-center">{% trans "Actions" %}</th>
                                 </tr>
                             </thead>
                             <tbody id="commandesTableBody">
                                 <tr>
-                                    <td colspan="9" class="text-center py-4">
+                                    <td colspan="10" class="text-center py-4">
                                         <i class="fa fa-spinner fa-spin fa-2x text-muted"></i>
                                         <p class="text-muted mt-2">{% trans "Chargement des commandes..." %}</p>
                                     </td>
@@ -368,7 +369,7 @@
         if (commandes.length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="9" class="text-center py-4">
+                    <td colspan="10" class="text-center py-4">
                         <i class="fa fa-inbox fa-2x text-muted"></i>
                         <p class="text-muted mt-2">Aucune commande trouvée</p>
                     </td>
@@ -379,6 +380,7 @@
 
         tbody.innerHTML = commandes.map(cmd => {
             const statusBadge = getStatusBadge(cmd.statut);
+            const paiementBadge = getPaiementBadge(cmd);
             const hasDetails = cmd.lignes && cmd.lignes.length > 0;
 
             return `
@@ -400,6 +402,7 @@
                     <td>${formatDateTime(cmd.date_commande)}</td>
                     <td>${cmd.date_livraison_souhaitee ? formatDate(cmd.date_livraison_souhaitee) : '-'}</td>
                     <td class="text-right"><strong>${formatCurrency(cmd.montant_total_ttc)}</strong></td>
+                    <td>${paiementBadge}</td>
                     <td>${statusBadge}</td>
                     <td class="text-center">
                         <div class="btn-group btn-group-sm">
@@ -421,7 +424,7 @@
                         </div>
                     </td>
                 </tr>
-                ${hasDetails ? '<tr id="details-' + cmd.id + '" style="display: none;"><td colspan="9">' + renderCommandeDetailsRow(cmd) + '</td></tr>' : ''}
+                ${hasDetails ? '<tr id="details-' + cmd.id + '" style="display: none;"><td colspan="10">' + renderCommandeDetailsRow(cmd) + '</td></tr>' : ''}
             `;
         }).join('');
     }
@@ -541,6 +544,15 @@
                         <tr><th width="40%">Total HT:</th><td class="text-right">${formatCurrency(commande.montant_total_ht)}</td></tr>
                         <tr><th>Total TTC:</th><td class="text-right"><h5 class="mb-0">${formatCurrency(commande.montant_total_ttc)}</h5></td></tr>
                     </table>
+
+                    <h6 class="border-bottom pb-2 mt-3"><i class="fa fa-credit-card"></i> Paiement</h6>
+                    <table class="table table-sm">
+                        <tr><th width="40%">Statut:</th><td>${commande.est_paye ? '<span class="badge badge-success"><i class="fa fa-check"></i> Payé</span>' : '<span class="badge badge-warning"><i class="fa fa-clock"></i> Non payé</span>'}</td></tr>
+                        <tr><th>Type:</th><td>${getTypePaiementLabel(commande.type_paiement)}</td></tr>
+                        ${commande.montant_paye > 0 ? `<tr><th>Montant payé:</th><td class="text-right"><strong>${formatCurrency(commande.montant_paye)}</strong></td></tr>` : ''}
+                        ${commande.montant_paye > 0 && commande.montant_paye < commande.montant_total_ttc ? `<tr><th>Reste à payer:</th><td class="text-right text-danger"><strong>${formatCurrency(commande.montant_total_ttc - commande.montant_paye)}</strong></td></tr>` : ''}
+                        ${commande.date_paiement ? `<tr><th>Date paiement:</th><td>${formatDateTime(commande.date_paiement)}</td></tr>` : ''}
+                    </table>
                     ${commande.notes ? '<div class="alert alert-info mt-3"><strong>Notes:</strong><br>' + commande.notes + '</div>' : ''}
                 </div>
                 ${livraisonSection}
@@ -650,6 +662,29 @@
             'cancelled': '<span class="badge badge-danger"><i class="fa fa-times"></i> Annulée</span>'
         };
         return badges[statut] || '<span class="badge badge-secondary">' + statut + '</span>';
+    }
+
+    function getPaiementBadge(cmd) {
+        if (cmd.est_paye) {
+            return '<span class="badge badge-success" title="Payé ' + (cmd.montant_paye || 0) + ' DA"><i class="fa fa-check-circle"></i> Payé</span>';
+        } else if (cmd.montant_paye > 0 && cmd.montant_paye < cmd.montant_total_ttc) {
+            const reste = cmd.montant_total_ttc - cmd.montant_paye;
+            return '<span class="badge badge-warning" title="Payé ' + cmd.montant_paye + ' DA, Reste ' + reste.toFixed(2) + ' DA"><i class="fa fa-exclamation-circle"></i> Partiel</span>';
+        } else {
+            return '<span class="badge badge-secondary" title="Non payé"><i class="fa fa-clock"></i> Non payé</span>';
+        }
+    }
+
+    function getTypePaiementLabel(type) {
+        const types = {
+            'especes': '<i class="fa fa-money-bill-wave"></i> Espèces',
+            'carte': '<i class="fa fa-credit-card"></i> Carte bancaire',
+            'cheque': '<i class="fa fa-file-invoice"></i> Chèque',
+            'credit': '<i class="fa fa-clock"></i> À crédit',
+            'virement': '<i class="fa fa-exchange-alt"></i> Virement',
+            'non_paye': '<i class="fa fa-times"></i> Non payé'
+        };
+        return types[type] || type;
     }
 
     function formatCurrency(amount) {

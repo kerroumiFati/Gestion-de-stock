@@ -843,6 +843,8 @@ class CommandeClientSerializer(serializers.ModelSerializer):
             'vehicule_immatriculation', 'entrepot_nom',
             'statut', 'date_commande', 'date_livraison_souhaitee', 'date_livraison_reelle',
             'montant_total_ht', 'montant_total_ttc',
+            # Champs de paiement
+            'est_paye', 'type_paiement', 'montant_paye', 'date_paiement',
             'notes', 'notes_preparation',
             'lignes', 'app_id', 'synced_at',
             'created_at', 'updated_at'
@@ -888,12 +890,28 @@ class CommandeClientCreateSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True
     )
+    # Champs de paiement
+    est_paye = serializers.BooleanField(required=False, default=False)
+    type_paiement = serializers.ChoiceField(
+        choices=CommandeClient.TYPE_PAIEMENT_CHOICES,
+        required=False,
+        default='non_paye'
+    )
+    montant_paye = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        required=False,
+        default=0
+    )
+    date_paiement = serializers.DateTimeField(required=False, allow_null=True)
 
     class Meta:
         model = CommandeClient
         fields = [
             'company', 'client', 'livreur',
-            'date_livraison_souhaitee', 'notes', 'app_id', 'lignes'
+            'date_livraison_souhaitee', 'notes', 'app_id', 'lignes',
+            # Champs de paiement
+            'est_paye', 'type_paiement', 'montant_paye', 'date_paiement'
         ]
 
     def create(self, validated_data):

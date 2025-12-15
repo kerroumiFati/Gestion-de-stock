@@ -70,9 +70,51 @@
                 option.textContent = livreur.nom || `${livreur.matricule}`;
                 select.appendChild(option);
             });
+
+            // Initialiser Select2 sur le select livreur
+            initSelect2();
         } catch (error) {
             console.error('[VISITES JS] Erreur chargement livreurs:', error);
         }
+    }
+
+    // Initialiser Select2 pour le select livreur
+    function initSelect2() {
+        if (typeof $ === 'undefined' || typeof $.fn.select2 === 'undefined') {
+            console.warn('[VISITES JS] jQuery ou Select2 non disponible');
+            return;
+        }
+
+        const $livreurSelect = $('#livreur-filter');
+
+        if (!$livreurSelect.length) {
+            console.warn('[VISITES JS] Select livreur non trouvé');
+            return;
+        }
+
+        // Détruire l'instance existante si elle existe
+        if ($livreurSelect.data('select2')) {
+            $livreurSelect.select2('destroy');
+        }
+
+        // Initialiser Select2
+        $livreurSelect.select2({
+            placeholder: 'Tous les livreurs',
+            allowClear: false,
+            width: '100%',
+            language: {
+                noResults: function() {
+                    return "Aucun livreur trouvé";
+                },
+                searching: function() {
+                    return "Recherche...";
+                }
+            },
+            dropdownAutoWidth: true,
+            minimumResultsForSearch: 5 // Afficher la recherche seulement si plus de 5 options
+        });
+
+        console.log('[VISITES JS] Select2 initialisé sur le select livreur');
     }
 
     // Charger les visites
