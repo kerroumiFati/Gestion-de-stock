@@ -101,7 +101,7 @@
         $livreurSelect.select2({
             placeholder: 'Tous les livreurs',
             allowClear: false,
-            width: '100%',
+            width: 'resolve',
             language: {
                 noResults: function() {
                     return "Aucun livreur trouvé";
@@ -110,7 +110,7 @@
                     return "Recherche...";
                 }
             },
-            dropdownAutoWidth: true,
+            dropdownAutoWidth: false,
             minimumResultsForSearch: 5 // Afficher la recherche seulement si plus de 5 options
         });
 

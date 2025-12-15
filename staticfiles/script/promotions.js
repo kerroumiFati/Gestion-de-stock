@@ -55,6 +55,9 @@ async function initPromotions() {
         // Initialiser les événements
         initEventListeners();
 
+        // Initialiser Select2 pour les selects de produits et catégories
+        initSelect2();
+
         // Cacher le formulaire au démarrage
         const formSection = document.getElementById('promo-form-section');
         if (formSection) formSection.style.display = 'none';
@@ -63,6 +66,84 @@ async function initPromotions() {
         console.error('Erreur initialisation promotions:', error);
         showNotification('Erreur lors du chargement', 'error');
     }
+}
+
+/**
+ * Initialise Select2 pour les selects de produits et catégories
+ */
+function initSelect2() {
+    // Vérifier si jQuery et Select2 sont disponibles
+    if (typeof $ === 'undefined' || typeof $.fn.select2 === 'undefined') {
+        console.warn('[PROMOTIONS] Select2 non disponible');
+        return;
+    }
+
+    console.log('[PROMOTIONS] Initialisation de Select2');
+
+    // Détruire les instances existantes si nécessaire
+    $('#promo-produit, #promo-categorie').select2('destroy');
+
+    // Configuration Select2 pour produits et catégories
+    $('#promo-produit, #promo-categorie').select2({
+        theme: 'bootstrap4',
+        placeholder: function() {
+            return $(this).data('placeholder') || 'Sélectionner...';
+        },
+        allowClear: true,
+        width: '100%',
+        dropdownCssClass: 'select2-dropdown-promo',
+        language: {
+            noResults: function() {
+                return "Aucun résultat trouvé";
+            },
+            searching: function() {
+                return "Recherche en cours...";
+            },
+            inputTooShort: function() {
+                return "Tapez pour rechercher...";
+            }
+        },
+        // Activer la recherche toujours
+        minimumResultsForSearch: 0
+    });
+
+    // Event listeners pour Select2
+    $('#promo-produit').on('select2:select', function(e) {
+        const value = $(this).val();
+        console.log('[PROMOTIONS] Produit sélectionné:', value);
+        onProductChange(value);
+
+        // Désélectionner la catégorie si un produit est sélectionné
+        if (value) {
+            $('#promo-categorie').val(null).trigger('change');
+        }
+    });
+
+    $('#promo-produit').on('select2:clear', function(e) {
+        console.log('[PROMOTIONS] Produit désélectionné');
+        onProductChange('');
+    });
+
+    $('#promo-categorie').on('select2:select', function(e) {
+        const value = $(this).val();
+        console.log('[PROMOTIONS] Catégorie sélectionnée:', value);
+
+        // Désélectionner le produit si une catégorie est sélectionnée
+        if (value) {
+            $('#promo-produit').val(null).trigger('change');
+
+            // Cacher l'affichage du conditionnement
+            const condDisplay = document.getElementById('conditionnement-display');
+            if (condDisplay) condDisplay.style.display = 'none';
+        }
+
+        updatePreview();
+    });
+
+    $('#promo-categorie').on('select2:clear', function(e) {
+        console.log('[PROMOTIONS] Catégorie désélectionnée');
+        updatePreview();
+    });
 }
 
 function initEventListeners() {
@@ -80,36 +161,8 @@ function initEventListeners() {
         });
     });
 
-    // Changement de produit
-    const produitSelect = document.getElementById('promo-produit');
-    if (produitSelect) {
-        produitSelect.addEventListener('change', function() {
-            console.log('[PROMOTIONS] Produit sélectionné:', this.value);
-            onProductChange(this.value);
-            // Désélectionner la catégorie si un produit est sélectionné
-            if (this.value) {
-                const categorieSelect = document.getElementById('promo-categorie');
-                if (categorieSelect) categorieSelect.value = '';
-            }
-        });
-    }
-
-    // Changement de catégorie
-    const categorieSelect = document.getElementById('promo-categorie');
-    if (categorieSelect) {
-        categorieSelect.addEventListener('change', function() {
-            console.log('[PROMOTIONS] Catégorie sélectionnée:', this.value);
-            // Désélectionner le produit si une catégorie est sélectionnée
-            if (this.value) {
-                const produitSelect = document.getElementById('promo-produit');
-                if (produitSelect) produitSelect.value = '';
-                // Cacher l'affichage du conditionnement
-                const condDisplay = document.getElementById('conditionnement-display');
-                if (condDisplay) condDisplay.style.display = 'none';
-            }
-            updatePreview();
-        });
-    }
+    // Changement de produit et catégorie - Géré par Select2 dans initSelect2()
+    // Les événements natifs sont désactivés pour éviter les conflits
 
     // Filtres
     const filterStatut = document.getElementById('filter-statut');
