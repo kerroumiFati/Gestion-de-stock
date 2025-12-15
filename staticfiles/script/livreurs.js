@@ -109,7 +109,7 @@ function loadLivreurs() {
             if (tbody) {
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="7" style="text-align: center; padding: 40px; color: #ef4444;">
+                        <td colspan="8" style="text-align: center; padding: 40px; color: #ef4444;">
                             <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 10px;"></i><br>
                             <strong>Erreur lors du chargement des livreurs</strong><br>
                             <small>${error.message}</small><br><br>
@@ -136,7 +136,7 @@ function displayLivreurs(livreursData) {
     if (livreursData.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="7" style="text-align: center; padding: 40px;">
+                <td colspan="8" style="text-align: center; padding: 40px;">
                     <i class="fas fa-inbox"></i><br>
                     Aucun livreur trouvé
                 </td>
@@ -151,6 +151,11 @@ function displayLivreurs(livreursData) {
             <td>${livreur.telephone}</td>
             <td>${livreur.vehicule_type || '-'}</td>
             <td>${livreur.immatriculation || '-'}</td>
+            <td>
+                ${livreur.entrepot_nom ?
+                    `<span class="badge badge-success"><i class="fas fa-warehouse"></i> ${livreur.entrepot_nom}</span>` :
+                    '<span class="badge badge-warning"><i class="fas fa-exclamation-triangle"></i> Aucun van</span>'}
+            </td>
             <td>
                 ${livreur.is_disponible ?
                     '<span class="badge badge-success"><i class="fas fa-check-circle"></i> Disponible</span>' :

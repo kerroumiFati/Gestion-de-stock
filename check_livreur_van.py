@@ -1,57 +1,89 @@
 import os
 import django
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'GestionStock.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'Gestion_stock.settings')
 django.setup()
 
 from API.distribution_models import LivreurDistribution
-from API.models import Warehouse, ProductStock
+from API.models import Warehouse
 
-# Chercher le van VAN-LIVRAISON-A
-van = Warehouse.objects.filter(code='VAN-LIVRAISON-A').first()
+print("\n" + "="*70)
+print("DIAGNOSTIC: LIVREURS ET VANS ASSIGNÉS")
+print("="*70)
 
-if van:
-    print(f"Van trouvé: {van.name} (ID: {van.id}, Code: {van.code})")
-    print("="*60)
+# Afficher tous les livreurs
+livreurs = LivreurDistribution.objects.all()
+print(f"\nNombre total de livreurs: {livreurs.count()}")
 
-    # Chercher le livreur assigné à ce van
-    livreur = LivreurDistribution.objects.filter(entrepot=van).first()
-
-    if livreur:
-        print(f"\nLivreur assigné:")
-        print(f"  - Nom: {livreur.nom}")
-        print(f"  - ID: {livreur.id}")
-        print(f"  - Matricule: {livreur.matricule}")
-        print(f"  - Téléphone: {livreur.telephone}")
-        print(f"  - Email: {livreur.email}")
-    else:
-        print("\nAucun livreur assigné à ce van")
-
-    # Vérifier le stock dans ce van
-    stock_count = ProductStock.objects.filter(warehouse=van).count()
-    total_quantity = ProductStock.objects.filter(warehouse=van).aggregate(
-        total=django.db.models.Sum('quantity')
-    )['total'] or 0
-
-    print(f"\nStock dans ce van:")
-    print(f"  - Nombre de produits: {stock_count}")
-    print(f"  - Quantité totale: {total_quantity}")
-
-    # Afficher le détail des produits
-    stocks = ProductStock.objects.filter(warehouse=van).select_related('produit')
-    if stocks:
-        print(f"\nDétail des produits:")
-        print("-"*60)
-        for s in stocks:
-            print(f"  - {s.produit.designation}: {s.quantity} {s.produit.get_unite_mesure_display()}")
+if livreurs.count() == 0:
+    print("\n⚠️  Aucun livreur trouvé dans la base de données!")
 else:
-    print("Van VAN-LIVRAISON-A non trouvé")
+    print("\nDétail des livreurs:")
+    print("-" * 70)
+    for livreur in livreurs:
+        print(f"\n🚚 Livreur: {livreur.nom}")
+        print(f"   ID: {livreur.id}")
+        print(f"   Matricule: {livreur.matricule}")
+        print(f"   Téléphone: {livreur.telephone}")
+        print(f"   Statut: {livreur.statut}")
 
-# Afficher tous les livreurs avec leurs vans
-print("\n" + "="*60)
-print("TOUS LES LIVREURS AVEC VANS ASSIGNÉS:")
-print("="*60)
-livreurs = LivreurDistribution.objects.filter(entrepot__isnull=False).select_related('entrepot')
-for l in livreurs:
-    print(f"\nLivreur: {l.nom} (ID: {l.id})")
-    print(f"  Van: {l.entrepot.name} ({l.entrepot.code})")
+        if livreur.entrepot:
+            print(f"   ✅ Van assigné: {livreur.entrepot.name}")
+            print(f"      - Code: {livreur.entrepot.code}")
+            print(f"      - ID: {livreur.entrepot.id}")
+        else:
+            print(f"   ❌ PAS DE VAN ASSIGNÉ!")
+            print(f"      👉 Pour corriger: aller dans 'Distribution > Gestion des Livreurs'")
+
+# Afficher tous les entrepôts disponibles
+print("\n" + "="*70)
+print("ENTREPÔTS DISPONIBLES")
+print("="*70)
+
+entrepots = Warehouse.objects.all()
+print(f"\nNombre total d'entrepôts: {entrepots.count()}")
+
+if entrepots.count() == 0:
+    print("\n⚠️  Aucun entrepôt trouvé!")
+    print("   Vous devez d'abord créer un entrepôt dans:")
+    print("   📍 Stocks > Entrepôts > Nouveau")
+else:
+    print("\nListe des entrepôts:")
+    print("-" * 70)
+    for entrepot in entrepots:
+        # Vérifier si cet entrepôt est assigné à un livreur
+        livreur_assigne = LivreurDistribution.objects.filter(entrepot=entrepot).first()
+
+        print(f"\n🏢 Entrepôt: {entrepot.name}")
+        print(f"   Code: {entrepot.code}")
+        print(f"   ID: {entrepot.id}")
+
+        if livreur_assigne:
+            print(f"   ✅ Assigné à: {livreur_assigne.nom} (ID: {livreur_assigne.id})")
+        else:
+            print(f"   ⚪ Disponible (non assigné)")
+
+print("\n" + "="*70)
+print("SOLUTION POUR ASSIGNER UN VAN")
+print("="*70)
+print("""
+Pour assigner un van à un livreur:
+
+1. 📍 Allez dans le menu: Distribution > Gestion des Livreurs
+   URL: http://localhost:8000/page/livreurs
+
+2. ✏️  Cliquez sur 'Modifier' (icône crayon) pour le livreur concerné
+
+3. 🏢 Dans le formulaire, trouvez le champ "Van/Entrepôt assigné"
+   et sélectionnez un van dans la liste déroulante
+
+4. 💾 Cliquez sur "Enregistrer"
+
+Si aucun entrepôt n'est disponible dans la liste:
+1. 📍 Allez dans: Stocks > Entrepôts
+2. ➕ Créez un nouvel entrepôt
+3. 🏷️  Donnez-lui un nom comme "Van Livraison X"
+4. 💾 Enregistrez
+5. 🔄 Retournez assigner cet entrepôt au livreur
+""")
+print("="*70)

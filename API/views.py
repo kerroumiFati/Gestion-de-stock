@@ -2084,7 +2084,7 @@ class VenteViewSet(TenantFilterMixin, viewsets.ModelViewSet):
         footer_message = cfg.ticket_footer_message or "Merci de votre visite !"
 
         # Devise
-        currency_symbol = vente.currency.symbol if vente.currency else '€'
+        currency_symbol = vente.currency.symbol if vente.currency else 'DA'
 
         # Générer les lignes du ticket
         lignes_html = ''

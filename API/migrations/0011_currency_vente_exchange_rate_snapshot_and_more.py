@@ -18,7 +18,7 @@ class Migration(migrations.Migration):
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('code', models.CharField(help_text='Code ISO 4217 (ex: USD, EUR, MAD)', max_length=3, unique=True)),
                 ('name', models.CharField(help_text='Nom de la devise', max_length=50)),
-                ('symbol', models.CharField(help_text='Symbole (ex: $, €, DH)', max_length=5)),
+                ('symbol', models.CharField(help_text='Symbole (ex: $, €, DA)', max_length=5)),
                 ('is_default', models.BooleanField(default=False, help_text='Devise par défaut du système')),
                 ('is_active', models.BooleanField(default=True)),
             ],

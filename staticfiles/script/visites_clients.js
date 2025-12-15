@@ -25,6 +25,27 @@
         // Charger les livreurs pour le filtre
         loadLivreurs();
 
+        // Ajouter l'event listener pour la recherche de client
+        const clientSearch = document.getElementById('client-search');
+        if (clientSearch) {
+            // Recherche en temps réel avec debounce
+            let searchTimeout;
+            clientSearch.addEventListener('input', function() {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    loadVisites();
+                }, 500); // Attendre 500ms après la dernière frappe
+            });
+
+            // Recherche immédiate avec Enter
+            clientSearch.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    clearTimeout(searchTimeout);
+                    loadVisites();
+                }
+            });
+        }
+
         // Charger les visites
         loadVisites();
     }
@@ -61,10 +82,12 @@
         const dateFilter = document.getElementById('date-filter');
         const livreurFilter = document.getElementById('livreur-filter');
         const resultatFilter = document.getElementById('resultat-filter');
+        const clientSearch = document.getElementById('client-search');
 
         const date = dateFilter ? dateFilter.value : '';
         const livreur = livreurFilter ? livreurFilter.value : '';
         const resultat = resultatFilter ? resultatFilter.value : '';
+        const search = clientSearch ? clientSearch.value.trim() : '';
 
         // Afficher le loading
         showLoading(true);
@@ -74,6 +97,7 @@
             if (date) url += `date=${date}&`;
             if (livreur) url += `livreur=${livreur}&`;
             if (resultat) url += `resultat=${resultat}&`;
+            if (search) url += `search=${encodeURIComponent(search)}&`;
             url += `page=${page}`;
 
             console.log('[VISITES JS] Fetching:', url);

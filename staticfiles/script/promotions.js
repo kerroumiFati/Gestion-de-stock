@@ -10,7 +10,8 @@ const PromoConfig = {
         produits: [],
         categories: [],
         conditionnements: {},
-        typesPrix: []
+        typesPrix: [],
+        codesPrix: []
     },
     initialized: false
 };
@@ -44,6 +45,7 @@ async function initPromotions() {
             loadProduits(),
             loadCategories(),
             loadTypesPrix(),
+            loadCodesPrix(),
             loadStats()
         ]);
 
@@ -196,10 +198,55 @@ async function loadTypesPrix() {
         const response = await fetch(`${PromoConfig.apiUrl}types-prix/`);
         if (response.ok) {
             PromoConfig.cache.typesPrix = await response.json();
+            // Peupler le select des types de prix
+            populateTypesPrixSelect();
         }
     } catch (error) {
         console.error('Erreur chargement types prix:', error);
     }
+}
+
+async function loadCodesPrix() {
+    try {
+        const response = await fetch(`${PromoConfig.apiUrl}codes-prix/`);
+        if (response.ok) {
+            PromoConfig.cache.codesPrix = await response.json();
+            // Peupler le select des codes prix
+            populateCodesPrixSelect();
+        }
+    } catch (error) {
+        console.error('Erreur chargement codes prix:', error);
+    }
+}
+
+function populateTypesPrixSelect() {
+    const select = document.getElementById('promo-types-prix');
+    if (!select) return;
+
+    select.innerHTML = '';
+    PromoConfig.cache.typesPrix.forEach(tp => {
+        const option = document.createElement('option');
+        option.value = tp.id;
+        option.textContent = `${tp.code} - ${tp.libelle}`;
+        select.appendChild(option);
+    });
+}
+
+function populateCodesPrixSelect() {
+    const select = document.getElementById('promo-code-prix');
+    if (!select) return;
+
+    select.innerHTML = '<option value="">-- Sélectionner un code de prix --</option>';
+    PromoConfig.cache.codesPrix.forEach(cp => {
+        const option = document.createElement('option');
+        option.value = cp.id;
+        const dateInfo = cp.date_debut && cp.date_fin
+            ? ` (${formatDate(cp.date_debut)} - ${formatDate(cp.date_fin)})`
+            : '';
+        const activeInfo = cp.is_active ? ' ✓' : '';
+        option.textContent = `${cp.code} - ${cp.libelle}${dateInfo}${activeInfo}`;
+        select.appendChild(option);
+    });
 }
 
 async function loadStats() {
@@ -291,6 +338,7 @@ function renderPromotionsTable(promotions) {
             <td><strong>${escapeHtml(p.code)}</strong></td>
             <td>${escapeHtml(p.nom)}</td>
             <td><span class="type-badge">${escapeHtml(p.type_promotion_display || p.type_promotion)}</span></td>
+            <td>${p.code_prix_code ? `<span class="badge badge-info" style="background: #4a5568; color: white; padding: 4px 8px; border-radius: 4px;">${escapeHtml(p.code_prix_code)}</span>` : '<span class="text-muted">-</span>'}</td>
             <td>${escapeHtml(p.produit_designation || p.categorie_nom || '-')}</td>
             <td class="promo-summary">${escapeHtml(p.resume || '-')}</td>
             <td>
@@ -451,6 +499,20 @@ async function editPromotion(id) {
         document.getElementById('promo-usage-client').value = promo.usage_par_client || '';
         document.getElementById('promo-carton-complet').checked = promo.carton_complet_requis || false;
         document.getElementById('promo-cumulable').checked = promo.est_cumulable || false;
+
+        // Code de prix
+        const codePrixSelect = document.getElementById('promo-code-prix');
+        if (codePrixSelect && promo.code_prix) {
+            codePrixSelect.value = promo.code_prix;
+        }
+
+        // Types de prix éligibles
+        const typesPrixSelect = document.getElementById('promo-types-prix');
+        if (typesPrixSelect && promo.types_prix_eligibles && Array.isArray(promo.types_prix_eligibles)) {
+            Array.from(typesPrixSelect.options).forEach(option => {
+                option.selected = promo.types_prix_eligibles.includes(parseInt(option.value));
+            });
+        }
 
         // Afficher le formulaire
         document.getElementById('promo-form-section').style.display = 'block';
@@ -754,6 +816,19 @@ async function savePromotion(statut) {
     // Usage par client (optionnel)
     const usageClient = document.getElementById('promo-usage-client').value;
     if (usageClient) data.usage_par_client = parseInt(usageClient);
+
+    // Code de prix (optionnel)
+    const codePrix = document.getElementById('promo-code-prix').value;
+    if (codePrix) data.code_prix = parseInt(codePrix);
+
+    // Types de prix éligibles (optionnel - multiple select)
+    const typesPrixSelect = document.getElementById('promo-types-prix');
+    if (typesPrixSelect) {
+        const selectedOptions = Array.from(typesPrixSelect.selectedOptions);
+        if (selectedOptions.length > 0) {
+            data.types_prix_eligibles = selectedOptions.map(opt => parseInt(opt.value));
+        }
+    }
 
     // Valeurs selon le type
     switch (type) {

@@ -332,6 +332,9 @@ if (!window.__visites_clients_script_loaded__) {
             <option value="autre">{% trans "Autre" %}</option>
         </select>
 
+        <label>{% trans "Rechercher client:" %}</label>
+        <input type="text" id="client-search" placeholder="{% trans 'Nom du client...' %}" style="min-width: 200px;">
+
         <button onclick="loadVisites()">
             <i class="fas fa-search"></i> {% trans "Rechercher" %}
         </button>

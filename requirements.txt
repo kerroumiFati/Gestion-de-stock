@@ -1,16 +1,53 @@
-Django>=4.0,<5.0
-djangorestframework>=3.14.0
-django-cors-headers>=3.13.0
-django-filter>=22.1
-django-solo>=2.0.0
-Pillow>=9.0.0
-python-decouple>=3.6
-gunicorn>=20.1.0
-whitenoise>=6.0.0
-psycopg2-binary>=2.9.0
-dj-database-url>=1.0.0
-pandas>=2.0.0
-openpyxl>=3.1.0
-reportlab>=4.0.0
-# JWT auth
-djangorestframework-simplejwt>=5.3.1
+# Core Django
+Django==4.2.25
+djangorestframework==3.16.1
+djangorestframework-simplejwt==5.5.1
+
+# Database
+psycopg2-binary==2.9.11
+dj-database-url==3.0.1
+
+# Server & Deployment
+gunicorn==23.0.0
+whitenoise==6.11.0
+
+# Django Extensions
+django-cors-headers==4.9.0
+django-filter==25.1
+django-solo==2.4.0
+
+# Image Processing
+Pillow==11.3.0
+
+# PDF & Excel
+reportlab==4.4.4
+openpyxl==3.1.5
+
+# Data Processing
+pandas==2.3.3
+numpy==2.3.4
+
+# Utilities
+python-decouple==3.8
+requests==2.32.5
+urllib3==2.3.0
+certifi==2024.12.14
+charset-normalizer==3.4.1
+idna==3.10
+
+# Date/Time
+python-dateutil==2.9.0.post0
+pytz==2024.2
+tzdata==2024.2
+
+# Excel Dependencies
+et-xmlfile==2.0.0
+
+# JWT & Security
+PyJWT==2.10.1
+
+# SQL Parsing
+sqlparse==0.5.3
+
+# Async Support
+asgiref==3.8.1

@@ -600,24 +600,27 @@ function addCommentTag(tag) {
 
     <!-- Section Planning Hebdomadaire -->
     <div id="planning-section" class="modern-section" style="display: none;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <div style="margin-bottom: 20px;">
             <h3>{% trans "Planning Hebdomadaire des Tournées" %}</h3>
-            <div>
-                <button class="btn-success" onclick="genererSemaine()">
-                    <i class="fas fa-calendar-plus"></i> {% trans "Générer Tournées de la Semaine" %}
-                </button>
-                <button class="btn-primary" onclick="openPlanningModal()">
-                    <i class="fas fa-plus"></i> {% trans "Nouveau Planning" %}
-                </button>
-            </div>
         </div>
 
-        <!-- Filtre par livreur -->
-        <div style="margin-bottom: 20px;">
-            <label for="filter-livreur-planning">{% trans "Filtrer par livreur:" %}</label>
-            <select id="filter-livreur-planning" onchange="loadPlanningsHebdo()">
-                <option value="">{% trans "Tous les livreurs" %}</option>
-            </select>
+        <!-- Filtres -->
+        <div style="margin-bottom: 20px; display: flex; gap: 20px; align-items: end;">
+            <div style="flex: 1;">
+                <label for="filter-week-planning">{% trans "Semaine:" %}</label>
+                <input type="week" id="filter-week-planning" onchange="loadPlanningsHebdo()"
+                       style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px;">
+            </div>
+            <div style="flex: 1;">
+                <label for="filter-livreur-planning">{% trans "Livreur:" %}</label>
+                <select id="filter-livreur-planning" onchange="loadPlanningsHebdo()"
+                        style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px;">
+                    <option value="">{% trans "Tous les livreurs" %}</option>
+                </select>
+            </div>
+            <button onclick="setCurrentWeek()" class="btn-primary" style="padding: 8px 16px;">
+                <i class="fas fa-calendar-day"></i> {% trans "Cette semaine" %}
+            </button>
         </div>
 
         <!-- Table de planning par jour de la semaine -->
@@ -626,13 +629,13 @@ function addCommentTag(tag) {
                 <thead>
                     <tr style="background: #f3f4f6;">
                         <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e5e7eb;">{% trans "Livreur" %}</th>
+                        <th style="padding: 12px; text-align: center; border-bottom: 2px solid #e5e7eb;">{% trans "Dimanche" %}</th>
                         <th style="padding: 12px; text-align: center; border-bottom: 2px solid #e5e7eb;">{% trans "Lundi" %}</th>
                         <th style="padding: 12px; text-align: center; border-bottom: 2px solid #e5e7eb;">{% trans "Mardi" %}</th>
                         <th style="padding: 12px; text-align: center; border-bottom: 2px solid #e5e7eb;">{% trans "Mercredi" %}</th>
                         <th style="padding: 12px; text-align: center; border-bottom: 2px solid #e5e7eb;">{% trans "Jeudi" %}</th>
                         <th style="padding: 12px; text-align: center; border-bottom: 2px solid #e5e7eb;">{% trans "Vendredi" %}</th>
                         <th style="padding: 12px; text-align: center; border-bottom: 2px solid #e5e7eb;">{% trans "Samedi" %}</th>
-                        <th style="padding: 12px; text-align: center; border-bottom: 2px solid #e5e7eb;">{% trans "Dimanche" %}</th>
                     </tr>
                 </thead>
                 <tbody id="planning-table-body">

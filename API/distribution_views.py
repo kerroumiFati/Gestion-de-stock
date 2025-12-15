@@ -724,11 +724,13 @@ class TourneeViewSet(viewsets.ModelViewSet):
         livreur_id = self.request.query_params.get('livreur')
         assigned_to = self.request.query_params.get('assigned_to')
         date_tournee = self.request.query_params.get('date_tournee') or self.request.query_params.get('date')
+        date_debut = self.request.query_params.get('date_tournee__gte') or self.request.query_params.get('date_debut')
+        date_fin = self.request.query_params.get('date_tournee__lte') or self.request.query_params.get('date_fin')
         statut = self.request.query_params.get('statut')
         # Nouveau paramètre: inclure les tournées actives (non terminées)
         actives_only = self.request.query_params.get('actives_only', 'false').lower() == 'true'
 
-        print(f"[TourneeViewSet] Params: livreur={livreur_id}, assigned_to={assigned_to}, actives_only={actives_only}")
+        print(f"[TourneeViewSet] Params: livreur={livreur_id}, assigned_to={assigned_to}, actives_only={actives_only}, date_debut={date_debut}, date_fin={date_fin}")
         print(f"[TourneeViewSet] Initial queryset count: {queryset.count()}")
 
         # Filtre spécial pour l'app mobile : assigned_to='me'
@@ -756,7 +758,12 @@ class TourneeViewSet(viewsets.ModelViewSet):
         if actives_only:
             # Retourner les tournées planifiées ou en cours (pas terminées, annulées ou clôturées)
             queryset = queryset.filter(statut__in=['planifiee', 'en_cours'])
+        elif date_debut and date_fin:
+            # Filtre par plage de dates
+            queryset = queryset.filter(date_tournee__gte=date_debut, date_tournee__lte=date_fin)
+            print(f"[TourneeViewSet] Filtered by date range {date_debut} to {date_fin}, count: {queryset.count()}")
         elif date_tournee:
+            # Filtre par date exacte
             queryset = queryset.filter(date_tournee=date_tournee)
 
         if statut:

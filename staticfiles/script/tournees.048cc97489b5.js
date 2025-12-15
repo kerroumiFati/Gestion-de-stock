@@ -2074,12 +2074,7 @@ function switchTab(tabName) {
     // Afficher la bonne section
     if (tabName === 'planning') {
         document.getElementById('planning-section').style.display = 'block';
-        // Définir la semaine courante si pas encore définie
-        if (!document.getElementById('filter-week-planning').value) {
-            setCurrentWeek();
-        } else {
-            loadPlanningsHebdo();
-        }
+        loadPlanningsHebdo();
     } else if (tabName === 'config-clients') {
         if (configSection) {
             configSection.style.display = 'block';
@@ -2111,199 +2106,43 @@ function switchTab(tabName) {
 async function loadPlanningsHebdo() {
     try {
         const livreurFilter = document.getElementById('filter-livreur-planning').value;
-        const weekFilter = document.getElementById('filter-week-planning').value;
-
-        console.log('[PLANNING] Loading tournées with filters:', { weekFilter, livreurFilter });
-
-        // Charger les tournées au lieu des configurations de planning
-        let url = '/API/tournees/?page_size=1000';
-
-        // Si une semaine est sélectionnée, calculer les dates de début et fin
-        if (weekFilter) {
-            const [year, week] = weekFilter.split('-W');
-            const weekDates = getWeekDates(parseInt(year), parseInt(week));
-            url += `&date_tournee__gte=${weekDates.start}&date_tournee__lte=${weekDates.end}`;
-            console.log('[PLANNING] Week dates:', weekDates);
-        }
-
+        let url = '/API/distribution/plannings-hebdo/';
         if (livreurFilter) {
-            url += `&livreur=${livreurFilter}`;
+            url += `?livreur=${livreurFilter}`;
         }
-
-        console.log('[PLANNING] Fetching URL:', url);
 
         const response = await fetch(url);
-        if (!response.ok) throw new Error('Erreur lors du chargement des tournées');
+        if (!response.ok) throw new Error('Erreur lors du chargement des plannings');
 
-        const data = await response.json();
-        allPlannings = Array.isArray(data) ? data : (data.results || []);
-
-        console.log('[PLANNING] Loaded tournées:', allPlannings.length);
-
-        // Afficher le tableau
-        displayTourneesWeeklyTable();
-
-        // Mettre à jour le dropdown des livreurs (seulement si pas de filtre livreur actif)
-        if (!livreurFilter) {
-            populateLivreurFilterPlanning();
-        }
+        allPlannings = await response.json();
+        displayPlanningsTable();
     } catch (error) {
         console.error('Erreur:', error);
-        showMessage('Erreur lors du chargement des tournées', 'error');
+        showMessage('Erreur lors du chargement des plannings', 'error');
     }
 }
 
-// Obtenir les dates de début (dimanche) et fin (samedi) d'une semaine ISO
-function getWeekDates(year, week) {
-    // Calculer le lundi de la semaine ISO demandée
-    // ISO week: la semaine qui contient le 4 janvier
-    const jan4 = new Date(Date.UTC(year, 0, 4));
-    const jan4Day = jan4.getUTCDay();
-    // Convertir: getUTCDay() 0=dimanche -> ISO 7, 1=lundi -> ISO 1, etc.
-    const jan4ISODay = jan4Day === 0 ? 7 : jan4Day;
-
-    // Trouver le lundi de la semaine 1 (le lundi <= 4 janvier)
-    const week1Monday = new Date(jan4);
-    week1Monday.setUTCDate(4 - jan4ISODay + 1);
-
-    // Ajouter (week-1) semaines pour arriver à la semaine demandée
-    const targetMonday = new Date(week1Monday);
-    targetMonday.setUTCDate(week1Monday.getUTCDate() + (week - 1) * 7);
-
-    // Notre semaine va du dimanche précédent au samedi suivant
-    const sunday = new Date(targetMonday);
-    sunday.setUTCDate(targetMonday.getUTCDate() - 1);
-
-    const saturday = new Date(sunday);
-    saturday.setUTCDate(sunday.getUTCDate() + 6);
-
-    // Formater les dates
-    const formatDate = (date) => {
-        const y = date.getUTCFullYear();
-        const m = String(date.getUTCMonth() + 1).padStart(2, '0');
-        const d = String(date.getUTCDate()).padStart(2, '0');
-        return `${y}-${m}-${d}`;
-    };
-
-    const result = {
-        start: formatDate(sunday),
-        end: formatDate(saturday)
-    };
-
-    console.log('[WEEK CALC] ISO Week', week, year, '- Monday:', formatDate(targetMonday), '- Range:', result);
-
-    return result;
-}
-
-// Définir la semaine courante
-function setCurrentWeek() {
-    const today = new Date();
-    const year = today.getFullYear();
-
-    // Calculer le numéro de la semaine ISO
-    const jan1 = new Date(year, 0, 1);
-    const days = Math.floor((today - jan1) / (24 * 60 * 60 * 1000));
-    const week = Math.ceil((days + jan1.getDay() + 1) / 7);
-
-    const weekString = `${year}-W${week.toString().padStart(2, '0')}`;
-    document.getElementById('filter-week-planning').value = weekString;
-
-    loadPlanningsHebdo();
-}
-
-// Peupler le filtre des livreurs pour le planning (uniquement ceux qui ont des tournées)
-function populateLivreurFilterPlanning() {
-    const select = document.getElementById('filter-livreur-planning');
-    if (!select) return;
-
-    // Sauvegarder la sélection actuelle
-    const currentValue = select.value;
-
-    // Garder l'option "Tous les livreurs"
-    select.innerHTML = '<option value="">Tous les livreurs</option>';
-
-    // Si aucune tournée chargée, ne rien afficher
-    if (!allPlannings || allPlannings.length === 0) {
-        return;
-    }
-
-    // Obtenir la liste unique des livreurs qui ont des tournées
-    const livreursAvecTournees = new Map();
-
-    allPlannings.forEach(tournee => {
-        if (tournee.livreur && !livreursAvecTournees.has(tournee.livreur)) {
-            livreursAvecTournees.set(tournee.livreur, {
-                id: tournee.livreur,
-                nom: tournee.livreur_nom || 'Inconnu'
-            });
-        }
-    });
-
-    // Trier par nom et ajouter au select
-    const livreursArray = Array.from(livreursAvecTournees.values());
-    livreursArray.sort((a, b) => a.nom.localeCompare(b.nom));
-
-    livreursArray.forEach(livreur => {
-        const option = document.createElement('option');
-        option.value = livreur.id;
-        option.textContent = livreur.nom;
-        select.appendChild(option);
-    });
-
-    // Restaurer la sélection si elle existe toujours
-    if (currentValue && livreursAvecTournees.has(parseInt(currentValue))) {
-        select.value = currentValue;
-    }
-}
-
-// Afficher les tournées dans un tableau hebdomadaire
-function displayTourneesWeeklyTable() {
+// Afficher la table des plannings
+function displayPlanningsTable() {
     const tbody = document.getElementById('planning-table-body');
 
-    if (!allPlannings || allPlannings.length === 0) {
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="8" style="text-align: center; padding: 40px; color: #6b7280;">
-                    Aucune tournée trouvée pour cette période.
-                </td>
-            </tr>
-        `;
-        return;
-    }
-
-    // Créer un map des tournées par livreur et jour de la semaine
-    const tourneesMap = {};
-
-    allPlannings.forEach(tournee => {
-        // Obtenir le jour de la semaine (0=Dimanche, 1=Lundi, ..., 6=Samedi)
-        const date = new Date(tournee.date_tournee + 'T00:00:00');
-        const jourSemaine = date.getDay(); // 0=Dimanche, 1=Lundi, ..., 6=Samedi
-
-        const livreurId = tournee.livreur;
-        const livreurNom = tournee.livreur_nom || 'Inconnu';
-
-        if (!tourneesMap[livreurId]) {
-            tourneesMap[livreurId] = {
-                nom: livreurNom,
-                jours: {}
-            };
+    // Créer un map des plannings par livreur et jour
+    planningsMap = {};
+    allPlannings.forEach(planning => {
+        if (!planningsMap[planning.livreur]) {
+            planningsMap[planning.livreur] = {};
         }
-
-        if (!tourneesMap[livreurId].jours[jourSemaine]) {
-            tourneesMap[livreurId].jours[jourSemaine] = [];
-        }
-
-        tourneesMap[livreurId].jours[jourSemaine].push(tournee);
+        planningsMap[planning.livreur][planning.jour_semaine] = planning;
     });
 
     // Obtenir la liste unique des livreurs
-    const livreursIds = Object.keys(tourneesMap);
+    const livreursIds = Object.keys(planningsMap);
 
     if (livreursIds.length === 0) {
         tbody.innerHTML = `
             <tr>
                 <td colspan="8" style="text-align: center; padding: 40px; color: #6b7280;">
-                    Aucune tournée trouvée.
+                    Aucun planning configuré. Cliquez sur "Nouveau Planning" pour commencer.
                 </td>
             </tr>
         `;
@@ -2313,53 +2152,36 @@ function displayTourneesWeeklyTable() {
     // Générer les lignes du tableau
     let html = '';
     livreursIds.forEach(livreurId => {
-        const livreurData = tourneesMap[livreurId];
+        const firstPlanning = Object.values(planningsMap[livreurId])[0];
         html += `<tr style="border-bottom: 1px solid #e5e7eb;">`;
-        html += `<td style="padding: 12px; font-weight: 500;">${livreurData.nom}</td>`;
+        html += `<td style="padding: 12px; font-weight: 500;">${firstPlanning.livreur_nom}</td>`;
 
-        // Pour chaque jour de la semaine (0=Dimanche, 1=Lundi, ..., 6=Samedi)
-        for (let jour = 0; jour <= 6; jour++) {
-            const tournees = livreurData.jours[jour] || [];
-
-            if (tournees.length > 0) {
-                // Afficher toutes les tournées de ce jour
-                let tourneesHtml = '';
-                tournees.forEach(tournee => {
-                    const statutColors = {
-                        'planifiee': '#dbeafe',
-                        'en_cours': '#fef3c7',
-                        'terminee': '#d1fae5',
-                        'annulee': '#fee2e2',
-                        'cloturee': '#f3f4f6'
-                    };
-                    const statutIcons = {
-                        'planifiee': '📅',
-                        'en_cours': '🚚',
-                        'terminee': '✅',
-                        'annulee': '❌',
-                        'cloturee': '🔒'
-                    };
-                    const bgColor = statutColors[tournee.statut] || '#f9fafb';
-                    const icon = statutIcons[tournee.statut] || '📦';
-
-                    tourneesHtml += `
-                        <div style="background: ${bgColor}; padding: 6px; border-radius: 4px; margin-bottom: 4px; font-size: 0.75rem; cursor: pointer;" onclick="viewTourneeDetails(${tournee.id})">
-                            <div style="font-weight: 600;">${icon} ${tournee.numero_tournee}</div>
-                            <div style="color: #6b7280; font-size: 0.7rem;">${tournee.statut}</div>
-                            ${tournee.arrets_count ? `<div style="color: #6b7280; font-size: 0.7rem;">${tournee.arrets_count} arrêts</div>` : ''}
-                        </div>
-                    `;
-                });
-
+        // Pour chaque jour de la semaine (1-7)
+        for (let jour = 1; jour <= 7; jour++) {
+            const planning = planningsMap[livreurId][jour];
+            if (planning) {
+                const statusIcon = planning.is_active ? '✅' : '❌';
+                const codePrix = planning.code_prix_code || 'Aucun';
                 html += `
-                    <td style="padding: 8px; text-align: left; vertical-align: top; background: #f9fafb;">
-                        ${tourneesHtml}
+                    <td style="padding: 12px; text-align: center; background: ${planning.is_active ? '#f0fdf4' : '#fef2f2'};">
+                        <div style="font-size: 1.2rem;">${statusIcon}</div>
+                        <small style="color: #6b7280; display: block; margin-top: 4px;">${codePrix}</small>
+                        <div style="margin-top: 8px;">
+                            <button class="btn-sm btn-primary" onclick="editPlanning(${planning.id})" style="padding: 4px 8px; font-size: 0.75rem; margin-right: 4px;">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn-sm btn-danger" onclick="deletePlanning(${planning.id})" style="padding: 4px 8px; font-size: 0.75rem;">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
                     </td>
                 `;
             } else {
                 html += `
-                    <td style="padding: 12px; text-align: center; background: #ffffff;">
-                        <span style="color: #d1d5db;">-</span>
+                    <td style="padding: 12px; text-align: center; background: #f9fafb;">
+                        <button class="btn-sm btn-success" onclick="openPlanningModal(${livreurId}, ${jour})" style="padding: 4px 8px; font-size: 0.75rem;">
+                            <i class="fas fa-plus"></i>
+                        </button>
                     </td>
                 `;
             }
@@ -2368,23 +2190,6 @@ function displayTourneesWeeklyTable() {
     });
 
     tbody.innerHTML = html;
-}
-
-// Voir les détails d'une tournée
-function viewTourneeDetails(tourneeId) {
-    // Trouver la tournée dans la liste
-    const tournee = allPlannings.find(t => t.id === tourneeId);
-    if (tournee) {
-        // Passer à l'onglet "Toutes" et filtrer par cette tournée
-        switchTab('tournees');
-        // Optionnel: ouvrir un modal ou scroller vers la tournée
-        console.log('Affichage détails tournée:', tournee);
-    }
-}
-
-// Ancienne fonction conservée pour compatibilité (si utilisée ailleurs)
-function displayPlanningsTable() {
-    displayTourneesWeeklyTable();
 }
 
 // Ouvrir le modal de planning

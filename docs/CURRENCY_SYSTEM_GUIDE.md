@@ -16,7 +16,7 @@ Le système multi-devises a été intégré dans votre application de gestion de
 #### Currency (Devise)
 - **code** : Code ISO 4217 (EUR, USD, MAD, etc.)
 - **name** : Nom complet de la devise
-- **symbol** : Symbole (€, $, DH, etc.)
+- **symbol** : Symbole (DA, $, DH, etc.)
 - **is_default** : Devise par défaut du système
 - **is_active** : Devise active/inactive
 

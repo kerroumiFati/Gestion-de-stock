@@ -288,7 +288,7 @@ class VenteTourneeMobile(models.Model):
         ordering = ['-date_vente']
 
     def __str__(self):
-        return f"{self.numero_vente} - {self.client.nom} - {self.montant_total}€"
+        return f"{self.numero_vente} - {self.client.nom} - {self.montant_total}DA"
 
     def save(self, *args, **kwargs):
         # Vérifier si la tournée est clôturée (seulement si une tournée existe)
@@ -431,7 +431,7 @@ class RapportCaisseMobile(models.Model):
         self.ecart = self.solde_final_reel - self.solde_final_theorique
 
         # Détection anomalies
-        if abs(self.ecart) > 10:  # Seuil de 10€
+        if abs(self.ecart) > 10:  # Seuil de 10DA
             self.a_des_anomalies = True
 
         self.save()
@@ -477,7 +477,7 @@ class DepenseTourneeMobile(models.Model):
         ordering = ['-date_depense']
 
     def __str__(self):
-        return f"{self.type_depense} - {self.montant}€"
+        return f"{self.type_depense} - {self.montant}DA"
 
 
 class SyncLogMobile(models.Model):
@@ -542,6 +542,15 @@ class CommandeClient(models.Model):
         ('cancelled', 'Annulée'),
     )
 
+    TYPE_PAIEMENT_CHOICES = (
+        ('especes', 'Espèces'),
+        ('carte', 'Carte bancaire'),
+        ('cheque', 'Chèque'),
+        ('credit', 'À crédit'),
+        ('virement', 'Virement'),
+        ('non_paye', 'Non payé'),
+    )
+
     # Référence unique
     reference = models.CharField(max_length=100, unique=True, blank=True)
 
@@ -561,6 +570,17 @@ class CommandeClient(models.Model):
     # Montants
     montant_total_ht = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     montant_total_ttc = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    # Paiement
+    est_paye = models.BooleanField('Est payé', default=False,
+                                   help_text='Indique si la commande a été payée')
+    type_paiement = models.CharField('Type de paiement', max_length=20,
+                                    choices=TYPE_PAIEMENT_CHOICES, default='non_paye',
+                                    help_text='Mode de paiement utilisé')
+    montant_paye = models.DecimalField('Montant payé', max_digits=12, decimal_places=2, default=0,
+                                      help_text='Montant déjà payé (peut être partiel)')
+    date_paiement = models.DateTimeField('Date de paiement', null=True, blank=True,
+                                        help_text='Date à laquelle le paiement a été effectué')
 
     # Notes
     notes = models.TextField(blank=True, null=True)

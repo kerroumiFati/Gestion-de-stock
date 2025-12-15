@@ -156,7 +156,13 @@ class LivreurSerializer(serializers.ModelSerializer):
         return obj.user is not None
 
     def get_is_disponible(self, obj):
-        return obj.statut == 'actif'
+        """
+        Un livreur est disponible s'il est actif ET n'a aucune tournée en cours ou planifiée
+        """
+        if obj.statut != 'actif':
+            return False
+        # Vérifier s'il a des tournées actives (planifiée ou en_cours)
+        return obj.tournees_actives().count() == 0
 
     def get_is_active(self, obj):
         return obj.statut == 'actif'

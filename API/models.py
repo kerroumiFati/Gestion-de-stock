@@ -518,7 +518,7 @@ class PrixProduit(models.Model):
         unique_together = ['produit', 'code_prix', 'type_prix']  # Un seul prix par combinaison produit/code/type
 
     def __str__(self):
-        currency_symbol = self.currency.symbol if self.currency else self.produit.currency.symbol if self.produit.currency else '€'
+        currency_symbol = self.currency.symbol if self.currency else self.produit.currency.symbol if self.produit.currency else 'DA'
         code_label = self.code_prix.code if self.code_prix else 'STD'
         return f"{self.produit.reference} - {code_label}/{self.type_prix.code}: {self.prix} {currency_symbol}"
 
@@ -1106,7 +1106,7 @@ class LigneVente(models.Model):
     )
 
     def __str__(self):
-        currency_symbol = self.currency.symbol if self.currency else self.vente.get_sale_currency().symbol if self.vente.get_sale_currency() else '€'
+        currency_symbol = self.currency.symbol if self.currency else self.vente.get_sale_currency().symbol if self.vente.get_sale_currency() else 'DA'
         return f"{self.designation} x {self.quantite} à {self.prixU_snapshot} {currency_symbol} (Vente {self.vente.numero})"
     
     def get_total_in_sale_currency(self):
@@ -1188,6 +1188,17 @@ class Livreur(models.Model):
     # Permis et documents
     numero_permis = models.CharField("Numéro de permis", max_length=50, blank=True)
     date_expiration_permis = models.DateField("Date d'expiration du permis", null=True, blank=True)
+
+    # Van/Entrepôt assigné
+    entrepot = models.ForeignKey(
+        Warehouse,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='livreurs_assignes',
+        verbose_name="Van/Entrepôt assigné",
+        help_text="Entrepôt mobile (van) assigné à ce livreur pour gérer son stock"
+    )
 
     # Statut
     is_active = models.BooleanField("Actif", default=True)
