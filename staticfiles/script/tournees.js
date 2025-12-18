@@ -754,9 +754,14 @@ function filterTournees(status) {
 
 // Voir les détails d'une tournée
 function viewTourneeDetails(id) {
+    console.log('[TOURNEES] viewTourneeDetails appelé avec id:', id);
+
     // Ajouter timestamp pour éviter le cache navigateur
     const timestamp = new Date().getTime();
-    fetch(`/API/tournees/${id}/?_t=${timestamp}`, {
+    const url = `/API/tournees/${id}/?_t=${timestamp}`;
+    console.log('[TOURNEES] Fetch URL:', url);
+
+    fetch(url, {
         credentials: 'same-origin',
         headers: {
             'Accept': 'application/json',
@@ -764,12 +769,14 @@ function viewTourneeDetails(id) {
         }
     })
         .then(response => {
+            console.log('[TOURNEES] Réponse reçue:', response.status, response.statusText);
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
             return response.json();
         })
         .then(apiData => {
+            console.log('[TOURNEES] Données reçues:', apiData);
             // Transformer les données de l'API vers le format attendu
             const tournee = transformTourneeData(apiData);
 
@@ -808,6 +815,11 @@ function getStatutArretDisplay(statut) {
 
 // Afficher la modal des détails
 function showTourneeDetailsModal(tournee) {
+    console.log('[TOURNEES] Ouverture modal détails pour:', tournee);
+
+    // Fermer toute modal existante
+    closeDetailsModal();
+
     const stats = tournee.statistiques || {};
 
     // Récupérer les arrêts depuis statistiques ou depuis la liste d'arrêts brute
@@ -1004,12 +1016,22 @@ function showTourneeDetailsModal(tournee) {
         </div>
     `;
 
+    // Créer la modal
     const modal = document.createElement('div');
     modal.id = 'detailsModal';
     modal.className = 'modal';
     modal.style.display = 'block';
     modal.innerHTML = `<div class="modal-content">${modalContent}</div>`;
+
+    // Ajouter au body
     document.body.appendChild(modal);
+    console.log('[TOURNEES] Modal ajoutée au DOM, display:', modal.style.display);
+
+    // Forcer l'affichage
+    setTimeout(function() {
+        modal.style.display = 'block';
+        modal.style.opacity = '1';
+    }, 10);
 
     // Fermer en cliquant en dehors
     modal.onclick = function(event) {
@@ -1022,7 +1044,13 @@ function showTourneeDetailsModal(tournee) {
 function closeDetailsModal() {
     const modal = document.getElementById('detailsModal');
     if (modal) {
-        document.body.removeChild(modal);
+        console.log('[TOURNEES] Fermeture de la modal détails');
+        modal.style.display = 'none';
+        try {
+            document.body.removeChild(modal);
+        } catch (e) {
+            console.warn('[TOURNEES] Erreur lors de la suppression de la modal:', e);
+        }
     }
 }
 
@@ -2370,17 +2398,8 @@ function displayTourneesWeeklyTable() {
     tbody.innerHTML = html;
 }
 
-// Voir les détails d'une tournée
-function viewTourneeDetails(tourneeId) {
-    // Trouver la tournée dans la liste
-    const tournee = allPlannings.find(t => t.id === tourneeId);
-    if (tournee) {
-        // Passer à l'onglet "Toutes" et filtrer par cette tournée
-        switchTab('tournees');
-        // Optionnel: ouvrir un modal ou scroller vers la tournée
-        console.log('Affichage détails tournée:', tournee);
-    }
-}
+// Ancienne fonction - ne pas utiliser, remplacée par la version complète plus haut
+// La fonction viewTourneeDetails principale se trouve ligne ~756
 
 // Ancienne fonction conservée pour compatibilité (si utilisée ailleurs)
 function displayPlanningsTable() {

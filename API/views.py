@@ -1224,6 +1224,7 @@ class VisiteClientViewSet(viewsets.ModelViewSet):
         client_id = self.request.query_params.get('client')
         livreur_id = self.request.query_params.get('livreur')
         resultat = self.request.query_params.get('resultat')
+        search = self.request.query_params.get('search')
 
         if date_visite:
             queryset = queryset.filter(date_visite=date_visite)
@@ -1233,6 +1234,13 @@ class VisiteClientViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(livreur_id=livreur_id)
         if resultat:
             queryset = queryset.filter(resultat=resultat)
+        if search:
+            from django.db.models import Q
+            queryset = queryset.filter(
+                Q(client__nom__icontains=search) |
+                Q(client__prenom__icontains=search) |
+                Q(client__adresse__icontains=search)
+            )
 
         return queryset.order_by('-date_visite', '-heure_visite')
 
