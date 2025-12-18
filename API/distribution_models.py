@@ -656,7 +656,7 @@ class LigneCommandeClient(models.Model):
     # Quantité et prix
     quantite = models.DecimalField(max_digits=10, decimal_places=2)
     prix_unitaire_ht = models.DecimalField(max_digits=10, decimal_places=2)
-    taux_tva = models.DecimalField(max_digits=5, decimal_places=2, default=19)
+    taux_tva = models.DecimalField(max_digits=5, decimal_places=2, default=0)
 
     # Montants calculés
     montant_ht = models.DecimalField(max_digits=10, decimal_places=2, default=0)

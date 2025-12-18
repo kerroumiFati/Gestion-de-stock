@@ -1,6 +1,47 @@
 {% load i18n %}
 {% load static %}
 
+<style>
+/* Select2 - Style pour dropdown avec hauteur limitée */
+.select2-dropdown-limited .select2-results {
+    max-height: 250px !important;
+    overflow-y: auto !important;
+}
+
+.select2-dropdown-limited .select2-results__option {
+    padding: 10px 12px;
+    font-size: 14px;
+    color: #2d3748;
+}
+
+.select2-dropdown-limited .select2-results__option--highlighted {
+    background-color: #f1f5f9 !important;
+    color: #2d3748 !important;
+}
+
+.select2-dropdown-limited .select2-results__option--selected {
+    background-color: #28a745 !important;
+    color: white !important;
+}
+
+.select2-dropdown-limited .select2-search--dropdown {
+    padding: 8px;
+    background: #f8fafc;
+}
+
+.select2-dropdown-limited .select2-search__field {
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 14px;
+}
+
+.select2-dropdown-limited .select2-search__field:focus {
+    border-color: #28a745;
+    outline: none;
+}
+</style>
+
 <div class="container-fluid">
     <div class="card bg-white">
         <div class="card-header card-color">
@@ -147,6 +188,7 @@
                                     <th>{% trans "Date Commande" %}</th>
                                     <th>{% trans "Livraison Souhaitée" %}</th>
                                     <th class="text-right">{% trans "Montant TTC" %}</th>
+                                    <th class="text-right">{% trans "Reste à payer" %}</th>
                                     <th>{% trans "Paiement" %}</th>
                                     <th>{% trans "Statut" %}</th>
                                     <th class="text-center">{% trans "Actions" %}</th>
@@ -154,7 +196,7 @@
                             </thead>
                             <tbody id="commandesTableBody">
                                 <tr>
-                                    <td colspan="10" class="text-center py-4">
+                                    <td colspan="11" class="text-center py-4">
                                         <i class="fa fa-spinner fa-spin fa-2x text-muted"></i>
                                         <p class="text-muted mt-2">{% trans "Chargement des commandes..." %}</p>
                                     </td>
@@ -258,8 +300,8 @@
                 </div>
                 <div class="form-group">
                     <label><i class="fa fa-user"></i> {% trans "Sélectionner le Livreur" %}:</label>
-                    <select id="newLivreur" class="form-control">
-                        <option value="">-- {% trans "Choisir un livreur" %} --</option>
+                    <select id="newLivreur" class="form-control select2-livreur" data-placeholder="-- {% trans "Rechercher un livreur" %} --">
+                        <option value=""></option>
                         <!-- Sera rempli dynamiquement -->
                     </select>
                 </div>
@@ -317,15 +359,28 @@
     }
 
     function loadCommandes() {
+        console.log('[COMMANDES] Chargement des commandes depuis /API/distribution/commandes/');
         fetch('/API/distribution/commandes/')
             .then(res => res.json())
             .then(data => {
+                console.log('[COMMANDES] Nombre de commandes reçues:', data.length);
+                console.log('[COMMANDES] Détails des commandes:', data);
+
+                // Log spécifique pour les paiements partiels
+                const commandesPartielles = data.filter(cmd =>
+                    cmd.montant_paye > 0 && cmd.montant_paye < cmd.montant_total_ttc
+                );
+                console.log('[COMMANDES] Commandes avec paiement partiel:', commandesPartielles.length);
+                if (commandesPartielles.length > 0) {
+                    console.log('[COMMANDES] Détails paiements partiels:', commandesPartielles);
+                }
+
                 allCommandes = data;
                 updateStatistics();
                 renderCommandes(data);
             })
             .catch(err => {
-                console.error('Erreur chargement commandes:', err);
+                console.error('[COMMANDES] Erreur chargement commandes:', err);
                 showError('Erreur lors du chargement des commandes');
             });
     }
@@ -369,7 +424,7 @@
         if (commandes.length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="10" class="text-center py-4">
+                    <td colspan="11" class="text-center py-4">
                         <i class="fa fa-inbox fa-2x text-muted"></i>
                         <p class="text-muted mt-2">Aucune commande trouvée</p>
                     </td>
@@ -382,6 +437,11 @@
             const statusBadge = getStatusBadge(cmd.statut);
             const paiementBadge = getPaiementBadge(cmd);
             const hasDetails = cmd.lignes && cmd.lignes.length > 0;
+
+            // Calculer le reste à payer
+            const montantPaye = parseFloat(cmd.montant_paye) || 0;
+            const montantTotal = parseFloat(cmd.montant_total_ttc) || 0;
+            const resteAPayer = Math.max(0, montantTotal - montantPaye);
 
             return `
                 <tr>
@@ -402,6 +462,9 @@
                     <td>${formatDateTime(cmd.date_commande)}</td>
                     <td>${cmd.date_livraison_souhaitee ? formatDate(cmd.date_livraison_souhaitee) : '-'}</td>
                     <td class="text-right"><strong>${formatCurrency(cmd.montant_total_ttc)}</strong></td>
+                    <td class="text-right">
+                        ${resteAPayer > 0 ? '<span class="text-danger"><strong>' + formatCurrency(resteAPayer) + '</strong></span>' : '<span class="text-success">0 DA</span>'}
+                    </td>
                     <td>${paiementBadge}</td>
                     <td>${statusBadge}</td>
                     <td class="text-center">
@@ -424,7 +487,7 @@
                         </div>
                     </td>
                 </tr>
-                ${hasDetails ? '<tr id="details-' + cmd.id + '" style="display: none;"><td colspan="10">' + renderCommandeDetailsRow(cmd) + '</td></tr>' : ''}
+                ${hasDetails ? '<tr id="details-' + cmd.id + '" style="display: none;"><td colspan="11">' + renderCommandeDetailsRow(cmd) + '</td></tr>' : ''}
             `;
         }).join('');
     }
@@ -665,12 +728,25 @@
     }
 
     function getPaiementBadge(cmd) {
-        if (cmd.est_paye) {
-            return '<span class="badge badge-success" title="Payé ' + (cmd.montant_paye || 0) + ' DA"><i class="fa fa-check-circle"></i> Payé</span>';
-        } else if (cmd.montant_paye > 0 && cmd.montant_paye < cmd.montant_total_ttc) {
-            const reste = cmd.montant_total_ttc - cmd.montant_paye;
-            return '<span class="badge badge-warning" title="Payé ' + cmd.montant_paye + ' DA, Reste ' + reste.toFixed(2) + ' DA"><i class="fa fa-exclamation-circle"></i> Partiel</span>';
+        // Convertir explicitement en nombres pour éviter les problèmes de comparaison
+        const montantPaye = parseFloat(cmd.montant_paye) || 0;
+        const montantTotal = parseFloat(cmd.montant_total_ttc) || 0;
+        const estPaye = cmd.est_paye === true || cmd.est_paye === 'true';
+
+        console.log('[PAIEMENT BADGE] cmd.reference:', cmd.reference,
+                    'est_paye:', cmd.est_paye, 'estPaye:', estPaye,
+                    'montant_paye:', cmd.montant_paye, 'montantPaye:', montantPaye,
+                    'montant_total_ttc:', cmd.montant_total_ttc, 'montantTotal:', montantTotal);
+
+        if (estPaye) {
+            console.log('[PAIEMENT BADGE]', cmd.reference, '-> Payé');
+            return '<span class="badge badge-success" title="Payé ' + montantPaye.toFixed(2) + ' DA"><i class="fa fa-check-circle"></i> Payé</span>';
+        } else if (montantPaye > 0 && montantPaye < montantTotal) {
+            const reste = montantTotal - montantPaye;
+            console.log('[PAIEMENT BADGE]', cmd.reference, '-> Partiel (payé:', montantPaye, 'reste:', reste.toFixed(2), ')');
+            return '<span class="badge badge-warning" title="Payé ' + montantPaye.toFixed(2) + ' DA, Reste ' + reste.toFixed(2) + ' DA"><i class="fa fa-exclamation-circle"></i> Partiel</span>';
         } else {
+            console.log('[PAIEMENT BADGE]', cmd.reference, '-> Non payé');
             return '<span class="badge badge-secondary" title="Non payé"><i class="fa fa-clock"></i> Non payé</span>';
         }
     }
@@ -739,8 +815,36 @@
             .then(data => {
                 allLivreurs = data;
                 const select = document.getElementById('newLivreur');
-                select.innerHTML = '<option value="">-- Choisir un livreur --</option>' +
+
+                // Détruire l'instance Select2 existante si elle existe
+                if (typeof $.fn.select2 !== 'undefined') {
+                    $('#newLivreur').select2('destroy');
+                }
+
+                // Charger les options
+                select.innerHTML = '<option value=""></option>' +
                     data.map(l => `<option value="${l.id}">${l.nom} (${l.matricule}) - ${l.entrepot_nom || 'Pas de van'}</option>`).join('');
+
+                // Initialiser Select2 avec hauteur limitée
+                if (typeof $.fn.select2 !== 'undefined') {
+                    $('#newLivreur').select2({
+                        theme: 'bootstrap4',
+                        placeholder: '-- Rechercher un livreur --',
+                        allowClear: true,
+                        width: '100%',
+                        dropdownParent: $('#modalAffecterLivreur'),
+                        dropdownCssClass: 'select2-dropdown-limited',
+                        language: {
+                            noResults: function() {
+                                return "Aucun livreur trouvé";
+                            },
+                            searching: function() {
+                                return "Recherche en cours...";
+                            }
+                        },
+                        minimumResultsForSearch: 0
+                    });
+                }
             })
             .catch(err => console.error('Erreur chargement livreurs:', err));
     }
@@ -754,13 +858,6 @@
         document.getElementById('commandeClientForLivreur').textContent =
             (commande.client_prenom || '') + ' ' + (commande.client_nom || '');
 
-        // Pré-sélectionner le livreur actuel si existe
-        if (commande.livreur) {
-            document.getElementById('newLivreur').value = commande.livreur;
-        } else {
-            document.getElementById('newLivreur').value = '';
-        }
-
         // Pré-remplir la date de livraison souhaitée
         if (commande.date_livraison_souhaitee) {
             document.getElementById('dateLivraisonSouhaitee').value = commande.date_livraison_souhaitee;
@@ -773,6 +870,15 @@
 
         // Charger la liste des livreurs
         loadLivreursForModal();
+
+        // Pré-sélectionner le livreur actuel après chargement
+        setTimeout(() => {
+            if (commande.livreur) {
+                $('#newLivreur').val(commande.livreur).trigger('change');
+            } else {
+                $('#newLivreur').val(null).trigger('change');
+            }
+        }, 500);
 
         $('#modalAffecterLivreur').modal('show');
     }

@@ -813,7 +813,7 @@ class LigneCommandeClientCreateSerializer(serializers.Serializer):
     produit = serializers.PrimaryKeyRelatedField(queryset=Produit.objects.all())
     quantite = serializers.DecimalField(max_digits=10, decimal_places=2)
     prix_unitaire_ht = serializers.DecimalField(max_digits=10, decimal_places=2)
-    taux_tva = serializers.DecimalField(max_digits=5, decimal_places=2, required=False, default=19)
+    taux_tva = serializers.DecimalField(max_digits=5, decimal_places=2, required=False, default=0)
 
 
 class CommandeClientSerializer(serializers.ModelSerializer):
@@ -915,6 +915,9 @@ class CommandeClientCreateSerializer(serializers.ModelSerializer):
         ]
 
     def create(self, validated_data):
+        import logging
+        logger = logging.getLogger(__name__)
+
         lignes_data = validated_data.pop('lignes')
 
         # Auto-assigner la company depuis le client si non fournie
@@ -936,8 +939,10 @@ class CommandeClientCreateSerializer(serializers.ModelSerializer):
             if livreur:
                 validated_data['livreur'] = livreur
 
+        # Créer la commande d'abord pour calculer le montant total
         commande = CommandeClient.objects.create(**validated_data)
 
+        # Créer les lignes de commande
         for ligne_data in lignes_data:
             # Retirer les champs calculés s'ils sont présents
             ligne_data.pop('produit_reference', None)
@@ -950,9 +955,51 @@ class CommandeClientCreateSerializer(serializers.ModelSerializer):
                 **ligne_data
             )
 
+        # Recalculer les totaux à partir des lignes
+        commande.calculer_totaux()
+
+        # Logique intelligente pour montant_paye et est_paye
+        type_paiement = commande.type_paiement
+        montant_paye = commande.montant_paye
+        montant_total = commande.montant_total_ttc
+
+        logger.info(f"[COMMANDE] Avant traitement: type_paiement={type_paiement}, montant_paye={montant_paye}, montant_total={montant_total}")
+
+        # Si montant_paye n'est pas fourni ou est 0, déduire du type_paiement
+        if montant_paye == 0:
+            if type_paiement in ['especes', 'carte', 'cheque', 'virement']:
+                # Paiement immédiat complet
+                commande.montant_paye = montant_total
+                commande.est_paye = True
+                if not commande.date_paiement:
+                    commande.date_paiement = timezone.now()
+                logger.info(f"[COMMANDE] Paiement complet déduit: montant_paye={commande.montant_paye}")
+            elif type_paiement in ['credit', 'non_paye']:
+                # Pas de paiement
+                commande.montant_paye = 0
+                commande.est_paye = False
+                commande.date_paiement = None
+                logger.info(f"[COMMANDE] Pas de paiement (crédit)")
+        else:
+            # montant_paye est fourni par l'app mobile
+            if montant_paye >= montant_total:
+                # Paiement complet
+                commande.est_paye = True
+                if not commande.date_paiement:
+                    commande.date_paiement = timezone.now()
+                logger.info(f"[COMMANDE] Paiement complet: montant_paye={montant_paye}")
+            else:
+                # Paiement partiel
+                commande.est_paye = False
+                if not commande.date_paiement:
+                    commande.date_paiement = timezone.now()
+                logger.info(f"[COMMANDE] Paiement partiel: montant_paye={montant_paye}, reste={montant_total - montant_paye}")
+
         # Marquer comme synchronisé
         commande.synced_at = timezone.now()
         commande.save()
+
+        logger.info(f"[COMMANDE] Après traitement: est_paye={commande.est_paye}, montant_paye={commande.montant_paye}, date_paiement={commande.date_paiement}")
 
         return commande
 
