@@ -360,8 +360,21 @@
 
     function loadCommandes() {
         console.log('[COMMANDES] Chargement des commandes depuis /API/distribution/commandes/');
-        fetch('/API/distribution/commandes/')
-            .then(res => res.json())
+        fetch('/API/distribution/commandes/', {
+            method: 'GET',
+            credentials: 'same-origin',
+            headers: {
+                'Accept': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        })
+            .then(res => {
+                console.log('[COMMANDES] Réponse status:', res.status);
+                if (!res.ok) {
+                    throw new Error('Erreur HTTP: ' + res.status);
+                }
+                return res.json();
+            })
             .then(data => {
                 console.log('[COMMANDES] Nombre de commandes reçues:', data.length);
                 console.log('[COMMANDES] Détails des commandes:', data);
@@ -386,8 +399,20 @@
     }
 
     function loadLivreurs() {
-        fetch('/API/distribution/livreurs/')
-            .then(res => res.json())
+        fetch('/API/distribution/livreurs/', {
+            method: 'GET',
+            credentials: 'same-origin',
+            headers: {
+                'Accept': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        })
+            .then(res => {
+                if (!res.ok) {
+                    throw new Error('Erreur HTTP: ' + res.status);
+                }
+                return res.json();
+            })
             .then(data => {
                 const select = document.getElementById('filterLivreur');
                 select.innerHTML = '<option value="">Tous</option>' +
@@ -706,6 +731,17 @@
     }
 
     function refreshCommandes() {
+        // Afficher indicateur de chargement
+        const tbody = document.getElementById('commandesTableBody');
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="11" class="text-center py-4">
+                    <i class="fa fa-spinner fa-spin fa-2x text-primary"></i>
+                    <p class="text-muted mt-2">Actualisation en cours...</p>
+                </td>
+            </tr>
+        `;
+        console.log('[COMMANDES] Bouton Actualiser cliqué - début du rafraîchissement');
         loadCommandes();
     }
 
@@ -810,8 +846,20 @@
     let allLivreurs = [];
 
     function loadLivreursForModal() {
-        fetch('/API/distribution/livreurs/')
-            .then(res => res.json())
+        fetch('/API/distribution/livreurs/', {
+            method: 'GET',
+            credentials: 'same-origin',
+            headers: {
+                'Accept': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        })
+            .then(res => {
+                if (!res.ok) {
+                    throw new Error('Erreur HTTP: ' + res.status);
+                }
+                return res.json();
+            })
             .then(data => {
                 allLivreurs = data;
                 const select = document.getElementById('newLivreur');
