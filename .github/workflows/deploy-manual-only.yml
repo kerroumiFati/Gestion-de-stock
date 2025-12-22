@@ -1,0 +1,196 @@
+name: Deploy to VPS (Manual Only)
+
+# ⚠️ Ce workflow se déclenche UNIQUEMENT manuellement
+# Il ne se déclenche PAS automatiquement sur les push
+
+on:
+  workflow_dispatch:  # Déclenchement manuel uniquement
+    inputs:
+      environment:
+        description: 'Environnement de déploiement'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+      create_backup:
+        description: 'Créer une sauvegarde avant déploiement'
+        required: true
+        default: true
+        type: boolean
+      run_migrations:
+        description: 'Exécuter les migrations'
+        required: true
+        default: true
+        type: boolean
+
+jobs:
+  deploy:
+    name: Deploy to ${{ github.event.inputs.environment }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Display deployment info
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🚀 Déploiement manuel demandé"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Environnement: ${{ github.event.inputs.environment }}"
+          echo "Branche: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "Sauvegarde: ${{ github.event.inputs.create_backup }}"
+          echo "Migrations: ${{ github.event.inputs.run_migrations }}"
+          echo "Lancé par: ${{ github.actor }}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p ${{ secrets.VPS_PORT }} ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Create .env file
+        run: |
+          echo "${{ secrets.ENV_FILE }}" > .env
+
+      - name: Create backup
+        if: ${{ github.event.inputs.create_backup == 'true' }}
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USERNAME: ${{ secrets.VPS_USERNAME }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+        run: |
+          echo "📦 Création d'une sauvegarde..."
+          ssh -i ~/.ssh/deploy_key -p ${VPS_PORT} ${VPS_USERNAME}@${VPS_HOST} << 'EOF'
+            BACKUP_DIR="/home/gestionstock/backups"
+            mkdir -p ${BACKUP_DIR}
+            DATE=$(date +%Y%m%d_%H%M%S)
+
+            # Sauvegarder la base de données
+            sudo -u postgres pg_dump gestion_stock_db > ${BACKUP_DIR}/db_${DATE}.sql
+            echo "✓ Base de données sauvegardée: ${BACKUP_DIR}/db_${DATE}.sql"
+
+            # Sauvegarder les fichiers media
+            tar -czf ${BACKUP_DIR}/media_${DATE}.tar.gz -C /home/gestionstock/app media/ 2>/dev/null || true
+            echo "✓ Fichiers media sauvegardés: ${BACKUP_DIR}/media_${DATE}.tar.gz"
+          EOF
+
+      - name: Deploy to VPS
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USERNAME: ${{ secrets.VPS_USERNAME }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+        run: |
+          echo "📤 Synchronisation des fichiers..."
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/deploy_key -p ${VPS_PORT}" \
+            --exclude='.git' \
+            --exclude='*.pyc' \
+            --exclude='__pycache__' \
+            --exclude='db.sqlite3' \
+            --exclude='media' \
+            --exclude='staticfiles' \
+            --exclude='venv' \
+            --exclude='.github' \
+            --exclude='*.log' \
+            ./ ${VPS_USERNAME}@${VPS_HOST}:/home/gestionstock/app/
+
+      - name: Install dependencies
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USERNAME: ${{ secrets.VPS_USERNAME }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+        run: |
+          echo "📦 Installation des dépendances..."
+          ssh -i ~/.ssh/deploy_key -p ${VPS_PORT} ${VPS_USERNAME}@${VPS_HOST} << 'EOF'
+            cd /home/gestionstock/app
+            source venv/bin/activate
+            pip install -r requirements.txt -q
+            echo "✓ Dépendances installées"
+          EOF
+
+      - name: Run migrations
+        if: ${{ github.event.inputs.run_migrations == 'true' }}
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USERNAME: ${{ secrets.VPS_USERNAME }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+        run: |
+          echo "🔄 Exécution des migrations..."
+          ssh -i ~/.ssh/deploy_key -p ${VPS_PORT} ${VPS_USERNAME}@${VPS_HOST} << 'EOF'
+            cd /home/gestionstock/app
+            source venv/bin/activate
+            python manage.py migrate --noinput
+            echo "✓ Migrations exécutées"
+          EOF
+
+      - name: Collect static files
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USERNAME: ${{ secrets.VPS_USERNAME }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+        run: |
+          echo "📁 Collecte des fichiers statiques..."
+          ssh -i ~/.ssh/deploy_key -p ${VPS_PORT} ${VPS_USERNAME}@${VPS_HOST} << 'EOF'
+            cd /home/gestionstock/app
+            source venv/bin/activate
+            python manage.py collectstatic --noinput
+            echo "✓ Fichiers statiques collectés"
+          EOF
+
+      - name: Restart application
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USERNAME: ${{ secrets.VPS_USERNAME }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+        run: |
+          echo "🔄 Redémarrage de l'application..."
+          ssh -i ~/.ssh/deploy_key -p ${VPS_PORT} ${VPS_USERNAME}@${VPS_HOST} << 'EOF'
+            sudo systemctl restart gestionstock
+            sleep 3
+
+            if sudo systemctl is-active --quiet gestionstock; then
+              echo "✓ Application redémarrée avec succès"
+            else
+              echo "✗ Échec du redémarrage"
+              sudo journalctl -u gestionstock -n 20 --no-pager
+              exit 1
+            fi
+          EOF
+
+      - name: Health check
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+        run: |
+          echo "🏥 Vérification de santé..."
+          sleep 5
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${VPS_HOST} || echo "000")
+
+          if [ "$HTTP_STATUS" == "200" ] || [ "$HTTP_STATUS" == "302" ] || [ "$HTTP_STATUS" == "301" ]; then
+            echo "✓ Health check réussi (HTTP $HTTP_STATUS)"
+          else
+            echo "⚠️ Health check: HTTP $HTTP_STATUS"
+          fi
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -f ~/.ssh/deploy_key
+          rm -f .env
+
+      - name: Deployment summary
+        if: success()
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✅ DÉPLOIEMENT RÉUSSI"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Environnement: ${{ github.event.inputs.environment }}"
+          echo "URL: http://${{ secrets.VPS_HOST }}"
+          echo "Déployé par: ${{ github.actor }}"
+          echo "Date: $(date)"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
