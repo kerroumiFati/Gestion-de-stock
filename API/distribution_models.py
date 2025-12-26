@@ -690,8 +690,10 @@ class LigneCommandeClient(models.Model):
 
         super().save(*args, **kwargs)
 
-        # Recalculer les totaux de la commande
-        self.commande.calculer_totaux()
+        # NOTE: Ne pas appeler automatiquement calculer_totaux() ici
+        # car cela cause des calculs multiples. La vue appelle explicitement
+        # calculer_totaux() UNE SEULE FOIS après toutes les mises à jour.
+        # self.commande.calculer_totaux()
 
 
 ###########################

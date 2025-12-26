@@ -1375,8 +1375,8 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny]  # TODO: Ajouter authentification en production
 
     def get_serializer_class(self):
-        """Utiliser CommandeClientCreateSerializer pour create depuis mobile"""
-        if self.action == 'create':
+        """Utiliser CommandeClientCreateSerializer pour create et update depuis mobile"""
+        if self.action in ['create', 'update', 'partial_update']:
             return CommandeClientCreateSerializer
         return CommandeClientSerializer
 
@@ -1478,6 +1478,100 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
             'errors': errors,
             'commandes': CommandeClientSerializer(created_commandes, many=True).data
         })
+
+    def partial_update(self, request, *args, **kwargs):
+        """
+        Mise à jour partielle d'une commande
+        Gère spécialement le cas de la livraison avec quantités ajustées
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        commande = self.get_object()
+        nouveau_statut = request.data.get('statut')
+        lignes_ajustees = request.data.get('lignes')
+        date_livraison = request.data.get('date_livraison_reelle')
+
+        logger.info(f"[PARTIAL_UPDATE] Commande {commande.id}: statut={nouveau_statut}, lignes={'OUI' if lignes_ajustees else 'NON'}")
+        if lignes_ajustees:
+            logger.info(f"[PARTIAL_UPDATE] Nombre de lignes reçues: {len(lignes_ajustees)}")
+
+        # Vérifier si on essaie d'ajuster les quantités d'une commande déjà payée
+        if lignes_ajustees and (commande.est_paye or commande.montant_paye > 0):
+            logger.warning(f"Tentative d'ajustement sur commande payée {commande.id}")
+            return Response(
+                {'error': 'Les quantités ne peuvent pas être ajustées après le paiement de la commande'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Si la commande est marquée comme livrée avec des quantités ajustées
+        if nouveau_statut == 'delivered' and lignes_ajustees:
+            from decimal import Decimal
+            from django.db import transaction
+
+            # Utiliser une transaction pour garantir la cohérence
+            with transaction.atomic():
+                # Calculer les totaux en une seule passe
+                total_ht = Decimal('0')
+                total_ttc = Decimal('0')
+
+                # Mettre à jour chaque ligne
+                for ligne_data in lignes_ajustees:
+                    produit_id = ligne_data.get('produit')
+                    nouvelle_quantite = Decimal(str(ligne_data.get('quantite', 0)))
+
+                    try:
+                        ligne = commande.lignes.get(produit_id=produit_id)
+
+                        # Calculer les nouveaux montants
+                        montant_ht = nouvelle_quantite * ligne.prix_unitaire_ht
+                        montant_tva = montant_ht * (ligne.taux_tva / Decimal('100'))
+                        montant_ttc = montant_ht + montant_tva
+
+                        # Mettre à jour la ligne directement en DB (sans trigger)
+                        LigneCommandeClient.objects.filter(id=ligne.id).update(
+                            quantite=nouvelle_quantite,
+                            montant_ht=montant_ht,
+                            montant_tva=montant_tva,
+                            montant_ttc=montant_ttc
+                        )
+
+                        # Accumuler pour le total
+                        total_ht += montant_ht
+                        total_ttc += montant_ttc
+
+                    except LigneCommandeClient.DoesNotExist:
+                        logger.error(f"Ligne de commande introuvable pour produit {produit_id}")
+
+                # Mettre à jour les totaux de la commande DIRECTEMENT (sans calculer_totaux())
+                CommandeClient.objects.filter(id=commande.id).update(
+                    montant_total_ht=total_ht,
+                    montant_total_ttc=total_ttc
+                )
+
+                # Rafraîchir l'objet pour avoir les nouvelles valeurs
+                commande.refresh_from_db()
+
+        # Mettre à jour le statut et la date de livraison
+        fields_to_update = []
+
+        if nouveau_statut:
+            commande.statut = nouveau_statut
+            fields_to_update.append('statut')
+
+        if nouveau_statut == 'delivered':
+            commande.date_livraison_reelle = date_livraison or timezone.now()
+            fields_to_update.append('date_livraison_reelle')
+
+        # Sauvegarder seulement les champs modifiés (ne pas écraser les montants recalculés)
+        if fields_to_update:
+            commande.save(update_fields=fields_to_update)
+
+        # Rafraîchir l'objet pour récupérer les montants mis à jour
+        commande.refresh_from_db()
+
+        serializer = CommandeClientSerializer(commande)
+        return Response(serializer.data)
 
     @action(detail=True, methods=['patch'])
     def changer_statut(self, request, pk=None):

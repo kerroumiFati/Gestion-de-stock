@@ -140,6 +140,10 @@ if (!window.__client_script_loaded__) {
     font-size: 0.85rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.05);
 }
 
 .modern-table tbody td {
@@ -385,7 +389,30 @@ if (!window.__client_script_loaded__) {
             {% trans "Liste des Clients" %}
         </div>
 
-        <div class="table-responsive">
+        <!-- Filtre de recherche -->
+        <div class="mb-3">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="input-group">
+                        <div class="input-group-prepend">
+                            <span class="input-group-text" style="background: #f7fafc; border: 1px solid #cbd5e0; border-radius: 6px 0 0 6px;">
+                                <i class="fa fa-search" style="color: #3b82f6;"></i>
+                            </span>
+                        </div>
+                        <input type="text" id="searchFilter" class="form-control modern-input"
+                               placeholder="{% trans 'Rechercher par nom, prénom, email, téléphone...' %}"
+                               style="border-radius: 0 6px 6px 0;">
+                    </div>
+                </div>
+                <div class="col-md-6 text-right">
+                    <span id="clientCount" class="text-muted" style="line-height: 38px; font-size: 0.9rem;">
+                        <i class="fa fa-users"></i> <span id="countText">0 client(s)</span>
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
             <table id="tclient" class="table modern-table" data-no-datatable="true">
                 <thead>
                     <tr>
@@ -433,4 +460,109 @@ function resetForm(){
     document.getElementById('rc').value = '';
     document.getElementById('btnClient').innerHTML = '<i class="fa fa-plus"></i> Ajouter';
 }
+
+// Fonction pour mettre à jour le compteur de clients
+function updateClientCount() {
+    const tbody = document.getElementById('table-content');
+    if (!tbody) return;
+
+    const rows = tbody.getElementsByTagName('tr');
+    let visibleCount = 0;
+
+    for (let i = 0; i < rows.length; i++) {
+        const cells = rows[i].getElementsByTagName('td');
+        // Ne compter que les vraies lignes avec des données (pas les lignes "Chargement..." ou "Aucun client")
+        if (cells.length > 1 && rows[i].style.display !== 'none') {
+            visibleCount++;
+        }
+    }
+
+    const countText = document.getElementById('countText');
+    if (countText) {
+        countText.textContent = visibleCount + ' client(s)';
+    }
+}
+
+// Fonction de filtrage
+window.filterClients = function() {
+    const searchFilter = document.getElementById('searchFilter');
+    if (!searchFilter) return;
+
+    const filterValue = searchFilter.value.toLowerCase().trim();
+    const tbody = document.getElementById('table-content');
+    if (!tbody) return;
+
+    const rows = tbody.getElementsByTagName('tr');
+
+    for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const cells = row.getElementsByTagName('td');
+
+        // Ignorer les lignes de message (Chargement, Aucun client, etc.)
+        if (cells.length <= 1) {
+            continue;
+        }
+
+        if (!filterValue) {
+            row.style.display = '';
+            continue;
+        }
+
+        // Recherche dans les colonnes : ID, Nom, Prénom, Email, Téléphone, Adresse, Secteur
+        const id = cells[0] ? cells[0].textContent.toLowerCase() : '';
+        const nom = cells[1] ? cells[1].textContent.toLowerCase() : '';
+        const prenom = cells[2] ? cells[2].textContent.toLowerCase() : '';
+        const email = cells[3] ? cells[3].textContent.toLowerCase() : '';
+        const telephone = cells[4] ? cells[4].textContent.toLowerCase() : '';
+        const adresse = cells[5] ? cells[5].textContent.toLowerCase() : '';
+        const secteur = cells[6] ? cells[6].textContent.toLowerCase() : '';
+
+        const searchText = id + ' ' + nom + ' ' + prenom + ' ' + email + ' ' + telephone + ' ' + adresse + ' ' + secteur;
+
+        if (searchText.includes(filterValue)) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    }
+
+    updateClientCount();
+};
+
+// Initialisation du filtre
+(function() {
+    function initFilter() {
+        const searchFilter = document.getElementById('searchFilter');
+        if (searchFilter) {
+            searchFilter.addEventListener('input', window.filterClients);
+            console.log('[CLIENT FILTER] Filter initialized');
+        }
+
+        // Observer pour mettre à jour le compteur quand le contenu du tableau change
+        const tableContent = document.getElementById('table-content');
+        if (tableContent) {
+            const observer = new MutationObserver(function() {
+                updateClientCount();
+                // Réappliquer le filtre après rechargement du tableau
+                if (document.getElementById('searchFilter').value) {
+                    window.filterClients();
+                }
+            });
+
+            observer.observe(tableContent, {
+                childList: true,
+                subtree: false
+            });
+
+            // Mise à jour initiale
+            updateClientCount();
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initFilter);
+    } else {
+        initFilter();
+    }
+})();
 </script>

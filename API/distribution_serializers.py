@@ -1003,6 +1003,47 @@ class CommandeClientCreateSerializer(serializers.ModelSerializer):
 
         return commande
 
+    def update(self, instance, validated_data):
+        """Mise à jour d'une commande avec ses lignes"""
+        import logging
+        logger = logging.getLogger(__name__)
+
+        logger.info(f"[COMMANDE UPDATE] Updating commande {instance.id} with data: {validated_data}")
+
+        # Extraire les lignes si présentes
+        lignes_data = validated_data.pop('lignes', None)
+
+        # Mettre à jour les champs de base
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        # Mettre à jour les lignes si fournies
+        if lignes_data is not None:
+            logger.info(f"[COMMANDE UPDATE] Updating {len(lignes_data)} lignes")
+            # Supprimer les anciennes lignes
+            instance.lignes.all().delete()
+            # Créer les nouvelles lignes
+            for ligne_data in lignes_data:
+                # Retirer les champs calculés s'ils sont présents
+                ligne_data.pop('produit_reference', None)
+                ligne_data.pop('produit_designation', None)
+                # Pour les objets Produit du PrimaryKeyRelatedField
+                produit = ligne_data.pop('produit')
+                LigneCommandeClient.objects.create(
+                    commande=instance,
+                    produit=produit,
+                    **ligne_data
+                )
+            # Recalculer les totaux
+            instance.calculer_totaux()
+
+        # Sauvegarder l'instance
+        instance.synced_at = timezone.now()
+        instance.save()
+
+        logger.info(f"[COMMANDE UPDATE] Commande {instance.id} updated successfully")
+        return instance
+
 
 class RapportCaisseCreateSerializer(serializers.ModelSerializer):
     """Serializer pour créer/mettre à jour un rapport de caisse depuis l'app mobile"""

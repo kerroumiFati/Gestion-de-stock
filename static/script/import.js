@@ -41,7 +41,7 @@
     };
 
     // Drag & Drop
-    ['products', 'categories', 'fournisseurs', 'clients'].forEach(type => {
+    ['products', 'categories', 'fournisseurs', 'clients', 'pricelists'].forEach(type => {
         const zone = document.getElementById('uploadZone' + capitalize(type));
         if (!zone) return;
 
@@ -219,6 +219,14 @@
                 return { valid: false, error: 'Nom manquant' };
             }
             return { valid: true };
+        } else if (type === 'pricelists') {
+            if ((!row.code_article || !row.code_article.trim()) && (!row.reference || !row.reference.trim())) {
+                return { valid: false, error: 'Code article ou référence manquant' };
+            }
+            if (!row.prix || isNaN(parseFloat(row.prix)) || parseFloat(row.prix) <= 0) {
+                return { valid: false, error: 'Prix invalide' };
+            }
+            return { valid: true };
         }
         return { valid: false, error: 'Type inconnu' };
     }
@@ -321,6 +329,8 @@
                 show('fournisseur');
             } else if (type === 'clients') {
                 show('client');
+            } else if (type === 'pricelists') {
+                show('produit');
             }
         }, 3000);
     }

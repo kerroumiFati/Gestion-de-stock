@@ -503,13 +503,13 @@
                     {% endif %}
 
                     {% if perms.API.export_data or user.is_superuser %}
-                    <li><a href="#" onclick="show('import')" class="sidebar-item">
+                    <li><a href="#" onclick="show('import');return false;" class="sidebar-item">
                         <i class="fas fa-file-import"></i><span>{% trans "Import de données" %}</span>
                     </a></li>
                     {% endif %}
 
                     {% if perms.API.view_parametres or user.is_superuser %}
-                    <li><a href="#" onclick="show('parametres')" class="sidebar-item">
+                    <li><a href="#" onclick="show('parametres');return false;" class="sidebar-item">
                         <i class="fas fa-cogs"></i><span>{% trans "Paramètres" %}</span>
                     </a></li>
                     {% endif %}
@@ -517,7 +517,7 @@
                     {# ===== ADMINISTRATION ===== #}
                     {% if user.is_staff or perms.API.view_admin %}
                     <li class="header-menu"><span>{% trans "ADMINISTRATION" %}</span></li>
-                    <li><a href="#" onclick="show('admin')" class="sidebar-item">
+                    <li><a href="#" onclick="show('admin');return false;" class="sidebar-item">
                         <i class="fas fa-tools"></i><span>{% trans "Tableau de bord Admin" %}</span>
                     </a></li>
                     {% if perms.API.manage_users or user.is_superuser %}

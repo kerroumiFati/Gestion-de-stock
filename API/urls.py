@@ -270,6 +270,57 @@ def download_template_view(request):
                 }
             ]
 
+        elif import_type == 'pricelists':
+            columns = ['code_article', 'reference', 'prix', 'prix_achat', 'prix_gros', 'prix_detail', 'remise']
+            filename = 'template_liste_prix'
+            example_data = [
+                {
+                    'code_article': '6111234567890',
+                    'reference': 'PROD-001',
+                    'prix': '150',
+                    'prix_achat': '100',
+                    'prix_gros': '130',
+                    'prix_detail': '150',
+                    'remise': '0'
+                },
+                {
+                    'code_article': '6111234567891',
+                    'reference': 'PROD-002',
+                    'prix': '180',
+                    'prix_achat': '120',
+                    'prix_gros': '160',
+                    'prix_detail': '180',
+                    'remise': '5'
+                },
+                {
+                    'code_article': '6111234567892',
+                    'reference': 'PROD-003',
+                    'prix': '50',
+                    'prix_achat': '30',
+                    'prix_gros': '45',
+                    'prix_detail': '50',
+                    'remise': '0'
+                },
+                {
+                    'code_article': '6111234567893',
+                    'reference': 'PROD-004',
+                    'prix': '80',
+                    'prix_achat': '50',
+                    'prix_gros': '70',
+                    'prix_detail': '80',
+                    'remise': '10'
+                },
+                {
+                    'code_article': '6111234567894',
+                    'reference': 'PROD-005',
+                    'prix': '120',
+                    'prix_achat': '80',
+                    'prix_gros': '100',
+                    'prix_detail': '120',
+                    'remise': '0'
+                }
+            ]
+
         else:
             return JsonResponse({'error': 'Type non supporté: ' + import_type}, status=400)
 

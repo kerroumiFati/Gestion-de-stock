@@ -128,6 +128,8 @@ class ImportExecuteView(APIView):
                 result = self.import_fournisseurs(df, request.user, company)
             elif import_type == 'clients':
                 result = self.import_clients(df, request.user, company)
+            elif import_type == 'pricelists':
+                result = self.import_pricelists(df, request.user, company)
             else:
                 return Response({'error': 'Type d\'import non supporté'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -498,6 +500,103 @@ class ImportExecuteView(APIView):
                         created += 1
                     else:
                         updated += 1
+
+                except Exception as e:
+                    errors.append({'row': idx + 2, 'message': str(e)})
+                    skipped += 1
+
+        return {
+            'stats': {
+                'created': created,
+                'updated': updated,
+                'skipped': skipped,
+                'total': len(df)
+            },
+            'errors': errors
+        }
+
+    def import_pricelists(self, df, user, company=None):
+        """Importer une liste de prix"""
+        created = 0
+        updated = 0
+        skipped = 0
+        errors = []
+
+        with transaction.atomic():
+            for idx, row in df.iterrows():
+                try:
+                    # Vérifier les champs requis
+                    code_article = str(row.get('code_article', '')).strip() if row.get('code_article') else ''
+                    reference = str(row.get('reference', '')).strip() if row.get('reference') else ''
+
+                    if not code_article and not reference:
+                        errors.append({'row': idx + 2, 'message': 'Code article ou référence manquant'})
+                        skipped += 1
+                        continue
+
+                    if not row.get('prix'):
+                        errors.append({'row': idx + 2, 'message': 'Prix manquant'})
+                        skipped += 1
+                        continue
+
+                    try:
+                        prix = Decimal(str(row['prix']))
+                        if prix <= 0:
+                            raise ValueError('Le prix doit être positif')
+                    except (ValueError, Exception) as e:
+                        errors.append({'row': idx + 2, 'message': f'Prix invalide: {str(e)}'})
+                        skipped += 1
+                        continue
+
+                    # Chercher le produit par code_barre ou référence
+                    produit = None
+                    if code_article:
+                        try:
+                            produit = Produit.objects.get(code_barre=code_article)
+                        except Produit.DoesNotExist:
+                            pass
+
+                    if not produit and reference:
+                        try:
+                            produit = Produit.objects.get(reference=reference)
+                        except Produit.DoesNotExist:
+                            pass
+
+                    if not produit:
+                        errors.append({'row': idx + 2, 'message': f'Produit "{code_article or reference}" introuvable'})
+                        skipped += 1
+                        continue
+
+                    # Mettre à jour le prix
+                    produit.prixU = prix
+
+                    # Mettre à jour les autres prix si fournis
+                    if row.get('prix_achat'):
+                        try:
+                            produit.prix_achat = Decimal(str(row['prix_achat']))
+                        except:
+                            pass
+
+                    if row.get('prix_gros'):
+                        try:
+                            produit.prix_gros = Decimal(str(row['prix_gros']))
+                        except:
+                            pass
+
+                    if row.get('prix_detail'):
+                        try:
+                            produit.prix_detail = Decimal(str(row['prix_detail']))
+                        except:
+                            pass
+
+                    if row.get('remise'):
+                        try:
+                            produit.remise = Decimal(str(row['remise']))
+                        except:
+                            pass
+
+                    produit.save()
+                    updated += 1
 
                 except Exception as e:
                     errors.append({'row': idx + 2, 'message': str(e)})

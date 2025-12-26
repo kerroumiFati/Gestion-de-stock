@@ -237,7 +237,7 @@
             <i class="fas fa-file-import mr-3"></i>{% trans "Import de Données" %}
         </h1>
         <p class="mb-0" style="opacity: 0.9;">
-            {% trans "Importez vos produits, catégories, fournisseurs et clients en masse depuis des fichiers Excel ou CSV" %}
+            {% trans "Importez vos produits, catégories, fournisseurs, clients et listes de prix en masse depuis des fichiers Excel ou CSV" %}
         </p>
     </div>
 
@@ -254,6 +254,9 @@
         </button>
         <button class="tab-btn" onclick="switchTab('clients')">
             <i class="fas fa-users mr-2"></i>{% trans "Clients" %}
+        </button>
+        <button class="tab-btn" onclick="switchTab('pricelists')">
+            <i class="fas fa-dollar-sign mr-2"></i>{% trans "Liste de Prix" %}
         </button>
     </div>
 
@@ -545,6 +548,78 @@
         </div>
     </div>
 
+    <!-- Contenu Liste de Prix -->
+    <div id="pricelists-tab" class="tab-content">
+        <div class="import-card">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h3 class="mb-0">
+                    <i class="fas fa-dollar-sign text-primary mr-2"></i>{% trans "Importer Liste de Prix" %}
+                </h3>
+                <div>
+                    <button class="template-btn" onclick="downloadTemplate('pricelists', 'excel')">
+                        <i class="fas fa-file-excel"></i>
+                        {% trans "Template Excel" %}
+                    </button>
+                    <button class="template-btn ml-2" onclick="downloadTemplate('pricelists', 'csv')">
+                        <i class="fas fa-file-csv"></i>
+                        {% trans "Template CSV" %}
+                    </button>
+                </div>
+            </div>
+
+            <!-- Zone d'upload -->
+            <div class="upload-zone" id="uploadZonePricelists" onclick="document.getElementById('fileInputPricelists').click()">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <h4>{% trans "Glissez votre fichier ici ou cliquez pour parcourir" %}</h4>
+                <p class="text-muted mb-0">{% trans "Formats acceptés" %}: .xlsx, .xls, .csv ({% trans "max" %} 10 MB)</p>
+                <input type="file" id="fileInputPricelists" class="file-input" accept=".xlsx,.xls,.csv" onchange="handleFileSelect(this, 'pricelists')">
+            </div>
+
+            <!-- Informations fichier -->
+            <div id="fileInfoPricelists" style="display: none; margin-top: 20px;">
+                <div class="alert alert-info">
+                    <i class="fas fa-file mr-2"></i>
+                    <strong id="fileNamePricelists"></strong> -
+                    <span id="fileSizePricelists"></span>
+                </div>
+            </div>
+
+            <!-- Prévisualisation -->
+            <div id="previewPricelists" style="display: none;">
+                <h5 class="mt-4 mb-3">
+                    <i class="fas fa-eye mr-2"></i>{% trans "Prévisualisation" %} (<span id="previewCountPricelists">0</span> {% trans "lignes" %})
+                </h5>
+                <div class="preview-table" id="previewTablePricelists"></div>
+
+                <div class="text-right mt-3">
+                    <button class="btn btn-secondary mr-2" onclick="cancelImport('pricelists')">
+                        <i class="fas fa-times mr-2"></i>{% trans "Annuler" %}
+                    </button>
+                    <button class="btn btn-success" onclick="confirmImport('pricelists')">
+                        <i class="fas fa-check mr-2"></i>{% trans "Confirmer l'import" %}
+                    </button>
+                </div>
+            </div>
+
+            <!-- Progression -->
+            <div id="progressPricelists" style="display: none;">
+                <h5 class="mt-4">{% trans "Import en cours..." %}</h5>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFillPricelists" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- Résultats -->
+            <div id="resultsPricelists" style="display: none;">
+                <h5 class="mt-4 mb-3">
+                    <i class="fas fa-check-circle text-success mr-2"></i>{% trans "Import terminé" %}
+                </h5>
+                <div class="import-results" id="resultsStatsPricelists"></div>
+                <div id="errorsListPricelists" style="display: none; margin-top: 20px;"></div>
+            </div>
+        </div>
+    </div>
+
     <!-- Instructions -->
     <div class="import-card">
         <h4 class="mb-3">
@@ -586,6 +661,18 @@
                     <li>{% trans "Colonnes optionnelles" %}: <code>prenom</code>, <code>telephone</code>, <code>email</code>, <code>adresse</code>, <code>lat</code>, <code>lng</code>, <code>secteur</code>, <code>nif</code>, <code>nis</code>, <code>ai</code>, <code>rc</code></li>
                     <li>{% trans "Le secteur doit exister dans le système si spécifié" %}</li>
                     <li>{% trans "Si un client existe déjà (même nom + prénom), il sera mis à jour" %}</li>
+                </ul>
+            </div>
+        </div>
+        <div class="row mt-3">
+            <div class="col-md-12">
+                <h6 class="font-weight-bold mb-2">{% trans "Pour la Liste de Prix:" %}</h6>
+                <ul class="text-muted">
+                    <li>{% trans "Colonnes requises" %}: <code>code_article</code> {% trans "ou" %} <code>reference</code>, <code>prix</code></li>
+                    <li>{% trans "Colonnes optionnelles" %}: <code>prix_achat</code>, <code>prix_gros</code>, <code>prix_detail</code>, <code>remise</code></li>
+                    <li>{% trans "Le code d'article ou la référence doit correspondre à un produit existant" %}</li>
+                    <li>{% trans "Le prix doit être un nombre positif" %}</li>
+                    <li>{% trans "Si plusieurs colonnes de prix sont fournies, le prix de vente unitaire (prixU) sera mis à jour avec la colonne 'prix'" %}</li>
                 </ul>
             </div>
         </div>

@@ -1,0 +1,179 @@
+stages:
+  - test
+  - deploy
+
+variables:
+  POSTGRES_DB: test_db
+  POSTGRES_USER: postgres
+  POSTGRES_PASSWORD: postgres
+  POSTGRES_HOST_AUTH_METHOD: trust
+
+# Job de tests
+test:
+  stage: test
+  image: python:3.11
+
+  services:
+    - postgres:15
+
+  before_script:
+    - pip install --upgrade pip
+    - pip install -r requirements.txt
+
+  script:
+    # Créer le fichier .env de test
+    - |
+      cat > .env << EOF
+      SECRET_KEY=test-secret-key-for-gitlab-ci
+      DEBUG=True
+      ALLOWED_HOSTS=localhost,127.0.0.1
+      DATABASE_URL=postgresql://postgres:postgres@postgres:5432/test_db
+      CORS_ALLOW_ALL_ORIGINS=True
+      EOF
+
+    # Exécuter les migrations
+    - python manage.py migrate
+
+    # Vérifier les migrations manquantes
+    - python manage.py makemigrations --check --dry-run
+
+    # Collecter les fichiers statiques
+    - python manage.py collectstatic --noinput
+
+    # Exécuter les tests
+    - python manage.py test
+
+  only:
+    - main
+    - merge_requests
+
+# Job de déploiement
+deploy:
+  stage: deploy
+  image: ubuntu:22.04
+
+  before_script:
+    # Installer les dépendances nécessaires
+    - apt-get update -qq
+    - apt-get install -y -qq openssh-client rsync
+
+    # Configurer SSH
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - echo "$VPS_SSH_KEY" > ~/.ssh/deploy_key
+    - chmod 600 ~/.ssh/deploy_key
+    - ssh-keyscan -p ${VPS_PORT} ${VPS_HOST} >> ~/.ssh/known_hosts
+
+  script:
+    - echo "🚀 Starting deployment to VPS..."
+
+    # Créer le fichier .env
+    - echo "$ENV_FILE" > .env
+
+    # Créer une sauvegarde sur le VPS
+    - |
+      ssh -i ~/.ssh/deploy_key -p ${VPS_PORT} ${VPS_USERNAME}@${VPS_HOST} << 'EOF'
+        echo "📦 Creating backup..."
+        BACKUP_DIR="/home/gestionstock/backups"
+        mkdir -p ${BACKUP_DIR}
+        DATE=$(date +%Y%m%d_%H%M%S)
+
+        # Sauvegarder la base de données
+        sudo -u postgres pg_dump gestion_stock_db > ${BACKUP_DIR}/db_${DATE}.sql
+
+        # Sauvegarder les fichiers media
+        tar -czf ${BACKUP_DIR}/media_${DATE}.tar.gz -C /home/gestionstock/app media/ 2>/dev/null || true
+
+        echo "✓ Backup created: ${BACKUP_DIR}/db_${DATE}.sql"
+      EOF
+
+    # Synchroniser les fichiers
+    - echo "📤 Uploading files to VPS..."
+    - |
+      rsync -avz --delete \
+        -e "ssh -i ~/.ssh/deploy_key -p ${VPS_PORT}" \
+        --exclude='.git' \
+        --exclude='*.pyc' \
+        --exclude='__pycache__' \
+        --exclude='db.sqlite3' \
+        --exclude='media' \
+        --exclude='staticfiles' \
+        --exclude='venv' \
+        --exclude='.gitlab-ci.yml' \
+        --exclude='*.log' \
+        ./ ${VPS_USERNAME}@${VPS_HOST}:/home/gestionstock/app/
+
+    # Installer les dépendances et migrer
+    - echo "📦 Installing dependencies and migrating..."
+    - |
+      ssh -i ~/.ssh/deploy_key -p ${VPS_PORT} ${VPS_USERNAME}@${VPS_HOST} << 'EOF'
+        cd /home/gestionstock/app
+        source venv/bin/activate
+
+        echo "Installing dependencies..."
+        pip install -r requirements.txt
+
+        echo "Running migrations..."
+        python manage.py migrate --noinput
+
+        echo "Collecting static files..."
+        python manage.py collectstatic --noinput
+
+        echo "✓ Installation completed"
+      EOF
+
+    # Redémarrer l'application
+    - echo "🔄 Restarting application..."
+    - |
+      ssh -i ~/.ssh/deploy_key -p ${VPS_PORT} ${VPS_USERNAME}@${VPS_HOST} << 'EOF'
+        sudo systemctl restart gestionstock
+
+        # Attendre un peu
+        sleep 3
+
+        # Vérifier le statut
+        if sudo systemctl is-active --quiet gestionstock; then
+          echo "✓ Application restarted successfully"
+          sudo systemctl status gestionstock --no-pager
+        else
+          echo "✗ Application failed to start"
+          sudo journalctl -u gestionstock -n 50 --no-pager
+          exit 1
+        fi
+      EOF
+
+    # Health check
+    - echo "🏥 Running health check..."
+    - sleep 5
+    - |
+      HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${VPS_HOST} || echo "000")
+      if [ "$HTTP_STATUS" == "200" ] || [ "$HTTP_STATUS" == "302" ] || [ "$HTTP_STATUS" == "301" ]; then
+        echo "✓ Health check passed (HTTP $HTTP_STATUS)"
+      else
+        echo "✗ Health check failed (HTTP $HTTP_STATUS)"
+        exit 1
+      fi
+
+    - echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    - echo "✅ DEPLOYMENT SUCCESSFUL"
+    - echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    - echo "Application: GestionStock"
+    - echo "Environment: Production"
+    - echo "URL: http://${VPS_HOST}"
+    - echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+  after_script:
+    # Nettoyage
+    - rm -f ~/.ssh/deploy_key
+    - rm -f .env
+
+  only:
+    - main
+
+  # Déploiement manuel
+  when: manual
+
+  # Environment
+  environment:
+    name: production
+    url: http://$VPS_HOST
