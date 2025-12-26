@@ -10,7 +10,7 @@ import pandas as pd
 import io
 import csv
 from decimal import Decimal
-from .models import Produit, Categorie, Fournisseur, Client, Secteur, Currency
+from .models import Produit, Categorie, Fournisseur, Client, Secteur, Currency, CodePrix, TypePrix, PrixProduit
 from django.db import transaction
 
 
@@ -197,15 +197,19 @@ class ImportExecuteView(APIView):
                         except:
                             pass
 
-                    if row.get('stock_min'):
+                    # Accepter stock_min OU seuil_alerte
+                    if row.get('stock_min') or row.get('seuil_alerte'):
                         try:
-                            data['stock_min'] = int(float(row['stock_min']))
+                            val = row.get('seuil_alerte') or row.get('stock_min')
+                            data['seuil_alerte'] = int(float(val))
                         except:
                             pass
 
-                    if row.get('stock_max'):
+                    # Accepter stock_max OU seuil_critique
+                    if row.get('stock_max') or row.get('seuil_critique'):
                         try:
-                            data['stock_max'] = int(float(row['stock_max']))
+                            val = row.get('seuil_critique') or row.get('stock_max')
+                            data['seuil_critique'] = int(float(val))
                         except:
                             pass
 
@@ -516,7 +520,7 @@ class ImportExecuteView(APIView):
         }
 
     def import_pricelists(self, df, user, company=None):
-        """Importer une liste de prix"""
+        """Importer une liste de prix avec codes de prix"""
         created = 0
         updated = 0
         skipped = 0
@@ -530,7 +534,7 @@ class ImportExecuteView(APIView):
                     reference = str(row.get('reference', '')).strip() if row.get('reference') else ''
 
                     if not code_article and not reference:
-                        errors.append({'row': idx + 2, 'message': 'Code article ou référence manquant'})
+                        errors.append({'row': idx + 2, 'message': 'Code article (code_barre) ou référence manquant'})
                         skipped += 1
                         continue
 
@@ -548,7 +552,7 @@ class ImportExecuteView(APIView):
                         skipped += 1
                         continue
 
-                    # Chercher le produit par code_barre ou référence
+                    # Chercher le produit par code_barre (code_article) ou référence
                     produit = None
                     if code_article:
                         try:
@@ -567,36 +571,57 @@ class ImportExecuteView(APIView):
                         skipped += 1
                         continue
 
-                    # Mettre à jour le prix
-                    produit.prixU = prix
-
-                    # Mettre à jour les autres prix si fournis
-                    if row.get('prix_achat'):
+                    # Chercher le code de prix (STANDARD, AID, RAMADAN, etc.)
+                    code_prix = None
+                    if row.get('code_prix'):
+                        code_prix_str = str(row['code_prix']).strip().upper()
                         try:
-                            produit.prix_achat = Decimal(str(row['prix_achat']))
-                        except:
-                            pass
+                            code_prix = CodePrix.objects.get(code__iexact=code_prix_str, is_active=True)
+                        except CodePrix.DoesNotExist:
+                            errors.append({'row': idx + 2, 'message': f'Code de prix "{code_prix_str}" introuvable. Utilisez STANDARD, AID, RAMADAN, etc.'})
+                            skipped += 1
+                            continue
+                    else:
+                        # Si pas de code prix spécifié, utiliser le code par défaut
+                        code_prix = CodePrix.get_default()
+                        if not code_prix:
+                            errors.append({'row': idx + 2, 'message': 'Aucun code de prix par défaut configuré'})
+                            skipped += 1
+                            continue
 
-                    if row.get('prix_gros'):
+                    # Chercher le type de prix (DETAIL, SUPERETTE, GROS, etc.)
+                    type_prix = None
+                    if row.get('type_prix'):
+                        type_prix_str = str(row['type_prix']).strip().upper()
                         try:
-                            produit.prix_gros = Decimal(str(row['prix_gros']))
-                        except:
-                            pass
+                            type_prix = TypePrix.objects.get(code__iexact=type_prix_str, is_active=True)
+                        except TypePrix.DoesNotExist:
+                            errors.append({'row': idx + 2, 'message': f'Type de prix "{type_prix_str}" introuvable. Utilisez DETAIL, SUPERETTE, GROS, etc.'})
+                            skipped += 1
+                            continue
+                    else:
+                        # Si pas de type prix spécifié, utiliser le type par défaut
+                        type_prix = TypePrix.objects.filter(is_default=True, is_active=True).first()
+                        if not type_prix:
+                            errors.append({'row': idx + 2, 'message': 'Aucun type de prix par défaut configuré'})
+                            skipped += 1
+                            continue
 
-                    if row.get('prix_detail'):
-                        try:
-                            produit.prix_detail = Decimal(str(row['prix_detail']))
-                        except:
-                            pass
+                    # Créer ou mettre à jour le prix du produit
+                    prix_produit, is_created = PrixProduit.objects.update_or_create(
+                        produit=produit,
+                        code_prix=code_prix,
+                        type_prix=type_prix,
+                        defaults={
+                            'prix': prix,
+                            'is_active': True
+                        }
+                    )
 
-                    if row.get('remise'):
-                        try:
-                            produit.remise = Decimal(str(row['remise']))
-                        except:
-                            pass
-
-                    produit.save()
-                    updated += 1
+                    if is_created:
+                        created += 1
+                    else:
+                        updated += 1
 
                 except Exception as e:
                     errors.append({'row': idx + 2, 'message': str(e)})
@@ -755,3 +780,68 @@ class ImportTemplateView(APIView):
         response = HttpResponse(output.getvalue(), content_type='text/csv; charset=utf-8-sig')
         response['Content-Disposition'] = f'attachment; filename="{filename}.csv"'
         return response
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class ExportProductsView(APIView):
+    """
+    Exporter la liste complète des produits en Excel
+    """
+    authentication_classes = [CsrfExemptSessionAuthentication, BasicAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            # Récupérer tous les produits
+            produits = Produit.objects.all().select_related('categorie', 'fournisseur')
+
+            # Préparer les données
+            data = []
+            for produit in produits:
+                data.append({
+                    'reference': produit.reference,
+                    'code_barre': produit.code_barre or '',
+                    'designation': produit.designation,
+                    'description': produit.description or '',
+                    'prixU': str(produit.prixU),
+                    'categorie': produit.categorie.nom if produit.categorie else '',
+                    'fournisseur': produit.fournisseur.libelle if produit.fournisseur else '',
+                    'quantite': produit.quantite or 0,
+                    'seuil_alerte': produit.seuil_alerte or 10,
+                    'seuil_critique': produit.seuil_critique or 5,
+                    'unite_mesure': produit.unite_mesure or 'piece'
+                })
+
+            # Créer le DataFrame
+            columns = ['reference', 'code_barre', 'designation', 'description', 'prixU',
+                      'categorie', 'fournisseur', 'quantite', 'seuil_alerte', 'seuil_critique', 'unite_mesure']
+            df = pd.DataFrame(data, columns=columns)
+
+            # Générer le fichier Excel
+            output = io.BytesIO()
+            try:
+                with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                    df.to_excel(writer, index=False, sheet_name='Produits')
+                output.seek(0)
+
+                response = HttpResponse(
+                    output.read(),
+                    content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                )
+                response['Content-Disposition'] = 'attachment; filename="liste_produits.xlsx"'
+                return response
+            except:
+                # Fallback to CSV if Excel fails
+                output = io.StringIO()
+                df.to_csv(output, index=False, encoding='utf-8-sig')
+                output.seek(0)
+
+                response = HttpResponse(output.getvalue(), content_type='text/csv; charset=utf-8-sig')
+                response['Content-Disposition'] = 'attachment; filename="liste_produits.csv"'
+                return response
+
+        except Exception as e:
+            return JsonResponse({
+                'error': 'Erreur lors de l\'export des produits',
+                'details': str(e)
+            }, status=500)

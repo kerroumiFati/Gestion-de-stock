@@ -243,19 +243,19 @@
 
     <!-- Onglets -->
     <div class="tab-buttons">
-        <button class="tab-btn active" onclick="switchTab('products')">
+        <button class="tab-btn active" onclick="switchTab('products', this)">
             <i class="fas fa-box mr-2"></i>{% trans "Produits" %}
         </button>
-        <button class="tab-btn" onclick="switchTab('categories')">
+        <button class="tab-btn" onclick="switchTab('categories', this)">
             <i class="fas fa-tags mr-2"></i>{% trans "Catégories" %}
         </button>
-        <button class="tab-btn" onclick="switchTab('fournisseurs')">
+        <button class="tab-btn" onclick="switchTab('fournisseurs', this)">
             <i class="fas fa-truck mr-2"></i>{% trans "Fournisseurs" %}
         </button>
-        <button class="tab-btn" onclick="switchTab('clients')">
+        <button class="tab-btn" onclick="switchTab('clients', this)">
             <i class="fas fa-users mr-2"></i>{% trans "Clients" %}
         </button>
-        <button class="tab-btn" onclick="switchTab('pricelists')">
+        <button class="tab-btn" onclick="switchTab('pricelists', this)">
             <i class="fas fa-dollar-sign mr-2"></i>{% trans "Liste de Prix" %}
         </button>
     </div>
@@ -275,6 +275,10 @@
                     <button class="template-btn ml-2" onclick="downloadTemplate('products', 'csv')">
                         <i class="fas fa-file-csv"></i>
                         {% trans "Template CSV" %}
+                    </button>
+                    <button class="template-btn ml-2" onclick="window.location.href='/API/import/export-products/'" style="background: #22c55e; color: white; border-color: #22c55e;">
+                        <i class="fas fa-download"></i>
+                        {% trans "Exporter liste des produits" %}
                     </button>
                 </div>
             </div>
@@ -630,7 +634,9 @@
                 <h6 class="font-weight-bold mb-2">{% trans "Pour les Produits:" %}</h6>
                 <ul class="text-muted">
                     <li>{% trans "Colonnes requises" %}: <code>reference</code>, <code>designation</code>, <code>prixU</code></li>
-                    <li>{% trans "Colonnes optionnelles" %}: <code>code_barre</code>, <code>description</code>, <code>categorie</code>, <code>fournisseur</code>, <code>quantite</code>, <code>stock_min</code>, <code>stock_max</code>, <code>unite_mesure</code></li>
+                    <li>{% trans "Colonnes optionnelles" %}: <code>code_barre</code>, <code>description</code>, <code>categorie</code>, <code>fournisseur</code>, <code>quantite</code>, <code>seuil_alerte</code>, <code>seuil_critique</code>, <code>unite_mesure</code></li>
+                    <li><strong>seuil_alerte</strong> : {% trans "Seuil pour alerte de stock faible (défaut: 10)" %}</li>
+                    <li><strong>seuil_critique</strong> : {% trans "Seuil pour stock critique (défaut: 5)" %}</li>
                     <li>{% trans "La catégorie et le fournisseur doivent exister dans le système" %}</li>
                     <li>{% trans "Le prix doit être un nombre positif" %}</li>
                 </ul>
@@ -669,10 +675,13 @@
                 <h6 class="font-weight-bold mb-2">{% trans "Pour la Liste de Prix:" %}</h6>
                 <ul class="text-muted">
                     <li>{% trans "Colonnes requises" %}: <code>code_article</code> {% trans "ou" %} <code>reference</code>, <code>prix</code></li>
-                    <li>{% trans "Colonnes optionnelles" %}: <code>prix_achat</code>, <code>prix_gros</code>, <code>prix_detail</code>, <code>remise</code></li>
-                    <li>{% trans "Le code d'article ou la référence doit correspondre à un produit existant" %}</li>
-                    <li>{% trans "Le prix doit être un nombre positif" %}</li>
-                    <li>{% trans "Si plusieurs colonnes de prix sont fournies, le prix de vente unitaire (prixU) sera mis à jour avec la colonne 'prix'" %}</li>
+                    <li>{% trans "Colonnes optionnelles" %}: <code>code_prix</code>, <code>type_prix</code></li>
+                    <li><strong>{% trans "code_article" %}</strong> = {% trans "Code-barres du produit (ex: 6111234567890)" %}</li>
+                    <li><strong>{% trans "reference" %}</strong> = {% trans "Référence du produit (ex: PROD-001)" %}</li>
+                    <li><strong>{% trans "code_prix" %}</strong> = {% trans "Code de tarification" %} (STANDARD, AID, RAMADAN, etc.). {% trans "Si vide, utilise le code par défaut" %}</li>
+                    <li><strong>{% trans "type_prix" %}</strong> = {% trans "Type de client" %} (DETAIL, SUPERETTE, GROS, etc.). {% trans "Si vide, utilise le type par défaut" %}</li>
+                    <li>{% trans "Le même produit peut avoir plusieurs prix selon le code_prix et type_prix" %}</li>
+                    <li>{% trans "Exemple" %}: PROD-001 avec code_prix=STANDARD et type_prix=DETAIL à 150 DA, et type_prix=GROS à 130 DA</li>
                 </ul>
             </div>
         </div>

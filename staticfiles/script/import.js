@@ -28,12 +28,14 @@
     }
 
     // Gérer les onglets
-    window.switchTab = function(tab) {
+    window.switchTab = function(tab, clickedButton) {
         currentTab = tab;
 
         // Update tab buttons
         document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-        event.target.classList.add('active');
+        if (clickedButton) {
+            clickedButton.classList.add('active');
+        }
 
         // Update tab content
         document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
@@ -41,7 +43,7 @@
     };
 
     // Drag & Drop
-    ['products', 'categories', 'fournisseurs', 'clients'].forEach(type => {
+    ['products', 'categories', 'fournisseurs', 'clients', 'pricelists'].forEach(type => {
         const zone = document.getElementById('uploadZone' + capitalize(type));
         if (!zone) return;
 
@@ -127,7 +129,14 @@
                 'X-CSRFToken': getCSRFToken()
             }
         })
-        .then(res => res.json())
+        .then(res => {
+            if (!res.ok) {
+                return res.text().then(text => {
+                    throw new Error(`HTTP ${res.status}: ${text}`);
+                });
+            }
+            return res.json();
+        })
         .then(data => {
             if (data.error) {
                 alert('Erreur: ' + data.error);
@@ -136,8 +145,8 @@
             displayPreview(data, type);
         })
         .catch(err => {
-            console.error('Erreur preview:', err);
-            alert('Erreur lors de la prévisualisation du fichier');
+            console.error('Erreur preview détaillée:', err);
+            alert('Erreur lors de la prévisualisation du fichier:\n' + err.message);
         });
     }
 
@@ -193,11 +202,14 @@
 
     // Valider une ligne
     function validateRow(row, type) {
+        // Fonction helper pour convertir en string et trim
+        const getString = (value) => value ? String(value).trim() : '';
+
         if (type === 'products') {
-            if (!row.reference || !row.reference.trim()) {
+            if (!getString(row.reference)) {
                 return { valid: false, error: 'Référence manquante' };
             }
-            if (!row.designation || !row.designation.trim()) {
+            if (!getString(row.designation)) {
                 return { valid: false, error: 'Désignation manquante' };
             }
             if (!row.prixU || isNaN(parseFloat(row.prixU)) || parseFloat(row.prixU) <= 0) {
@@ -205,19 +217,31 @@
             }
             return { valid: true };
         } else if (type === 'categories') {
-            if (!row.nom || !row.nom.trim()) {
+            if (!getString(row.nom)) {
                 return { valid: false, error: 'Nom manquant' };
             }
             return { valid: true };
         } else if (type === 'fournisseurs') {
-            if (!row.libelle || !row.libelle.trim()) {
+            if (!getString(row.libelle)) {
                 return { valid: false, error: 'Libellé manquant' };
             }
             return { valid: true };
         } else if (type === 'clients') {
-            if (!row.nom || !row.nom.trim()) {
+            if (!getString(row.nom)) {
                 return { valid: false, error: 'Nom manquant' };
             }
+            return { valid: true };
+        } else if (type === 'pricelists') {
+            const codeArticle = getString(row.code_article);
+            const reference = getString(row.reference);
+
+            if (!codeArticle && !reference) {
+                return { valid: false, error: 'Code article (code-barres) ou référence manquant' };
+            }
+            if (!row.prix || isNaN(parseFloat(row.prix)) || parseFloat(row.prix) <= 0) {
+                return { valid: false, error: 'Prix invalide' };
+            }
+            // code_prix et type_prix sont optionnels (utiliseront les valeurs par défaut)
             return { valid: true };
         }
         return { valid: false, error: 'Type inconnu' };
@@ -250,15 +274,22 @@
                 'X-CSRFToken': getCSRFToken()
             }
         })
-        .then(res => res.json())
+        .then(res => {
+            if (!res.ok) {
+                return res.text().then(text => {
+                    throw new Error(`HTTP ${res.status}: ${text}`);
+                });
+            }
+            return res.json();
+        })
         .then(data => {
             document.getElementById('progress' + capitalize(type)).style.display = 'none';
             displayResults(data, type);
         })
         .catch(err => {
-            console.error('Erreur import:', err);
+            console.error('Erreur import détaillée:', err);
             document.getElementById('progress' + capitalize(type)).style.display = 'none';
-            alert('Erreur lors de l\'import: ' + err.message);
+            alert('Erreur lors de l\'import:\n' + err.message);
         });
     };
 
@@ -321,6 +352,8 @@
                 show('fournisseur');
             } else if (type === 'clients') {
                 show('client');
+            } else if (type === 'pricelists') {
+                show('produit');
             }
         }, 3000);
     }
@@ -338,6 +371,12 @@
     // Télécharger un template
     window.downloadTemplate = function(type, format) {
         const url = '/API/import/template/?type=' + type + '&format=' + format;
+        window.location.href = url;
+    };
+
+    // Exporter la liste des produits
+    window.exportProductsList = function() {
+        const url = '/API/import/export-products/';
         window.location.href = url;
     };
 

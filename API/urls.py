@@ -14,7 +14,7 @@ from .distribution_views import (
 
 # Try to import with error handling
 try:
-    from .views_import import ImportPreviewView, ImportExecuteView, ImportTemplateView
+    from .views_import import ImportPreviewView, ImportExecuteView, ImportTemplateView, ExportProductsView
     IMPORT_VIEWS_LOADED = True
     IMPORT_ERROR = None
 except Exception as e:
@@ -30,6 +30,9 @@ except Exception as e:
         def post(self, request):
             return Response({'error': 'Import views failed to load', 'details': IMPORT_ERROR}, status=500)
     class ImportTemplateView(APIView):
+        def get(self, request):
+            return Response({'error': 'Import views failed to load', 'details': IMPORT_ERROR}, status=500)
+    class ExportProductsView(APIView):
         def get(self, request):
             return Response({'error': 'Import views failed to load', 'details': IMPORT_ERROR}, status=500)
 
@@ -76,7 +79,7 @@ def download_template_view(request):
 
         if import_type == 'products':
             columns = ['reference', 'code_barre', 'designation', 'description', 'prixU',
-                      'categorie', 'fournisseur', 'quantite', 'stock_min', 'stock_max', 'unite_mesure']
+                      'categorie', 'fournisseur', 'quantite', 'seuil_alerte', 'seuil_critique', 'unite_mesure']
             filename = 'template_produits'
             example_data = [
                 {
@@ -88,8 +91,8 @@ def download_template_view(request):
                     'categorie': 'Boissons',
                     'fournisseur': 'Coca-Cola Company',
                     'quantite': '500',
-                    'stock_min': '50',
-                    'stock_max': '1000',
+                    'seuil_alerte': '50',
+                    'seuil_critique': '20',
                     'unite_mesure': 'bouteille'
                 },
                 {
@@ -101,8 +104,8 @@ def download_template_view(request):
                     'categorie': 'Boissons',
                     'fournisseur': 'PepsiCo',
                     'quantite': '300',
-                    'stock_min': '30',
-                    'stock_max': '800',
+                    'seuil_alerte': '30',
+                    'seuil_critique': '15',
                     'unite_mesure': 'bouteille'
                 },
                 {
@@ -114,8 +117,8 @@ def download_template_view(request):
                     'categorie': 'Boissons',
                     'fournisseur': 'Ifri',
                     'quantite': '1000',
-                    'stock_min': '100',
-                    'stock_max': '2000',
+                    'seuil_alerte': '100',
+                    'seuil_critique': '50',
                     'unite_mesure': 'bouteille'
                 },
                 {
@@ -127,8 +130,8 @@ def download_template_view(request):
                     'categorie': 'Snacks',
                     'fournisseur': 'Bingo',
                     'quantite': '200',
-                    'stock_min': '20',
-                    'stock_max': '500',
+                    'seuil_alerte': '20',
+                    'seuil_critique': '10',
                     'unite_mesure': 'sachet'
                 },
                 {
@@ -140,8 +143,8 @@ def download_template_view(request):
                     'categorie': 'Biscuits',
                     'fournisseur': 'Bimo',
                     'quantite': '150',
-                    'stock_min': '15',
-                    'stock_max': '400',
+                    'seuil_alerte': '15',
+                    'seuil_critique': '8',
                     'unite_mesure': 'paquet'
                 }
             ]
@@ -271,53 +274,50 @@ def download_template_view(request):
             ]
 
         elif import_type == 'pricelists':
-            columns = ['code_article', 'reference', 'prix', 'prix_achat', 'prix_gros', 'prix_detail', 'remise']
+            columns = ['code_article', 'reference', 'code_prix', 'type_prix', 'prix']
             filename = 'template_liste_prix'
             example_data = [
                 {
                     'code_article': '6111234567890',
                     'reference': 'PROD-001',
-                    'prix': '150',
-                    'prix_achat': '100',
-                    'prix_gros': '130',
-                    'prix_detail': '150',
-                    'remise': '0'
+                    'code_prix': 'STANDARD',
+                    'type_prix': 'DETAIL',
+                    'prix': '150'
+                },
+                {
+                    'code_article': '6111234567890',
+                    'reference': 'PROD-001',
+                    'code_prix': 'STANDARD',
+                    'type_prix': 'GROS',
+                    'prix': '130'
                 },
                 {
                     'code_article': '6111234567891',
                     'reference': 'PROD-002',
-                    'prix': '180',
-                    'prix_achat': '120',
-                    'prix_gros': '160',
-                    'prix_detail': '180',
-                    'remise': '5'
+                    'code_prix': 'AID',
+                    'type_prix': 'DETAIL',
+                    'prix': '165'
+                },
+                {
+                    'code_article': '6111234567891',
+                    'reference': 'PROD-002',
+                    'code_prix': 'AID',
+                    'type_prix': 'GROS',
+                    'prix': '145'
                 },
                 {
                     'code_article': '6111234567892',
                     'reference': 'PROD-003',
-                    'prix': '50',
-                    'prix_achat': '30',
-                    'prix_gros': '45',
-                    'prix_detail': '50',
-                    'remise': '0'
+                    'code_prix': 'RAMADAN',
+                    'type_prix': 'DETAIL',
+                    'prix': '55'
                 },
                 {
-                    'code_article': '6111234567893',
-                    'reference': 'PROD-004',
-                    'prix': '80',
-                    'prix_achat': '50',
-                    'prix_gros': '70',
-                    'prix_detail': '80',
-                    'remise': '10'
-                },
-                {
-                    'code_article': '6111234567894',
-                    'reference': 'PROD-005',
-                    'prix': '120',
-                    'prix_achat': '80',
-                    'prix_gros': '100',
-                    'prix_detail': '120',
-                    'remise': '0'
+                    'code_article': '6111234567892',
+                    'reference': 'PROD-003',
+                    'code_prix': 'RAMADAN',
+                    'type_prix': 'SUPERETTE',
+                    'prix': '50'
                 }
             ]
 
@@ -415,6 +415,7 @@ urlpatterns = [
     path('import/preview/', ImportPreviewView.as_view(), name='import-preview'),
     path('import/execute/', ImportExecuteView.as_view(), name='import-execute'),
     path('import/template/', download_template_view, name='import-template'),  # Vue fonction au lieu de classe
+    path('import/export-products/', ExportProductsView.as_view(), name='export-products'),  # Export liste des produits
 
     # Module de distribution mobile (nouveau système complet)
     path('distribution/', include('API.distribution_urls')),
