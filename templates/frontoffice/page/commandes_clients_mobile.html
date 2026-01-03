@@ -941,26 +941,92 @@
             return;
         }
 
-        fetch(`/API/distribution/commandes/${id}/`, {
-            method: 'PATCH',
+        // Utiliser le nouvel endpoint qui gère le transfert de stock automatiquement
+        fetch(`/API/distribution/commandes/${id}/affecter_livreur/`, {
+            method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': getCookie('csrftoken')
             },
             body: JSON.stringify({
-                livreur: parseInt(newLivreur),
-                date_livraison_souhaitee: dateLivraison || null,
-                statut: 'confirmed' // Passer en confirmé quand un livreur est affecté
+                livreur_id: parseInt(newLivreur)
+                // entrepot_source_id est optionnel, prend l'entrepôt principal par défaut
             })
         })
-        .then(res => {
-            if (!res.ok) throw new Error('Erreur serveur');
-            return res.json();
-        })
+        .then(res => res.json())
         .then(data => {
-            $('#modalAffecterLivreur').modal('hide');
-            showSuccess('Commande affectée au livreur avec succès!');
-            loadCommandes();
+            if (data.success) {
+                // Succès : stock transféré au van du livreur
+                $('#modalAffecterLivreur').modal('hide');
+
+                // Afficher un message de succès détaillé
+                let message = data.message;
+                if (data.transfert_numero) {
+                    message += `<br><small class="text-muted">Transfert: ${data.transfert_numero}</small>`;
+                }
+                showSuccess(message);
+
+                // Mettre à jour la date de livraison si fournie
+                if (dateLivraison) {
+                    fetch(`/API/distribution/commandes/${id}/`, {
+                        method: 'PATCH',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': getCookie('csrftoken')
+                        },
+                        body: JSON.stringify({
+                            date_livraison_souhaitee: dateLivraison
+                        })
+                    }).then(() => loadCommandes());
+                } else {
+                    loadCommandes();
+                }
+            } else {
+                // Erreur : rupture de stock ou autre problème
+                $('#modalAffecterLivreur').modal('hide');
+
+                if (data.ruptures && data.ruptures.length > 0) {
+                    // Afficher les produits en rupture de stock
+                    let rupturesHtml = '<div class="alert alert-warning"><strong>⚠️ Rupture de stock détectée !</strong><br><br>';
+                    rupturesHtml += '<table class="table table-sm table-bordered mt-2">';
+                    rupturesHtml += '<thead><tr><th>Produit</th><th>Demandé</th><th>Disponible</th><th>Manquant</th></tr></thead>';
+                    rupturesHtml += '<tbody>';
+
+                    data.ruptures.forEach(rupture => {
+                        rupturesHtml += `<tr>
+                            <td><strong>${rupture.produit}</strong><br><small class="text-muted">${rupture.reference}</small></td>
+                            <td class="text-center">${rupture.quantite_demandee}</td>
+                            <td class="text-center">${rupture.quantite_disponible}</td>
+                            <td class="text-center text-danger"><strong>${rupture.manquant}</strong></td>
+                        </tr>`;
+                    });
+
+                    rupturesHtml += '</tbody></table>';
+                    rupturesHtml += '<p class="mb-0"><em>Veuillez réapprovisionner le stock ou ajuster les quantités de la commande.</em></p>';
+                    rupturesHtml += '</div>';
+
+                    // Afficher dans un modal SweetAlert si disponible, sinon utiliser un alert Bootstrap
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            title: 'Rupture de Stock',
+                            html: rupturesHtml,
+                            icon: 'warning',
+                            confirmButtonText: 'OK',
+                            width: '600px'
+                        });
+                    } else {
+                        // Fallback : afficher dans un modal Bootstrap ou un message simple
+                        let rupturesText = 'Rupture de stock détectée :\n\n';
+                        data.ruptures.forEach(rupture => {
+                            rupturesText += `${rupture.produit} (${rupture.reference}): Demandé=${rupture.quantite_demandee}, Disponible=${rupture.quantite_disponible}, Manquant=${rupture.manquant}\n`;
+                        });
+                        alert(rupturesText + '\nVeuillez réapprovisionner le stock ou ajuster les quantités de la commande.');
+                    }
+                } else {
+                    // Autre erreur
+                    showError(data.message || 'Erreur lors de l\'affectation du livreur');
+                }
+            }
         })
         .catch(err => {
             console.error('Erreur:', err);

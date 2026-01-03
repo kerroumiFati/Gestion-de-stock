@@ -647,6 +647,254 @@ class CommandeClient(models.Model):
         self.montant_total_ttc = sum(ligne.montant_ttc for ligne in lignes)
         self.save(update_fields=['montant_total_ht', 'montant_total_ttc'])
 
+    def affecter_livreur_et_preparer_stock(self, livreur, entrepot_source, user):
+        """
+        Affecte la commande à un livreur et transfère les produits de l'entrepôt vers le van du livreur.
+
+        Args:
+            livreur: Le livreur à qui affecter la commande
+            entrepot_source: L'entrepôt depuis lequel prélever les produits
+            user: L'utilisateur qui effectue l'opération
+
+        Returns:
+            dict: {
+                'success': bool,
+                'message': str,
+                'transfert': TransfertStock ou None,
+                'ruptures': list  # Liste des produits en rupture de stock
+            }
+        """
+        from django.core.exceptions import ValidationError
+        from django.db import transaction
+        from .models import TransfertStock, LigneTransfertStock, ProductStock
+
+        # Vérifier que le livreur a un entrepôt (van) assigné
+        if not livreur.entrepot:
+            return {
+                'success': False,
+                'message': f'Le livreur {livreur.nom} n\'a pas de van assigné',
+                'transfert': None,
+                'ruptures': []
+            }
+
+        # Vérifier que la commande a des lignes
+        if not self.lignes.exists():
+            return {
+                'success': False,
+                'message': 'La commande ne contient aucun produit',
+                'transfert': None,
+                'ruptures': []
+            }
+
+        # Vérifier les stocks disponibles avant de créer le transfert
+        ruptures = []
+        for ligne in self.lignes.all():
+            try:
+                stock = ProductStock.objects.get(
+                    produit=ligne.produit,
+                    warehouse=entrepot_source
+                )
+                stock_disponible = stock.quantity
+            except ProductStock.DoesNotExist:
+                stock_disponible = 0
+
+            # Convertir la quantité de commande en entier pour la comparaison
+            quantite_demandee = int(ligne.quantite)
+
+            if stock_disponible < quantite_demandee:
+                ruptures.append({
+                    'produit': ligne.produit.designation,
+                    'reference': ligne.produit.reference,
+                    'quantite_demandee': quantite_demandee,
+                    'quantite_disponible': stock_disponible,
+                    'manquant': quantite_demandee - stock_disponible
+                })
+
+        # Si des ruptures de stock sont détectées, retourner l'information
+        if ruptures:
+            return {
+                'success': False,
+                'message': 'Rupture de stock détectée pour certains produits',
+                'transfert': None,
+                'ruptures': ruptures
+            }
+
+        # Tout est OK, créer le transfert de stock
+        try:
+            with transaction.atomic():
+                # Créer le transfert
+                transfert = TransfertStock.objects.create(
+                    company=self.company,
+                    entrepot_source=entrepot_source,
+                    entrepot_destination=livreur.entrepot,
+                    statut='brouillon',
+                    demandeur=user,
+                    notes=f'Transfert automatique pour commande {self.reference}'
+                )
+
+                # Créer les lignes de transfert
+                for ligne in self.lignes.all():
+                    LigneTransfertStock.objects.create(
+                        transfert=transfert,
+                        produit=ligne.produit,
+                        quantite=int(ligne.quantite),
+                        notes=f'Commande {self.reference} - ligne {ligne.id}'
+                    )
+
+                # Valider le transfert (cela va effectuer les mouvements de stock)
+                transfert.valider(user)
+
+                # Affecter le livreur à la commande
+                self.livreur = livreur
+
+                # Changer le statut de la commande
+                if self.statut == 'pending':
+                    self.statut = 'confirmed'
+
+                self.save(update_fields=['livreur', 'statut'])
+
+                return {
+                    'success': True,
+                    'message': f'Commande affectée au livreur {livreur.nom} et stock transféré vers son van',
+                    'transfert': transfert,
+                    'ruptures': []
+                }
+
+        except ValidationError as e:
+            # Cela ne devrait pas arriver car nous avons vérifié avant, mais au cas où
+            return {
+                'success': False,
+                'message': f'Erreur lors du transfert de stock: {str(e)}',
+                'transfert': None,
+                'ruptures': []
+            }
+        except Exception as e:
+            return {
+                'success': False,
+                'message': f'Erreur inattendue: {str(e)}',
+                'transfert': None,
+                'ruptures': []
+            }
+
+    def livrer_et_deduire_stock_van(self, quantites_livrees=None):
+        """
+        Marque la commande comme livrée et déduit automatiquement les produits du stock du van du livreur.
+
+        Args:
+            quantites_livrees: dict optionnel {produit_id: quantite_livree}
+                              Si None, utilise les quantités de la commande
+
+        Returns:
+            dict: {
+                'success': bool,
+                'message': str,
+                'mouvements': list  # Liste des mouvements de stock créés
+            }
+        """
+        from django.db import transaction
+        from .models import ProductStock, StockMove
+
+        # Vérifier que la commande a un livreur
+        if not self.livreur:
+            return {
+                'success': False,
+                'message': 'La commande n\'a pas de livreur assigné',
+                'mouvements': []
+            }
+
+        # Vérifier que le livreur a un van
+        van = self.livreur.entrepot
+        if not van:
+            return {
+                'success': False,
+                'message': f'Le livreur {self.livreur.nom} n\'a pas de van assigné',
+                'mouvements': []
+            }
+
+        # Vérifier que la commande a des lignes
+        if not self.lignes.exists():
+            return {
+                'success': False,
+                'message': 'La commande ne contient aucun produit',
+                'mouvements': []
+            }
+
+        mouvements_crees = []
+
+        try:
+            with transaction.atomic():
+                # Pour chaque ligne de commande, décrémenter le stock du van
+                for ligne in self.lignes.all():
+                    # Déterminer la quantité à déduire
+                    if quantites_livrees and ligne.produit.id in quantites_livrees:
+                        quantite_a_deduire = int(quantites_livrees[ligne.produit.id])
+                    else:
+                        quantite_a_deduire = int(ligne.quantite)
+
+                    # Ignorer si quantité = 0
+                    if quantite_a_deduire <= 0:
+                        continue
+
+                    # Récupérer ou créer le stock du van pour ce produit
+                    stock_van, created = ProductStock.objects.get_or_create(
+                        produit=ligne.produit,
+                        warehouse=van,
+                        defaults={'quantity': 0}
+                    )
+
+                    # Vérifier que le stock du van est suffisant
+                    if stock_van.quantity < quantite_a_deduire:
+                        # Attention : stock insuffisant dans le van
+                        # On peut soit lever une erreur, soit déduire ce qui est disponible
+                        # Pour l'instant, on va quand même déduire (peut passer en négatif)
+                        pass
+
+                    # Décrémenter le stock du van
+                    stock_van.quantity -= quantite_a_deduire
+                    stock_van.save()
+
+                    # Créer un mouvement de stock pour traçabilité
+                    mouvement = StockMove.objects.create(
+                        produit=ligne.produit,
+                        warehouse=van,
+                        delta=-quantite_a_deduire,
+                        source='VENTE',
+                        ref_id=self.reference,
+                        note=f'Livraison commande {self.reference} au client {self.client.nom}'
+                    )
+                    mouvements_crees.append(mouvement)
+
+                    # Mettre à jour Produit.quantite (somme de tous les stocks hors vans)
+                    from django.db.models import Sum
+                    total_stock = ProductStock.objects.filter(
+                        produit=ligne.produit,
+                        warehouse__is_active=True
+                    ).exclude(
+                        warehouse__code__icontains='van'
+                    ).aggregate(total=Sum('quantity'))['total'] or 0
+
+                    ligne.produit.quantite = total_stock
+                    ligne.produit.save(update_fields=['quantite'])
+
+                # Marquer la commande comme livrée si ce n'est pas déjà fait
+                if self.statut != 'delivered':
+                    self.statut = 'delivered'
+                    self.date_livraison_reelle = timezone.now()
+                    self.save(update_fields=['statut', 'date_livraison_reelle'])
+
+                return {
+                    'success': True,
+                    'message': f'Commande livrée et {len(mouvements_crees)} produit(s) déduit(s) du van {van.name}',
+                    'mouvements': mouvements_crees
+                }
+
+        except Exception as e:
+            return {
+                'success': False,
+                'message': f'Erreur lors de la déduction du stock: {str(e)}',
+                'mouvements': []
+            }
+
 
 class LigneCommandeClient(models.Model):
     """Ligne de commande client"""

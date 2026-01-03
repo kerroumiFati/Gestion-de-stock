@@ -1570,6 +1570,29 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
         # Rafraîchir l'objet pour récupérer les montants mis à jour
         commande.refresh_from_db()
 
+        # Si livraison, déduire automatiquement le stock du van
+        if nouveau_statut == 'delivered':
+            # Préparer les quantités livrées si elles ont été ajustées
+            quantites_livrees = None
+            if lignes_ajustees:
+                quantites_livrees = {
+                    ligne_data.get('produit'): int(ligne_data.get('quantite', 0))
+                    for ligne_data in lignes_ajustees
+                }
+
+            # Déduire le stock du van
+            resultat_stock = commande.livrer_et_deduire_stock_van(quantites_livrees)
+
+            # Ajouter l'info dans la réponse
+            serializer = CommandeClientSerializer(commande)
+            response_data = serializer.data
+            response_data['stock_deduction'] = {
+                'success': resultat_stock['success'],
+                'message': resultat_stock['message'],
+                'mouvements_count': len(resultat_stock['mouvements'])
+            }
+            return Response(response_data)
+
         serializer = CommandeClientSerializer(commande)
         return Response(serializer.data)
 
@@ -1591,18 +1614,38 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        commande.statut = nouveau_statut
-
-        # Si livré, enregistrer la date de livraison réelle
+        # Si on passe au statut livré, déduire automatiquement le stock du van
         if nouveau_statut == 'delivered':
-            commande.date_livraison_reelle = timezone.now()
+            resultat = commande.livrer_et_deduire_stock_van()
 
-        commande.save()
+            if resultat['success']:
+                return Response({
+                    'message': f'Statut changé à {nouveau_statut}',
+                    'stock_message': resultat['message'],
+                    'mouvements_stock': len(resultat['mouvements']),
+                    'commande': CommandeClientSerializer(commande).data
+                })
+            else:
+                # Erreur lors de la déduction du stock, mais on continue quand même
+                # On pourrait aussi bloquer si souhaité
+                commande.statut = nouveau_statut
+                commande.date_livraison_reelle = timezone.now()
+                commande.save()
 
-        return Response({
-            'message': f'Statut changé à {nouveau_statut}',
-            'commande': CommandeClientSerializer(commande).data
-        })
+                return Response({
+                    'message': f'Statut changé à {nouveau_statut}',
+                    'warning': resultat['message'],
+                    'commande': CommandeClientSerializer(commande).data
+                }, status=status.HTTP_200_OK)
+        else:
+            # Autre statut, pas de déduction de stock
+            commande.statut = nouveau_statut
+            commande.save()
+
+            return Response({
+                'message': f'Statut changé à {nouveau_statut}',
+                'commande': CommandeClientSerializer(commande).data
+            })
 
     @action(detail=False, methods=['get'])
     def en_attente(self, request):
@@ -1610,6 +1653,92 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
         commandes = self.get_queryset().filter(statut='pending')
         serializer = CommandeClientSerializer(commandes, many=True)
         return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def affecter_livreur(self, request, pk=None):
+        """
+        Affecte une commande à un livreur et transfère automatiquement les produits
+        de l'entrepôt vers le van du livreur.
+
+        Body:
+        {
+            "livreur_id": int,           # ID du livreur
+            "entrepot_source_id": int    # ID de l'entrepôt source (optionnel, prend l'entrepôt principal par défaut)
+        }
+
+        Returns:
+        - 200: Commande affectée avec succès
+        - 400: Erreur (rupture de stock, livreur sans van, etc.)
+        """
+        from .models import Warehouse
+        from .distribution_models import LivreurDistribution
+
+        commande = self.get_object()
+        livreur_id = request.data.get('livreur_id')
+        entrepot_source_id = request.data.get('entrepot_source_id')
+
+        # Validation des paramètres
+        if not livreur_id:
+            return Response(
+                {'error': 'livreur_id requis'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Récupérer le livreur
+        try:
+            livreur = LivreurDistribution.objects.get(id=livreur_id)
+        except LivreurDistribution.DoesNotExist:
+            return Response(
+                {'error': f'Livreur avec ID {livreur_id} introuvable'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Récupérer l'entrepôt source
+        if entrepot_source_id:
+            try:
+                entrepot_source = Warehouse.objects.get(id=entrepot_source_id)
+            except Warehouse.DoesNotExist:
+                return Response(
+                    {'error': f'Entrepôt avec ID {entrepot_source_id} introuvable'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+        else:
+            # Prendre l'entrepôt principal de la company
+            # On cherche un entrepôt actif qui n'est pas un van
+            entrepot_source = Warehouse.objects.filter(
+                company=commande.company,
+                is_active=True
+            ).exclude(
+                code__icontains='van'
+            ).first()
+
+            if not entrepot_source:
+                return Response(
+                    {'error': 'Aucun entrepôt source trouvé. Veuillez spécifier entrepot_source_id.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        # Effectuer l'affectation et le transfert de stock
+        resultat = commande.affecter_livreur_et_preparer_stock(
+            livreur=livreur,
+            entrepot_source=entrepot_source,
+            user=request.user
+        )
+
+        if resultat['success']:
+            return Response({
+                'success': True,
+                'message': resultat['message'],
+                'commande': CommandeClientSerializer(commande).data,
+                'transfert_numero': resultat['transfert'].numero if resultat['transfert'] else None
+            }, status=status.HTTP_200_OK)
+        else:
+            # En cas de rupture de stock ou autre erreur
+            return Response({
+                'success': False,
+                'message': resultat['message'],
+                'ruptures': resultat['ruptures']
+            }, status=status.HTTP_400_BAD_REQUEST)
 
 
 class PlanningHebdomadaireViewSet(viewsets.ModelViewSet):
