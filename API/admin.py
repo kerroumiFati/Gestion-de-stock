@@ -150,14 +150,50 @@ class ProduitAdmin(admin.ModelAdmin):
         self.message_user(request, f'{count} produit(s) désactivé(s) avec succès.')
     desactiver_produits.short_description = "✗ Désactiver les produits sélectionnés"
 
+    def get_readonly_fields(self, request, obj=None):
+        """Rendre company en lecture seule pour les utilisateurs non-admin"""
+        readonly = list(self.readonly_fields)
+        # Si l'utilisateur n'est pas superuser/staff, company est readonly
+        if not request.user.is_superuser and not request.user.is_staff:
+            if 'company' not in readonly:
+                readonly.append('company')
+        return readonly
+
     def save_model(self, request, obj, form, change):
-        """Avertir si la company change"""
-        if change and 'company' in form.changed_data:
-            self.message_user(
-                request,
-                f'⚠️ ATTENTION: La société du produit a été modifiée! Le produit peut ne plus être visible pour certains utilisateurs.',
-                level='WARNING'
-            )
+        """Auto-assigner la company et gérer les modifications"""
+        # Si c'est une création et que le produit n'a pas de company
+        if not change and not obj.company:
+            # Auto-assigner la company de l'utilisateur connecté
+            if hasattr(request, 'company') and request.company:
+                obj.company = request.company
+                self.message_user(
+                    request,
+                    f'✓ Société automatiquement assignée: {request.company}',
+                    level='SUCCESS'
+                )
+
+        # Si c'est une modification
+        if change:
+            # Vérifier si la company a changé
+            if 'company' in form.changed_data:
+                old_company = form.initial.get('company')
+                new_company = obj.company
+                if old_company != new_company:
+                    self.message_user(
+                        request,
+                        f'⚠️ ATTENTION: La société a changé de {old_company} à {new_company}. Le produit peut ne plus être visible pour certains utilisateurs.',
+                        level='WARNING'
+                    )
+
+            # Si le produit n'a pas de company après modification, auto-assigner
+            if not obj.company and hasattr(request, 'company') and request.company:
+                obj.company = request.company
+                self.message_user(
+                    request,
+                    f'✓ Société automatiquement réassignée: {request.company}',
+                    level='SUCCESS'
+                )
+
         super().save_model(request, obj, form, change)
 
 # ===========================
