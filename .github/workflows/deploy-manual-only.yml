@@ -164,26 +164,26 @@ ENDENV
           VPS_PORT: ${{ secrets.VPS_PORT }}
         run: |
           echo "🧪 Test de l'application avant redémarrage..."
-          ssh -i ~/.ssh/deploy_key -p ${VPS_PORT} ${VPS_USERNAME}@${VPS_HOST} << 'EOF'
+          ssh -i ~/.ssh/deploy_key -p ${VPS_PORT} ${VPS_USERNAME}@${VPS_HOST} 'bash -s' << 'ENDSSH'
             cd /home/gestionstock/app
             source venv/bin/activate
 
-            echo "Test d'importation du WSGI..."
-            python -c "
+            echo "Test d importation du WSGI..."
+            python3 << 'ENDPYTHON'
 import sys
 import os
 sys.path.insert(0, '/home/gestionstock/app')
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'Gestion_stock.settings')
 try:
     from Gestion_stock.wsgi import application
-    print('✓ WSGI importé avec succès')
+    print('✓ WSGI importe avec succes')
 except Exception as e:
     print(f'✗ Erreur d importation WSGI: {e}')
     import traceback
     traceback.print_exc()
-    exit(1)
-"
-          EOF
+    sys.exit(1)
+ENDPYTHON
+          ENDSSH
 
       - name: Restart application
         env:
