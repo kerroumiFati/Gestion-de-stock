@@ -316,6 +316,50 @@ chmod 644 ~/.ssh/cicd_deploy_key.pub
    ssh -i ~/.ssh/cicd_deploy_key root@VOTRE_IP_VPS "cd /home/gestionstock/app && ls -la"
    ```
 
+### Erreur : "Worker failed to boot" ou problèmes de variables d'environnement
+
+**Problème :** Le fichier .env est mal formaté (variables sur la même ligne)
+
+**Symptômes :**
+- Gunicorn affiche "Worker failed to boot"
+- Les variables d'environnement ne sont pas reconnues
+- DEBUG et ALLOWED_HOSTS semblent fusionnés
+
+**Cause :** Le secret `ENV_FILE` dans GitHub a un formatage incorrect
+
+**Solution :**
+
+1. **Vérifiez le format de votre .env** - Chaque variable DOIT être sur une ligne séparée :
+
+   ✅ **CORRECT :**
+   ```env
+   SECRET_KEY=abc123
+   DEBUG=False
+   ALLOWED_HOSTS=example.com
+   ```
+
+   ❌ **INCORRECT :**
+   ```env
+   SECRET_KEY=abc123DEBUG=False
+   ALLOWED_HOSTS=example.com
+   ```
+
+2. **Mettez à jour le secret ENV_FILE dans GitHub :**
+   - Allez sur : `Settings → Secrets and variables → Actions`
+   - Cliquez sur `ENV_FILE` → `Update`
+   - Collez le contenu correctement formaté (une variable par ligne)
+   - Cliquez sur `Update secret`
+
+3. **Redéployez :**
+   - Allez sur : `Actions → Deploy to VPS (Manual Only)`
+   - Cliquez sur `Run workflow`
+
+4. **Vérifiez sur le VPS** (après déploiement) :
+   ```bash
+   ssh root@VOTRE_IP_VPS "cat /home/gestionstock/app/.env"
+   ```
+   Assurez-vous que chaque variable est bien sur une ligne séparée
+
 ---
 
 ## 📱 Déploiement manuel (déclencher manuellement)
