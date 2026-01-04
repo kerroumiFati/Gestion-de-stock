@@ -161,8 +161,14 @@
         }
       }
 
+      // Générer l'affichage de l'image
+      const imageHtml = p.image
+        ? `<img src="${p.image}" alt="${p.designation}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px;">`
+        : `<div style="width: 50px; height: 50px; background: #f0f0f0; border-radius: 4px; display: flex; align-items: center; justify-content: center;"><i class="fas fa-image" style="color: #ccc;"></i></div>`;
+
       return `<tr data-id="${p.id}">
         <td>${p.id}</td>
+        <td>${imageHtml}</td>
         <td>${p.reference||''}</td>
         <td>${p.code_barre||''}</td>
         <td>${p.designation||''}</td>
@@ -282,16 +288,40 @@
       categorie: el('#categorie')?.value ? Number(el('#categorie').value) : null,
       prixU: el('#prixU')?.value ? Number(el('#prixU').value) : 0,
     };
-    return {id, payload};
+
+    // IMPORTANT: Préserver la company lors de l'édition
+    // Si on modifie un produit existant, garder sa company
+    if(id){
+      const existingProduct = __cacheProduits.find(p => p.id === id);
+      if(existingProduct && existingProduct.company){
+        payload.company = existingProduct.company;
+      }
+    }
+
+    // Ajouter l'image si présente
+    const imageInput = el('#image');
+    const hasImage = imageInput && imageInput.files && imageInput.files.length > 0;
+
+    return {id, payload, hasImage, imageFile: hasImage ? imageInput.files[0] : null};
   }
 
   async function createOrUpdate(){
-    const {id, payload} = collectForm();
+    const {id, payload, hasImage, imageFile} = collectForm();
     // Validation stricte: vérifier que les champs ne sont pas vides/null/undefined
     if(!payload.reference || !payload.designation || payload.categorie == null || !payload.code_barre){
       showAlert('Veuillez remplir les champs obligatoires (référence, code-barres, désignation, catégorie)', 'warning');
       return;
     }
+
+    // Valider la taille de l'image (max 2 MB)
+    if(hasImage && imageFile){
+      const maxSize = 2 * 1024 * 1024; // 2 MB en bytes
+      if(imageFile.size > maxSize){
+        showAlert(`L'image est trop grande (${(imageFile.size / 1024 / 1024).toFixed(2)} MB). Taille maximale: 2 MB`, 'danger');
+        return;
+      }
+    }
+
     // Vérification unicité côté client pour éviter une erreur 400 inutile
     // Exclure le produit en cours de modification lors de la vérification
     const refExists = __cacheProduits.some(p => p.id !== id && (p.reference||'').toLowerCase() === (payload.reference||'').toLowerCase());
@@ -302,13 +332,50 @@
       return;
     }
     try{
-      const opts = {
-        method: id? 'PUT':'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      };
       const url = id? api.produits + id + '/' : api.produits;
-      await fetchJSON(url, opts);
+      let response;
+
+      // Si une image est présente, utiliser FormData
+      if(hasImage && imageFile){
+        const formData = new FormData();
+        formData.append('reference', payload.reference);
+        formData.append('code_barre', payload.code_barre);
+        formData.append('designation', payload.designation);
+        formData.append('categorie', payload.categorie);
+        formData.append('prixU', payload.prixU);
+        formData.append('image', imageFile);
+
+        // IMPORTANT: Inclure la company pour préserver l'affectation
+        if(payload.company){
+          formData.append('company', payload.company);
+        }
+
+        const csrftoken = getCookie('csrftoken');
+        const opts = {
+          method: id? 'PUT':'POST',
+          headers: {
+            'X-CSRFToken': csrftoken,
+            'X-Requested-With': 'XMLHttpRequest'
+          },
+          credentials: 'same-origin',
+          body: formData
+        };
+        response = await fetch(url, opts);
+      } else {
+        // Sans image, utiliser JSON comme avant
+        const opts = {
+          method: id? 'PUT':'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        };
+        response = await fetch(url, opts);
+      }
+
+      if(!response.ok){
+        const errorData = await response.json();
+        throw { data: errorData };
+      }
+
       showAlert(id? 'Produit mis à jour avec succès' : 'Produit créé avec succès', 'success');
       clearForm();
       await loadProduits();
@@ -342,6 +409,18 @@
   function clearForm(){
     ['#id','#reference','#code_barre','#designation','#prixU'].forEach(s=>{ const n=el(s); if(n) n.value=''; });
     if(el('#categorie')) el('#categorie').value='';
+
+    // Effacer l'image
+    const imageInput = el('#image');
+    if(imageInput) imageInput.value = '';
+    const imagePreview = el('#image-preview');
+    if(imagePreview) imagePreview.style.display = 'none';
+
+    // Remettre le texte du bouton en mode "Ajouter"
+    const btnSubmit = el('#btn');
+    if(btnSubmit){
+      btnSubmit.innerHTML = '<i class="fas fa-plus"></i> Ajouter le produit';
+    }
   }
 
   function showAlert(msg, level){
@@ -381,6 +460,12 @@
           if(el('#designation')) el('#designation').value = p.designation||'';
           if(el('#categorie')) el('#categorie').value = p.categorie||'';
           if(el('#prixU')) el('#prixU').value = p.prixU!=null? Number(p.prixU): '';
+
+          // Changer le texte du bouton en mode édition
+          const btnSubmit = el('#btn');
+          if(btnSubmit){
+            btnSubmit.innerHTML = '<i class="fas fa-save"></i> Modifier le produit';
+          }
         }catch(err){ showAlert('Chargement produit échoué', 'danger'); }
       }
     });
@@ -419,6 +504,46 @@
     bindTableActions();
     const btn = el('#btn');
     if(btn){ btn.addEventListener('click', createOrUpdate); }
+
+    // Event handlers pour l'image
+    const imageInput = el('#image');
+    if(imageInput){
+      imageInput.addEventListener('change', function(e){
+        const file = e.target.files[0];
+        if(!file) return;
+
+        // Vérifier la taille (max 2 MB)
+        const maxSize = 2 * 1024 * 1024;
+        if(file.size > maxSize){
+          showAlert(`L'image est trop grande (${(file.size / 1024 / 1024).toFixed(2)} MB). Taille maximale: 2 MB`, 'danger');
+          imageInput.value = '';
+          el('#image-preview').style.display = 'none';
+          return;
+        }
+
+        // Afficher l'aperçu
+        const reader = new FileReader();
+        reader.onload = function(event){
+          const previewImg = el('#preview-img');
+          const previewContainer = el('#image-preview');
+          if(previewImg && previewContainer){
+            previewImg.src = event.target.result;
+            previewContainer.style.display = 'block';
+          }
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    const removeImageBtn = el('#remove-image');
+    if(removeImageBtn){
+      removeImageBtn.addEventListener('click', function(){
+        const imageInput = el('#image');
+        if(imageInput) imageInput.value = '';
+        const imagePreview = el('#image-preview');
+        if(imagePreview) imagePreview.style.display = 'none';
+      });
+    }
 
     // Event handler pour changer le type de prix affiché
     $(document).off('change', '#display_price_type').on('change', '#display_price_type', function(){
