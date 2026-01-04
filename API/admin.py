@@ -96,10 +96,23 @@ class FournisseurAdmin(admin.ModelAdmin):
 
 @admin.register(Produit)
 class ProduitAdmin(admin.ModelAdmin):
-    list_display = ['reference', 'designation', 'quantite', 'prixU', 'categorie']
-    list_filter = ['categorie', 'fournisseur']
+    list_display = ['reference', 'designation', 'quantite', 'prixU', 'categorie', 'is_active']
+    list_filter = ['categorie', 'fournisseur', 'is_active']
     search_fields = ['reference', 'designation', 'code_barre']
     autocomplete_fields = ['categorie', 'fournisseur']
+    actions = ['activer_produits', 'desactiver_produits']
+
+    def activer_produits(self, request, queryset):
+        """Réactiver les produits sélectionnés"""
+        count = queryset.update(is_active=True)
+        self.message_user(request, f'{count} produit(s) réactivé(s) avec succès.')
+    activer_produits.short_description = "✓ Activer les produits sélectionnés"
+
+    def desactiver_produits(self, request, queryset):
+        """Désactiver les produits sélectionnés"""
+        count = queryset.update(is_active=False)
+        self.message_user(request, f'{count} produit(s) désactivé(s) avec succès.')
+    desactiver_produits.short_description = "✗ Désactiver les produits sélectionnés"
 
 # ===========================
 # Sales with Inline
