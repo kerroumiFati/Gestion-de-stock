@@ -136,12 +136,9 @@ jobs:
           VPS_PORT: ${{ secrets.VPS_PORT }}
         run: |
           echo "📝 Mise à jour du fichier .env sur le VPS..."
-          ssh -i ~/.ssh/deploy_key -p ${VPS_PORT} ${VPS_USERNAME}@${VPS_HOST} bash << 'ENDSSH'
-            cat > /home/gestionstock/app/.env << 'ENDENV'
-${{ secrets.ENV_FILE }}
-ENDENV
-            echo "✓ Fichier .env mis à jour"
-          ENDSSH
+          # Copy .env file to VPS
+          scp -i ~/.ssh/deploy_key -P ${VPS_PORT} .env ${VPS_USERNAME}@${VPS_HOST}:/home/gestionstock/app/.env
+          echo "✓ Fichier .env mis à jour"
 
       - name: Collect static files
         env:
