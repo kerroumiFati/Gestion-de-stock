@@ -96,12 +96,12 @@ class FournisseurAdmin(admin.ModelAdmin):
 
 @admin.register(Produit)
 class ProduitAdmin(admin.ModelAdmin):
-    list_display = ['reference', 'designation', 'quantite', 'prixU', 'categorie', 'company', 'is_active']
+    list_display = ['image_thumbnail', 'reference', 'designation', 'quantite', 'prixU', 'categorie', 'company', 'is_active']
     list_filter = ['categorie', 'fournisseur', 'company', 'is_active']
     search_fields = ['reference', 'designation', 'code_barre']
     autocomplete_fields = ['categorie', 'fournisseur']
     actions = ['activer_produits', 'desactiver_produits']
-    readonly_fields = ['created_at', 'updated_at']
+    readonly_fields = ['created_at', 'updated_at', 'image_preview']
 
     fieldsets = (
         ('Informations de base', {
@@ -114,13 +114,29 @@ class ProduitAdmin(admin.ModelAdmin):
             'fields': ('prixU', 'currency', 'quantite', 'seuil_alerte', 'seuil_critique')
         }),
         ('Caractéristiques', {
-            'fields': ('unite_mesure', 'poids', 'dimensions', 'image'),
+            'fields': ('unite_mesure', 'poids', 'dimensions', 'image', 'image_preview'),
             'classes': ('collapse',)
         }),
         ('Gestion', {
             'fields': ('is_active', 'created_at', 'updated_at')
         }),
     )
+
+    def image_thumbnail(self, obj):
+        """Affiche une miniature de l'image du produit dans la liste"""
+        if obj.image:
+            from django.utils.html import format_html
+            return format_html('<img src="{}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px;" />', obj.image.url)
+        return '-'
+    image_thumbnail.short_description = 'Image'
+
+    def image_preview(self, obj):
+        """Affiche un aperçu de l'image dans le formulaire d'édition"""
+        if obj.image:
+            from django.utils.html import format_html
+            return format_html('<img src="{}" style="max-width: 300px; max-height: 300px; border-radius: 8px;" />', obj.image.url)
+        return 'Aucune image'
+    image_preview.short_description = 'Aperçu de l\'image'
 
     def activer_produits(self, request, queryset):
         """Réactiver les produits sélectionnés"""
