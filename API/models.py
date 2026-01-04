@@ -557,7 +557,7 @@ class Client(models.Model):
     )
     nom = models.CharField(max_length=50)
     prenom = models.CharField(max_length=50)
-    email = models.EmailField(max_length=50)
+    email = models.EmailField(max_length=50, blank=True, default='')
     telephone = models.CharField(max_length=50)
     adresse = models.CharField(max_length=50)
     lat = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True,
