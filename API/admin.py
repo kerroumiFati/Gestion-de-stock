@@ -96,11 +96,31 @@ class FournisseurAdmin(admin.ModelAdmin):
 
 @admin.register(Produit)
 class ProduitAdmin(admin.ModelAdmin):
-    list_display = ['reference', 'designation', 'quantite', 'prixU', 'categorie', 'is_active']
-    list_filter = ['categorie', 'fournisseur', 'is_active']
+    list_display = ['reference', 'designation', 'quantite', 'prixU', 'categorie', 'company', 'is_active']
+    list_filter = ['categorie', 'fournisseur', 'company', 'is_active']
     search_fields = ['reference', 'designation', 'code_barre']
     autocomplete_fields = ['categorie', 'fournisseur']
     actions = ['activer_produits', 'desactiver_produits']
+    readonly_fields = ['created_at', 'updated_at']
+
+    fieldsets = (
+        ('Informations de base', {
+            'fields': ('company', 'reference', 'code_barre', 'designation', 'description')
+        }),
+        ('Classification', {
+            'fields': ('categorie', 'fournisseur')
+        }),
+        ('Prix et stock', {
+            'fields': ('prixU', 'currency', 'quantite', 'seuil_alerte', 'seuil_critique')
+        }),
+        ('Caractéristiques', {
+            'fields': ('unite_mesure', 'poids', 'dimensions', 'image'),
+            'classes': ('collapse',)
+        }),
+        ('Gestion', {
+            'fields': ('is_active', 'created_at', 'updated_at')
+        }),
+    )
 
     def activer_produits(self, request, queryset):
         """Réactiver les produits sélectionnés"""
@@ -113,6 +133,16 @@ class ProduitAdmin(admin.ModelAdmin):
         count = queryset.update(is_active=False)
         self.message_user(request, f'{count} produit(s) désactivé(s) avec succès.')
     desactiver_produits.short_description = "✗ Désactiver les produits sélectionnés"
+
+    def save_model(self, request, obj, form, change):
+        """Avertir si la company change"""
+        if change and 'company' in form.changed_data:
+            self.message_user(
+                request,
+                f'⚠️ ATTENTION: La société du produit a été modifiée! Le produit peut ne plus être visible pour certains utilisateurs.',
+                level='WARNING'
+            )
+        super().save_model(request, obj, form, change)
 
 # ===========================
 # Sales with Inline
