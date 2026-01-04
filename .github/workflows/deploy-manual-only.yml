@@ -143,6 +143,34 @@ jobs:
             echo "✓ Fichiers statiques collectés"
           EOF
 
+      - name: Test application before restart
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USERNAME: ${{ secrets.VPS_USERNAME }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+        run: |
+          echo "🧪 Test de l'application avant redémarrage..."
+          ssh -i ~/.ssh/deploy_key -p ${VPS_PORT} ${VPS_USERNAME}@${VPS_HOST} << 'EOF'
+            cd /home/gestionstock/app
+            source venv/bin/activate
+
+            echo "Test d'importation du WSGI..."
+            python -c "
+import sys
+import os
+sys.path.insert(0, '/home/gestionstock/app')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'Gestion_stock.settings')
+try:
+    from Gestion_stock.wsgi import application
+    print('✓ WSGI importé avec succès')
+except Exception as e:
+    print(f'✗ Erreur d importation WSGI: {e}')
+    import traceback
+    traceback.print_exc()
+    exit(1)
+"
+          EOF
+
       - name: Restart application
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
@@ -158,7 +186,15 @@ jobs:
               echo "✓ Application redémarrée avec succès"
             else
               echo "✗ Échec du redémarrage"
-              sudo journalctl -u gestionstock -n 20 --no-pager
+              echo ""
+              echo "=== LOGS DÉTAILLÉS (100 dernières lignes) ==="
+              sudo journalctl -u gestionstock -n 100 --no-pager
+              echo ""
+              echo "=== LOGS GUNICORN (erreurs) ==="
+              tail -50 /home/gestionstock/logs/gunicorn-error.log 2>/dev/null || echo "Fichier de log introuvable"
+              echo ""
+              echo "=== STATUT DU SERVICE ==="
+              sudo systemctl status gestionstock --no-pager -l
               exit 1
             fi
           EOF
