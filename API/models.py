@@ -391,6 +391,10 @@ class Produit(models.Model):
     poids = models.DecimalField("Poids (kg)", max_digits=8, decimal_places=3, null=True, blank=True)
     dimensions = models.CharField("Dimensions (LxlxH)", max_length=50, blank=True)
     
+    # Image du produit
+    image = models.ImageField("Image du produit", upload_to='produits/', blank=True, null=True,
+                             help_text="Image du produit (max 2 MB, sera compressée automatiquement)")
+
     # Gestion
     fournisseur = models.ForeignKey(Fournisseur, on_delete=models.SET_NULL,
                                     null=True, blank=True,
@@ -486,6 +490,46 @@ class Produit(models.Model):
             return max(self.seuil_alerte * 2, 30)
         return 0
 
+    def save(self, *args, **kwargs):
+        """Override save pour compresser l'image automatiquement"""
+        if self.image:
+            from PIL import Image
+            from io import BytesIO
+            from django.core.files.uploadedfile import InMemoryUploadedFile
+            import sys
+
+            # Ouvrir l'image
+            img = Image.open(self.image)
+
+            # Convertir en RGB si nécessaire (pour les PNG avec transparence)
+            if img.mode in ('RGBA', 'LA', 'P'):
+                background = Image.new('RGB', img.size, (255, 255, 255))
+                if img.mode == 'P':
+                    img = img.convert('RGBA')
+                background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
+                img = background
+
+            # Redimensionner si trop grande (max 800x800)
+            max_size = (800, 800)
+            img.thumbnail(max_size, Image.Resampling.LANCZOS)
+
+            # Sauvegarder avec compression
+            output = BytesIO()
+            img.save(output, format='JPEG', quality=85, optimize=True)
+            output.seek(0)
+
+            # Remplacer l'image par la version compressée
+            self.image = InMemoryUploadedFile(
+                output,
+                'ImageField',
+                f"{self.image.name.split('.')[0]}.jpg",
+                'image/jpeg',
+                sys.getsizeof(output),
+                None
+            )
+
+        super(Produit, self).save(*args, **kwargs)
+
 #####################
 #   Prix Produits   #
 #####################
@@ -544,6 +588,15 @@ class PrixProduit(models.Model):
 
 
 class Client(models.Model):
+    # UUID permanent pour identification cross-platform (mobile <-> backend)
+    uuid = models.UUIDField(
+        "UUID permanent",
+        unique=True,
+        null=True,
+        blank=True,
+        help_text="Identifiant unique permanent (généré automatiquement si vide)"
+    )
+
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='clients',
                                null=True, blank=True,
                                help_text="Entreprise propriétaire de ce client")
@@ -584,6 +637,13 @@ class Client(models.Model):
                          help_text="Article d'Imposition")
     rc = models.CharField("RC (Registre de Commerce)", max_length=20, blank=True,
                          help_text="Numéro du Registre de Commerce")
+
+    def save(self, *args, **kwargs):
+        """Générer automatiquement l'UUID si absent"""
+        if not self.uuid:
+            import uuid
+            self.uuid = uuid.uuid4()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return '{} {}'.format(self.nom, self.prenom)

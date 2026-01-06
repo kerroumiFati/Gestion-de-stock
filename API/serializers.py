@@ -216,19 +216,22 @@ class ProduitSerializer(serializers.ModelSerializer):
     class Meta:
         model = Produit
         fields = (
-            'id', 'reference', 'code_barre', 'designation', 'description',
+            'id', 'reference', 'code_barre', 'designation', 'description', 'image',
             'categorie', 'categorie_nom', 'categorie_path',
             'prixU', 'currency', 'currency_code', 'currency_symbol', 'prix_formatted',
             'quantite', 'seuil_alerte', 'seuil_critique', 'unite_mesure',
             'fournisseur', 'fournisseur_nom',
             'stock_mouvements', 'stock_status', 'stock_status_display', 'stock_class',
             'prix_multiples', 'nombre_prix',
+            'company',  # IMPORTANT: Inclure company pour préserver l'affectation lors de l'édition
             'is_active', 'created_at', 'updated_at'
         )
         extra_kwargs = {
             'fournisseur': {'required': False, 'allow_null': True},
+            'company': {'required': False, 'allow_null': True},  # Company optionnelle pour compatibilité
             'quantite': {'required': False, 'default': 0},
             'description': {'required': False, 'allow_blank': True},
+            'image': {'required': False, 'allow_null': True},
             'currency': {'required': False, 'allow_null': True},
             'seuil_alerte': {'required': False},
             'seuil_critique': {'required': False},
@@ -262,7 +265,7 @@ class ClientSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Client
-        fields = ('id', 'nom', 'prenom', 'email', 'telephone', 'adresse', 'lat', 'lng',
+        fields = ('id', 'uuid', 'nom', 'prenom', 'email', 'telephone', 'adresse', 'lat', 'lng',
                   'secteur', 'secteur_nom', 'secteur_code', 'secteur_couleur', 'produits',
                   'nif', 'nis', 'ai', 'rc', 'type_prix', 'type_prix_code', 'type_prix_libelle')
 

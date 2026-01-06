@@ -22,6 +22,8 @@ from frontoffice.create_admin import create_first_admin
 from frontoffice.check_admin import check_existing_admins
 from frontoffice.views_company import create_company_view, list_companies_view, delete_company_view
 from API.map_view import livreurs_map_view
+from django.conf import settings
+from django.conf.urls.static import static
 
 urlpatterns = [
     path('favicon.ico', RedirectView.as_view(url='/static/img/favicon.ico', permanent=True)),
@@ -63,3 +65,7 @@ urlpatterns = [
     # Module de Distribution - routes centralisées dans frontoffice/urls.py
 
 ]
+
+# Serve media files in development
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -224,6 +224,10 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 # Use WhiteNoise with manifest hashing for cache-busting
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
+# Media files (uploaded images, etc.)
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
 # CORS settings
 CORS_ALLOWED_ORIGINS = [
     "https://your-vercel-domain.vercel.app",  # Remplacez par votre domaine Vercel

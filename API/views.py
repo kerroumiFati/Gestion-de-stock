@@ -1,7 +1,7 @@
 import logging
 from django.contrib.auth import authenticate
 from django.shortcuts import render
-from django.db.models import Sum, Q, F
+from django.db.models import Sum, Q, F, Max
 from rest_framework import viewsets, generics, status
 from rest_framework import permissions
 from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
@@ -158,15 +158,178 @@ class ClientViewSet(TenantFilterMixin, viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def perform_create(self, serializer):
-        """Assigner automatiquement la company de l'utilisateur connecté lors de la création"""
+        """
+        Assigner automatiquement la company de l'utilisateur connecté lors de la création
+        Si le client est créé depuis l'app mobile (par un livreur):
+        1. Créer un arrêt dans la tournée active du livreur
+        2. Créer une configuration hebdomadaire pour le jour actuel
+        """
+        # Déterminer la company à assigner
+        company_to_assign = None
+
+        # Priorité 1: Company du request (middleware)
         if hasattr(self.request, 'company') and self.request.company is not None:
-            obj = serializer.save(company=self.request.company)
+            company_to_assign = self.request.company
+            print(f"[CLIENT_CREATE] Company depuis request: {company_to_assign}")
+        else:
+            # Priorité 2: Si créé par un livreur, utiliser la company du livreur
+            try:
+                from .distribution_models import LivreurDistribution
+                livreur = LivreurDistribution.objects.filter(user=self.request.user).first()
+                if livreur:
+                    # Essayer d'obtenir company depuis le profil utilisateur
+                    if hasattr(livreur.user, 'profile') and livreur.user.profile.company:
+                        company_to_assign = livreur.user.profile.company
+                        print(f"[CLIENT_CREATE] Company depuis user.profile: {company_to_assign}")
+                    # Sinon essayer depuis l'entrepôt
+                    elif livreur.entrepot and livreur.entrepot.company:
+                        company_to_assign = livreur.entrepot.company
+                        print(f"[CLIENT_CREATE] Company depuis entrepôt: {company_to_assign}")
+                    else:
+                        print(f"[CLIENT_CREATE] ⚠️ Livreur trouvé mais pas de company accessible")
+            except Exception as e:
+                print(f"[CLIENT_CREATE] Erreur détection company livreur: {e}")
+                import traceback
+                traceback.print_exc()
+
+        # Sauvegarder avec la company appropriée
+        if company_to_assign:
+            obj = serializer.save(company=company_to_assign)
+            print(f"[CLIENT_CREATE] ✅ Client créé avec company: {company_to_assign}")
         else:
             obj = serializer.save()
+            print(f"[CLIENT_CREATE] ⚠️ Client créé SANS company!")
+
         try:
             log_event(self.request, 'client.create', target=obj, metadata={'id': obj.id, 'nom': obj.nom})
         except Exception:
             pass
+
+        # Vérifier si la requête vient d'un livreur (app mobile)
+        try:
+            from .distribution_models import LivreurDistribution, TourneeMobile, ArretTourneeMobile, ClientLivreurHebdo
+            from datetime import datetime, date
+
+            print(f"\n{'='*60}")
+            print(f"[CLIENT_CREATE] Début du processus de création")
+            print(f"[CLIENT_CREATE] Utilisateur: {self.request.user.username} (ID: {self.request.user.id})")
+            print(f"[CLIENT_CREATE] Client: {obj.nom} {obj.prenom} (ID: {obj.id})")
+            print(f"[CLIENT_CREATE] Company: {obj.company}")
+            print(f"{'='*60}\n")
+
+            # Essayer de récupérer le livreur associé à l'utilisateur
+            livreur = LivreurDistribution.objects.filter(user=self.request.user).first()
+
+            if not livreur:
+                print(f"[CLIENT_CREATE] ❌ Aucun livreur trouvé pour l'utilisateur {self.request.user.username}")
+                print(f"[CLIENT_CREATE] Le client a été créé mais sans configuration automatique")
+                return
+
+            if livreur:
+                today = date.today()
+                jour_semaine = today.isoweekday()  # 1=Lundi, 7=Dimanche
+
+                print(f"[CLIENT_CREATE] Client créé par livreur {livreur.nom} (Matricule: {livreur.matricule})")
+                print(f"[CLIENT_CREATE] Client: {obj.nom} {obj.prenom} (ID: {obj.id})")
+                print(f"[CLIENT_CREATE] Jour: {jour_semaine} ({['', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'][jour_semaine]})")
+
+                # 1. Chercher la tournée active du livreur
+                # Priorité 1: Tournée EN COURS (peu importe la date)
+                tournee_active = TourneeMobile.objects.filter(
+                    livreur=livreur,
+                    statut='en_cours'
+                ).first()
+
+                # Priorité 2: Si pas de tournée en cours, chercher une tournée planifiée pour aujourd'hui
+                if not tournee_active:
+                    tournee_active = TourneeMobile.objects.filter(
+                        livreur=livreur,
+                        date_tournee=today,
+                        statut='planifiee'
+                    ).first()
+
+                if tournee_active:
+                    print(f"[CLIENT_CREATE] ✅ Tournée trouvée: {tournee_active.id} (Statut: {tournee_active.statut}, Date: {tournee_active.date_tournee})")
+
+                    # Calculer le prochain ordre de passage
+                    dernier_ordre = ArretTourneeMobile.objects.filter(
+                        tournee=tournee_active
+                    ).aggregate(Max('ordre_passage'))['ordre_passage__max'] or 0
+
+                    nouvel_ordre = dernier_ordre + 1
+
+                    # Créer l'arrêt dans la tournée
+                    arret = ArretTourneeMobile.objects.create(
+                        tournee=tournee_active,
+                        client=obj,
+                        ordre_passage=nouvel_ordre,
+                        statut='en_attente',
+                        latitude=obj.lat,
+                        longitude=obj.lng
+                    )
+                    print(f"[CLIENT_CREATE] Arrêt créé avec ordre {nouvel_ordre}")
+                else:
+                    print(f"[CLIENT_CREATE] Aucune tournée active trouvée pour {livreur.nom}")
+
+                # 2. Créer la configuration hebdomadaire pour le jour actuel
+                print(f"\n[CLIENT_CREATE] --- Création configuration hebdomadaire ---")
+                print(f"[CLIENT_CREATE] Client: {obj.id} ({obj.nom} {obj.prenom})")
+                print(f"[CLIENT_CREATE] Livreur: {livreur.id} ({livreur.nom})")
+                print(f"[CLIENT_CREATE] Jour: {jour_semaine} ({['', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'][jour_semaine]})")
+                print(f"[CLIENT_CREATE] Company: {obj.company}")
+
+                # VÉRIFICATION CRITIQUE: Le client doit avoir une company
+                if not obj.company:
+                    print(f"[CLIENT_CREATE] ❌ ERREUR: Client sans company! Impossible de créer la configuration.")
+                    print(f"[CLIENT_CREATE] ❌ Configuration hebdomadaire NON créée")
+                    return
+
+                # Vérifier que la configuration n'existe pas déjà
+                # NOTE: La contrainte unique est sur (client, jour_semaine, company)
+                # Un client ne peut être configuré qu'une seule fois par jour dans la même company
+                config_exists = ClientLivreurHebdo.objects.filter(
+                    client=obj,
+                    jour_semaine=jour_semaine,
+                    company=obj.company
+                ).exists()
+
+                print(f"[CLIENT_CREATE] Configuration existe déjà? {config_exists}")
+
+                if not config_exists:
+                    try:
+                        config = ClientLivreurHebdo.objects.create(
+                            company=obj.company,
+                            client=obj,
+                            livreur=livreur,
+                            jour_semaine=jour_semaine,
+                            ordre_passage=None,  # Sera défini manuellement si nécessaire
+                            is_active=True
+                        )
+                        print(f"[CLIENT_CREATE] ✅ Configuration hebdomadaire créée (ID: {config.id})")
+                        print(f"[CLIENT_CREATE] ✅ Jour: {['', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'][jour_semaine]}")
+                    except Exception as e:
+                        print(f"[CLIENT_CREATE] ❌ Erreur création config: {e}")
+                        import traceback
+                        traceback.print_exc()
+                else:
+                    print(f"[CLIENT_CREATE] ⚠️ Configuration hebdomadaire existe déjà pour ce client/jour/company")
+
+                # 3. Ajouter le client à la liste clients_assignes du livreur
+                # pour qu'il soit retourné par l'endpoint clients_assignes
+                if not livreur.clients_assignes.filter(id=obj.id).exists():
+                    livreur.clients_assignes.add(obj)
+                    print(f"[CLIENT_CREATE] Client ajouté à clients_assignes du livreur")
+
+        except Exception as e:
+            # Ne pas bloquer la création du client en cas d'erreur
+            print(f"\n{'='*60}")
+            print(f"[CLIENT_CREATE] ❌ ERREUR GLOBALE lors de la création de l'arrêt/config")
+            print(f"[CLIENT_CREATE] Erreur: {e}")
+            print(f"[CLIENT_CREATE] Type: {type(e).__name__}")
+            print(f"{'='*60}\n")
+            import traceback
+            traceback.print_exc()
+            print(f"{'='*60}\n")
 
     def perform_update(self, serializer):
         obj = serializer.save()

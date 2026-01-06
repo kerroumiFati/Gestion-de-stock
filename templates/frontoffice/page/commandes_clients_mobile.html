@@ -524,6 +524,7 @@
                 <table class="table table-sm table-bordered bg-white">
                     <thead>
                         <tr>
+                            <th style="width: 60px;">Image</th>
                             <th>Produit</th>
                             <th>Référence</th>
                             <th class="text-right">Qté</th>
@@ -533,8 +534,13 @@
                         </tr>
                     </thead>
                     <tbody>
-                        ${cmd.lignes.map(ligne => `
+                        ${cmd.lignes.map(ligne => {
+                            const imageHtml = ligne.produit_image
+                                ? `<img src="${ligne.produit_image}" alt="${ligne.produit_designation}" style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px;">`
+                                : `<div style="width: 40px; height: 40px; background: #f0f0f0; border-radius: 4px; display: flex; align-items: center; justify-content: center;"><i class="fas fa-image" style="color: #ccc; font-size: 16px;"></i></div>`;
+                            return `
                             <tr>
+                                <td>${imageHtml}</td>
                                 <td>${ligne.produit_designation || '-'}</td>
                                 <td><code>${ligne.produit_reference || '-'}</code></td>
                                 <td class="text-right">${ligne.quantite}</td>
@@ -542,7 +548,7 @@
                                 <td class="text-right">${formatCurrency(ligne.montant_ht)}</td>
                                 <td class="text-right"><strong>${formatCurrency(ligne.montant_ttc)}</strong></td>
                             </tr>
-                        `).join('')}
+                        `;}).join('')}
                     </tbody>
                     <tfoot class="bg-light">
                         <tr>

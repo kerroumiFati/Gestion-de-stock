@@ -450,6 +450,25 @@ input[type="number"].form-control-product::-webkit-outer-spin-button {
                     </div>
                 </div>
 
+                <!-- Image du produit -->
+                <div class="row">
+                    <div class="col-md-12 mb-3">
+                        <label for="image" class="form-label-product">
+                            <i class="fas fa-image"></i> {% trans "Image du produit" %} <small class="text-muted">(Optionnel, max 2 MB)</small>
+                        </label>
+                        <input class="form-control form-control-product" type="file" id="image" accept="image/*">
+                        <div id="image-preview" class="mt-2" style="display: none;">
+                            <img id="preview-img" src="" alt="Aperçu" style="max-width: 200px; max-height: 200px; border-radius: 8px; border: 2px solid #ddd;">
+                            <button type="button" class="btn btn-sm btn-danger mt-2" id="remove-image">
+                                <i class="fas fa-times"></i> Supprimer
+                            </button>
+                        </div>
+                        <small class="form-text text-muted">
+                            <i class="fas fa-info-circle"></i> L'image sera automatiquement compressée et optimisée
+                        </small>
+                    </div>
+                </div>
+
                 <!-- Catégorie et Prix -->
                 <div class="row">
                     <div class="col-md-6 mb-3">
@@ -546,6 +565,7 @@ input[type="number"].form-control-product::-webkit-outer-spin-button {
                             <thead>
                                 <tr>
                                     <th scope="col">{% trans "ID" %}</th>
+                                    <th scope="col">{% trans "Image" %}</th>
                                     <th scope="col">{% trans "Référence" %}</th>
                                     <th scope="col">{% trans "Code-barres" %}</th>
                                     <th scope="col">{% trans "Désignation" %}</th>

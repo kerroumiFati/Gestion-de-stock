@@ -796,11 +796,12 @@ class LigneCommandeClientSerializer(serializers.ModelSerializer):
     """Serializer pour LigneCommandeClient (lecture)"""
     produit_reference = serializers.CharField(source='produit.reference', read_only=True)
     produit_designation = serializers.CharField(source='produit.designation', read_only=True)
+    produit_image = serializers.ImageField(source='produit.image', read_only=True)
 
     class Meta:
         model = LigneCommandeClient
         fields = [
-            'id', 'produit', 'produit_reference', 'produit_designation',
+            'id', 'produit', 'produit_reference', 'produit_designation', 'produit_image',
             'quantite', 'prix_unitaire_ht', 'taux_tva',
             'montant_ht', 'montant_tva', 'montant_ttc',
             'created_at', 'updated_at'
