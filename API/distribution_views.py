@@ -671,6 +671,7 @@ class LivreurViewSet(viewsets.ModelViewSet):
                     'code_barre': stock.produit.code_barre,
                     'designation': stock.produit.designation,
                     'categorie': stock.produit.categorie.nom if stock.produit.categorie else None,
+                    'image': stock.produit.image.url if stock.produit.image else None,  # URL de l'image
                     'quantite': stock.quantity,
                     'prix_unitaire': prix_affichage,  # Prix standard DETAIL (pas prixU)
                     'prix_par_type': prix_par_type,  # Prix par type de client avec promotions
