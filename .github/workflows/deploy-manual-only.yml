@@ -167,19 +167,19 @@ jobs:
 
             echo "Test d importation du WSGI..."
             python3 << 'ENDPYTHON'
-            import sys
-            import os
-            sys.path.insert(0, '/home/gestionstock/app')
-            os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'Gestion_stock.settings')
-            try:
-                from Gestion_stock.wsgi import application
-                print('✓ WSGI importe avec succes')
-            except Exception as e:
-                print(f'✗ Erreur d importation WSGI: {e}')
-                import traceback
-                traceback.print_exc()
-                sys.exit(1)
-            ENDPYTHON
+import sys
+import os
+sys.path.insert(0, '/home/gestionstock/app')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'Gestion_stock.settings')
+try:
+    from Gestion_stock.wsgi import application
+    print('✓ WSGI importe avec succes')
+except Exception as e:
+    print(f'✗ Erreur d importation WSGI: {e}')
+    import traceback
+    traceback.print_exc()
+    sys.exit(1)
+ENDPYTHON
           ENDSSH
 
       - name: Restart application
