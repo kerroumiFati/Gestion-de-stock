@@ -203,7 +203,16 @@ class ProduitAdmin(admin.ModelAdmin):
 class LigneVenteInline(admin.TabularInline):
     model = LigneVente
     extra = 1
-    fields = ['produit', 'designation', 'quantite', 'prixU_snapshot']
+    fields = ['produit', 'designation', 'quantite', 'prixU_snapshot', 'get_total_ligne']
+    readonly_fields = ['get_total_ligne']
+
+    def get_total_ligne(self, obj):
+        """Afficher le total de la ligne"""
+        if obj.pk:
+            total = obj.quantite * obj.prixU_snapshot
+            return f"{total:.2f} DA"
+        return "-"
+    get_total_ligne.short_description = "Total"
 
 @admin.register(Vente)
 class VenteAdmin(admin.ModelAdmin):
@@ -217,6 +226,18 @@ class VenteAdmin(admin.ModelAdmin):
         super().save_model(request, obj, form, change)
         obj.recompute_totals()
         obj.save()
+
+    def save_formset(self, request, form, formset, change):
+        """Recalculer les totaux après modification des lignes"""
+        instances = formset.save(commit=False)
+        for instance in instances:
+            instance.save()
+        formset.save_m2m()
+
+        # Recalculer les totaux de la vente
+        if form.instance.pk:
+            form.instance.recompute_totals()
+            form.instance.save()
 
 admin.site.register(LigneVente)
 
