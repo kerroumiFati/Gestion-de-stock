@@ -2063,7 +2063,68 @@ class VenteViewSet(TenantFilterMixin, viewsets.ModelViewSet):
                 pass
             return Response({'status': 'Vente annulée'})
         return Response({'error': 'Vente déjà annulée'}, status=400)
-    
+
+    @action(detail=True, methods=['patch'], url_path='update-line-price')
+    def update_line_price(self, request, pk=None):
+        """Mettre à jour le prix unitaire d'une ligne de vente"""
+        vente = self.get_object()
+        ligne_id = request.data.get('ligne_id')
+        new_price = request.data.get('prix_unitaire')
+
+        if not ligne_id:
+            return Response({'error': 'ligne_id requis'}, status=400)
+        if new_price is None:
+            return Response({'error': 'prix_unitaire requis'}, status=400)
+
+        try:
+            from decimal import Decimal
+            from .models import LigneVente
+
+            new_price = Decimal(str(new_price))
+            if new_price < 0:
+                return Response({'error': 'Le prix ne peut pas être négatif'}, status=400)
+
+            ligne = LigneVente.objects.filter(id=ligne_id, vente=vente).first()
+            if not ligne:
+                return Response({'error': 'Ligne de vente non trouvée'}, status=404)
+
+            # Mettre à jour le prix
+            ligne.prixU_snapshot = new_price
+            ligne.save(update_fields=['prixU_snapshot'])
+
+            # Recalculer les totaux de la vente
+            vente.recompute_totals()
+            vente.save()
+
+            try:
+                log_event(self.request, 'vente.update_line_price', target=vente, metadata={
+                    'vente_id': vente.id,
+                    'ligne_id': ligne_id,
+                    'new_price': float(new_price)
+                })
+            except Exception:
+                pass
+
+            # Retourner les données mises à jour
+            return Response({
+                'success': True,
+                'ligne': {
+                    'id': ligne.id,
+                    'prixU_snapshot': float(ligne.prixU_snapshot),
+                    'quantite': ligne.quantite,
+                    'total': float(ligne.prixU_snapshot * ligne.quantite)
+                },
+                'vente': {
+                    'total_ht': float(vente.total_ht),
+                    'total_ttc': float(vente.total_ttc)
+                }
+            })
+        except ValueError:
+            return Response({'error': 'Format de prix invalide'}, status=400)
+        except Exception as e:
+            logger.exception('Erreur lors de la mise à jour du prix de la ligne: %s', e)
+            return Response({'error': str(e)}, status=500)
+
     @action(detail=False)
     def stats(self, request):
         """Statistiques des ventes (filtrées par entreprise)"""

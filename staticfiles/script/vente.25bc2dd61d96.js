@@ -876,9 +876,6 @@
           } else {
             // Actions pour ventes mobiles
             actions += '<button class="btn btn-sm btn-info view-sale-details" data-id="'+v.id+'"><i class="fa fa-eye"></i> Détails</button> ';
-            if(reste > 0) {
-              actions += '<button class="btn btn-sm btn-primary add-payment" data-id="'+v.id+'" data-reste="'+reste+'" data-mobile="true"><i class="fa fa-money"></i> Payer</button> ';
-            }
             if(v.tournee){
               actions += '<span class="badge badge-secondary ml-1"><i class="fa fa-truck"></i> '+v.tournee+'</span> ';
             }
@@ -1164,15 +1161,11 @@
     html += '<div class="card-header bg-'+badgeClass+' text-white"><i class="fa fa-wallet"></i> État du paiement</div>';
     html += '<div class="card-body">';
     html += '<p class="mb-2"><strong>Montant payé:</strong> <span class="float-right text-success">'+(montantPaye.toFixed(2))+' DA</span></p>';
-    html += '<p class="mb-2"><strong>Reste à payer:</strong> <span class="float-right '+(isPaye ? 'text-success' : 'text-danger')+'"><strong>'+(resteAPayer.toFixed(2))+' DA</strong></span></p>';
     if(sale.montant_rendu > 0){
       html += '<p class="mb-2"><strong>Monnaie rendue:</strong> <span class="float-right">'+(sale.montant_rendu || 0)+' DA</span></p>';
     }
     html += '<hr class="my-2">';
     html += '<p class="mb-0"><strong>Statut:</strong> <span class="badge badge-'+badgeClass+'">'+statutPaiement+'</span></p>';
-    if(!isPaye) {
-      html += '<button class="btn btn-primary btn-block mt-3 add-payment" data-id="'+sale.id+'" data-reste="'+resteAPayer+'" data-mobile="true"><i class="fa fa-money"></i> Ajouter un paiement</button>';
-    }
     html += '</div></div>';
 
     if(sale.notes){

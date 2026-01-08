@@ -1306,6 +1306,72 @@ class VenteTourneeViewSet(viewsets.ModelViewSet):
             'ventes': VenteTourneeSerializer(created_ventes, many=True).data
         })
 
+    @action(detail=True, methods=['patch'], url_path='update-line-price')
+    def update_line_price(self, request, pk=None):
+        """Mettre à jour le prix unitaire d'une ligne de vente mobile"""
+        import logging
+        from decimal import Decimal
+        logger = logging.getLogger(__name__)
+
+        vente = self.get_object()
+        ligne_id = request.data.get('ligne_id')
+        new_price = request.data.get('prix_unitaire')
+
+        if not ligne_id:
+            return Response({'error': 'ligne_id requis'}, status=status.HTTP_400_BAD_REQUEST)
+        if new_price is None:
+            return Response({'error': 'prix_unitaire requis'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            new_price = Decimal(str(new_price))
+            if new_price < 0:
+                return Response({'error': 'Le prix ne peut pas être négatif'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Chercher la ligne dans LigneVenteTourneeMobile
+            from .distribution_models import LigneVenteTourneeMobile
+            ligne = LigneVenteTourneeMobile.objects.filter(id=ligne_id, vente=vente).first()
+            if not ligne:
+                return Response({'error': 'Ligne de vente non trouvée'}, status=status.HTTP_404_NOT_FOUND)
+
+            # Mettre à jour le prix unitaire
+            # La méthode save() recalculera automatiquement montant_ht, montant_tva, montant_ttc
+            ligne.prix_unitaire = new_price
+            ligne.save()  # save() recalcule automatiquement les montants
+
+            # Recalculer les totaux de la vente
+            from django.db.models import Sum
+            totaux = vente.lignes.aggregate(
+                total_ht=Sum('montant_ht'),
+                total_tva=Sum('montant_tva'),
+                total_ttc=Sum('montant_ttc')
+            )
+            vente.montant_ht = totaux['total_ht'] or Decimal('0')
+            vente.montant_tva = totaux['total_tva'] or Decimal('0')
+            vente.montant_total = totaux['total_ttc'] or Decimal('0')
+            vente.save(update_fields=['montant_ht', 'montant_tva', 'montant_total'])
+
+            logger.info(f"Prix de la ligne {ligne_id} mis à jour: {new_price}")
+
+            # Retourner les données mises à jour
+            return Response({
+                'success': True,
+                'ligne': {
+                    'id': ligne.id,
+                    'prix_unitaire': float(ligne.prix_unitaire),
+                    'quantite': float(ligne.quantite),
+                    'total': float(ligne.montant_ttc)
+                },
+                'vente': {
+                    'total_ht': float(vente.montant_ht),
+                    'total_ttc': float(vente.montant_total)
+                }
+            })
+        except ValueError:
+            return Response({'error': 'Format de prix invalide'}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger.exception('Erreur lors de la mise à jour du prix de la ligne: %s', e)
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 class RapportCaisseViewSet(viewsets.ModelViewSet):
     """ViewSet pour la gestion des rapports de caisse"""

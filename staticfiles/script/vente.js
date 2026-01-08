@@ -876,6 +876,9 @@
           } else {
             // Actions pour ventes mobiles
             actions += '<button class="btn btn-sm btn-info view-sale-details" data-id="'+v.id+'"><i class="fa fa-eye"></i> Détails</button> ';
+            if(reste > 0) {
+              actions += '<button class="btn btn-sm btn-primary add-payment" data-id="'+v.id+'" data-reste="'+reste+'" data-mobile="true"><i class="fa fa-money"></i> Payer</button> ';
+            }
             if(v.tournee){
               actions += '<span class="badge badge-secondary ml-1"><i class="fa fa-truck"></i> '+v.tournee+'</span> ';
             }
@@ -1161,11 +1164,15 @@
     html += '<div class="card-header bg-'+badgeClass+' text-white"><i class="fa fa-wallet"></i> État du paiement</div>';
     html += '<div class="card-body">';
     html += '<p class="mb-2"><strong>Montant payé:</strong> <span class="float-right text-success">'+(montantPaye.toFixed(2))+' DA</span></p>';
+    html += '<p class="mb-2"><strong>Reste à payer:</strong> <span class="float-right '+(isPaye ? 'text-success' : 'text-danger')+'"><strong>'+(resteAPayer.toFixed(2))+' DA</strong></span></p>';
     if(sale.montant_rendu > 0){
       html += '<p class="mb-2"><strong>Monnaie rendue:</strong> <span class="float-right">'+(sale.montant_rendu || 0)+' DA</span></p>';
     }
     html += '<hr class="my-2">';
     html += '<p class="mb-0"><strong>Statut:</strong> <span class="badge badge-'+badgeClass+'">'+statutPaiement+'</span></p>';
+    if(!isPaye) {
+      html += '<button class="btn btn-primary btn-block mt-3 add-payment" data-id="'+sale.id+'" data-reste="'+resteAPayer+'" data-mobile="true"><i class="fa fa-money"></i> Ajouter un paiement</button>';
+    }
     html += '</div></div>';
 
     if(sale.notes){
@@ -1177,14 +1184,18 @@
     // Tableau des produits
     html += '<div class="row">';
     html += '<div class="col-12">';
-    html += '<h5 class="mb-3"><i class="fa fa-boxes"></i> Produits</h5>';
+    html += '<div class="d-flex justify-content-between align-items-center mb-3">';
+    html += '<h5 class="mb-0"><i class="fa fa-boxes"></i> Produits</h5>';
+    // Bouton pour activer le mode édition
+    html += '<button class="btn btn-sm btn-warning" id="toggleEditPrices" data-editing="false" data-mobile="true"><i class="fa fa-edit"></i> Modifier les prix</button>';
+    html += '</div>';
 
     const lignes = sale.lignes || [];
     if(lignes.length === 0){
       html += '<div class="alert alert-warning"><i class="fa fa-exclamation-triangle"></i> Aucun produit dans cette vente</div>';
     } else {
       html += '<div class="table-responsive">';
-      html += '<table class="table table-sm table-bordered table-hover mb-0">';
+      html += '<table class="table table-sm table-bordered table-hover mb-0" id="saleDetailsTable">';
       html += '<thead class="thead-dark">';
       html += '<tr><th>Produit</th><th>Prix unitaire</th><th>Quantité</th><th>Total</th></tr>';
       html += '</thead>';
@@ -1195,11 +1206,14 @@
         const qty = parseInt(ligne.quantite || 0, 10);
         const total = parseFloat(ligne.montant_total || prix * qty);
 
-        html += '<tr>';
+        html += '<tr data-ligne-id="'+ligne.id+'">';
         html += '<td>'+desig+'</td>';
-        html += '<td class="text-right">'+(prix.toFixed(2))+' DA</td>';
+        html += '<td class="text-right price-cell" data-original-price="'+prix.toFixed(2)+'" data-currency="DA">';
+        html += '<span class="price-display">'+(prix.toFixed(2))+' DA</span>';
+        html += '<input type="number" class="form-control form-control-sm price-edit" style="display:none;" step="0.01" min="0" value="'+prix.toFixed(2)+'">';
+        html += '</td>';
         html += '<td class="text-center"><span class="badge badge-primary">'+qty+'</span></td>';
-        html += '<td class="text-right"><strong>'+(total.toFixed(2))+' DA</strong></td>';
+        html += '<td class="text-right total-cell"><strong>'+(total.toFixed(2))+' DA</strong></td>';
         html += '</tr>';
       });
       html += '</tbody>';
@@ -1212,6 +1226,144 @@
     html += '</div>';
 
     $container.html(html);
+
+    // Stocker les données de la vente pour la mise à jour
+    $container.data('sale', sale);
+
+    // Event handler pour le bouton "Modifier les prix"
+    $('#toggleEditPrices').off('click').on('click', function() {
+      const $btn = $(this);
+      const isEditing = $btn.attr('data-editing') === 'true';
+
+      if (!isEditing) {
+        // Activer le mode édition
+        $('.price-display').hide();
+        $('.price-edit').show().focus();
+        $btn.attr('data-editing', 'true')
+          .removeClass('btn-warning').addClass('btn-success')
+          .html('<i class="fa fa-save"></i> Enregistrer les modifications');
+      } else {
+        // Sauvegarder toutes les modifications
+        saveMobilePriceChanges(sale.id);
+      }
+    });
+
+    // Event handler pour sauvegarder quand on appuie sur Enter
+    $('.price-edit').off('keypress').on('keypress', function(e) {
+      if (e.which === 13) {
+        e.preventDefault();
+        saveMobilePriceChanges(sale.id);
+      }
+    });
+
+    // Event handler pour mettre à jour le total en temps réel lors de la modification
+    $('.price-edit').off('input').on('input', function() {
+      const $row = $(this).closest('tr');
+      const newPrice = parseFloat($(this).val()) || 0;
+      const qty = parseInt($row.find('.badge-primary').text()) || 0;
+      const currency = $(this).closest('.price-cell').data('currency');
+      const newTotal = newPrice * qty;
+      $row.find('.total-cell').html('<strong>' + newTotal.toFixed(2) + ' ' + currency + '</strong>');
+    });
+  }
+
+  // Fonction pour sauvegarder les changements de prix des ventes mobiles
+  function saveMobilePriceChanges(venteId) {
+    const $btn = $('#toggleEditPrices');
+    $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Enregistrement...');
+
+    const updates = [];
+    $('.price-edit:visible').each(function() {
+      const $input = $(this);
+      const $row = $input.closest('tr');
+      const ligneId = $row.data('ligne-id');
+      const originalPrice = parseFloat($input.closest('.price-cell').data('original-price'));
+      const newPrice = parseFloat($input.val());
+
+      // Ne mettre à jour que si le prix a changé
+      if (newPrice !== originalPrice && !isNaN(newPrice) && newPrice >= 0) {
+        updates.push({
+          ligneId: ligneId,
+          newPrice: newPrice,
+          $row: $row
+        });
+      }
+    });
+
+    if (updates.length === 0) {
+      // Aucun changement, revenir au mode affichage
+      $('.price-display').show();
+      $('.price-edit').hide();
+      $btn.prop('disabled', false)
+        .attr('data-editing', 'false')
+        .removeClass('btn-success').addClass('btn-warning')
+        .html('<i class="fa fa-edit"></i> Modifier les prix');
+      return;
+    }
+
+    // Sauvegarder chaque changement
+    let completed = 0;
+    let hasError = false;
+
+    updates.forEach(function(update) {
+      $.ajax({
+        url: '/API/distribution/ventes/' + venteId + '/update-line-price/',
+        method: 'PATCH',
+        contentType: 'application/json',
+        headers: { 'X-CSRFToken': getCSRFToken() },
+        data: JSON.stringify({
+          ligne_id: update.ligneId,
+          prix_unitaire: update.newPrice
+        }),
+        dataType: 'json'
+      }).done(function(response) {
+        if (response.success) {
+          // Mettre à jour l'affichage avec les nouvelles valeurs
+          const $priceCell = update.$row.find('.price-cell');
+          const currency = $priceCell.data('currency');
+          $priceCell.data('original-price', update.newPrice);
+          $priceCell.find('.price-display').html(update.newPrice.toFixed(2) + ' ' + currency);
+          $priceCell.find('.price-edit').val(update.newPrice.toFixed(2));
+
+          // Mettre à jour le total de la ligne
+          update.$row.find('.total-cell').html('<strong>' + response.ligne.total.toFixed(2) + ' ' + currency + '</strong>');
+
+          // Mettre à jour les totaux de la vente
+          if (completed === 0) {
+            $('#saleDetailsContent .card-body h5').filter(function() {
+              return $(this).text().indexOf('Total TTC') !== -1;
+            }).html('<strong>Total TTC:</strong> <span class="float-right text-success">' + response.vente.total_ttc.toFixed(2) + ' ' + currency + '</span>');
+
+            $('#saleDetailsContent .card-body p').filter(function() {
+              return $(this).text().indexOf('Montant HT') !== -1;
+            }).html('<strong>Montant HT:</strong> <span class="float-right">' + response.vente.total_ht.toFixed(2) + ' ' + currency + '</span>');
+          }
+        }
+      }).fail(function(xhr) {
+        hasError = true;
+        const errorMsg = xhr.responseJSON && xhr.responseJSON.error ? xhr.responseJSON.error : 'Erreur lors de la mise à jour';
+        alert('Erreur: ' + errorMsg);
+      }).always(function() {
+        completed++;
+        if (completed === updates.length) {
+          // Tous les changements sont terminés
+          if (!hasError) {
+            // Revenir au mode affichage
+            $('.price-display').show();
+            $('.price-edit').hide();
+            $btn.attr('data-editing', 'false')
+              .removeClass('btn-success').addClass('btn-warning')
+              .html('<i class="fa fa-edit"></i> Modifier les prix');
+
+            // Recharger les données de la vente dans le tableau principal
+            loadSalesList();
+          } else {
+            $btn.html('<i class="fa fa-save"></i> Enregistrer les modifications');
+          }
+          $btn.prop('disabled', false);
+        }
+      });
+    });
   }
 
   function renderSaleDetailsInModal(sale){
@@ -1292,14 +1444,18 @@
     // Tableau des produits
     html += '<div class="row">';
     html += '<div class="col-12">';
-    html += '<h5 class="mb-3"><i class="fa fa-boxes"></i> Produits <span class="badge badge-secondary">'+(sale.lignes ? sale.lignes.length : 0)+'</span></h5>';
+    html += '<div class="d-flex justify-content-between align-items-center mb-3">';
+    html += '<h5 class="mb-0"><i class="fa fa-boxes"></i> Produits <span class="badge badge-secondary">'+(sale.lignes ? sale.lignes.length : 0)+'</span></h5>';
+    // Bouton pour activer le mode édition
+    html += '<button class="btn btn-sm btn-warning" id="toggleEditPrices" data-editing="false"><i class="fa fa-edit"></i> Modifier les prix</button>';
+    html += '</div>';
 
     const lignes = sale.lignes || [];
     if(lignes.length === 0){
       html += '<div class="alert alert-warning"><i class="fa fa-exclamation-triangle"></i> Aucun produit dans cette vente</div>';
     } else {
       html += '<div class="table-responsive" style="max-height: 400px; overflow-y: auto;">';
-      html += '<table class="table table-sm table-bordered table-hover mb-0">';
+      html += '<table class="table table-sm table-bordered table-hover mb-0" id="saleDetailsTable">';
       html += '<thead class="thead-dark" style="position: sticky; top: 0; z-index: 1;">';
       html += '<tr><th style="width: 15%;">Référence</th><th style="width: 40%;">Désignation</th><th style="width: 15%;">Prix unitaire</th><th style="width: 10%;">Quantité</th><th style="width: 20%;">Total</th></tr>';
       html += '</thead>';
@@ -1334,12 +1490,15 @@
           totalHtml += '<br><small class="text-success">Économie: -'+remisePromo.toFixed(2)+' '+sym+'</small>';
         }
 
-        html += '<tr>';
+        html += '<tr data-ligne-id="'+ligne.id+'">';
         html += '<td><code>'+ref+'</code></td>';
         html += '<td>'+desig+'</td>';
-        html += '<td class="text-right">'+prixHtml+'</td>';
+        html += '<td class="text-right price-cell" data-original-price="'+prix.toFixed(2)+'" data-currency="'+sym+'">';
+        html += '<span class="price-display">'+prixHtml+'</span>';
+        html += '<input type="number" class="form-control form-control-sm price-edit" style="display:none;" step="0.01" min="0" value="'+prix.toFixed(2)+'">';
+        html += '</td>';
         html += '<td class="text-center"><span class="badge badge-primary">'+qty+'</span></td>';
-        html += '<td class="text-right">'+totalHtml+'</td>';
+        html += '<td class="text-right total-cell">'+totalHtml+'</td>';
         html += '</tr>';
       });
       html += '</tbody>';
@@ -1387,6 +1546,144 @@
     html += '</div>';
 
     $container.html(html);
+
+    // Stocker les données de la vente pour la mise à jour
+    $container.data('sale', sale);
+
+    // Event handler pour le bouton "Modifier les prix"
+    $('#toggleEditPrices').off('click').on('click', function() {
+      const $btn = $(this);
+      const isEditing = $btn.attr('data-editing') === 'true';
+
+      if (!isEditing) {
+        // Activer le mode édition
+        $('.price-display').hide();
+        $('.price-edit').show().focus();
+        $btn.attr('data-editing', 'true')
+          .removeClass('btn-warning').addClass('btn-success')
+          .html('<i class="fa fa-save"></i> Enregistrer les modifications');
+      } else {
+        // Sauvegarder toutes les modifications
+        savePriceChanges(sale.id);
+      }
+    });
+
+    // Event handler pour sauvegarder quand on appuie sur Enter
+    $('.price-edit').off('keypress').on('keypress', function(e) {
+      if (e.which === 13) {
+        e.preventDefault();
+        savePriceChanges(sale.id);
+      }
+    });
+
+    // Event handler pour mettre à jour le total en temps réel lors de la modification
+    $('.price-edit').off('input').on('input', function() {
+      const $row = $(this).closest('tr');
+      const newPrice = parseFloat($(this).val()) || 0;
+      const qty = parseInt($row.find('.badge-primary').text()) || 0;
+      const currency = $(this).closest('.price-cell').data('currency');
+      const newTotal = newPrice * qty;
+      $row.find('.total-cell').html('<strong>' + newTotal.toFixed(2) + ' ' + currency + '</strong>');
+    });
+  }
+
+  // Fonction pour sauvegarder les changements de prix
+  function savePriceChanges(venteId) {
+    const $btn = $('#toggleEditPrices');
+    $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Enregistrement...');
+
+    const updates = [];
+    $('.price-edit:visible').each(function() {
+      const $input = $(this);
+      const $row = $input.closest('tr');
+      const ligneId = $row.data('ligne-id');
+      const originalPrice = parseFloat($input.closest('.price-cell').data('original-price'));
+      const newPrice = parseFloat($input.val());
+
+      // Ne mettre à jour que si le prix a changé
+      if (newPrice !== originalPrice && !isNaN(newPrice) && newPrice >= 0) {
+        updates.push({
+          ligneId: ligneId,
+          newPrice: newPrice,
+          $row: $row
+        });
+      }
+    });
+
+    if (updates.length === 0) {
+      // Aucun changement, revenir au mode affichage
+      $('.price-display').show();
+      $('.price-edit').hide();
+      $btn.prop('disabled', false)
+        .attr('data-editing', 'false')
+        .removeClass('btn-success').addClass('btn-warning')
+        .html('<i class="fa fa-edit"></i> Modifier les prix');
+      return;
+    }
+
+    // Sauvegarder chaque changement
+    let completed = 0;
+    let hasError = false;
+
+    updates.forEach(function(update) {
+      $.ajax({
+        url: '/API/ventes/' + venteId + '/update-line-price/',
+        method: 'PATCH',
+        contentType: 'application/json',
+        headers: { 'X-CSRFToken': getCSRFToken() },
+        data: JSON.stringify({
+          ligne_id: update.ligneId,
+          prix_unitaire: update.newPrice
+        }),
+        dataType: 'json'
+      }).done(function(response) {
+        if (response.success) {
+          // Mettre à jour l'affichage avec les nouvelles valeurs
+          const $priceCell = update.$row.find('.price-cell');
+          const currency = $priceCell.data('currency');
+          $priceCell.data('original-price', update.newPrice);
+          $priceCell.find('.price-display').html(update.newPrice.toFixed(2) + ' ' + currency);
+          $priceCell.find('.price-edit').val(update.newPrice.toFixed(2));
+
+          // Mettre à jour le total de la ligne
+          update.$row.find('.total-cell').html('<strong>' + response.ligne.total.toFixed(2) + ' ' + currency + '</strong>');
+
+          // Mettre à jour les totaux de la vente
+          if (completed === 0) {
+            $('#saleDetailsContent .card-body h5').filter(function() {
+              return $(this).text().indexOf('Total TTC') !== -1;
+            }).html('<strong>Total TTC:</strong> <span class="float-right text-success">' + response.vente.total_ttc.toFixed(2) + ' ' + currency + '</span>');
+
+            $('#saleDetailsContent .card-body p').filter(function() {
+              return $(this).text().indexOf('Total HT') !== -1;
+            }).html('<strong>Total HT:</strong> <span class="float-right">' + response.vente.total_ht.toFixed(2) + ' ' + currency + '</span>');
+          }
+        }
+      }).fail(function(xhr) {
+        hasError = true;
+        const errorMsg = xhr.responseJSON && xhr.responseJSON.error ? xhr.responseJSON.error : 'Erreur lors de la mise à jour';
+        alert('Erreur: ' + errorMsg);
+      }).always(function() {
+        completed++;
+        if (completed === updates.length) {
+          // Tous les changements sont terminés
+          if (!hasError) {
+            // Revenir au mode affichage
+            $('.price-display').show();
+            $('.price-edit').hide();
+            $btn.attr('data-editing', 'false')
+              .removeClass('btn-success').addClass('btn-warning')
+              .html('<i class="fa fa-edit"></i> Modifier les prix');
+
+            // Recharger les données de la vente dans le tableau principal
+            loadSalesList();
+          } else {
+            $btn.html('<i class="fa fa-save"></i> Enregistrer les modifications');
+          }
+          $btn.prop('disabled', false);
+        }
+      });
+    });
   }
 
   // ==================== GESTION DES PAIEMENTS ====================

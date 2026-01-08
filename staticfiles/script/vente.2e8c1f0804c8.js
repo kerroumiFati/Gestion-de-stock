@@ -876,9 +876,6 @@
           } else {
             // Actions pour ventes mobiles
             actions += '<button class="btn btn-sm btn-info view-sale-details" data-id="'+v.id+'"><i class="fa fa-eye"></i> Détails</button> ';
-            if(reste > 0) {
-              actions += '<button class="btn btn-sm btn-primary add-payment" data-id="'+v.id+'" data-reste="'+reste+'" data-mobile="true"><i class="fa fa-money"></i> Payer</button> ';
-            }
             if(v.tournee){
               actions += '<span class="badge badge-secondary ml-1"><i class="fa fa-truck"></i> '+v.tournee+'</span> ';
             }
