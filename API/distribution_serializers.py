@@ -99,8 +99,9 @@ class ClientMobileSerializer(serializers.ModelSerializer):
         return None
 
     def get_solde_actuel(self, obj):
-        """Solde du compte client - TODO: calculer depuis les ventes"""
-        return 0.0
+        """Solde du compte client"""
+        # Retourner le solde initial du client (champ sur le modèle)
+        return float(obj.solde) if obj.solde is not None else 0.0
 
     def get_type_prix_code(self, obj):
         """Code du type de prix (DETAIL, GROS, SUPERETTE, etc.)"""
@@ -885,7 +886,15 @@ class CommandeClientCreateSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True
     )
-    client = serializers.PrimaryKeyRelatedField(queryset=Client.objects.all())
+    client = serializers.PrimaryKeyRelatedField(
+        queryset=Client.objects.all(),
+        required=False,
+        allow_null=True
+    )
+    # Champs pour gérer les clients créés localement dans l'app mobile
+    app_client_id = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    client_nom = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+
     livreur = serializers.PrimaryKeyRelatedField(
         queryset=LivreurDistribution.objects.all(),
         required=False,
@@ -896,7 +905,8 @@ class CommandeClientCreateSerializer(serializers.ModelSerializer):
     type_paiement = serializers.ChoiceField(
         choices=CommandeClient.TYPE_PAIEMENT_CHOICES,
         required=False,
-        default='non_paye'
+        default='non_paye',
+        allow_blank=True
     )
     montant_paye = serializers.DecimalField(
         max_digits=12,
@@ -909,7 +919,7 @@ class CommandeClientCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = CommandeClient
         fields = [
-            'company', 'client', 'livreur',
+            'company', 'client', 'app_client_id', 'client_nom', 'livreur',
             'date_livraison_souhaitee', 'notes', 'app_id', 'lignes',
             # Champs de paiement
             'est_paye', 'type_paiement', 'montant_paye', 'date_paiement'
@@ -919,29 +929,72 @@ class CommandeClientCreateSerializer(serializers.ModelSerializer):
         import logging
         logger = logging.getLogger(__name__)
 
+        logger.info('[COMMANDE CREATE] ===== DÉBUT =====')
+        logger.info(f'[COMMANDE CREATE] validated_data: {validated_data}')
+
         lignes_data = validated_data.pop('lignes')
+        app_client_id = validated_data.pop('app_client_id', None)
+        client_nom = validated_data.pop('client_nom', None)
+
+        # Gérer le client: si client est null mais app_client_id fourni
+        client = validated_data.get('client')
+        if not client and app_client_id:
+            logger.info(f'[COMMANDE CREATE] Client null, recherche par app_client_id: {app_client_id}')
+            # Essayer de trouver un client existant avec cet app_client_id
+            # ou par nom si fourni
+            if client_nom:
+                from .distribution_models import Client
+                # Rechercher par nom (approximatif)
+                client = Client.objects.filter(nom__icontains=client_nom.split()[-1] if client_nom else '').first()
+                if client:
+                    logger.info(f'[COMMANDE CREATE] Client trouvé par nom: {client.id} - {client.nom}')
+                    validated_data['client'] = client
+                else:
+                    logger.warning(f'[COMMANDE CREATE] Aucun client trouvé avec le nom: {client_nom}')
+                    # On ne peut pas créer la commande sans client valide
+                    raise serializers.ValidationError({
+                        'client': f'Client introuvable. Veuillez d\'abord synchroniser le client "{client_nom}".'
+                    })
+
+        if not validated_data.get('client'):
+            logger.error('[COMMANDE CREATE] Client manquant après résolution')
+            raise serializers.ValidationError({'client': 'Le client est obligatoire pour créer une commande.'})
 
         # Auto-assigner la company depuis le client si non fournie
+        # DÉSACTIVÉ: Pour que les commandes mobile restent avec company=null et apparaissent dans toutes les interfaces
+        # client = validated_data.get('client')
+        # if not validated_data.get('company') and client:
+        #     if hasattr(client, 'company') and client.company:
+        #         validated_data['company'] = client.company
+        #     else:
+        #         # Fallback: utiliser la première company disponible
+        #         from .models import Company
+        #         default_company = Company.objects.first()
+        #         if default_company:
+        #             validated_data['company'] = default_company
+
+        # Laisser company=null pour les commandes mobile (permet le filtre Q(company__isnull=True))
         client = validated_data.get('client')
-        if not validated_data.get('company') and client:
-            if hasattr(client, 'company') and client.company:
-                validated_data['company'] = client.company
-            else:
-                # Fallback: utiliser la première company disponible
-                from .models import Company
-                default_company = Company.objects.first()
-                if default_company:
-                    validated_data['company'] = default_company
+        logger.info(f'[COMMANDE CREATE] Company fournie: {validated_data.get("company")}, sera laissée à null pour compatibilité filtres')
 
         # Auto-assigner le livreur depuis le client si non fourni
         if not validated_data.get('livreur') and client:
+            # ATTENTION: Auto-assignation du livreur - peut causer des problèmes si plusieurs livreurs ont le même client
+            logger.warning(f'[COMMANDE CREATE] Livreur non fourni, auto-assignation depuis client {client.id}')
             # Trouver le livreur assigné à ce client
             livreur = LivreurDistribution.objects.filter(clients_assignes=client).first()
             if livreur:
+                logger.info(f'[COMMANDE CREATE] Livreur auto-assigné: {livreur.id} - {livreur.nom}')
                 validated_data['livreur'] = livreur
+            else:
+                logger.warning(f'[COMMANDE CREATE] Aucun livreur assigné au client {client.id}, commande créée sans livreur')
+                # Ne pas lever d'erreur, permettre la création sans livreur
+                # Cela pourrait être corrigé manuellement plus tard via l'interface web
 
         # Créer la commande d'abord pour calculer le montant total
         commande = CommandeClient.objects.create(**validated_data)
+
+        logger.info(f'[COMMANDE CREATE] Commande créée: id={commande.id}, company={commande.company_id if commande.company else None}, livreur={commande.livreur_id if commande.livreur else None}, client={commande.client_id if commande.client else None}')
 
         # Créer les lignes de commande
         for ligne_data in lignes_data:
@@ -1039,14 +1092,23 @@ class CommandeClientCreateSerializer(serializers.ModelSerializer):
             # Créer les nouvelles lignes
             lignes_creees = []
             for idx, ligne_data in enumerate(lignes_data):
-                logger.info(f"[COMMANDE UPDATE] Création ligne {idx}: {ligne_data}")
+                logger.info(f"[COMMANDE UPDATE] ===== Ligne {idx} =====")
+                logger.info(f"[COMMANDE UPDATE] Données brutes reçues: {ligne_data}")
+                logger.info(f"[COMMANDE UPDATE] Type de ligne_data: {type(ligne_data)}")
+                logger.info(f"[COMMANDE UPDATE] Clés disponibles: {ligne_data.keys() if hasattr(ligne_data, 'keys') else 'N/A'}")
 
                 # Retirer les champs calculés s'ils sont présents
                 ligne_data.pop('produit_reference', None)
                 ligne_data.pop('produit_designation', None)
+                ligne_data.pop('produit_image', None)
 
                 # Pour les objets Produit du PrimaryKeyRelatedField
                 produit = ligne_data.pop('produit')
+                logger.info(f"[COMMANDE UPDATE] Produit ID: {produit.id if hasattr(produit, 'id') else produit}")
+
+                # Log des données avant création
+                logger.info(f"[COMMANDE UPDATE] Données après nettoyage: {ligne_data}")
+                logger.info(f"[COMMANDE UPDATE] Prix dans ligne_data: prix_unitaire_ht={ligne_data.get('prix_unitaire_ht', 'NON TROUVÉ')}")
 
                 nouvelle_ligne = LigneCommandeClient.objects.create(
                     commande=instance,

@@ -258,6 +258,9 @@
         <button class="tab-btn" onclick="switchTab('pricelists', this)">
             <i class="fas fa-dollar-sign mr-2"></i>{% trans "Liste de Prix" %}
         </button>
+        <button class="tab-btn" onclick="switchTab('solde_client', this)">
+            <i class="fas fa-money-bill-wave mr-2"></i>{% trans "Solde Client" %}
+        </button>
     </div>
 
     <!-- Contenu Produits -->
@@ -624,6 +627,78 @@
         </div>
     </div>
 
+    <!-- Contenu Solde Client -->
+    <div id="solde_client-tab" class="tab-content">
+        <div class="import-card">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h3 class="mb-0">
+                    <i class="fas fa-money-bill-wave text-primary mr-2"></i>{% trans "Importer Solde Client" %}
+                </h3>
+                <div>
+                    <button class="template-btn" onclick="downloadTemplate('solde_client', 'excel')">
+                        <i class="fas fa-file-excel"></i>
+                        {% trans "Template Excel" %}
+                    </button>
+                    <button class="template-btn ml-2" onclick="downloadTemplate('solde_client', 'csv')">
+                        <i class="fas fa-file-csv"></i>
+                        {% trans "Template CSV" %}
+                    </button>
+                </div>
+            </div>
+
+            <!-- Zone d'upload -->
+            <div class="upload-zone" id="uploadZoneSolde_client" onclick="document.getElementById('fileInputSolde_client').click()">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <h4>{% trans "Glissez votre fichier ici ou cliquez pour parcourir" %}</h4>
+                <p class="text-muted mb-0">{% trans "Formats acceptés" %}: .xlsx, .xls, .csv ({% trans "max" %} 10 MB)</p>
+                <input type="file" id="fileInputSolde_client" class="file-input" accept=".xlsx,.xls,.csv" onchange="handleFileSelect(this, 'solde_client')">
+            </div>
+
+            <!-- Informations fichier -->
+            <div id="fileInfoSolde_client" style="display: none; margin-top: 20px;">
+                <div class="alert alert-info">
+                    <i class="fas fa-file mr-2"></i>
+                    <strong id="fileNameSolde_client"></strong> -
+                    <span id="fileSizeSolde_client"></span>
+                </div>
+            </div>
+
+            <!-- Prévisualisation -->
+            <div id="previewSolde_client" style="display: none;">
+                <h5 class="mt-4 mb-3">
+                    <i class="fas fa-eye mr-2"></i>{% trans "Prévisualisation" %} (<span id="previewCountSolde_client">0</span> {% trans "lignes" %})
+                </h5>
+                <div class="preview-table" id="previewTableSolde_client"></div>
+
+                <div class="text-right mt-3">
+                    <button class="btn btn-secondary mr-2" onclick="cancelImport('solde_client')">
+                        <i class="fas fa-times mr-2"></i>{% trans "Annuler" %}
+                    </button>
+                    <button class="btn btn-success" onclick="confirmImport('solde_client')">
+                        <i class="fas fa-check mr-2"></i>{% trans "Confirmer l'import" %}
+                    </button>
+                </div>
+            </div>
+
+            <!-- Progression -->
+            <div id="progressSolde_client" style="display: none;">
+                <h5 class="mt-4">{% trans "Import en cours..." %}</h5>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFillSolde_client" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- Résultats -->
+            <div id="resultsSolde_client" style="display: none;">
+                <h5 class="mt-4 mb-3">
+                    <i class="fas fa-check-circle text-success mr-2"></i>{% trans "Import terminé" %}
+                </h5>
+                <div class="import-results" id="resultsStatsSolde_client"></div>
+                <div id="errorsListSolde_client" style="display: none; margin-top: 20px;"></div>
+            </div>
+        </div>
+    </div>
+
     <!-- Instructions -->
     <div class="import-card">
         <h4 class="mb-3">
@@ -682,6 +757,23 @@
                     <li><strong>{% trans "type_prix" %}</strong> = {% trans "Type de client" %} (DETAIL, SUPERETTE, GROS, etc.). {% trans "Si vide, utilise le type par défaut" %}</li>
                     <li>{% trans "Le même produit peut avoir plusieurs prix selon le code_prix et type_prix" %}</li>
                     <li>{% trans "Exemple" %}: PROD-001 avec code_prix=STANDARD et type_prix=DETAIL à 150 DA, et type_prix=GROS à 130 DA</li>
+                </ul>
+            </div>
+        </div>
+        <div class="row mt-3">
+            <div class="col-md-12">
+                <h6 class="font-weight-bold mb-2">{% trans "Pour le Solde Client:" %}</h6>
+                <ul class="text-muted">
+                    <li>{% trans "Colonnes requises" %}: <code>client_id</code> {% trans "ou" %} (<code>nom</code> + <code>prenom</code>), <code>solde</code></li>
+                    <li>{% trans "Colonnes optionnelles" %}: <code>telephone</code>, <code>notes</code></li>
+                    <li><strong>client_id</strong> : {% trans "ID du client dans le système" %}</li>
+                    <li><strong>nom + prenom</strong> : {% trans "Si client_id non fourni, recherche par nom et prénom" %}</li>
+                    <li><strong>solde</strong> : {% trans "Montant du solde (positif = crédit client, négatif = dette)" %}</li>
+                    <li><strong>telephone</strong> : {% trans "Téléphone pour identification du client (optionnel)" %}</li>
+                    <li><strong>notes</strong> : {% trans "Notes ou commentaires sur le solde (optionnel)" %}</li>
+                    <li>{% trans "Le client doit exister dans le système" %}</li>
+                    <li>{% trans "Le solde sera ajouté au solde actuel du client" %}</li>
+                    <li>{% trans "Format du solde: nombre décimal (ex: 5000.50, -1200.00)" %}</li>
                 </ul>
             </div>
         </div>

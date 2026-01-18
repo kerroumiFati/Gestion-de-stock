@@ -404,6 +404,7 @@
                                         <th class="text-right">{% trans "Prix Unit. HT" %}</th>
                                         <th class="text-right">{% trans "Total HT" %}</th>
                                         <th class="text-right">{% trans "Total TTC" %}</th>
+                                        <th class="text-center" style="width: 80px;">{% trans "Actions" %}</th>
                                     </tr>
                                 </thead>
                                 <tbody id="editLignesBody">
@@ -414,11 +415,13 @@
                                         <th colspan="4" class="text-right">{% trans "Total HT" %}:</th>
                                         <th class="text-right" id="editTotalHT">0.00 DA</th>
                                         <th></th>
+                                        <th></th>
                                     </tr>
                                     <tr>
                                         <th colspan="4" class="text-right">{% trans "Total TTC" %}:</th>
                                         <th></th>
                                         <th class="text-right" id="editTotalTTC">0.00 DA</th>
+                                        <th></th>
                                     </tr>
                                 </tfoot>
                             </table>
@@ -472,6 +475,15 @@
                 loadLivreurs();
             }
         }, 100);
+    }
+
+    // Fonction pour gérer les erreurs de chargement d'image
+    function handleImageError(img) {
+        if (!img) return;
+        const placeholder = document.createElement('div');
+        placeholder.style.cssText = 'width: 40px; height: 40px; background: #f0f0f0; border-radius: 4px; display: flex; align-items: center; justify-content: center;';
+        placeholder.innerHTML = '<i class="fas fa-image" style="color: #ccc; font-size: 16px;"></i>';
+        img.parentNode.replaceChild(placeholder, img);
     }
 
     function loadCommandes() {
@@ -655,7 +667,7 @@
                     <tbody>
                         ${cmd.lignes.map(ligne => {
                             const imageHtml = ligne.produit_image
-                                ? `<img src="${ligne.produit_image}" alt="${ligne.produit_designation}" style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px;">`
+                                ? `<img src="${ligne.produit_image}" alt="${ligne.produit_designation}" style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px;" onerror="handleImageError(this)">`
                                 : `<div style="width: 40px; height: 40px; background: #f0f0f0; border-radius: 4px; display: flex; align-items: center; justify-content: center;"><i class="fas fa-image" style="color: #ccc; font-size: 16px;"></i></div>`;
                             return `
                             <tr>
@@ -1326,7 +1338,7 @@
         let totalTTC = 0;
 
         if (editingLignes.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">Aucun produit</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-3">Aucun produit</td></tr>';
             document.getElementById('editTotalHT').textContent = '0.00 DA';
             document.getElementById('editTotalTTC').textContent = '0.00 DA';
             return;
@@ -1350,9 +1362,25 @@
                                onchange="updateLigneQuantite(${index}, this.value)"
                                style="width: 80px; display: inline-block;">
                     </td>
-                    <td class="text-right">${formatCurrency(ligne.prix_unitaire_ht)}</td>
+                    <td class="text-right">
+                        <input type="number"
+                               class="form-control form-control-sm text-right"
+                               value="${ligne.prix_unitaire_ht}"
+                               min="0"
+                               step="0.01"
+                               onchange="updateLignePrix(${index}, this.value)"
+                               style="width: 100px; display: inline-block;">
+                    </td>
                     <td class="text-right" id="editMontantHT-${index}">${formatCurrency(montantHT)}</td>
                     <td class="text-right" id="editMontantTTC-${index}">${formatCurrency(montantTTC)}</td>
+                    <td class="text-center">
+                        <button type="button"
+                                class="btn btn-sm btn-danger"
+                                onclick="removeLigne(${index})"
+                                title="Supprimer">
+                            <i class="fa fa-trash"></i>
+                        </button>
+                    </td>
                 </tr>
             `;
         }).join('');
@@ -1389,6 +1417,66 @@
 
         renderEditLignes();
     }
+
+    function updateLignePrix(index, newPrix) {
+        const prix = parseFloat(newPrix) || 0;
+        if (prix < 0) {
+            alert('Le prix ne peut pas être négatif');
+            renderEditLignes();
+            return;
+        }
+
+        editingLignes[index].prix_unitaire_ht = prix;
+
+        // Recalculer les montants
+        const quantite = parseInt(editingLignes[index].quantite) || 1;
+        const tauxTVA = parseFloat(editingLignes[index].taux_tva) || 19;
+
+        editingLignes[index].montant_ht = prix * quantite;
+        editingLignes[index].montant_ttc = editingLignes[index].montant_ht * (1 + tauxTVA / 100);
+
+        console.log('[PRIX UPDATE]', {
+            index: index,
+            prixUnitHT: prix,
+            quantite: quantite,
+            tauxTVA: tauxTVA,
+            montantHT: editingLignes[index].montant_ht,
+            montantTTC: editingLignes[index].montant_ttc
+        });
+
+        renderEditLignes();
+    }
+
+    function removeLigne(index) {
+        if (editingLignes.length <= 1) {
+            alert('Impossible de supprimer le dernier produit. Une commande doit contenir au moins un produit.');
+            return;
+        }
+
+        const ligne = editingLignes[index];
+        const confirmMsg = `Voulez-vous vraiment supprimer "${ligne.produit_designation || 'ce produit'}" de la commande ?`;
+
+        if (confirm(confirmMsg)) {
+            console.log('[REMOVE LIGNE]', {
+                index: index,
+                produit: ligne.produit_designation,
+                avant: editingLignes.length
+            });
+
+            // Supprimer la ligne
+            editingLignes.splice(index, 1);
+
+            console.log('[REMOVE LIGNE] Après suppression:', editingLignes.length, 'produits restants');
+
+            // Rafraîchir l'affichage
+            renderEditLignes();
+        }
+    }
+
+    // Exposer les fonctions globalement pour les événements onclick
+    window.updateLigneQuantite = updateLigneQuantite;
+    window.updateLignePrix = updateLignePrix;
+    window.removeLigne = removeLigne;
 
     function saveCommandeModifications() {
         const id = document.getElementById('editCommandeId').value;

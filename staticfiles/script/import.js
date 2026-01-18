@@ -43,7 +43,7 @@
     };
 
     // Drag & Drop
-    ['products', 'categories', 'fournisseurs', 'clients', 'pricelists'].forEach(type => {
+    ['products', 'categories', 'fournisseurs', 'clients', 'pricelists', 'solde_client'].forEach(type => {
         const zone = document.getElementById('uploadZone' + capitalize(type));
         if (!zone) return;
 
@@ -243,6 +243,18 @@
             }
             // code_prix et type_prix sont optionnels (utiliseront les valeurs par défaut)
             return { valid: true };
+        } else if (type === 'solde_client') {
+            const clientId = getString(row.client_id);
+            const nom = getString(row.nom);
+            const prenom = getString(row.prenom);
+
+            if (!clientId && !nom) {
+                return { valid: false, error: 'Client ID ou Nom manquant' };
+            }
+            if (!row.solde || isNaN(parseFloat(row.solde))) {
+                return { valid: false, error: 'Solde invalide (doit être un nombre)' };
+            }
+            return { valid: true };
         }
         return { valid: false, error: 'Type inconnu' };
     }
@@ -354,6 +366,8 @@
                 show('client');
             } else if (type === 'pricelists') {
                 show('produit');
+            } else if (type === 'solde_client') {
+                show('client');
             }
         }, 3000);
     }

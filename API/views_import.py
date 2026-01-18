@@ -130,6 +130,8 @@ class ImportExecuteView(APIView):
                 result = self.import_clients(df, request.user, company)
             elif import_type == 'pricelists':
                 result = self.import_pricelists(df, request.user, company)
+            elif import_type == 'solde_client':
+                result = self.import_solde_client(df, request.user, company)
             else:
                 return Response({'error': 'Type d\'import non supporté'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -637,6 +639,109 @@ class ImportExecuteView(APIView):
             'errors': errors
         }
 
+    def import_solde_client(self, df, user, company=None):
+        """Importer le solde des clients"""
+        created = 0
+        updated = 0
+        skipped = 0
+        errors = []
+
+        with transaction.atomic():
+            for idx, row in df.iterrows():
+                try:
+                    # Vérifier les champs requis
+                    client_id = str(row.get('client_id', '')).strip() if row.get('client_id') else ''
+                    nom = str(row.get('nom', '')).strip() if row.get('nom') else ''
+                    prenom = str(row.get('prenom', '')).strip() if row.get('prenom') else ''
+                    telephone = str(row.get('telephone', '')).strip() if row.get('telephone') else ''
+
+                    if not client_id and not nom:
+                        errors.append({'row': idx + 2, 'message': 'Client ID ou Nom manquant'})
+                        skipped += 1
+                        continue
+
+                    if not row.get('solde') and row.get('solde') != 0:
+                        errors.append({'row': idx + 2, 'message': 'Solde manquant'})
+                        skipped += 1
+                        continue
+
+                    try:
+                        solde = Decimal(str(row['solde']))
+                    except (ValueError, Exception) as e:
+                        errors.append({'row': idx + 2, 'message': f'Solde invalide: {str(e)}'})
+                        skipped += 1
+                        continue
+
+                    # Chercher le client par ID ou par nom/prénom
+                    client = None
+                    if client_id:
+                        try:
+                            client = Client.objects.get(id=int(client_id))
+                        except (Client.DoesNotExist, ValueError):
+                            pass
+
+                    # Si pas trouvé par ID, chercher par nom et prénom
+                    if not client and nom:
+                        filters = {'nom__iexact': nom}
+                        if prenom:
+                            filters['prenom__iexact'] = prenom
+                        if company:
+                            filters['company'] = company
+
+                        try:
+                            # Chercher le client
+                            clients = Client.objects.filter(**filters)
+
+                            # Si téléphone fourni, filtrer davantage
+                            if telephone and clients.count() > 1:
+                                clients = clients.filter(telephone=telephone)
+
+                            if clients.count() == 1:
+                                client = clients.first()
+                            elif clients.count() > 1:
+                                errors.append({'row': idx + 2, 'message': f'Plusieurs clients trouvés pour "{nom} {prenom}". Utilisez client_id ou ajoutez le téléphone.'})
+                                skipped += 1
+                                continue
+                            else:
+                                errors.append({'row': idx + 2, 'message': f'Client "{nom} {prenom}" introuvable'})
+                                skipped += 1
+                                continue
+                        except Exception as e:
+                            errors.append({'row': idx + 2, 'message': f'Erreur lors de la recherche du client: {str(e)}'})
+                            skipped += 1
+                            continue
+
+                    if not client:
+                        errors.append({'row': idx + 2, 'message': f'Client "{client_id or nom}" introuvable'})
+                        skipped += 1
+                        continue
+
+                    # Mettre à jour le solde du client
+                    # Le solde est ajouté au solde actuel
+                    if hasattr(client, 'solde'):
+                        client.solde = (client.solde or Decimal('0')) + solde
+                    else:
+                        # Si le champ solde n'existe pas, on peut l'ajouter via un attribut personnalisé
+                        # Pour l'instant, on le stocke juste
+                        client.solde = solde
+
+                    client.save()
+                    updated += 1
+
+                except Exception as e:
+                    errors.append({'row': idx + 2, 'message': str(e)})
+                    skipped += 1
+
+        return {
+            'stats': {
+                'created': created,
+                'updated': updated,
+                'skipped': skipped,
+                'total': len(df)
+            },
+            'errors': errors
+        }
+
 
 class ImportTemplateView(APIView):
     """
@@ -718,6 +823,27 @@ class ImportTemplateView(APIView):
                     'nis': '123456789012345',
                     'ai': '12345678901',
                     'rc': '12/00-1234567B89'
+                }]
+
+            elif import_type == 'solde_client':
+                columns = ['client_id', 'nom', 'prenom', 'telephone', 'solde', 'notes']
+                filename = 'template_solde_client'
+
+                # Données d'exemple
+                example_data = [{
+                    'client_id': '1',
+                    'nom': 'Superette Centrale',
+                    'prenom': '',
+                    'telephone': '0555987654',
+                    'solde': '5000.00',
+                    'notes': 'Paiement initial'
+                }, {
+                    'client_id': '',
+                    'nom': 'Benali',
+                    'prenom': 'Ahmed',
+                    'telephone': '0661234567',
+                    'solde': '-1200.50',
+                    'notes': 'Dette en cours'
                 }]
 
             else:

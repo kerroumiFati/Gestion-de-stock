@@ -1441,6 +1441,10 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
     serializer_class = CommandeClientSerializer
     permission_classes = [AllowAny]  # TODO: Ajouter authentification en production
 
+    def get_permissions(self):
+        """Override pour forcer AllowAny (contourner DEFAULT_PERMISSION_CLASSES)"""
+        return [AllowAny()]
+
     def get_serializer_class(self):
         """Utiliser CommandeClientCreateSerializer pour create et update depuis mobile"""
         if self.action in ['create', 'update', 'partial_update']:
@@ -1505,14 +1509,25 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         from django.db.models import Q
+        import logging
+        logger = logging.getLogger(__name__)
+
         queryset = super().get_queryset()
+        initial_count = queryset.count()
+
+        # Option pour désactiver le filtre company (utile pour l'interface web)
+        skip_company_filter = self.request.query_params.get('all_companies', 'false').lower() == 'true'
 
         # Filtrer par company de l'utilisateur OU commandes sans company assignée
-        if hasattr(self.request.user, 'company') and self.request.user.company:
+        if not skip_company_filter and hasattr(self.request.user, 'company') and self.request.user.company:
             # Inclure les commandes de la company de l'utilisateur ET les commandes sans company
             queryset = queryset.filter(
                 Q(company=self.request.user.company) | Q(company__isnull=True)
             )
+            filtered_count = queryset.count()
+            logger.info(f"[CommandeClient] Filtre company appliqué: {initial_count} -> {filtered_count} commandes (company={self.request.user.company.id})")
+        else:
+            logger.info(f"[CommandeClient] Pas de filtre company (skip={skip_company_filter}, total={initial_count})")
 
         # Filtres optionnels
         livreur_id = self.request.query_params.get('livreur')
@@ -1579,6 +1594,7 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
         logger = logging.getLogger(__name__)
 
         commande = self.get_object()
+        ancien_statut = commande.statut  # Stocker l'ancien statut pour éviter double déduction
         nouveau_statut = request.data.get('statut')
         lignes_ajustees = request.data.get('lignes')
         date_livraison = request.data.get('date_livraison_reelle')
@@ -1587,11 +1603,12 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
         if lignes_ajustees:
             logger.info(f"[PARTIAL_UPDATE] Nombre de lignes reçues: {len(lignes_ajustees)}")
 
-        # Vérifier si on essaie d'ajuster les quantités d'une commande déjà payée
-        if lignes_ajustees and (commande.est_paye or commande.montant_paye > 0):
-            logger.warning(f"Tentative d'ajustement sur commande payée {commande.id}")
+        # Vérifier si on essaie d'ajuster les quantités d'une commande entièrement payée
+        # Permettre l'ajustement pour paiements partiels (est_paye=False)
+        if lignes_ajustees and commande.est_paye:
+            logger.warning(f"Tentative d'ajustement sur commande entièrement payée {commande.id}")
             return Response(
-                {'error': 'Les quantités ne peuvent pas être ajustées après le paiement de la commande'},
+                {'error': 'Les quantités ne peuvent pas être ajustées pour une commande entièrement payée'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -1662,7 +1679,8 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
         commande.refresh_from_db()
 
         # Si livraison, déduire automatiquement le stock du van
-        if nouveau_statut == 'delivered':
+        # IMPORTANT: Ne déduire que si le statut CHANGE vers 'delivered' (pas si déjà livré)
+        if nouveau_statut == 'delivered' and ancien_statut != 'delivered':
             # Préparer les quantités livrées si elles ont été ajustées
             quantites_livrees = None
             if lignes_ajustees:
@@ -1672,6 +1690,7 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
                 }
 
             # Déduire le stock du van
+            logger.info(f"[PARTIAL_UPDATE] Déduction stock pour commande {commande.id}: {ancien_statut} -> {nouveau_statut}")
             resultat_stock = commande.livrer_et_deduire_stock_van(quantites_livrees)
 
             # Ajouter l'info dans la réponse
@@ -1691,6 +1710,7 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
     def changer_statut(self, request, pk=None):
         """Changer le statut d'une commande"""
         commande = self.get_object()
+        ancien_statut = commande.statut  # Stocker l'ancien statut pour éviter double déduction
         nouveau_statut = request.data.get('statut')
 
         if not nouveau_statut:
@@ -1706,7 +1726,8 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
             )
 
         # Si on passe au statut livré, déduire automatiquement le stock du van
-        if nouveau_statut == 'delivered':
+        # IMPORTANT: Ne déduire que si le statut CHANGE vers 'delivered' (pas si déjà livré)
+        if nouveau_statut == 'delivered' and ancien_statut != 'delivered':
             resultat = commande.livrer_et_deduire_stock_van()
 
             if resultat['success']:
@@ -1764,12 +1785,18 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
         from .models import Warehouse
         from .distribution_models import LivreurDistribution
 
+        print(f"[AFFECTER LIVREUR] Début - Commande ID: {pk}, User: {request.user.username}")
+        print(f"[AFFECTER LIVREUR] Request data: {request.data}")
+
         commande = self.get_object()
+        print(f"[AFFECTER LIVREUR] Commande récupérée: {commande.reference}, Statut: {commande.statut}, Lignes: {commande.lignes.count()}")
+
         livreur_id = request.data.get('livreur_id')
         entrepot_source_id = request.data.get('entrepot_source_id')
 
         # Validation des paramètres
         if not livreur_id:
+            print(f"[AFFECTER LIVREUR] Erreur: livreur_id manquant")
             return Response(
                 {'error': 'livreur_id requis'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -1778,7 +1805,9 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
         # Récupérer le livreur
         try:
             livreur = LivreurDistribution.objects.get(id=livreur_id)
+            print(f"[AFFECTER LIVREUR] Livreur trouvé: {livreur.nom}, Van: {livreur.entrepot}")
         except LivreurDistribution.DoesNotExist:
+            print(f"[AFFECTER LIVREUR] Erreur: Livreur ID {livreur_id} introuvable")
             return Response(
                 {'error': f'Livreur avec ID {livreur_id} introuvable'},
                 status=status.HTTP_404_NOT_FOUND
@@ -1788,7 +1817,9 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
         if entrepot_source_id:
             try:
                 entrepot_source = Warehouse.objects.get(id=entrepot_source_id)
+                print(f"[AFFECTER LIVREUR] Entrepôt source spécifié: {entrepot_source.name} (ID: {entrepot_source.id})")
             except Warehouse.DoesNotExist:
+                print(f"[AFFECTER LIVREUR] Erreur: Entrepôt ID {entrepot_source_id} introuvable")
                 return Response(
                     {'error': f'Entrepôt avec ID {entrepot_source_id} introuvable'},
                     status=status.HTTP_404_NOT_FOUND
@@ -1796,27 +1827,76 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
         else:
             # Prendre l'entrepôt principal de la company
             # On cherche un entrepôt actif qui n'est pas un van
-            entrepot_source = Warehouse.objects.filter(
-                company=commande.company,
-                is_active=True
-            ).exclude(
-                code__icontains='van'
-            ).first()
+            print(f"[AFFECTER LIVREUR] Recherche d'un entrepôt source pour company: {commande.company}")
+
+            # Essayer d'abord avec la company de la commande
+            if commande.company:
+                entrepot_source = Warehouse.objects.filter(
+                    company=commande.company,
+                    is_active=True
+                ).exclude(
+                    code__icontains='van'
+                ).first()
+                print(f"[AFFECTER LIVREUR] Recherche avec company: trouvé={entrepot_source}")
+            else:
+                entrepot_source = None
+
+            # Si pas trouvé avec company, essayer avec la company du client
+            if not entrepot_source and commande.client.company:
+                print(f"[AFFECTER LIVREUR] Commande sans company, recherche avec company du client: {commande.client.company}")
+                entrepot_source = Warehouse.objects.filter(
+                    company=commande.client.company,
+                    is_active=True
+                ).exclude(
+                    code__icontains='van'
+                ).first()
+                print(f"[AFFECTER LIVREUR] Recherche avec company du client: trouvé={entrepot_source}")
+
+                # Mettre à jour la commande avec la company du client
+                if entrepot_source:
+                    commande.company = commande.client.company
+                    commande.save(update_fields=['company'])
+                    print(f"[AFFECTER LIVREUR] Company du client assignée à la commande")
+
+            # Si toujours pas trouvé, chercher n'importe quel entrepôt actif non-van
+            if not entrepot_source:
+                print(f"[AFFECTER LIVREUR] Aucun entrepôt trouvé avec company, recherche globale...")
+                entrepot_source = Warehouse.objects.filter(
+                    is_active=True
+                ).exclude(
+                    code__icontains='van'
+                ).first()
+                print(f"[AFFECTER LIVREUR] Recherche globale: trouvé={entrepot_source}")
 
             if not entrepot_source:
+                print(f"[AFFECTER LIVREUR] Erreur: Aucun entrepôt source trouvé dans le système")
                 return Response(
-                    {'error': 'Aucun entrepôt source trouvé. Veuillez spécifier entrepot_source_id.'},
+                    {'error': 'Aucun entrepôt source trouvé. Veuillez créer un entrepôt ou spécifier entrepot_source_id.'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
+            else:
+                print(f"[AFFECTER LIVREUR] Entrepôt source auto-détecté: {entrepot_source.name} (ID: {entrepot_source.id})")
 
         # Effectuer l'affectation et le transfert de stock
-        resultat = commande.affecter_livreur_et_preparer_stock(
-            livreur=livreur,
-            entrepot_source=entrepot_source,
-            user=request.user
-        )
+        print(f"[AFFECTER LIVREUR] Appel affecter_livreur_et_preparer_stock...")
+        try:
+            resultat = commande.affecter_livreur_et_preparer_stock(
+                livreur=livreur,
+                entrepot_source=entrepot_source,
+                user=request.user
+            )
+            print(f"[AFFECTER LIVREUR] Résultat: success={resultat['success']}, message={resultat['message']}")
+        except Exception as e:
+            print(f"[AFFECTER LIVREUR] Exception non gérée: {type(e).__name__}: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return Response({
+                'success': False,
+                'error': f'Erreur inattendue: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         if resultat['success']:
+            print(f"[AFFECTER LIVREUR] Succès - Transfert: {resultat['transfert']}")
             return Response({
                 'success': True,
                 'message': resultat['message'],
@@ -1825,6 +1905,7 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_200_OK)
         else:
             # En cas de rupture de stock ou autre erreur
+            print(f"[AFFECTER LIVREUR] Échec - Ruptures: {len(resultat.get('ruptures', []))}")
             return Response({
                 'success': False,
                 'message': resultat['message'],

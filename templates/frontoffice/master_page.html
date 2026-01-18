@@ -484,6 +484,11 @@
                                 <i class="fas fa-file-export"></i>{% trans "Rapports" %}
                             </a></li>
                             {% endif %}
+                            {% if perms.API.manage_clients or user.is_superuser %}
+                            <li><a href="/admindash/clients-solde-dashboard" class="sidebar-item" onclick="show('clients_solde_dashboard');return false;">
+                                <i class="fas fa-wallet"></i>{% trans "Dashboard Soldes Clients" %}
+                            </a></li>
+                            {% endif %}
                             {% if user.is_staff %}
                             <li><a href="/audit-logs/">
                                 <i class="fas fa-clipboard-list"></i>{% trans "Journaux d'audit" %}

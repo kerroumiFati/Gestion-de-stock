@@ -610,6 +610,19 @@ class CommandeClient(models.Model):
         return f"Commande {self.reference} - {self.client} ({self.statut})"
 
     def save(self, *args, **kwargs):
+        # Auto-assigner la company depuis le client si non fournie
+        if not self.company and self.client_id:
+            # Si on a déjà l'objet client chargé
+            if hasattr(self, '_client_cache') or self.client:
+                self.company = self.client.company
+            # Sinon, récupérer juste la company du client sans charger tout l'objet
+            else:
+                from .models import Client
+                client_company = Client.objects.filter(id=self.client_id).values_list('company_id', flat=True).first()
+                if client_company:
+                    from .models import Company
+                    self.company_id = client_company
+
         # Générer la référence si elle n'existe pas
         if not self.reference:
             self.reference = self.generer_reference()
@@ -668,8 +681,14 @@ class CommandeClient(models.Model):
         from django.db import transaction
         from .models import TransfertStock, LigneTransfertStock, ProductStock
 
+        print(f"[AFFECTER METHOD] Début pour commande {self.reference}")
+        print(f"[AFFECTER METHOD] Livreur: {livreur.nom}, Van: {livreur.entrepot}")
+        print(f"[AFFECTER METHOD] Entrepôt source: {entrepot_source.name}")
+        print(f"[AFFECTER METHOD] User: {user.username}")
+
         # Vérifier que le livreur a un entrepôt (van) assigné
         if not livreur.entrepot:
+            print(f"[AFFECTER METHOD] ERREUR: Livreur sans van")
             return {
                 'success': False,
                 'message': f'Le livreur {livreur.nom} n\'a pas de van assigné',
@@ -678,7 +697,10 @@ class CommandeClient(models.Model):
             }
 
         # Vérifier que la commande a des lignes
+        lignes_count = self.lignes.count()
+        print(f"[AFFECTER METHOD] Nombre de lignes de commande: {lignes_count}")
         if not self.lignes.exists():
+            print(f"[AFFECTER METHOD] ERREUR: Commande sans lignes")
             return {
                 'success': False,
                 'message': 'La commande ne contient aucun produit',
@@ -687,6 +709,7 @@ class CommandeClient(models.Model):
             }
 
         # Vérifier les stocks disponibles avant de créer le transfert
+        print(f"[AFFECTER METHOD] Vérification des stocks...")
         ruptures = []
         for ligne in self.lignes.all():
             try:
@@ -697,11 +720,14 @@ class CommandeClient(models.Model):
                 stock_disponible = stock.quantity
             except ProductStock.DoesNotExist:
                 stock_disponible = 0
+                print(f"[AFFECTER METHOD] Produit {ligne.produit.designation}: Aucun stock dans {entrepot_source.name}")
 
             # Convertir la quantité de commande en entier pour la comparaison
             quantite_demandee = int(ligne.quantite)
+            print(f"[AFFECTER METHOD] Produit {ligne.produit.designation}: Demandé={quantite_demandee}, Disponible={stock_disponible}")
 
             if stock_disponible < quantite_demandee:
+                print(f"[AFFECTER METHOD] RUPTURE: Produit {ligne.produit.designation} - Manque {quantite_demandee - stock_disponible} unités")
                 ruptures.append({
                     'produit': ligne.produit.designation,
                     'reference': ligne.produit.reference,
@@ -712,6 +738,7 @@ class CommandeClient(models.Model):
 
         # Si des ruptures de stock sont détectées, retourner l'information
         if ruptures:
+            print(f"[AFFECTER METHOD] ERREUR: {len(ruptures)} rupture(s) de stock détectée(s)")
             return {
                 'success': False,
                 'message': 'Rupture de stock détectée pour certains produits',
@@ -720,9 +747,11 @@ class CommandeClient(models.Model):
             }
 
         # Tout est OK, créer le transfert de stock
+        print(f"[AFFECTER METHOD] Stocks OK, création du transfert...")
         try:
             with transaction.atomic():
                 # Créer le transfert
+                print(f"[AFFECTER METHOD] Création du TransfertStock de {entrepot_source.name} vers {livreur.entrepot.name}")
                 transfert = TransfertStock.objects.create(
                     company=self.company,
                     entrepot_source=entrepot_source,
@@ -731,8 +760,10 @@ class CommandeClient(models.Model):
                     demandeur=user,
                     notes=f'Transfert automatique pour commande {self.reference}'
                 )
+                print(f"[AFFECTER METHOD] TransfertStock créé: {transfert.numero}")
 
                 # Créer les lignes de transfert
+                print(f"[AFFECTER METHOD] Création des lignes de transfert...")
                 for ligne in self.lignes.all():
                     LigneTransfertStock.objects.create(
                         transfert=transfert,
@@ -740,19 +771,26 @@ class CommandeClient(models.Model):
                         quantite=int(ligne.quantite),
                         notes=f'Commande {self.reference} - ligne {ligne.id}'
                     )
+                    print(f"[AFFECTER METHOD] Ligne créée: {ligne.produit.designation} x {int(ligne.quantite)}")
 
                 # Valider le transfert (cela va effectuer les mouvements de stock)
+                print(f"[AFFECTER METHOD] Validation du transfert...")
                 transfert.valider(user)
+                print(f"[AFFECTER METHOD] Transfert validé, statut: {transfert.statut}")
 
                 # Affecter le livreur à la commande
+                print(f"[AFFECTER METHOD] Affectation du livreur à la commande...")
                 self.livreur = livreur
 
                 # Changer le statut de la commande
+                old_statut = self.statut
                 if self.statut == 'pending':
                     self.statut = 'confirmed'
 
                 self.save(update_fields=['livreur', 'statut'])
+                print(f"[AFFECTER METHOD] Commande mise à jour: statut {old_statut} -> {self.statut}, livreur={livreur.nom}")
 
+                print(f"[AFFECTER METHOD] SUCCÈS: Affectation terminée")
                 return {
                     'success': True,
                     'message': f'Commande affectée au livreur {livreur.nom} et stock transféré vers son van',
@@ -762,6 +800,9 @@ class CommandeClient(models.Model):
 
         except ValidationError as e:
             # Cela ne devrait pas arriver car nous avons vérifié avant, mais au cas où
+            print(f"[AFFECTER METHOD] ValidationError: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return {
                 'success': False,
                 'message': f'Erreur lors du transfert de stock: {str(e)}',
@@ -769,6 +810,9 @@ class CommandeClient(models.Model):
                 'ruptures': []
             }
         except Exception as e:
+            print(f"[AFFECTER METHOD] Exception: {type(e).__name__}: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return {
                 'success': False,
                 'message': f'Erreur inattendue: {str(e)}',

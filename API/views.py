@@ -1,4 +1,5 @@
 import logging
+from decimal import InvalidOperation
 from django.contrib.auth import authenticate
 from django.shortcuts import render
 from django.db.models import Sum, Q, F, Max
@@ -156,6 +157,12 @@ class ClientViewSet(TenantFilterMixin, viewsets.ModelViewSet):
     queryset = Client.objects.all().order_by('nom')
     serializer_class = ClientSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_permissions(self):
+        """Override pour permettre l'accès sans auth à certaines actions"""
+        if self.action == 'historique_paiements':
+            return [AllowAny()]
+        return super().get_permissions()
 
     def perform_create(self, serializer):
         """
@@ -394,6 +401,352 @@ class ClientViewSet(TenantFilterMixin, viewsets.ModelViewSet):
                 return queryset.none()
 
         return queryset
+
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    def rapport_soldes(self, request):
+        """
+        Rapport consolidé des soldes clients : solde initial + reste à payer sur ventes
+        Retourne pour chaque client:
+        - Solde initial (champ solde du modèle)
+        - Reste à payer (somme des restes à payer sur ventes)
+        - Solde total (solde initial + reste à payer)
+        """
+        from django.db.models import Sum, F, DecimalField
+        from django.db.models.functions import Coalesce
+        from decimal import Decimal
+
+        # Récupérer tous les clients avec leur solde initial
+        clients_qs = self.get_queryset().select_related('secteur', 'type_prix')
+
+        rapport = []
+
+        for client in clients_qs:
+            # Solde initial du client (champ sur le modèle)
+            solde_initial = float(client.solde) if client.solde is not None else 0.0
+
+            # Calculer le reste à payer sur les ventes web
+            ventes_web = Vente.objects.filter(client=client, statut='completed')
+            reste_ventes_web = 0.0
+            for vente in ventes_web:
+                reste_ventes_web += float(vente.get_reste_a_payer())
+
+            # Calculer le reste à payer sur les ventes mobiles
+            from .distribution_models import VenteTourneeMobile
+            ventes_mobile = VenteTourneeMobile.objects.filter(client=client)
+            reste_ventes_mobile = 0.0
+            for vente_mobile in ventes_mobile:
+                montant_total = float(vente_mobile.montant_total or 0)
+                montant_paye = float(vente_mobile.montant_paye or 0)
+                reste_ventes_mobile += (montant_total - montant_paye)
+
+            # Total reste à payer (web + mobile)
+            reste_a_payer_total = reste_ventes_web + reste_ventes_mobile
+
+            # Solde total = solde initial + reste à payer
+            # Si reste_a_payer est négatif, on le considère comme 0
+            reste_a_payer_total = max(0, reste_a_payer_total)
+            solde_total = solde_initial + reste_a_payer_total
+
+            # N'inclure que les clients avec un solde non nul ou un reste à payer
+            if solde_initial != 0 or reste_a_payer_total > 0:
+                rapport.append({
+                    'client_id': client.id,
+                    'client_nom': client.nom,
+                    'client_prenom': client.prenom,
+                    'telephone': client.telephone or '',
+                    'secteur': client.secteur.nom if client.secteur else None,
+                    'solde_initial': round(solde_initial, 2),
+                    'reste_a_payer_ventes': round(reste_a_payer_total, 2),
+                    'solde_total': round(solde_total, 2),
+                    'nombre_ventes_impayees': ventes_web.count() + ventes_mobile.count(),
+                })
+
+        # Trier par solde total décroissant
+        rapport.sort(key=lambda x: x['solde_total'], reverse=True)
+
+        return Response(rapport)
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def payer_solde(self, request, pk=None):
+        """
+        Endpoint pour enregistrer un paiement de solde client
+        Utilisé par l'app mobile pour augmenter le solde du client
+        """
+        from decimal import Decimal
+
+        client = self.get_object()
+
+        # Récupérer les données du paiement
+        montant = request.data.get('montant')
+        mode_paiement = request.data.get('mode_paiement', 'especes')
+        notes = request.data.get('notes', '')
+        date_paiement = request.data.get('date_paiement')
+
+        # Valider le montant
+        if not montant:
+            return Response(
+                {'error': 'Le montant est requis'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            montant_decimal = Decimal(str(montant))
+            if montant_decimal <= 0:
+                return Response(
+                    {'error': 'Le montant doit être supérieur à zéro'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        except (ValueError, InvalidOperation):
+            return Response(
+                {'error': 'Montant invalide'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Mettre à jour le solde du client
+        solde_actuel = client.solde or Decimal('0')
+        nouveau_solde = solde_actuel + montant_decimal
+        client.solde = nouveau_solde
+        client.save()
+
+        # Enregistrer le paiement dans l'historique
+        company = getattr(request, 'company', None) or getattr(request.user, 'selected_company', None)
+        paiement = PaiementSolde.objects.create(
+            client=client,
+            company=company,
+            montant=montant_decimal,
+            mode_paiement=mode_paiement,
+            solde_avant=solde_actuel,
+            solde_apres=nouveau_solde,
+            notes=notes,
+            enregistre_par=request.user
+        )
+
+        # Log l'événement
+        try:
+            log_event(
+                request,
+                'client.paiement_solde',
+                target=client,
+                metadata={
+                    'paiement_id': paiement.id,
+                    'client_id': client.id,
+                    'client_nom': f'{client.nom} {client.prenom}',
+                    'montant': float(montant_decimal),
+                    'mode_paiement': mode_paiement,
+                    'solde_avant': float(solde_actuel),
+                    'solde_apres': float(nouveau_solde),
+                    'notes': notes,
+                }
+            )
+        except Exception as e:
+            print(f"Erreur lors du logging: {e}")
+
+        return Response({
+            'message': 'Paiement enregistré avec succès',
+            'paiement_id': paiement.id,
+            'client_id': client.id,
+            'client_nom': f'{client.nom} {client.prenom}',
+            'montant_paye': float(montant_decimal),
+            'solde_avant': float(solde_actuel),
+            'solde_apres': float(nouveau_solde),
+            'mode_paiement': mode_paiement,
+            'date_paiement': paiement.date_paiement.isoformat(),
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated])
+    def historique_paiements(self, request, pk=None):
+        """
+        Récupérer l'historique complet des paiements de solde d'un client
+        """
+        print(f"[HISTORIQUE] User: {request.user.username}, pk={pk}, Company: {getattr(request, 'company', None)}")
+
+        try:
+            client = self.get_object()
+            print(f"[HISTORIQUE] Client trouvé: {client.nom} {client.prenom} (ID: {client.id})")
+        except Exception as e:
+            print(f"[HISTORIQUE] Erreur get_object: {e}")
+            raise
+
+        # Récupérer tous les paiements de solde du client
+        paiements = PaiementSolde.objects.filter(client=client).order_by('-date_paiement')
+        print(f"[HISTORIQUE] Nombre de paiements trouvés: {paiements.count()}")
+
+        # Sérialiser les données
+        result = [{
+            'id': p.id,
+            'montant': float(p.montant),
+            'mode_paiement': p.mode_paiement,
+            'mode_paiement_display': p.get_mode_paiement_display(),
+            'date_paiement': p.date_paiement.isoformat(),
+            'solde_avant': float(p.solde_avant),
+            'solde_apres': float(p.solde_apres),
+            'notes': p.notes,
+            'enregistre_par': p.enregistre_par.username if p.enregistre_par else None,
+        } for p in paiements]
+
+        return Response({
+            'client_id': client.id,
+            'client_nom': f'{client.nom} {client.prenom}',
+            'solde_actuel': float(client.solde or 0),
+            'total_paiements': len(result),
+            'paiements': result
+        })
+
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    def dashboard_stats(self, request):
+        """
+        Statistiques globales pour le dashboard de gestion des soldes clients
+        """
+        from django.db.models import Sum, Count, Q, F
+        from django.utils import timezone
+        from datetime import timedelta
+        from decimal import Decimal
+
+        # Récupérer la company de l'utilisateur
+        company = getattr(request, 'company', None)
+
+        # DEBUG: Log company and user info
+        print(f"[DASHBOARD STATS] User: {request.user.username}, Company: {company}, Is staff: {request.user.is_staff}, Is superuser: {request.user.is_superuser}")
+
+        # Filtrer les clients par company si disponible
+        if company:
+            clients = Client.objects.filter(company=company)
+            print(f"[DASHBOARD STATS] Filtering by company: {company}")
+        elif request.user.is_superuser or request.user.is_staff:
+            # Les superusers voient tous les clients
+            clients = Client.objects.all()
+            print(f"[DASHBOARD STATS] User is staff/superuser, showing all clients")
+        else:
+            # Utilisateurs sans company voient les clients sans company
+            clients = Client.objects.filter(company__isnull=True)
+            print(f"[DASHBOARD STATS] User has no company, filtering by company__isnull=True")
+
+        # Statistiques globales
+        total_clients = clients.count()
+        clients_avec_credit = clients.filter(solde__gt=0).count()
+        clients_avec_dette = clients.filter(solde__lt=0).count()
+
+        # DEBUG: Log statistics
+        print(f"[DASHBOARD STATS] Total clients: {total_clients}, With credit: {clients_avec_credit}, With debt: {clients_avec_dette}")
+
+        # Soldes totaux
+        total_credits = clients.filter(solde__gt=0).aggregate(total=Sum('solde'))['total'] or Decimal('0')
+        total_dettes = clients.filter(solde__lt=0).aggregate(total=Sum('solde'))['total'] or Decimal('0')
+        solde_global = clients.aggregate(total=Sum('solde'))['total'] or Decimal('0')
+
+        # Top 10 clients avec le plus de dettes
+        top_dettes = list(clients.filter(solde__lt=0).order_by('solde')[:10].values(
+            'id', 'nom', 'prenom', 'solde', 'telephone'
+        ))
+
+        # Top 10 clients avec le plus de crédits
+        top_credits = list(clients.filter(solde__gt=0).order_by('-solde')[:10].values(
+            'id', 'nom', 'prenom', 'solde', 'telephone'
+        ))
+
+        # Paiements récents (30 derniers jours)
+        date_limite = timezone.now() - timedelta(days=30)
+
+        # Construire le filtre pour les paiements selon le contexte
+        if company:
+            paiements_filter = Q(client__company=company)
+            ventes_filter = Q(client__company=company)
+        elif request.user.is_superuser or request.user.is_staff:
+            paiements_filter = Q()
+            ventes_filter = Q()
+        else:
+            paiements_filter = Q(client__company__isnull=True)
+            ventes_filter = Q(client__company__isnull=True)
+
+        paiements_recents = PaiementSolde.objects.filter(
+            paiements_filter & Q(date_paiement__gte=date_limite)
+        ).order_by('-date_paiement')[:20]
+
+        paiements_data = [{
+            'id': p.id,
+            'client_nom': f'{p.client.nom} {p.client.prenom}',
+            'montant': float(p.montant),
+            'mode_paiement': p.get_mode_paiement_display(),
+            'date_paiement': p.date_paiement.isoformat(),
+            'solde_apres': float(p.solde_apres),
+        } for p in paiements_recents]
+
+        # Évolution des paiements (7 derniers jours)
+        evolution_paiements = []
+        for i in range(6, -1, -1):
+            date = timezone.now().date() - timedelta(days=i)
+            date_start = timezone.make_aware(timezone.datetime.combine(date, timezone.datetime.min.time()))
+            date_end = timezone.make_aware(timezone.datetime.combine(date, timezone.datetime.max.time()))
+
+            montant = PaiementSolde.objects.filter(
+                paiements_filter & Q(date_paiement__gte=date_start, date_paiement__lte=date_end)
+            ).aggregate(total=Sum('montant'))['total'] or Decimal('0')
+
+            evolution_paiements.append({
+                'date': date.strftime('%Y-%m-%d'),
+                'montant': float(montant)
+            })
+
+        # Distribution par mode de paiement (30 derniers jours)
+        modes_paiement = PaiementSolde.objects.filter(
+            paiements_filter & Q(date_paiement__gte=date_limite)
+        ).values('mode_paiement').annotate(
+            count=Count('id'),
+            total=Sum('montant')
+        )
+
+        modes_data = [{
+            'mode': p['mode_paiement'],
+            'mode_display': dict(PaiementSolde.MODE_PAIEMENT_CHOICES).get(p['mode_paiement'], p['mode_paiement']),
+            'count': p['count'],
+            'total': float(p['total'] or 0)
+        } for p in modes_paiement]
+
+        # Ventes avec reste à payer
+        # Le champ reste_a_payer n'existe pas en DB, il faut le calculer avec des annotations
+        from django.db.models import ExpressionWrapper, DecimalField, Value
+        from django.db.models.functions import Coalesce
+        from API.models import Vente
+
+        # Annoter les ventes avec le montant payé
+        ventes_annotees = Vente.objects.filter(ventes_filter).annotate(
+            montant_paye=Coalesce(Sum('paiements__montant'), Value(0, output_field=DecimalField()))
+        )
+
+        # Puis annoter avec le reste à payer (référence à l'annotation précédente)
+        ventes_annotees = ventes_annotees.annotate(
+            reste_a_payer_calc=ExpressionWrapper(
+                F('total_ttc') - F('montant_paye'),
+                output_field=DecimalField()
+            )
+        )
+
+        # Filtrer celles avec reste à payer > 0
+        ventes_avec_reste = ventes_annotees.filter(reste_a_payer_calc__gt=0)
+        ventes_credit = ventes_avec_reste.count()
+
+        # Calculer le total du reste à payer
+        total_reste_a_payer = ventes_avec_reste.aggregate(
+            total=Sum('reste_a_payer_calc')
+        )['total'] or Decimal('0')
+
+        return Response({
+            'stats_globales': {
+                'total_clients': total_clients,
+                'clients_avec_credit': clients_avec_credit,
+                'clients_avec_dette': clients_avec_dette,
+                'total_credits': float(total_credits),
+                'total_dettes': float(total_dettes),
+                'solde_global': float(solde_global),
+                'ventes_credit': ventes_credit,
+                'total_reste_a_payer': float(total_reste_a_payer),
+            },
+            'top_dettes': top_dettes,
+            'top_credits': top_credits,
+            'paiements_recents': paiements_data,
+            'evolution_paiements': evolution_paiements,
+            'modes_paiement': modes_data,
+        })
 
 class FournisseurViewSet(TenantFilterMixin, viewsets.ModelViewSet):
     queryset = Fournisseur.objects.all().order_by('libelle')
@@ -2552,6 +2905,58 @@ class PaiementVenteViewSet(viewsets.ModelViewSet):
         if vente_id:
             queryset = queryset.filter(vente_id=vente_id)
         return queryset.select_related('vente', 'created_by')
+
+    def create(self, request, *args, **kwargs):
+        """Créer un paiement avec gestion d'erreur améliorée"""
+        try:
+            # Log des données reçues pour debug
+            logger.info(f"Données de paiement reçues: {request.data}")
+
+            # Vérifier les champs requis
+            if not request.data.get('vente'):
+                return Response(
+                    {'error': 'Le champ "vente" est requis'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            if not request.data.get('montant'):
+                return Response(
+                    {'error': 'Le champ "montant" est requis'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Valider que le montant est positif
+            try:
+                montant = float(request.data.get('montant', 0))
+                if montant <= 0:
+                    return Response(
+                        {'error': 'Le montant doit être supérieur à 0'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            except (ValueError, TypeError):
+                return Response(
+                    {'error': 'Le montant doit être un nombre valide'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Vérifier que la vente existe
+            try:
+                vente = Vente.objects.get(id=request.data.get('vente'))
+            except Vente.DoesNotExist:
+                return Response(
+                    {'error': f'Vente {request.data.get("vente")} introuvable'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Continuer avec la création normale
+            return super().create(request, *args, **kwargs)
+
+        except Exception as e:
+            logger.error(f"Erreur lors de la création du paiement: {str(e)}")
+            return Response(
+                {'error': f'Erreur lors de la création du paiement: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     def perform_create(self, serializer):
         """Associer l'utilisateur actuel au paiement"""

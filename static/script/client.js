@@ -38,13 +38,14 @@
       $nis: $('#nis'),
       $ai: $('#ai'),
       $rc: $('#rc'),
+      $solde: $('#solde'),
       $btn: $('#btnClient'),
       $tableBody: $('#table-content')
     };
   }
 
   function resetForm(){
-    const { $id, $nom, $prenom, $email, $adresse, $telephone, $secteur, $type_prix, $lat, $lng, $nif, $nis, $ai, $rc, $btn } = els();
+    const { $id, $nom, $prenom, $email, $adresse, $telephone, $secteur, $type_prix, $lat, $lng, $nif, $nis, $ai, $rc, $solde, $btn } = els();
     $id.val('');
     $nom.val('');
     $prenom.val('');
@@ -60,6 +61,7 @@
     $nis.val('');
     $ai.val('');
     $rc.val('');
+    $solde.val('');
     $btn.html('<i class="fa fa-plus"></i> Ajouter');
   }
 
@@ -113,7 +115,7 @@
         const { $tableBody } = els();
         $tableBody.empty();
         if(!list || !list.length){
-          $tableBody.append('<tr><td colspan="15" class="text-center text-muted">Aucun client</td></tr>');
+          $tableBody.append('<tr><td colspan="16" class="text-center text-muted">Aucun client</td></tr>');
           return;
         }
         list.forEach(function(c){
@@ -144,7 +146,13 @@
           $tr.append(`<td>${c.nis || '<span class="text-muted">-</span>'}</td>`);
           $tr.append(`<td>${c.ai || '<span class="text-muted">-</span>'}</td>`);
           $tr.append(`<td>${c.rc || '<span class="text-muted">-</span>'}</td>`);
+          // Solde avec couleur
+          const soldeVal = c.solde != null ? parseFloat(c.solde) : 0;
+          const soldeClass = soldeVal > 0 ? 'text-success' : (soldeVal < 0 ? 'text-danger' : 'text-muted');
+          const soldeDisplay = soldeVal !== 0 ? `<strong>${soldeVal.toFixed(2)} DA</strong>` : '<span class="text-muted">0.00 DA</span>';
+          $tr.append(`<td class="${soldeClass}">${soldeDisplay}</td>`);
           $tr.append(`<td>
+            <button type="button" class="action-btn action-btn-info btn-historique" data-id="${c.id}" title="Historique des paiements"><i class="fas fa-history"></i></button>
             <button type="button" class="action-btn action-btn-edit btn-edit" data-id="${c.id}"><i class="fas fa-edit"></i></button>
             <button type="button" class="action-btn action-btn-delete btn-delete" data-id="${c.id}"><i class="fas fa-trash"></i></button>
           </td>`);
@@ -153,17 +161,18 @@
       })
       .fail(function(xhr){
         const { $tableBody } = els();
-        $tableBody.empty().append('<tr><td colspan="15" class="text-center text-danger">Erreur de chargement</td></tr>');
+        $tableBody.empty().append('<tr><td colspan="16" class="text-center text-danger">Erreur de chargement</td></tr>');
         dbg('loadClients: fail', xhr.status, xhr.responseText || xhr.statusText);
       });
   }
 
   function payloadFromForm(){
-    const { $nom, $prenom, $email, $adresse, $telephone, $secteur, $type_prix, $lat, $lng, $nif, $nis, $ai, $rc } = els();
+    const { $nom, $prenom, $email, $adresse, $telephone, $secteur, $type_prix, $lat, $lng, $nif, $nis, $ai, $rc, $solde } = els();
     const secteurVal = $secteur.val();
     const typePrixVal = $type_prix.val();
     const latVal = $lat.val();
     const lngVal = $lng.val();
+    const soldeVal = $solde.val();
     return {
       nom: ($nom.val()||'').trim(),
       prenom: ($prenom.val()||'').trim(),
@@ -177,7 +186,8 @@
       nif: ($nif.val()||'').trim(),
       nis: ($nis.val()||'').trim(),
       ai: ($ai.val()||'').trim(),
-      rc: ($rc.val()||'').trim()
+      rc: ($rc.val()||'').trim(),
+      solde: soldeVal ? parseFloat(soldeVal) : 0
     };
   }
 
@@ -230,7 +240,7 @@
         dbg('editClient loaded - FULL CLIENT DATA:', JSON.stringify(c, null, 2));
         dbg('Client secteur value:', c.secteur, 'Type:', typeof c.secteur);
 
-        const { $id, $nom, $prenom, $email, $adresse, $telephone, $secteur, $type_prix, $lat, $lng, $nif, $nis, $ai, $rc, $btn } = els();
+        const { $id, $nom, $prenom, $email, $adresse, $telephone, $secteur, $type_prix, $lat, $lng, $nif, $nis, $ai, $rc, $solde, $btn } = els();
 
         // Log all select options
         dbg('Available secteur options in select:');
@@ -251,6 +261,7 @@
         $nis.val(c.nis || '');
         $ai.val(c.ai || '');
         $rc.val(c.rc || '');
+        $solde.val(c.solde || '');
         $btn.html('<i class="fa fa-save"></i> Modifier');
 
         // Set secteur value
@@ -316,6 +327,69 @@
       });
   }
 
+  function showHistoriquePaiements(clientId){
+    // Charger l'historique des paiements
+    $.ajax({ url: API_BASE + clientId + '/historique_paiements/', method: 'GET' })
+      .done(function(data){
+        dbg('Historique paiements:', data);
+
+        // Mettre à jour les infos du client
+        $('#historique-client-nom').text(data.client_nom);
+        const soldeClass = data.solde_actuel >= 0 ? 'text-success' : 'text-danger';
+        $('#historique-solde-actuel').html(`<span class="${soldeClass}">${data.solde_actuel >= 0 ? '+' : ''}${data.solde_actuel.toFixed(2)} DA</span>`);
+        $('#historique-client-info').show();
+
+        // Construire le tableau d'historique
+        let html = '';
+        if(data.paiements && data.paiements.length > 0){
+          html = `<div class="table-responsive">
+            <table class="table table-hover">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Montant</th>
+                  <th>Mode</th>
+                  <th>Solde Avant</th>
+                  <th>Solde Après</th>
+                  <th>Enregistré par</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody>`;
+
+          data.paiements.forEach(function(p){
+            const date = new Date(p.date_paiement).toLocaleString('fr-FR');
+            const montantClass = 'text-success';
+            const soldeAvantClass = p.solde_avant >= 0 ? 'text-success' : 'text-danger';
+            const soldeApresClass = p.solde_apres >= 0 ? 'text-success' : 'text-danger';
+
+            html += `<tr>
+              <td><small>${date}</small></td>
+              <td class="${montantClass}"><strong>+${p.montant.toFixed(2)} DA</strong></td>
+              <td><span class="badge badge-info">${p.mode_paiement_display}</span></td>
+              <td class="${soldeAvantClass}">${p.solde_avant >= 0 ? '+' : ''}${p.solde_avant.toFixed(2)} DA</td>
+              <td class="${soldeApresClass}">${p.solde_apres >= 0 ? '+' : ''}${p.solde_apres.toFixed(2)} DA</td>
+              <td><small>${p.enregistre_par || 'N/A'}</small></td>
+              <td><small>${p.notes || '-'}</small></td>
+            </tr>`;
+          });
+
+          html += `</tbody></table></div>`;
+        } else {
+          html = `<div class="alert alert-info text-center">
+            <i class="fa fa-info-circle"></i> Aucun paiement de solde enregistré pour ce client
+          </div>`;
+        }
+
+        $('#historique-content').html(html);
+        $('#historiqueModal').modal('show');
+      })
+      .fail(function(xhr){
+        dbg('showHistoriquePaiements fail', xhr);
+        alert('Impossible de charger l\'historique des paiements');
+      });
+  }
+
   function bind(){
     $(document).off('click', '#btnClient').on('click', '#btnClient', function(){
       const { $id } = els();
@@ -331,6 +405,9 @@
     });
     $(document).off('click', '#table-content .btn-edit').on('click', '#table-content .btn-edit', function(){
       const id = $(this).data('id'); editClient(id);
+    });
+    $(document).off('click', '#table-content .btn-historique').on('click', '#table-content .btn-historique', function(){
+      const id = $(this).data('id'); showHistoriquePaiements(id);
     });
   }
 

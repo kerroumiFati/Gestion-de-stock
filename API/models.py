@@ -638,6 +638,17 @@ class Client(models.Model):
     rc = models.CharField("RC (Registre de Commerce)", max_length=20, blank=True,
                          help_text="Numéro du Registre de Commerce")
 
+    # Solde du compte client
+    solde = models.DecimalField(
+        "Solde du compte",
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        null=True,
+        blank=True,
+        help_text="Solde initial du client (positif = crédit accordé, négatif = dette). Indépendant des paiements partiels sur ventes."
+    )
+
     def save(self, *args, **kwargs):
         """Générer automatiquement l'UUID si absent"""
         if not self.uuid:
@@ -647,6 +658,94 @@ class Client(models.Model):
 
     def __str__(self):
         return '{} {}'.format(self.nom, self.prenom)
+
+class PaiementSolde(models.Model):
+    """Historique des paiements de solde client"""
+    MODE_PAIEMENT_CHOICES = (
+        ('especes', 'Espèces'),
+        ('cheque', 'Chèque'),
+        ('virement', 'Virement'),
+        ('carte', 'Carte bancaire'),
+    )
+
+    client = models.ForeignKey(
+        Client,
+        on_delete=models.CASCADE,
+        related_name='paiements_solde',
+        help_text="Client ayant effectué le paiement"
+    )
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name='paiements_solde',
+        null=True,
+        blank=True,
+        help_text="Entreprise à laquelle appartient ce paiement"
+    )
+
+    # Détails du paiement
+    montant = models.DecimalField(
+        "Montant payé",
+        max_digits=12,
+        decimal_places=2,
+        help_text="Montant du paiement"
+    )
+    mode_paiement = models.CharField(
+        "Mode de paiement",
+        max_length=20,
+        choices=MODE_PAIEMENT_CHOICES,
+        default='especes'
+    )
+    date_paiement = models.DateTimeField(
+        "Date du paiement",
+        auto_now_add=True,
+        help_text="Date et heure du paiement"
+    )
+
+    # Soldes avant/après pour traçabilité
+    solde_avant = models.DecimalField(
+        "Solde avant paiement",
+        max_digits=12,
+        decimal_places=2,
+        help_text="Solde du client avant ce paiement"
+    )
+    solde_apres = models.DecimalField(
+        "Solde après paiement",
+        max_digits=12,
+        decimal_places=2,
+        help_text="Solde du client après ce paiement"
+    )
+
+    # Informations complémentaires
+    notes = models.TextField(
+        "Notes",
+        blank=True,
+        help_text="Notes ou commentaires sur ce paiement"
+    )
+    enregistre_par = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='paiements_solde_enregistres',
+        help_text="Utilisateur ayant enregistré ce paiement"
+    )
+
+    # Métadonnées
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Paiement de solde"
+        verbose_name_plural = "Paiements de solde"
+        ordering = ['-date_paiement']
+        indexes = [
+            models.Index(fields=['client', '-date_paiement']),
+            models.Index(fields=['company', '-date_paiement']),
+        ]
+
+    def __str__(self):
+        return f"{self.client.nom} - {self.montant} DA le {self.date_paiement.strftime('%d/%m/%Y')}"
 
 class Achat(models.Model):
     UNITE_CHOICES = (

@@ -321,6 +321,44 @@ def download_template_view(request):
                 }
             ]
 
+        elif import_type == 'solde_client':
+            columns = ['client_id', 'nom', 'prenom', 'telephone', 'solde', 'notes']
+            filename = 'template_solde_client'
+            example_data = [
+                {
+                    'client_id': '1',
+                    'nom': 'Superette El Baraka',
+                    'prenom': '',
+                    'telephone': '0555123456',
+                    'solde': '5000.00',
+                    'notes': 'Paiement initial - Crédit client'
+                },
+                {
+                    'client_id': '',
+                    'nom': 'Mini Market Essalam',
+                    'prenom': '',
+                    'telephone': '0555234567',
+                    'solde': '-1200.50',
+                    'notes': 'Dette en cours - Facture impayée'
+                },
+                {
+                    'client_id': '',
+                    'nom': 'Benali',
+                    'prenom': 'Ahmed',
+                    'telephone': '0555456789',
+                    'solde': '2500.00',
+                    'notes': 'Avance sur commande'
+                },
+                {
+                    'client_id': '3',
+                    'nom': 'Alimentation Rahma',
+                    'prenom': '',
+                    'telephone': '0555345678',
+                    'solde': '-800.00',
+                    'notes': 'Reste à payer'
+                }
+            ]
+
         else:
             return JsonResponse({'error': 'Type non supporté: ' + import_type}, status=400)
 

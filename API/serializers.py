@@ -267,7 +267,7 @@ class ClientSerializer(serializers.ModelSerializer):
         model = Client
         fields = ('id', 'uuid', 'nom', 'prenom', 'email', 'telephone', 'adresse', 'lat', 'lng',
                   'secteur', 'secteur_nom', 'secteur_code', 'secteur_couleur', 'produits',
-                  'nif', 'nis', 'ai', 'rc', 'type_prix', 'type_prix_code', 'type_prix_libelle')
+                  'nif', 'nis', 'ai', 'rc', 'solde', 'type_prix', 'type_prix_code', 'type_prix_libelle')
 
 class AchatSerializer(serializers.ModelSerializer):
     fournisseur_nom = serializers.CharField(source='fournisseur.libelle', read_only=True)

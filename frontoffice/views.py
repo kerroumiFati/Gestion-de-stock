@@ -57,6 +57,8 @@ def page(request, name: str):
         return render(request, 'frontoffice/page/tournees.html')
     elif name == 'distribution_dashboard':
         return render(request, 'frontoffice/page/distribution_dashboard.html')
+    elif name == 'clients_solde_dashboard':
+        return render(request, 'frontoffice/page/clients_solde_dashboard.html')
     elif name == 'commandes_clients_mobile':
         return commandes_clients_mobile(request)
     elif name == 'distribution_test':
@@ -310,6 +312,11 @@ def tournees_page(request):
 @login_required
 def distribution_page(request):
     # Render the master page - JavaScript will load the distribution dashboard content based on URL
+    return render(request, 'frontoffice/master_page.html')
+
+@login_required
+def clients_solde_dashboard_page(request):
+    # Render the master page - JavaScript will load the clients solde dashboard content based on URL
     return render(request, 'frontoffice/master_page.html')
 
 @login_required
