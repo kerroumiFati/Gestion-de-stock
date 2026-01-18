@@ -3,6 +3,7 @@ let currentTournee = null;
 let allArrets = [];
 let signaturePad = null;
 let tourneeVerrouillee = false;  // Indique si une tournée est en cours (verrouillée)
+let currentClientsConfigs = [];  // Stockage des configurations de clients pour le filtrage
 
 // Fonction d'initialisation
 function initLivreurMobilePage() {
@@ -15,6 +16,7 @@ function initLivreurMobilePage() {
 
     console.log('[LIVREUR_MOBILE] Initializing livreur mobile page');
     initSignaturePad();
+    initSearchBox();
     loadLivreurData();
     setupFormHandlers();
 }
@@ -94,6 +96,60 @@ function initSignaturePad() {
     }
 
     signaturePad = { canvas, ctx };
+}
+
+// Initialiser la barre de recherche
+function initSearchBox() {
+    const searchInput = document.getElementById('client-search-input');
+    const searchClear = document.getElementById('search-clear');
+
+    if (!searchInput) return;
+
+    // Recherche en temps réel
+    searchInput.addEventListener('input', function() {
+        const searchTerm = this.value.trim();
+
+        // Afficher/masquer le bouton clear
+        if (searchClear) {
+            searchClear.style.display = searchTerm ? 'flex' : 'none';
+        }
+
+        // Filtrer les clients
+        filterClients(searchTerm);
+    });
+
+    // Bouton pour effacer la recherche
+    if (searchClear) {
+        searchClear.addEventListener('click', function() {
+            searchInput.value = '';
+            searchClear.style.display = 'none';
+            filterClients('');
+        });
+    }
+}
+
+// Filtrer les clients affichés
+function filterClients(searchTerm) {
+    const arretCards = document.querySelectorAll('.arret-card');
+    const searchLower = searchTerm.toLowerCase();
+
+    if (!searchTerm) {
+        // Afficher tous les clients
+        arretCards.forEach(card => card.classList.remove('hidden'));
+        return;
+    }
+
+    // Filtrer par nom ou adresse
+    arretCards.forEach(card => {
+        const clientName = card.querySelector('.client-name')?.textContent.toLowerCase() || '';
+        const clientAddress = card.querySelector('.arret-detail span')?.textContent.toLowerCase() || '';
+
+        if (clientName.includes(searchLower) || clientAddress.includes(searchLower)) {
+            card.classList.remove('hidden');
+        } else {
+            card.classList.add('hidden');
+        }
+    });
 }
 
 function clearSignature() {
@@ -220,6 +276,7 @@ function displayJourInfoAvecDemarrage(jourNom, configs) {
 // Afficher les clients avec bouton pour démarrer la tournée
 function displayClientsAvecBoutonDemarrer(configs) {
     const container = document.getElementById('arrets-container');
+    const searchContainer = document.getElementById('search-container');
 
     if (configs.length === 0) {
         container.innerHTML = `
@@ -228,8 +285,12 @@ function displayClientsAvecBoutonDemarrer(configs) {
                 <p>Aucun client assigné pour aujourd'hui</p>
             </div>
         `;
+        if (searchContainer) searchContainer.style.display = 'none';
         return;
     }
+
+    // Afficher la barre de recherche
+    if (searchContainer) searchContainer.style.display = 'block';
 
     // Bouton pour démarrer la tournée
     let html = `
@@ -348,6 +409,7 @@ async function terminerTournee() {
 // Afficher les clients pour une tournée en cours (avec actions)
 function displayClientsJourAvecActions(configs, tourneeId) {
     const container = document.getElementById('arrets-container');
+    const searchContainer = document.getElementById('search-container');
 
     if (configs.length === 0) {
         container.innerHTML = `
@@ -356,8 +418,12 @@ function displayClientsJourAvecActions(configs, tourneeId) {
                 <p>Aucun client pour cette tournée</p>
             </div>
         `;
+        if (searchContainer) searchContainer.style.display = 'none';
         return;
     }
+
+    // Afficher la barre de recherche
+    if (searchContainer) searchContainer.style.display = 'block';
 
     // Bouton pour terminer la tournée
     let html = `
@@ -657,6 +723,8 @@ function showHistory() {
 
 function showEmptyState(message) {
     const container = document.getElementById('arrets-container');
+    const searchContainer = document.getElementById('search-container');
+
     container.innerHTML = `
         <div class="empty-state">
             <i class="fas fa-inbox"></i>
@@ -665,6 +733,7 @@ function showEmptyState(message) {
     `;
     document.getElementById('tournee-info').style.display = 'none';
     document.getElementById('progress-bar').style.display = 'none';
+    if (searchContainer) searchContainer.style.display = 'none';
 }
 
 function showNotification(message, type = 'info') {

@@ -91,14 +91,39 @@
         const delta = Number(r.delta);
         if (delta > 0) totalIn += delta; else totalOut += Math.abs(delta);
 
+        // Bouton d'impression pour les retours fournisseur
+        let actionsHtml = '';
+        if (r.source === 'RETOUR') {
+          // Stocker les données dans des attributs data-*
+          const dataAttrs = `
+            data-id="${r.id || ''}"
+            data-date="${d.toLocaleString('fr-FR')}"
+            data-produit="${r.produit_reference ? r.produit_reference + ' - ' + (r.produit_designation || '') : r.produit}"
+            data-quantite="${Math.abs(delta)}"
+            data-entrepot="${r.warehouse_code ? r.warehouse_code + ' - ' + (r.warehouse_name || '') : ''}"
+            data-ref="${r.ref_id || ''}"
+            data-note="${(r.note || '').replace(/"/g, '&quot;')}"
+          `.trim();
+
+          actionsHtml = `<button class="btn btn-sm btn-primary btn-print-retour" ${dataAttrs} title="Imprimer">
+            <i class="fa fa-print"></i>
+          </button>`;
+        }
+
+        // Utiliser un timestamp pour le tri et afficher la date formatée
+        // DataTables peut trier correctement avec @data-order
+        const timestamp = d.getTime();
+        const dateDisplay = `<span data-order="${timestamp}">${d.toLocaleString('fr-FR')}</span>`;
+
         return [
-          d.toLocaleString('fr-FR'),
+          dateDisplay,
           r.produit_reference ? `${r.produit_reference} - ${r.produit_designation || ''}` : r.produit,
           r.warehouse_code ? `${r.warehouse_code} - ${r.warehouse_name||''}` : '',
           getDeltaBadge(delta),
           getSourceBadge(r.source),
           r.ref_id || '',
-          r.note || ''
+          r.note || '',
+          actionsHtml
         ];
       });
 
@@ -111,16 +136,49 @@
       // Vider le tbody
       $('#tmouv tbody').empty();
 
+      // Créer un plugin de tri pour data-order si pas déjà fait
+      if (!$.fn.dataTable.ext.order['dom-data-order']) {
+        $.fn.dataTable.ext.order['dom-data-order'] = function(settings, col) {
+          return this.api().column(col, {order:'index'}).nodes().map(function(td, i) {
+            const span = $(td).find('span[data-order]');
+            return span.length ? parseInt(span.attr('data-order')) : 0;
+          });
+        };
+      }
+
       // Initialiser DataTables avec les nouvelles données
       mouvementsDataTable = $('#tmouv').DataTable({
         data: tableData,
         destroy: true,
         language: {
-          url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/fr-FR.json',
-          emptyTable: 'Aucun mouvement trouvé'
+          processing: "Traitement en cours...",
+          search: "Rechercher&nbsp;:",
+          lengthMenu: "Afficher _MENU_ &eacute;l&eacute;ments",
+          info: "Affichage de l'&eacute;l&eacute;ment _START_ &agrave; _END_ sur _TOTAL_ &eacute;l&eacute;ments",
+          infoEmpty: "Affichage de l'&eacute;l&eacute;ment 0 &agrave; 0 sur 0 &eacute;l&eacute;ments",
+          infoFiltered: "(filtr&eacute; de _MAX_ &eacute;l&eacute;ments au total)",
+          infoPostFix: "",
+          loadingRecords: "Chargement en cours...",
+          zeroRecords: "Aucun &eacute;l&eacute;ment &agrave; afficher",
+          emptyTable: "Aucun mouvement trouvé",
+          paginate: {
+            first: "Premier",
+            previous: "Pr&eacute;c&eacute;dent",
+            next: "Suivant",
+            last: "Dernier"
+          },
+          aria: {
+            sortAscending: ": activer pour trier la colonne par ordre croissant",
+            sortDescending: ": activer pour trier la colonne par ordre d&eacute;croissant"
+          }
         },
         order: [[0, 'desc']],
         columnDefs: [
+          {
+            targets: 0,
+            type: 'html-num',
+            orderDataType: 'dom-data-order'
+          },
           { targets: [3, 4], className: 'text-center' }
         ],
         pageLength: 25,
@@ -331,6 +389,47 @@
     });
   }
 
+  function setupPrintRetour(){
+    // Event listener pour les boutons d'impression (délégation d'événement)
+    $(document).on('click', '.btn-print-retour', function(){
+      const $btn = $(this);
+
+      // Récupérer les données depuis les attributs data-*
+      const date = $btn.data('date');
+      const produit = $btn.data('produit');
+      const quantite = $btn.data('quantite');
+      const entrepot = $btn.data('entrepot');
+      const ref = $btn.data('ref');
+      const note = $btn.data('note') || '';
+
+      // Extraire le motif et les notes depuis la note complète
+      // Format: "RETOUR FOURNISSEUR - [Motif]: [Notes]"
+      let motif = '';
+      let notes = note;
+      let fournisseur = 'Non spécifié';
+
+      if (note.includes('RETOUR FOURNISSEUR -')) {
+        const parts = note.replace('RETOUR FOURNISSEUR - ', '').split(':');
+        motif = parts[0].trim();
+        notes = parts.length > 1 ? parts.slice(1).join(':').trim() : '';
+      }
+
+      // Remplir le modal
+      $('#print_retour_date').text(date);
+      $('#print_retour_ref').text(ref || 'N/A');
+      $('#print_retour_produit').text(produit);
+      $('#print_retour_quantite').text(quantite);
+      $('#print_retour_fournisseur').text(fournisseur);
+      $('#print_retour_entrepot').text(entrepot);
+      $('#print_retour_motif').text(motif || 'Non spécifié');
+      $('#print_retour_notes').text(notes || 'Aucune note');
+      $('#print_generated_date').text(new Date().toLocaleString('fr-FR'));
+
+      // Ouvrir le modal
+      $('#modalImprimerRetour').modal('show');
+    });
+  }
+
   function init(){
     if (!$('#tmouv').length) return; // not on mouvements page
     // Ensure selects exist before loading
@@ -344,6 +443,7 @@
     setupLoss();
     setupOutflow();
     setupReturn();
+    setupPrintRetour();
   }
 
   $(document).ready(init);

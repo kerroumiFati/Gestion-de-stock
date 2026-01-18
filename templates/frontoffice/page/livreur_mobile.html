@@ -286,6 +286,61 @@
             margin-bottom: 20px;
         }
 
+        .search-container {
+            margin: 15px;
+        }
+
+        .search-box {
+            position: relative;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            padding: 12px 15px;
+            gap: 10px;
+        }
+
+        .search-box i.fa-search {
+            color: #8b5cf6;
+            font-size: 1.1rem;
+        }
+
+        .search-box input {
+            flex: 1;
+            border: none;
+            outline: none;
+            font-size: 1rem;
+            color: #333;
+            background: transparent;
+        }
+
+        .search-box input::placeholder {
+            color: #9ca3af;
+        }
+
+        .search-clear {
+            background: #e5e7eb;
+            border: none;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: #6b7280;
+            transition: background 0.2s;
+        }
+
+        .search-clear:active {
+            background: #d1d5db;
+        }
+
+        .arret-card.hidden {
+            display: none;
+        }
+
         @media (max-width: 600px) {
             .header h1 {
                 font-size: 1.2rem;
@@ -324,6 +379,16 @@
 
     <div class="progress-bar" id="progress-bar" style="display: none;">
         <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+    </div>
+
+    <div class="search-container" id="search-container" style="display: none;">
+        <div class="search-box">
+            <i class="fas fa-search"></i>
+            <input type="text" id="client-search-input" placeholder="Rechercher un client...">
+            <button class="search-clear" id="search-clear" style="display: none;">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
     </div>
 
     <div class="arrets-container" id="arrets-container">

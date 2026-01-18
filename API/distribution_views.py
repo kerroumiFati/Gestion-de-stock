@@ -1447,6 +1447,30 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
             return CommandeClientCreateSerializer
         return CommandeClientSerializer
 
+    def partial_update(self, request, *args, **kwargs):
+        """Override partial_update pour forcer l'utilisation du serializer.update()"""
+        import logging
+        logger = logging.getLogger(__name__)
+
+        logger.info(f"[VIEWSET PARTIAL_UPDATE] ===== DÉBUT =====")
+        logger.info(f"[VIEWSET PARTIAL_UPDATE] ID: {kwargs.get('pk')}")
+        logger.info(f"[VIEWSET PARTIAL_UPDATE] Data: {request.data}")
+
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=True)
+
+        logger.info(f"[VIEWSET PARTIAL_UPDATE] Serializer class: {serializer.__class__.__name__}")
+
+        if not serializer.is_valid():
+            logger.error(f"[VIEWSET PARTIAL_UPDATE] Validation errors: {serializer.errors}")
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        logger.info(f"[VIEWSET PARTIAL_UPDATE] Validation OK, calling save()")
+        self.perform_update(serializer)
+
+        logger.info(f"[VIEWSET PARTIAL_UPDATE] ===== FIN =====")
+        return Response(serializer.data)
+
     def create(self, request, *args, **kwargs):
         """Override create pour ajouter du logging et gérer les doublons"""
         import logging

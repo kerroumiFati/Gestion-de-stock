@@ -1009,7 +1009,9 @@ class CommandeClientCreateSerializer(serializers.ModelSerializer):
         import logging
         logger = logging.getLogger(__name__)
 
-        logger.info(f"[COMMANDE UPDATE] Updating commande {instance.id} with data: {validated_data}")
+        logger.info(f"[COMMANDE UPDATE] ===== DÉBUT UPDATE =====")
+        logger.info(f"[COMMANDE UPDATE] Commande ID: {instance.id}")
+        logger.info(f"[COMMANDE UPDATE] Data reçue: {validated_data}")
 
         # Extraire les lignes si présentes
         lignes_data = validated_data.pop('lignes', None)
@@ -1017,32 +1019,67 @@ class CommandeClientCreateSerializer(serializers.ModelSerializer):
         # Mettre à jour les champs de base
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
+            logger.info(f"[COMMANDE UPDATE] Champ '{attr}' mis à jour: {value}")
 
         # Mettre à jour les lignes si fournies
         if lignes_data is not None:
-            logger.info(f"[COMMANDE UPDATE] Updating {len(lignes_data)} lignes")
+            logger.info(f"[COMMANDE UPDATE] Nombre de lignes à traiter: {len(lignes_data)}")
+
+            # Compter les lignes avant suppression
+            nb_lignes_avant = instance.lignes.count()
+            logger.info(f"[COMMANDE UPDATE] Lignes avant suppression: {nb_lignes_avant}")
+
             # Supprimer les anciennes lignes
             instance.lignes.all().delete()
+
+            # Vérifier que les lignes sont supprimées
+            nb_lignes_apres_delete = instance.lignes.count()
+            logger.info(f"[COMMANDE UPDATE] Lignes après suppression: {nb_lignes_apres_delete}")
+
             # Créer les nouvelles lignes
-            for ligne_data in lignes_data:
+            lignes_creees = []
+            for idx, ligne_data in enumerate(lignes_data):
+                logger.info(f"[COMMANDE UPDATE] Création ligne {idx}: {ligne_data}")
+
                 # Retirer les champs calculés s'ils sont présents
                 ligne_data.pop('produit_reference', None)
                 ligne_data.pop('produit_designation', None)
+
                 # Pour les objets Produit du PrimaryKeyRelatedField
                 produit = ligne_data.pop('produit')
-                LigneCommandeClient.objects.create(
+
+                nouvelle_ligne = LigneCommandeClient.objects.create(
                     commande=instance,
                     produit=produit,
                     **ligne_data
                 )
+
+                logger.info(f"[COMMANDE UPDATE] Ligne {idx} créée - ID: {nouvelle_ligne.id}, "
+                          f"Qté: {nouvelle_ligne.quantite}, Prix HT: {nouvelle_ligne.prix_unitaire_ht}, "
+                          f"Montant HT: {nouvelle_ligne.montant_ht}, Montant TTC: {nouvelle_ligne.montant_ttc}")
+
+                lignes_creees.append(nouvelle_ligne)
+
+            # Vérifier le nombre de lignes après création
+            nb_lignes_finales = instance.lignes.count()
+            logger.info(f"[COMMANDE UPDATE] Lignes après création: {nb_lignes_finales}")
+
             # Recalculer les totaux
+            logger.info(f"[COMMANDE UPDATE] Appel de calculer_totaux()")
             instance.calculer_totaux()
+
+            # Recharger depuis la DB pour voir les nouvelles valeurs
+            instance.refresh_from_db()
+            logger.info(f"[COMMANDE UPDATE] Après calculer_totaux - Total HT: {instance.montant_total_ht}, "
+                      f"Total TTC: {instance.montant_total_ttc}")
 
         # Sauvegarder l'instance
         instance.synced_at = timezone.now()
         instance.save()
 
-        logger.info(f"[COMMANDE UPDATE] Commande {instance.id} updated successfully")
+        logger.info(f"[COMMANDE UPDATE] ===== FIN UPDATE =====")
+        logger.info(f"[COMMANDE UPDATE] Valeurs finales - HT: {instance.montant_total_ht}, TTC: {instance.montant_total_ttc}")
+
         return instance
 
 

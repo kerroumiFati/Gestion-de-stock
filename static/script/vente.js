@@ -573,6 +573,10 @@
     const p = PRODUCTS_CACHE[prodId];
     if(!p){ alert('Produit introuvable en cache, réessayez.'); return; }
 
+    // Récupérer le prix du champ ou utiliser le prix calculé comme fallback
+    const prixFromInput = parseFloat($('#vente_prix').val() || '0');
+    const prixToUse = (prixFromInput > 0) ? prixFromInput : getBestPrice(p);
+
     // Vérifier si le produit existe déjà dans le panier
     const existingIndex = LINES.findIndex(function(l){ return l.produit === prodId; });
 
@@ -580,7 +584,7 @@
       // Produit déjà dans le panier - mettre à jour la quantité
       const existingLine = LINES[existingIndex];
       const newQty = existingLine.quantite + qty;
-      const prixOriginal = Number(existingLine.prix_original || existingLine.prixU_snapshot || 0) || 0;
+      const prixOriginal = prixToUse;
 
       // Recalculer la promotion avec la nouvelle quantité
       calculatePriceWithPromotion(prodId, newQty, prixOriginal)
@@ -606,6 +610,7 @@
           }
 
           $('#vente_qte').val('1');
+          $('#vente_prix').val('');
           $('#promo_info').hide().empty();
           renderLines();
         })
@@ -613,11 +618,12 @@
           // En cas d'erreur, juste mettre à jour la quantité
           existingLine.quantite = newQty;
           $('#vente_qte').val('1');
+          $('#vente_prix').val('');
           renderLines();
         });
     } else {
       // Nouveau produit - ajouter une nouvelle ligne
-      const prixOriginal = getBestPrice(p) || 0;
+      const prixOriginal = prixToUse;
 
       calculatePriceWithPromotion(prodId, qty, prixOriginal)
         .done(function(result){
@@ -648,6 +654,7 @@
 
           LINES.push(line);
           $('#vente_qte').val('1');
+          $('#vente_prix').val('');
           $('#promo_info').hide().empty();
           renderLines();
         })
@@ -661,6 +668,7 @@
           };
           LINES.push(line);
           $('#vente_qte').val('1');
+          $('#vente_prix').val('');
           renderLines();
         });
     }
@@ -715,6 +723,7 @@
     $('#vente_obs').val('');
     $('#vente_prod').val('');
     $('#vente_qte').val('1');
+    $('#vente_prix').val('');
     $('#vente_status').text('');
   }
 
@@ -1860,11 +1869,31 @@
     $(document).off('change', '#vente_prod').on('change', '#vente_prod', function(){
       const prodId = parseInt($(this).val() || '0', 10);
       if(prodId > 0){
+        // Récupérer le produit du cache et remplir le prix
+        const product = PRODUCTS_CACHE[prodId];
+        if(product){
+          const price = getBestPrice(product);
+          $('#vente_prix').val(price.toFixed(2));
+        }
+
         loadPromotionsForProduct(prodId).done(function(){
           displayAvailablePromotions(prodId);
         });
       } else {
         $('#promo_info').hide().empty();
+        $('#vente_prix').val('');
+      }
+    });
+
+    // Mettre à jour le prix quand le type de prix change
+    $(document).off('change', '#vente_type_prix').on('change', '#vente_type_prix', function(){
+      const prodId = parseInt($('#vente_prod').val() || '0', 10);
+      if(prodId > 0){
+        const product = PRODUCTS_CACHE[prodId];
+        if(product){
+          const price = getBestPrice(product);
+          $('#vente_prix').val(price.toFixed(2));
+        }
       }
     });
     // save draft

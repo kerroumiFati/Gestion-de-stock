@@ -322,6 +322,122 @@
     </div>
 </div>
 
+<!-- Modal: Modifier Commande -->
+<div class="modal fade" id="modalModifierCommande" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-xl" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title">
+                    <i class="fa fa-edit"></i> {% trans "Modifier la Commande" %}
+                </h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editCommandeId">
+
+                <!-- Informations générales -->
+                <div class="card mb-3">
+                    <div class="card-header bg-light">
+                        <h6 class="mb-0"><i class="fa fa-info-circle"></i> {% trans "Informations générales" %}</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>{% trans "Référence" %}:</label>
+                                    <input type="text" id="editReference" class="form-control" readonly>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>{% trans "Client" %}:</label>
+                                    <input type="text" id="editClient" class="form-control" readonly>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>{% trans "Date de livraison souhaitée" %}:</label>
+                                    <input type="date" id="editDateLivraison" class="form-control">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>{% trans "Type de paiement" %}:</label>
+                                    <select id="editTypePaiement" class="form-control">
+                                        <option value="especes">{% trans "Espèces" %}</option>
+                                        <option value="carte">{% trans "Carte bancaire" %}</option>
+                                        <option value="cheque">{% trans "Chèque" %}</option>
+                                        <option value="credit">{% trans "À crédit" %}</option>
+                                        <option value="virement">{% trans "Virement" %}</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-12">
+                                <div class="form-group">
+                                    <label>{% trans "Notes" %}:</label>
+                                    <textarea id="editNotes" class="form-control" rows="2"></textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Produits -->
+                <div class="card">
+                    <div class="card-header bg-light">
+                        <h6 class="mb-0"><i class="fa fa-boxes"></i> {% trans "Produits" %}</h6>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th>{% trans "Produit" %}</th>
+                                        <th>{% trans "Référence" %}</th>
+                                        <th class="text-center" style="width: 150px;">{% trans "Quantité" %}</th>
+                                        <th class="text-right">{% trans "Prix Unit. HT" %}</th>
+                                        <th class="text-right">{% trans "Total HT" %}</th>
+                                        <th class="text-right">{% trans "Total TTC" %}</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="editLignesBody">
+                                    <!-- Sera rempli dynamiquement -->
+                                </tbody>
+                                <tfoot class="bg-light">
+                                    <tr>
+                                        <th colspan="4" class="text-right">{% trans "Total HT" %}:</th>
+                                        <th class="text-right" id="editTotalHT">0.00 DA</th>
+                                        <th></th>
+                                    </tr>
+                                    <tr>
+                                        <th colspan="4" class="text-right">{% trans "Total TTC" %}:</th>
+                                        <th></th>
+                                        <th class="text-right" id="editTotalTTC">0.00 DA</th>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">
+                    <i class="fa fa-times"></i> {% trans "Annuler" %}
+                </button>
+                <button type="button" class="btn btn-warning" onclick="saveCommandeModifications()">
+                    <i class="fa fa-save"></i> {% trans "Enregistrer les modifications" %}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 (function() {
     'use strict';
@@ -498,10 +614,13 @@
                                 <i class="fa fa-eye"></i>
                             </button>
                             ${cmd.statut !== 'delivered' && cmd.statut !== 'cancelled' ? `
+                            <button class="btn btn-warning" onclick="openModifierCommandeModal(${cmd.id})" title="Modifier">
+                                <i class="fa fa-edit"></i>
+                            </button>
                             <button class="btn btn-success" onclick="openAffecterLivreurModal(${cmd.id})" title="Affecter livreur">
                                 <i class="fa fa-truck"></i>
                             </button>
-                            <button class="btn btn-warning" onclick="openChangeStatusModal(${cmd.id})" title="Changer statut">
+                            <button class="btn btn-secondary" onclick="openChangeStatusModal(${cmd.id})" title="Changer statut">
                                 <i class="fa fa-exchange-alt"></i>
                             </button>
                             ` : `
@@ -909,20 +1028,20 @@
         const montantTotal = parseFloat(cmd.montant_total_ttc) || 0;
         const estPaye = cmd.est_paye === true || cmd.est_paye === 'true';
 
-        console.log('[PAIEMENT BADGE] cmd.reference:', cmd.reference,
-                    'est_paye:', cmd.est_paye, 'estPaye:', estPaye,
-                    'montant_paye:', cmd.montant_paye, 'montantPaye:', montantPaye,
-                    'montant_total_ttc:', cmd.montant_total_ttc, 'montantTotal:', montantTotal);
+        // console.log('[PAIEMENT BADGE] cmd.reference:', cmd.reference,
+        //             'est_paye:', cmd.est_paye, 'estPaye:', estPaye,
+        //             'montant_paye:', cmd.montant_paye, 'montantPaye:', montantPaye,
+        //             'montant_total_ttc:', cmd.montant_total_ttc, 'montantTotal:', montantTotal);
 
         if (estPaye) {
-            console.log('[PAIEMENT BADGE]', cmd.reference, '-> Payé');
+            // console.log('[PAIEMENT BADGE]', cmd.reference, '-> Payé');
             return '<span class="badge badge-success" title="Payé ' + montantPaye.toFixed(2) + ' DA"><i class="fa fa-check-circle"></i> Payé</span>';
         } else if (montantPaye > 0 && montantPaye < montantTotal) {
             const reste = montantTotal - montantPaye;
-            console.log('[PAIEMENT BADGE]', cmd.reference, '-> Partiel (payé:', montantPaye, 'reste:', reste.toFixed(2), ')');
+            //console.log('[PAIEMENT BADGE]', cmd.reference, '-> Partiel (payé:', montantPaye, 'reste:', reste.toFixed(2), ')');
             return '<span class="badge badge-warning" title="Payé ' + montantPaye.toFixed(2) + ' DA, Reste ' + reste.toFixed(2) + ' DA"><i class="fa fa-exclamation-circle"></i> Partiel</span>';
         } else {
-            console.log('[PAIEMENT BADGE]', cmd.reference, '-> Non payé');
+            //console.log('[PAIEMENT BADGE]', cmd.reference, '-> Non payé');
             return '<span class="badge badge-secondary" title="Non payé"><i class="fa fa-clock"></i> Non payé</span>';
         }
     }
@@ -1174,6 +1293,206 @@
         });
     }
 
+    // === Modification de Commande ===
+    let editingLignes = [];
+
+    function openModifierCommandeModal(id) {
+        const commande = allCommandes.find(c => c.id === id);
+        if (!commande) return;
+
+        console.log('[COMMANDE EDIT] Ouverture modal pour commande:', commande);
+
+        // Remplir les champs
+        document.getElementById('editCommandeId').value = id;
+        document.getElementById('editReference').value = commande.reference;
+        document.getElementById('editClient').value = (commande.client_prenom || '') + ' ' + (commande.client_nom || '');
+        document.getElementById('editDateLivraison').value = commande.date_livraison_souhaitee || '';
+        document.getElementById('editTypePaiement').value = commande.type_paiement || 'especes';
+        document.getElementById('editNotes').value = commande.notes || '';
+
+        // Charger les lignes de produits avec tous les champs nécessaires
+        editingLignes = commande.lignes ? JSON.parse(JSON.stringify(commande.lignes)) : [];
+
+        console.log('[COMMANDE EDIT] Lignes chargées:', editingLignes);
+
+        renderEditLignes();
+
+        $('#modalModifierCommande').modal('show');
+    }
+
+    function renderEditLignes() {
+        const tbody = document.getElementById('editLignesBody');
+        let totalHT = 0;
+        let totalTTC = 0;
+
+        if (editingLignes.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">Aucun produit</td></tr>';
+            document.getElementById('editTotalHT').textContent = '0.00 DA';
+            document.getElementById('editTotalTTC').textContent = '0.00 DA';
+            return;
+        }
+
+        tbody.innerHTML = editingLignes.map((ligne, index) => {
+            const montantHT = parseFloat(ligne.montant_ht) || 0;
+            const montantTTC = parseFloat(ligne.montant_ttc) || 0;
+            totalHT += montantHT;
+            totalTTC += montantTTC;
+
+            return `
+                <tr>
+                    <td>${ligne.produit_designation || '-'}</td>
+                    <td><code>${ligne.produit_reference || '-'}</code></td>
+                    <td class="text-center">
+                        <input type="number"
+                               class="form-control form-control-sm text-center"
+                               value="${ligne.quantite}"
+                               min="1"
+                               onchange="updateLigneQuantite(${index}, this.value)"
+                               style="width: 80px; display: inline-block;">
+                    </td>
+                    <td class="text-right">${formatCurrency(ligne.prix_unitaire_ht)}</td>
+                    <td class="text-right" id="editMontantHT-${index}">${formatCurrency(montantHT)}</td>
+                    <td class="text-right" id="editMontantTTC-${index}">${formatCurrency(montantTTC)}</td>
+                </tr>
+            `;
+        }).join('');
+
+        document.getElementById('editTotalHT').textContent = formatCurrency(totalHT);
+        document.getElementById('editTotalTTC').textContent = formatCurrency(totalTTC);
+    }
+
+    function updateLigneQuantite(index, newQuantite) {
+        const quantite = parseInt(newQuantite) || 1;
+        if (quantite < 1) {
+            alert('La quantité doit être au moins 1');
+            renderEditLignes();
+            return;
+        }
+
+        editingLignes[index].quantite = quantite;
+
+        // Recalculer les montants
+        const prixUnitHT = parseFloat(editingLignes[index].prix_unitaire_ht) || 0;
+        const tauxTVA = parseFloat(editingLignes[index].taux_tva) || 19;
+
+        editingLignes[index].montant_ht = prixUnitHT * quantite;
+        editingLignes[index].montant_ttc = editingLignes[index].montant_ht * (1 + tauxTVA / 100);
+
+        console.log('[LIGNE UPDATE]', {
+            index: index,
+            quantite: quantite,
+            prixUnitHT: prixUnitHT,
+            tauxTVA: tauxTVA,
+            montantHT: editingLignes[index].montant_ht,
+            montantTTC: editingLignes[index].montant_ttc
+        });
+
+        renderEditLignes();
+    }
+
+    function saveCommandeModifications() {
+        const id = document.getElementById('editCommandeId').value;
+        const dateLivraison = document.getElementById('editDateLivraison').value;
+        const typePaiement = document.getElementById('editTypePaiement').value;
+        const notes = document.getElementById('editNotes').value;
+
+        console.log('[COMMANDE EDIT] ===== DÉBUT SAUVEGARDE =====');
+        console.log('[COMMANDE EDIT] ID Commande:', id);
+        console.log('[COMMANDE EDIT] Lignes brutes:', editingLignes);
+
+        // OPTION 1: Test sans les lignes (juste les champs de base)
+        // Décommentez ceci pour tester si le problème vient des lignes
+        /*
+        const payloadSimple = {
+            date_livraison_souhaitee: dateLivraison || null,
+            type_paiement: typePaiement,
+            notes: notes
+        };
+        console.log('[COMMANDE EDIT] Test payload simple (sans lignes):', payloadSimple);
+        */
+
+        // OPTION 2: Payload complet avec lignes
+        const payload = {
+            date_livraison_souhaitee: dateLivraison || null,
+            type_paiement: typePaiement,
+            notes: notes,
+            lignes: editingLignes.map((ligne, idx) => {
+                // Garder le taux de TVA original (ne pas forcer à 19)
+                const tauxTVA = parseFloat(ligne.taux_tva) || 0;
+
+                const lignePayload = {
+                    produit: ligne.produit,  // ID du produit
+                    quantite: parseFloat(ligne.quantite),
+                    prix_unitaire_ht: parseFloat(ligne.prix_unitaire_ht),
+                    taux_tva: tauxTVA
+                };
+
+                console.log(`[COMMANDE EDIT] Ligne ${idx}:`, {
+                    produit_id: ligne.produit,
+                    designation: ligne.produit_designation,
+                    quantite_avant: ligne.quantite,
+                    quantite_apres: lignePayload.quantite,
+                    prix_unit_ht: lignePayload.prix_unitaire_ht,
+                    taux_tva: lignePayload.taux_tva,
+                    calcul_attendu_ht: lignePayload.quantite * lignePayload.prix_unitaire_ht
+                });
+
+                return lignePayload;
+            })
+        };
+
+        console.log('[COMMANDE EDIT] Payload complet:', JSON.stringify(payload, null, 2));
+        console.log('[COMMANDE EDIT] URL:', `/API/distribution/commandes/${id}/`);
+        console.log('[COMMANDE EDIT] CSRF Token:', getCookie('csrftoken'));
+
+        // Envoyer la requête
+        fetch(`/API/distribution/commandes/${id}/`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(res => {
+            console.log('[COMMANDE EDIT] Réponse status:', res.status);
+            console.log('[COMMANDE EDIT] Réponse OK?:', res.ok);
+            if (!res.ok) {
+                return res.text().then(text => {
+                    console.error('[COMMANDE EDIT] Réponse erreur (texte brut):', text);
+                    try {
+                        const err = JSON.parse(text);
+                        console.error('[COMMANDE EDIT] Erreur API (objet JSON):', err);
+                        // Afficher les erreurs de validation si présentes
+                        if (err.lignes) {
+                            console.error('[COMMANDE EDIT] Erreurs sur les lignes:', err.lignes);
+                        }
+                        throw new Error('Erreur API: ' + JSON.stringify(err, null, 2));
+                    } catch(e) {
+                        if (e.message.includes('Erreur API:')) {
+                            throw e;
+                        }
+                        throw new Error('Erreur serveur: ' + text);
+                    }
+                });
+            }
+            return res.json();
+        })
+        .then(data => {
+            console.log('[COMMANDE EDIT] ===== SUCCÈS =====');
+            console.log('[COMMANDE EDIT] Données reçues:', data);
+            $('#modalModifierCommande').modal('hide');
+            showSuccess('Commande modifiée avec succès!');
+            setTimeout(() => loadCommandes(), 500);
+        })
+        .catch(err => {
+            console.error('[COMMANDE EDIT] ===== ERREUR =====');
+            console.error('[COMMANDE EDIT] Message:', err.message);
+            console.error('[COMMANDE EDIT] Stack:', err.stack);
+            showError('Erreur: ' + err.message);
+        });
+    }
+
     // Exposer les fonctions globalement
     window.toggleDetails = toggleDetails;
     window.viewCommandeDetails = viewCommandeDetails;
@@ -1181,6 +1500,9 @@
     window.confirmChangeStatus = confirmChangeStatus;
     window.openAffecterLivreurModal = openAffecterLivreurModal;
     window.confirmAffecterLivreur = confirmAffecterLivreur;
+    window.openModifierCommandeModal = openModifierCommandeModal;
+    window.updateLigneQuantite = updateLigneQuantite;
+    window.saveCommandeModifications = saveCommandeModifications;
     window.applyFilters = applyFilters;
     window.resetFilters = resetFilters;
     window.refreshCommandes = refreshCommandes;

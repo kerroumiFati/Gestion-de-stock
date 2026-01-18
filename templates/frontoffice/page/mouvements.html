@@ -563,7 +563,7 @@
       <div class="row table-responsive m-auto rounded">
         <table id="tmouv" class="table table-hover w-100">
           <thead><tr class="text-uppercase bg-light w-100">
-            <th>{% trans "Date" %}</th><th>{% trans "Produit" %}</th><th>{% trans "Entrepôt" %}</th><th>Delta</th><th>Source</th><th>Ref</th><th>Note</th>
+            <th>{% trans "Date" %}</th><th>{% trans "Produit" %}</th><th>{% trans "Entrepôt" %}</th><th>Delta</th><th>Source</th><th>Ref</th><th>Note</th><th>Actions</th>
           </tr></thead>
           <tbody></tbody>
         </table>
@@ -572,7 +572,269 @@
   </div>
 </div>
 
+<!-- Modal: Impression Retour Fournisseur -->
+<div class="modal fade" id="modalImprimerRetour" tabindex="-1" role="dialog">
+  <div class="modal-dialog modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title">
+          <i class="fa fa-print"></i> Bon de Retour Fournisseur
+        </h5>
+        <button type="button" class="close text-white" data-dismiss="modal">
+          <span>&times;</span>
+        </button>
+      </div>
+      <div class="modal-body" id="printRetourContent">
+        <!-- Contenu à imprimer -->
+        <div class="text-center mb-4 print-header">
+          <h2 class="font-weight-bold mb-3">BON DE RETOUR FOURNISSEUR</h2>
+          <div class="row">
+            <div class="col-6 text-left">
+              <strong>Date:</strong> <span id="print_retour_date"></span>
+            </div>
+            <div class="col-6 text-right">
+              <strong>Référence:</strong> <span id="print_retour_ref"></span>
+            </div>
+          </div>
+        </div>
+
+        <hr class="my-4">
+
+        <div class="mb-4">
+          <h5 class="font-weight-bold mb-3">
+            <i class="fa fa-info-circle"></i> Informations du retour
+          </h5>
+          <table class="table table-bordered print-table">
+            <tbody>
+              <tr>
+                <td class="font-weight-bold bg-light" style="width: 35%;">Produit</td>
+                <td id="print_retour_produit"></td>
+              </tr>
+              <tr>
+                <td class="font-weight-bold bg-light">Quantité retournée</td>
+                <td>
+                  <strong class="text-danger" style="font-size: 1.2em;" id="print_retour_quantite"></strong> unités
+                </td>
+              </tr>
+              <tr>
+                <td class="font-weight-bold bg-light">Fournisseur</td>
+                <td id="print_retour_fournisseur"></td>
+              </tr>
+              <tr>
+                <td class="font-weight-bold bg-light">Entrepôt</td>
+                <td id="print_retour_entrepot"></td>
+              </tr>
+              <tr>
+                <td class="font-weight-bold bg-light">Motif du retour</td>
+                <td id="print_retour_motif"></td>
+              </tr>
+              <tr>
+                <td class="font-weight-bold bg-light">Notes / Détails</td>
+                <td id="print_retour_notes" style="white-space: pre-wrap;"></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="row mt-5 pt-4 print-signatures">
+          <div class="col-6">
+            <div class="signature-box">
+              <p class="mb-1 font-weight-bold">Signature Responsable</p>
+              <p class="text-muted small mb-4">Nom et date :</p>
+              <div class="signature-line"></div>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="signature-box">
+              <p class="mb-1 font-weight-bold">Signature Fournisseur</p>
+              <p class="text-muted small mb-4">Nom et date :</p>
+              <div class="signature-line"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="text-center text-muted mt-5 pt-3 print-footer">
+          <small>Document généré le <span id="print_generated_date"></span></small>
+        </div>
+      </div>
+      <div class="modal-footer d-print-none">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">
+          <i class="fa fa-times"></i> Fermer
+        </button>
+        <button type="button" class="btn btn-primary" onclick="printRetour()">
+          <i class="fa fa-print"></i> Imprimer
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+/* Styles pour les signatures */
+.signature-box {
+  min-height: 120px;
+  padding: 10px;
+}
+
+.signature-line {
+  border-bottom: 2px solid #333;
+  height: 60px;
+  margin-top: 10px;
+}
+
+/* Styles d'impression */
+@media print {
+  /* Améliorer l'apparence du tableau */
+  .print-table {
+    border: 2px solid #000 !important;
+    page-break-inside: avoid;
+    width: 100%;
+  }
+
+  .print-table td {
+    border: 1px solid #333 !important;
+    padding: 10px !important;
+    font-size: 11pt;
+  }
+
+  .print-table .bg-light {
+    background-color: #f0f0f0 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Header */
+  .print-header h2 {
+    font-size: 20pt;
+    margin-bottom: 15px !important;
+    border-bottom: 3px solid #000;
+    padding-bottom: 10px;
+  }
+
+  /* Signatures */
+  .print-signatures {
+    margin-top: 40px !important;
+    page-break-inside: avoid;
+  }
+
+  .signature-line {
+    border-bottom: 2px solid #000 !important;
+    height: 70px;
+    margin-top: 15px;
+  }
+
+  .signature-box {
+    min-height: 100px;
+  }
+
+  /* Footer */
+  .print-footer {
+    margin-top: 30px;
+    font-size: 9pt;
+    border-top: 1px solid #ccc;
+    padding-top: 10px;
+  }
+
+  /* Forcer l'impression des couleurs */
+  .print-table .bg-light,
+  .print-header h2 {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Éviter les sauts de page */
+  .print-table, .print-signatures {
+    page-break-inside: avoid;
+  }
+}
+
+/* Styles pour l'écran (prévisualisation) */
+.print-table {
+  font-size: 0.95rem;
+}
+
+.print-table td {
+  padding: 12px;
+}
+
+.print-header h2 {
+  color: #333;
+  border-bottom: 2px solid #dee2e6;
+  padding-bottom: 10px;
+}
+</style>
+
 <script>
+// Fonction d'impression du bon de retour
+function printRetour() {
+    const printContent = document.getElementById('printRetourContent').innerHTML;
+    const originalContent = document.body.innerHTML;
+
+    // Créer une nouvelle fenêtre d'impression
+    const printWindow = window.open('', '_blank', 'width=800,height=600');
+
+    printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Bon de Retour Fournisseur</title>
+            <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+            <style>
+                body {
+                    padding: 20px;
+                    font-family: Arial, sans-serif;
+                }
+                .print-table {
+                    border: 2px solid #000;
+                    width: 100%;
+                }
+                .print-table td {
+                    border: 1px solid #333;
+                    padding: 10px;
+                }
+                .print-table .bg-light {
+                    background-color: #f0f0f0;
+                }
+                .print-header h2 {
+                    border-bottom: 3px solid #000;
+                    padding-bottom: 10px;
+                }
+                .signature-line {
+                    border-bottom: 2px solid #000;
+                    height: 70px;
+                    margin-top: 15px;
+                }
+                .signature-box {
+                    min-height: 100px;
+                    padding: 10px;
+                }
+                @media print {
+                    body { margin: 0; padding: 20px; }
+                    .print-table .bg-light {
+                        -webkit-print-color-adjust: exact;
+                        print-color-adjust: exact;
+                    }
+                }
+            </style>
+        </head>
+        <body>
+            ${printContent}
+        </body>
+        </html>
+    `);
+
+    printWindow.document.close();
+
+    // Attendre que le contenu soit chargé puis imprimer
+    printWindow.onload = function() {
+        printWindow.focus();
+        setTimeout(function() {
+            printWindow.print();
+            printWindow.close();
+        }, 250);
+    };
+}
+
 (function() {
     var mvData = {
         products: [],
