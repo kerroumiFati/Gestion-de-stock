@@ -930,7 +930,7 @@ class CommandeClientCreateSerializer(serializers.ModelSerializer):
         logger = logging.getLogger(__name__)
 
         logger.info('[COMMANDE CREATE] ===== DÉBUT =====')
-        logger.info(f'[COMMANDE CREATE] validated_data: {validated_data}')
+        print(f'[COMMANDE CREATE] validated_data: {validated_data}')
 
         lignes_data = validated_data.pop('lignes')
         app_client_id = validated_data.pop('app_client_id', None)
@@ -939,7 +939,7 @@ class CommandeClientCreateSerializer(serializers.ModelSerializer):
         # Gérer le client: si client est null mais app_client_id fourni
         client = validated_data.get('client')
         if not client and app_client_id:
-            logger.info(f'[COMMANDE CREATE] Client null, recherche par app_client_id: {app_client_id}')
+            print(f'[COMMANDE CREATE] Client null, recherche par app_client_id: {app_client_id}')
             # Essayer de trouver un client existant avec cet app_client_id
             # ou par nom si fourni
             if client_nom:
@@ -947,17 +947,17 @@ class CommandeClientCreateSerializer(serializers.ModelSerializer):
                 # Rechercher par nom (approximatif)
                 client = Client.objects.filter(nom__icontains=client_nom.split()[-1] if client_nom else '').first()
                 if client:
-                    logger.info(f'[COMMANDE CREATE] Client trouvé par nom: {client.id} - {client.nom}')
+                    print(f'[COMMANDE CREATE] Client trouvé par nom: {client.id} - {client.nom}')
                     validated_data['client'] = client
                 else:
-                    logger.warning(f'[COMMANDE CREATE] Aucun client trouvé avec le nom: {client_nom}')
+                    print(f'[COMMANDE CREATE - WARNING] Aucun client trouvé avec le nom: {client_nom}')
                     # On ne peut pas créer la commande sans client valide
                     raise serializers.ValidationError({
                         'client': f'Client introuvable. Veuillez d\'abord synchroniser le client "{client_nom}".'
                     })
 
         if not validated_data.get('client'):
-            logger.error('[COMMANDE CREATE] Client manquant après résolution')
+            print('[COMMANDE CREATE - ERROR] Client manquant après résolution')
             raise serializers.ValidationError({'client': 'Le client est obligatoire pour créer une commande.'})
 
         # Auto-assigner la company depuis le client si non fournie
@@ -975,26 +975,26 @@ class CommandeClientCreateSerializer(serializers.ModelSerializer):
 
         # Laisser company=null pour les commandes mobile (permet le filtre Q(company__isnull=True))
         client = validated_data.get('client')
-        logger.info(f'[COMMANDE CREATE] Company fournie: {validated_data.get("company")}, sera laissée à null pour compatibilité filtres')
+        print(f'[COMMANDE CREATE] Company fournie: {validated_data.get("company")}, sera laissée à null pour compatibilité filtres')
 
         # Auto-assigner le livreur depuis le client si non fourni
         if not validated_data.get('livreur') and client:
             # ATTENTION: Auto-assignation du livreur - peut causer des problèmes si plusieurs livreurs ont le même client
-            logger.warning(f'[COMMANDE CREATE] Livreur non fourni, auto-assignation depuis client {client.id}')
+            print(f'[COMMANDE CREATE - WARNING] Livreur non fourni, auto-assignation depuis client {client.id}')
             # Trouver le livreur assigné à ce client
             livreur = LivreurDistribution.objects.filter(clients_assignes=client).first()
             if livreur:
-                logger.info(f'[COMMANDE CREATE] Livreur auto-assigné: {livreur.id} - {livreur.nom}')
+                print(f'[COMMANDE CREATE] Livreur auto-assigné: {livreur.id} - {livreur.nom}')
                 validated_data['livreur'] = livreur
             else:
-                logger.warning(f'[COMMANDE CREATE] Aucun livreur assigné au client {client.id}, commande créée sans livreur')
+                print(f'[COMMANDE CREATE - WARNING] Aucun livreur assigné au client {client.id}, commande créée sans livreur')
                 # Ne pas lever d'erreur, permettre la création sans livreur
                 # Cela pourrait être corrigé manuellement plus tard via l'interface web
 
         # Créer la commande d'abord pour calculer le montant total
         commande = CommandeClient.objects.create(**validated_data)
 
-        logger.info(f'[COMMANDE CREATE] Commande créée: id={commande.id}, company={commande.company_id if commande.company else None}, livreur={commande.livreur_id if commande.livreur else None}, client={commande.client_id if commande.client else None}')
+        print(f'[COMMANDE CREATE] Commande créée: id={commande.id}, company={commande.company_id if commande.company else None}, livreur={commande.livreur_id if commande.livreur else None}, client={commande.client_id if commande.client else None}')
 
         # Créer les lignes de commande
         for ligne_data in lignes_data:
@@ -1017,7 +1017,7 @@ class CommandeClientCreateSerializer(serializers.ModelSerializer):
         montant_paye = commande.montant_paye
         montant_total = commande.montant_total_ttc
 
-        logger.info(f"[COMMANDE] Avant traitement: type_paiement={type_paiement}, montant_paye={montant_paye}, montant_total={montant_total}")
+        print(f"[COMMANDE] Avant traitement: type_paiement={type_paiement}, montant_paye={montant_paye}, montant_total={montant_total}")
 
         # Si montant_paye n'est pas fourni ou est 0, déduire du type_paiement
         if montant_paye == 0:
@@ -1027,13 +1027,13 @@ class CommandeClientCreateSerializer(serializers.ModelSerializer):
                 commande.est_paye = True
                 if not commande.date_paiement:
                     commande.date_paiement = timezone.now()
-                logger.info(f"[COMMANDE] Paiement complet déduit: montant_paye={commande.montant_paye}")
+                print(f"[COMMANDE] Paiement complet déduit: montant_paye={commande.montant_paye}")
             elif type_paiement in ['credit', 'non_paye']:
                 # Pas de paiement
                 commande.montant_paye = 0
                 commande.est_paye = False
                 commande.date_paiement = None
-                logger.info(f"[COMMANDE] Pas de paiement (crédit)")
+                print(f"[COMMANDE] Pas de paiement (crédit)")
         else:
             # montant_paye est fourni par l'app mobile
             if montant_paye >= montant_total:
@@ -1041,19 +1041,19 @@ class CommandeClientCreateSerializer(serializers.ModelSerializer):
                 commande.est_paye = True
                 if not commande.date_paiement:
                     commande.date_paiement = timezone.now()
-                logger.info(f"[COMMANDE] Paiement complet: montant_paye={montant_paye}")
+                print(f"[COMMANDE] Paiement complet: montant_paye={montant_paye}")
             else:
                 # Paiement partiel
                 commande.est_paye = False
                 if not commande.date_paiement:
                     commande.date_paiement = timezone.now()
-                logger.info(f"[COMMANDE] Paiement partiel: montant_paye={montant_paye}, reste={montant_total - montant_paye}")
+                print(f"[COMMANDE] Paiement partiel: montant_paye={montant_paye}, reste={montant_total - montant_paye}")
 
         # Marquer comme synchronisé
         commande.synced_at = timezone.now()
         commande.save()
 
-        logger.info(f"[COMMANDE] Après traitement: est_paye={commande.est_paye}, montant_paye={commande.montant_paye}, date_paiement={commande.date_paiement}")
+        print(f"[COMMANDE] Après traitement: est_paye={commande.est_paye}, montant_paye={commande.montant_paye}, date_paiement={commande.date_paiement}")
 
         return commande
 
@@ -1062,9 +1062,9 @@ class CommandeClientCreateSerializer(serializers.ModelSerializer):
         import logging
         logger = logging.getLogger(__name__)
 
-        logger.info(f"[COMMANDE UPDATE] ===== DÉBUT UPDATE =====")
-        logger.info(f"[COMMANDE UPDATE] Commande ID: {instance.id}")
-        logger.info(f"[COMMANDE UPDATE] Data reçue: {validated_data}")
+        print(f"[COMMANDE UPDATE] ===== DÉBUT UPDATE =====")
+        print(f"[COMMANDE UPDATE] Commande ID: {instance.id}")
+        print(f"[COMMANDE UPDATE] Data reçue: {validated_data}")
 
         # Extraire les lignes si présentes
         lignes_data = validated_data.pop('lignes', None)
@@ -1072,30 +1072,30 @@ class CommandeClientCreateSerializer(serializers.ModelSerializer):
         # Mettre à jour les champs de base
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
-            logger.info(f"[COMMANDE UPDATE] Champ '{attr}' mis à jour: {value}")
+            print(f"[COMMANDE UPDATE] Champ '{attr}' mis à jour: {value}")
 
         # Mettre à jour les lignes si fournies
         if lignes_data is not None:
-            logger.info(f"[COMMANDE UPDATE] Nombre de lignes à traiter: {len(lignes_data)}")
+            print(f"[COMMANDE UPDATE] Nombre de lignes à traiter: {len(lignes_data)}")
 
             # Compter les lignes avant suppression
             nb_lignes_avant = instance.lignes.count()
-            logger.info(f"[COMMANDE UPDATE] Lignes avant suppression: {nb_lignes_avant}")
+            print(f"[COMMANDE UPDATE] Lignes avant suppression: {nb_lignes_avant}")
 
             # Supprimer les anciennes lignes
             instance.lignes.all().delete()
 
             # Vérifier que les lignes sont supprimées
             nb_lignes_apres_delete = instance.lignes.count()
-            logger.info(f"[COMMANDE UPDATE] Lignes après suppression: {nb_lignes_apres_delete}")
+            print(f"[COMMANDE UPDATE] Lignes après suppression: {nb_lignes_apres_delete}")
 
             # Créer les nouvelles lignes
             lignes_creees = []
             for idx, ligne_data in enumerate(lignes_data):
-                logger.info(f"[COMMANDE UPDATE] ===== Ligne {idx} =====")
-                logger.info(f"[COMMANDE UPDATE] Données brutes reçues: {ligne_data}")
-                logger.info(f"[COMMANDE UPDATE] Type de ligne_data: {type(ligne_data)}")
-                logger.info(f"[COMMANDE UPDATE] Clés disponibles: {ligne_data.keys() if hasattr(ligne_data, 'keys') else 'N/A'}")
+                print(f"[COMMANDE UPDATE] ===== Ligne {idx} =====")
+                print(f"[COMMANDE UPDATE] Données brutes reçues: {ligne_data}")
+                print(f"[COMMANDE UPDATE] Type de ligne_data: {type(ligne_data)}")
+                print(f"[COMMANDE UPDATE] Clés disponibles: {ligne_data.keys() if hasattr(ligne_data, 'keys') else 'N/A'}")
 
                 # Retirer les champs calculés s'ils sont présents
                 ligne_data.pop('produit_reference', None)
@@ -1104,11 +1104,11 @@ class CommandeClientCreateSerializer(serializers.ModelSerializer):
 
                 # Pour les objets Produit du PrimaryKeyRelatedField
                 produit = ligne_data.pop('produit')
-                logger.info(f"[COMMANDE UPDATE] Produit ID: {produit.id if hasattr(produit, 'id') else produit}")
+                print(f"[COMMANDE UPDATE] Produit ID: {produit.id if hasattr(produit, 'id') else produit}")
 
                 # Log des données avant création
-                logger.info(f"[COMMANDE UPDATE] Données après nettoyage: {ligne_data}")
-                logger.info(f"[COMMANDE UPDATE] Prix dans ligne_data: prix_unitaire_ht={ligne_data.get('prix_unitaire_ht', 'NON TROUVÉ')}")
+                print(f"[COMMANDE UPDATE] Données après nettoyage: {ligne_data}")
+                print(f"[COMMANDE UPDATE] Prix dans ligne_data: prix_unitaire_ht={ligne_data.get('prix_unitaire_ht', 'NON TROUVÉ')}")
 
                 nouvelle_ligne = LigneCommandeClient.objects.create(
                     commande=instance,
@@ -1116,7 +1116,7 @@ class CommandeClientCreateSerializer(serializers.ModelSerializer):
                     **ligne_data
                 )
 
-                logger.info(f"[COMMANDE UPDATE] Ligne {idx} créée - ID: {nouvelle_ligne.id}, "
+                print(f"[COMMANDE UPDATE] Ligne {idx} créée - ID: {nouvelle_ligne.id}, "
                           f"Qté: {nouvelle_ligne.quantite}, Prix HT: {nouvelle_ligne.prix_unitaire_ht}, "
                           f"Montant HT: {nouvelle_ligne.montant_ht}, Montant TTC: {nouvelle_ligne.montant_ttc}")
 
@@ -1124,23 +1124,23 @@ class CommandeClientCreateSerializer(serializers.ModelSerializer):
 
             # Vérifier le nombre de lignes après création
             nb_lignes_finales = instance.lignes.count()
-            logger.info(f"[COMMANDE UPDATE] Lignes après création: {nb_lignes_finales}")
+            print(f"[COMMANDE UPDATE] Lignes après création: {nb_lignes_finales}")
 
             # Recalculer les totaux
-            logger.info(f"[COMMANDE UPDATE] Appel de calculer_totaux()")
+            print(f"[COMMANDE UPDATE] Appel de calculer_totaux()")
             instance.calculer_totaux()
 
             # Recharger depuis la DB pour voir les nouvelles valeurs
             instance.refresh_from_db()
-            logger.info(f"[COMMANDE UPDATE] Après calculer_totaux - Total HT: {instance.montant_total_ht}, "
+            print(f"[COMMANDE UPDATE] Après calculer_totaux - Total HT: {instance.montant_total_ht}, "
                       f"Total TTC: {instance.montant_total_ttc}")
 
         # Sauvegarder l'instance
         instance.synced_at = timezone.now()
         instance.save()
 
-        logger.info(f"[COMMANDE UPDATE] ===== FIN UPDATE =====")
-        logger.info(f"[COMMANDE UPDATE] Valeurs finales - HT: {instance.montant_total_ht}, TTC: {instance.montant_total_ttc}")
+        print(f"[COMMANDE UPDATE] ===== FIN UPDATE =====")
+        print(f"[COMMANDE UPDATE] Valeurs finales - HT: {instance.montant_total_ht}, TTC: {instance.montant_total_ttc}")
 
         return instance
 

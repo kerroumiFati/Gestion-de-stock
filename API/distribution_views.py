@@ -1441,38 +1441,75 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
     serializer_class = CommandeClientSerializer
     permission_classes = [AllowAny]  # TODO: Ajouter authentification en production
 
+    def dispatch(self, request, *args, **kwargs):
+        """Intercepter toutes les requêtes pour debug"""
+        print(f"[DISPATCH] Method: {request.method}, Path: {request.path}")
+        result = super().dispatch(request, *args, **kwargs)
+        print(f"[DISPATCH] Action was: {self.action if hasattr(self, 'action') else 'N/A'}, Result status: {result.status_code if hasattr(result, 'status_code') else 'N/A'}")
+        return result
+
     def get_permissions(self):
         """Override pour forcer AllowAny (contourner DEFAULT_PERMISSION_CLASSES)"""
         return [AllowAny()]
 
     def get_serializer_class(self):
         """Utiliser CommandeClientCreateSerializer pour create et update depuis mobile"""
+        print(f"[GET_SERIALIZER_CLASS] Action: {self.action}")
         if self.action in ['create', 'update', 'partial_update']:
+            print(f"[GET_SERIALIZER_CLASS] Retourne CommandeClientCreateSerializer")
             return CommandeClientCreateSerializer
+        print(f"[GET_SERIALIZER_CLASS] Retourne CommandeClientSerializer")
         return CommandeClientSerializer
 
-    def partial_update(self, request, *args, **kwargs):
-        """Override partial_update pour forcer l'utilisation du serializer.update()"""
-        import logging
-        logger = logging.getLogger(__name__)
+    def update(self, request, *args, **kwargs):
+        """Override update ET partial_update"""
+        partial = kwargs.pop('partial', False)
+        print(f"[VIEWSET UPDATE] ===== DÉBUT ===== (partial={partial})")
+        print(f"[VIEWSET UPDATE] ID: {kwargs.get('pk')}")
+        print(f"[VIEWSET UPDATE] Data: {request.data}")
 
-        logger.info(f"[VIEWSET PARTIAL_UPDATE] ===== DÉBUT =====")
-        logger.info(f"[VIEWSET PARTIAL_UPDATE] ID: {kwargs.get('pk')}")
-        logger.info(f"[VIEWSET PARTIAL_UPDATE] Data: {request.data}")
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+
+        print(f"[VIEWSET UPDATE] Serializer class: {serializer.__class__.__name__}")
+
+        if not serializer.is_valid():
+            print(f"[VIEWSET UPDATE] Validation errors: {serializer.errors}")
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        print(f"[VIEWSET UPDATE] Validation OK, calling save()")
+        self.perform_update(serializer)
+
+        print(f"[VIEWSET UPDATE] ===== FIN =====")
+        return Response(serializer.data)
+
+    def perform_update(self, serializer):
+        """Appelé par update() pour sauvegarder - TOUJOURS appelé"""
+        print(f"[PERFORM_UPDATE] ===== APPELÉ =====")
+        print(f"[PERFORM_UPDATE] Serializer class: {serializer.__class__.__name__}")
+        print(f"[PERFORM_UPDATE] Validated data: {serializer.validated_data}")
+        serializer.save()
+        print(f"[PERFORM_UPDATE] ===== SAUVEGARDÉ =====")
+
+    def old_partial_update(self, request, *args, **kwargs):
+        """Ancienne méthode - ne devrait plus être appelée"""
+        print(f"[OLD PARTIAL_UPDATE] ===== DÉBUT =====")
+        print(f"[OLD PARTIAL_UPDATE] ID: {kwargs.get('pk')}")
+        print(f"[OLD PARTIAL_UPDATE] Data: {request.data}")
 
         instance = self.get_object()
         serializer = self.get_serializer(instance, data=request.data, partial=True)
 
-        logger.info(f"[VIEWSET PARTIAL_UPDATE] Serializer class: {serializer.__class__.__name__}")
+        print(f"[VIEWSET PARTIAL_UPDATE] Serializer class: {serializer.__class__.__name__}")
 
         if not serializer.is_valid():
-            logger.error(f"[VIEWSET PARTIAL_UPDATE] Validation errors: {serializer.errors}")
+            print(f"[VIEWSET PARTIAL_UPDATE] Validation errors: {serializer.errors}")
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        logger.info(f"[VIEWSET PARTIAL_UPDATE] Validation OK, calling save()")
+        print(f"[VIEWSET PARTIAL_UPDATE] Validation OK, calling save()")
         self.perform_update(serializer)
 
-        logger.info(f"[VIEWSET PARTIAL_UPDATE] ===== FIN =====")
+        print(f"[VIEWSET PARTIAL_UPDATE] ===== FIN =====")
         return Response(serializer.data)
 
     def create(self, request, *args, **kwargs):
@@ -1590,8 +1627,9 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
         Mise à jour partielle d'une commande
         Gère spécialement le cas de la livraison avec quantités ajustées
         """
-        import logging
-        logger = logging.getLogger(__name__)
+        print(f"[PARTIAL_UPDATE] ===== DÉBUT =====")
+        print(f"[PARTIAL_UPDATE] Request data: {request.data}")
+        print(f"[PARTIAL_UPDATE] PK: {kwargs.get('pk')}")
 
         commande = self.get_object()
         ancien_statut = commande.statut  # Stocker l'ancien statut pour éviter double déduction
@@ -1599,14 +1637,14 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
         lignes_ajustees = request.data.get('lignes')
         date_livraison = request.data.get('date_livraison_reelle')
 
-        logger.info(f"[PARTIAL_UPDATE] Commande {commande.id}: statut={nouveau_statut}, lignes={'OUI' if lignes_ajustees else 'NON'}")
+        print(f"[PARTIAL_UPDATE] Commande {commande.id}: statut={nouveau_statut}, lignes={'OUI' if lignes_ajustees else 'NON'}")
         if lignes_ajustees:
-            logger.info(f"[PARTIAL_UPDATE] Nombre de lignes reçues: {len(lignes_ajustees)}")
+            print(f"[PARTIAL_UPDATE] Nombre de lignes reçues: {len(lignes_ajustees)}")
 
         # Vérifier si on essaie d'ajuster les quantités d'une commande entièrement payée
         # Permettre l'ajustement pour paiements partiels (est_paye=False)
         if lignes_ajustees and commande.est_paye:
-            logger.warning(f"Tentative d'ajustement sur commande entièrement payée {commande.id}")
+            print(f"[PARTIAL_UPDATE - WARNING] Tentative d'ajustement sur commande entièrement payée {commande.id}")
             return Response(
                 {'error': 'Les quantités ne peuvent pas être ajustées pour une commande entièrement payée'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -1703,7 +1741,18 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
             }
             return Response(response_data)
 
-        serializer = CommandeClientSerializer(commande)
+        # Cas normal: mise à jour standard (pas une livraison)
+        # Utiliser le serializer pour gérer la mise à jour des champs et des lignes
+        print(f"[PARTIAL_UPDATE] Cas normal (pas livraison), utilisation du serializer")
+        serializer = self.get_serializer(commande, data=request.data, partial=True)
+
+        if not serializer.is_valid():
+            print(f"[PARTIAL_UPDATE] Erreurs de validation: {serializer.errors}")
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        print(f"[PARTIAL_UPDATE] Validation OK, appel de save()")
+        serializer.save()
+        print(f"[PARTIAL_UPDATE] ===== FIN (sauvegardé via serializer) =====")
         return Response(serializer.data)
 
     @action(detail=True, methods=['patch'])
