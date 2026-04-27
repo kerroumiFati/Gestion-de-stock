@@ -498,9 +498,9 @@
     <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
 
     <script>
-        // Données depuis Django
-        const livreursData = {{ livreurs_json|safe }};
-        const clientsData = {{ clients_json|safe }};
+        // Données depuis Django (mutables pour le rafraîchissement AJAX)
+        let livreursData = {{ livreurs_json|safe }};
+        let clientsData = {{ clients_json|safe }};
         const secteursData = {{ secteurs_json|safe }};
         const allLivreursData = {{ all_livreurs_json|safe }};
 
@@ -838,16 +838,37 @@
             });
         }
 
-        // Rafraîchir la carte
-        function refreshMap() {
+        // Rafraîchir la carte via AJAX — le zoom et la position de la carte sont conservés
+        async function refreshMap() {
             const btn = document.getElementById('refresh-btn');
             const icon = document.getElementById('refresh-icon');
 
             btn.classList.add('loading');
             icon.innerHTML = '<div class="spinner"></div>';
 
-            // Recharger la page
-            window.location.reload();
+            try {
+                const response = await fetch('{% url "livreurs_map_data" %}', {
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                });
+                if (!response.ok) throw new Error('Erreur réseau');
+
+                const data = await response.json();
+
+                // Mettre à jour les données locales
+                livreursData = data.livreurs;
+                clientsData = data.clients;
+
+                // Redessiner uniquement les markers — pas de setView / fitBounds
+                addLivreurMarkers(livreursData);
+                addClientMarkers(clientsData);
+                updateVisibleStats();
+                updateRefreshTime();
+            } catch (e) {
+                console.warn('Rafraîchissement carte échoué:', e);
+            } finally {
+                btn.classList.remove('loading');
+                icon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>`;
+            }
         }
 
         // Initialisation
@@ -856,7 +877,7 @@
             addLivreurMarkers(livreursData);
             addClientMarkers(clientsData);
             updateRefreshTime();
-            fitMapToMarkers();
+            fitMapToMarkers();  // fitBounds uniquement au premier chargement
 
             console.log(`Carte initialisée: ${livreursData.length} livreur(s), ${clientsData.length} client(s), ${secteursData.length} secteur(s)`);
         }
@@ -864,10 +885,8 @@
         // Lancer l'initialisation
         init();
 
-        // Auto-refresh toutes les 60 secondes
-        setInterval(() => {
-            refreshMap();
-        }, 60000);
+        // Auto-refresh toutes les 60 secondes — AJAX uniquement, zoom préservé
+        setInterval(refreshMap, 60000);
     </script>
 </body>
 </html>

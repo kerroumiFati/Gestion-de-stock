@@ -161,9 +161,14 @@
         }
       }
 
-      // Générer l'affichage de l'image
+      // Générer l'affichage de l'image avec gestion d'erreur
       const imageHtml = p.image
-        ? `<img src="${p.image}" alt="${p.designation}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px;">`
+        ? `<img src="${p.image}" alt="${p.designation}"
+              onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+              style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px;">
+           <div style="width: 50px; height: 50px; background: #f0f0f0; border-radius: 4px; display: none; align-items: center; justify-content: center;">
+             <i class="fas fa-image" style="color: #ccc;"></i>
+           </div>`
         : `<div style="width: 50px; height: 50px; background: #f0f0f0; border-radius: 4px; display: flex; align-items: center; justify-content: center;"><i class="fas fa-image" style="color: #ccc;"></i></div>`;
 
       return `<tr data-id="${p.id}">
@@ -350,7 +355,8 @@
           formData.append('company', payload.company);
         }
 
-        const csrftoken = getCookie('csrftoken');
+        // Utiliser getCSRFToken() qui fonctionne mieux
+        const csrftoken = getCSRFToken();
         const opts = {
           method: id? 'PUT':'POST',
           headers: {
@@ -361,19 +367,17 @@
           body: formData
         };
         response = await fetch(url, opts);
-      } else {
-        // Sans image, utiliser JSON comme avant
-        const opts = {
-          method: id? 'PUT':'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        };
-        response = await fetch(url, opts);
-      }
 
-      if(!response.ok){
-        const errorData = await response.json();
-        throw { data: errorData };
+        if(!response.ok){
+          const errorData = await response.json();
+          throw { data: errorData };
+        }
+      } else {
+        // Sans image, utiliser fetchJSON qui gère automatiquement le CSRF
+        await fetchJSON(url, {
+          method: id? 'PUT':'POST',
+          body: JSON.stringify(payload)
+        });
       }
 
       showAlert(id? 'Produit mis à jour avec succès' : 'Produit créé avec succès', 'success');
@@ -570,9 +574,18 @@
       e.preventDefault();
       addPrixProduit();
     });
+    $(document).off('click', '#btn_cancel_prix_prod').on('click', '#btn_cancel_prix_prod', function(e){
+      e.preventDefault();
+      clearPrixProduitForm();
+      showAlert('Mode édition annulé', 'info');
+    });
     $(document).off('click', '[data-action="delete-prix-prod"]').on('click', '[data-action="delete-prix-prod"]', function(e){
       e.preventDefault();
       deletePrixProduit($(this).data('id'));
+    });
+    $(document).off('click', '[data-action="edit-prix-prod"]').on('click', '[data-action="edit-prix-prod"]', function(e){
+      e.preventDefault();
+      editPrixProduit($(this).data('id'));
     });
     $(document).off('change', '#prix_prod_filter').on('change', '#prix_prod_filter', function(){
       loadPrixProduits();
@@ -979,7 +992,8 @@
       tr.append('<td class="text-center">'+p.quantite_min+'</td>');
       const statusBadge = p.is_active ? '<span class="badge badge-success">Actif</span>' : '<span class="badge badge-warning">Inactif</span>';
       tr.append('<td>'+statusBadge+'</td>');
-      const actions = '<button type="button" class="btn btn-sm btn-delete" data-action="delete-prix-prod" data-id="'+p.id+'">Supprimer</button>';
+      const actions = '<button type="button" class="btn btn-sm btn-edit mr-1" data-action="edit-prix-prod" data-id="'+p.id+'"><i class="fas fa-edit"></i> Modifier</button>' +
+                     '<button type="button" class="btn btn-sm btn-delete" data-action="delete-prix-prod" data-id="'+p.id+'"><i class="fas fa-trash"></i> Supprimer</button>';
       tr.append('<td>'+actions+'</td>');
       $tbody.append(tr);
     });
@@ -1008,6 +1022,8 @@
     console.log('[Produit] Selects de prix remplis avec', list.length, 'produits');
   }
 
+  let __editingPrixProduitId = null; // Variable pour tracker l'ID en cours d'édition
+
   function addPrixProduit(){
     const produitVal = $('#prix_prod_produit').val();
     const produit = parseInt(produitVal || '0', 10);
@@ -1017,31 +1033,34 @@
     const type_prix = parseInt(typePrixVal || '0', 10);
     const prix = parseFloat($('#prix_prod_prix').val() || '0');
     const quantite_min = parseInt($('#prix_prod_qte_min').val() || '1', 10);
+    const date_debut = $('#prix_prod_date_debut').val() || null;
+    const date_fin = $('#prix_prod_date_fin').val() || null;
 
-    console.log('[PrixProduit] Valeurs:', { produitVal, produit, code_prix_val, code_prix, typePrixVal, type_prix, prix, quantite_min });
+    console.log('[PrixProduit] Valeurs:', { produitVal, produit, code_prix_val, code_prix, typePrixVal, type_prix, prix, quantite_min, date_debut, date_fin });
 
     if(!produit){ alert('Veuillez sélectionner un produit'); return; }
     if(!type_prix){ alert('Veuillez sélectionner un type de prix'); return; }
     if(!prix || prix <= 0){ alert('Prix invalide'); return; }
 
-    const data = { produit, code_prix, type_prix, prix, quantite_min };
+    const data = { produit, code_prix, type_prix, prix, quantite_min, date_debut, date_fin };
     console.log('[PrixProduit] Data envoyée:', data);
 
-    $.ajax({ url: apiBase + '/prix-produits/', method: 'POST', contentType: 'application/json',
+    // Déterminer si c'est un ajout ou une modification
+    const isEditing = __editingPrixProduitId !== null;
+    const method = isEditing ? 'PUT' : 'POST';
+    const url = isEditing ? apiBase + '/prix-produits/' + __editingPrixProduitId + '/' : apiBase + '/prix-produits/';
+
+    $.ajax({ url: url, method: method, contentType: 'application/json',
              headers: { 'X-CSRFToken': getCSRFToken() }, data: JSON.stringify(data) })
       .done(function(){
-        $('#prix_prod_produit').val('');
-        $('#prix_prod_code').val('');
-        $('#prix_prod_type').val('');
-        $('#prix_prod_prix').val('');
-        $('#prix_prod_qte_min').val('1');
+        clearPrixProduitForm();
         loadPrixProduits();
         loadAllPrixProduits(); // Recharge tous les prix pour mettre à jour l'affichage
-        showAlert('Prix produit ajouté avec succès', 'success');
+        showAlert(isEditing ? 'Prix produit modifié avec succès' : 'Prix produit ajouté avec succès', 'success');
       })
       .fail(function(xhr){
         console.error('[PrixProduit] Erreur:', xhr.status, xhr.responseJSON);
-        let msg = 'Erreur ajout prix';
+        let msg = isEditing ? 'Erreur modification prix' : 'Erreur ajout prix';
         if (xhr.responseJSON) {
           if (xhr.responseJSON.non_field_errors) {
             msg = xhr.responseJSON.non_field_errors.join(', ');
@@ -1058,6 +1077,91 @@
           }
         }
         showAlert(msg, 'danger');
+      });
+  }
+
+  function clearPrixProduitForm(){
+    __editingPrixProduitId = null;
+    $('#prix_prod_produit').val('');
+    $('#prix_prod_code').val('');
+    $('#prix_prod_type').val('');
+    $('#prix_prod_prix').val('');
+    $('#prix_prod_qte_min').val('1');
+    $('#prix_prod_date_debut').val('');
+    $('#prix_prod_date_fin').val('');
+
+    // Réinitialiser les custom selects
+    const triggerProduit = document.querySelector('#customSelectProduit .custom-select-trigger .selected-text');
+    if(triggerProduit) {
+      triggerProduit.textContent = 'Sélectionner un produit';
+      triggerProduit.classList.add('placeholder');
+    }
+    const triggerCode = document.querySelector('#customSelectCodePrix .custom-select-trigger .selected-text');
+    if(triggerCode) {
+      triggerCode.textContent = 'Standard';
+      triggerCode.classList.add('placeholder');
+    }
+    const triggerType = document.querySelector('#customSelectTypePrix .custom-select-trigger .selected-text');
+    if(triggerType) {
+      triggerType.textContent = 'Sélectionner un type';
+      triggerType.classList.add('placeholder');
+    }
+
+    // Changer le bouton en mode "Ajouter"
+    $('#btn_add_prix_prod').html('<i class="fa fa-plus"></i> Ajouter');
+    // Masquer le bouton Annuler
+    $('#btn_cancel_prix_prod').hide();
+  }
+
+  function editPrixProduit(id){
+    console.log('[PrixProduit] Edition du prix ID:', id);
+    // Récupérer les détails du prix produit
+    $.ajax({ url: apiBase + '/prix-produits/' + id + '/', method: 'GET', dataType: 'json' })
+      .done(function(p){
+        console.log('[PrixProduit] Données reçues:', p);
+
+        __editingPrixProduitId = id;
+
+        // Remplir les champs
+        $('#prix_prod_produit').val(p.produit);
+        $('#prix_prod_code').val(p.code_prix || '');
+        $('#prix_prod_type').val(p.type_prix);
+        $('#prix_prod_prix').val(p.prix);
+        $('#prix_prod_qte_min').val(p.quantite_min || 1);
+        $('#prix_prod_date_debut').val(p.date_debut || '');
+        $('#prix_prod_date_fin').val(p.date_fin || '');
+
+        // Mettre à jour les custom selects
+        if(p.produit){
+          const prodLabel = p.produit_reference + ' - ' + p.produit_designation;
+          selectCustomOption('customSelectProduit', p.produit, prodLabel, 'prix_prod_produit');
+        }
+        if(p.code_prix){
+          const codeLabel = p.code_prix_libelle + ' (' + p.code_prix_code + ')';
+          selectCustomOption('customSelectCodePrix', p.code_prix, codeLabel, 'prix_prod_code');
+        } else {
+          selectCustomOption('customSelectCodePrix', '', 'Standard', 'prix_prod_code');
+        }
+        if(p.type_prix){
+          const typeLabel = p.type_prix_libelle + ' (' + p.type_prix_code + ')';
+          selectCustomOption('customSelectTypePrix', p.type_prix, typeLabel, 'prix_prod_type');
+        }
+
+        // Changer le bouton en mode "Modifier"
+        $('#btn_add_prix_prod').html('<i class="fa fa-save"></i> Modifier');
+        // Afficher le bouton Annuler
+        $('#btn_cancel_prix_prod').show();
+
+        // Scroll vers le formulaire
+        $('html, body').animate({
+          scrollTop: $('#prix-produits').offset().top - 100
+        }, 500);
+
+        showAlert('Mode édition activé. Modifiez les champs et cliquez sur "Modifier"', 'info');
+      })
+      .fail(function(xhr){
+        console.error('[PrixProduit] Erreur chargement:', xhr);
+        showAlert('Erreur lors du chargement du prix produit', 'danger');
       });
   }
 

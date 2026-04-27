@@ -716,7 +716,7 @@ class TourneeViewSet(viewsets.ModelViewSet):
     """ViewSet pour la gestion des tournées"""
     queryset = TourneeMobile.objects.all()
     serializer_class = TourneeSerializer
-    permission_classes = [AllowAny]  # TODO: Ajouter authentification en production
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -1154,7 +1154,7 @@ class ArretTourneeViewSet(viewsets.ModelViewSet):
     """ViewSet pour la gestion des arrêts"""
     queryset = ArretTourneeMobile.objects.all()
     serializer_class = ArretTourneeSerializer
-    permission_classes = [AllowAny]  # TODO: Ajouter authentification en production
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -1220,7 +1220,7 @@ class VenteTourneeViewSet(viewsets.ModelViewSet):
     """ViewSet pour la gestion des ventes"""
     queryset = VenteTourneeMobile.objects.all()
     serializer_class = VenteTourneeSerializer
-    permission_classes = [AllowAny]  # TODO: Ajouter authentification en production
+    permission_classes = [IsAuthenticated]
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -1377,7 +1377,7 @@ class RapportCaisseViewSet(viewsets.ModelViewSet):
     """ViewSet pour la gestion des rapports de caisse"""
     queryset = RapportCaisseMobile.objects.all()
     serializer_class = RapportCaisseSerializer
-    permission_classes = [AllowAny]  # TODO: Ajouter authentification en production
+    permission_classes = [IsAuthenticated]
 
     def get_serializer_class(self):
         """Utiliser RapportCaisseCreateSerializer pour create/update depuis mobile"""
@@ -1439,7 +1439,7 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
     """ViewSet pour la gestion des commandes clients passées par les livreurs"""
     queryset = CommandeClient.objects.all()
     serializer_class = CommandeClientSerializer
-    permission_classes = [AllowAny]  # TODO: Ajouter authentification en production
+    permission_classes = [IsAuthenticated]
 
     def dispatch(self, request, *args, **kwargs):
         """Intercepter toutes les requêtes pour debug"""
@@ -1447,10 +1447,6 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
         result = super().dispatch(request, *args, **kwargs)
         print(f"[DISPATCH] Action was: {self.action if hasattr(self, 'action') else 'N/A'}, Result status: {result.status_code if hasattr(result, 'status_code') else 'N/A'}")
         return result
-
-    def get_permissions(self):
-        """Override pour forcer AllowAny (contourner DEFAULT_PERMISSION_CLASSES)"""
-        return [AllowAny()]
 
     def get_serializer_class(self):
         """Utiliser CommandeClientCreateSerializer pour create et update depuis mobile"""
@@ -1966,7 +1962,7 @@ class PlanningHebdomadaireViewSet(viewsets.ModelViewSet):
     """ViewSet pour la gestion des plannings hebdomadaires"""
     queryset = PlanningHebdomadaire.objects.all()
     serializer_class = PlanningHebdomadaireSerializer
-    permission_classes = [AllowAny]  # TODO: Ajouter authentification en production
+    permission_classes = [IsAuthenticated]
 
     def get_serializer_class(self):
         """Utiliser PlanningHebdomadaireCreateSerializer pour create"""
@@ -2983,7 +2979,22 @@ class ClientLivreurHebdoViewSet(viewsets.ModelViewSet):
 
 class SyncViewSet(viewsets.ViewSet):
     """ViewSet pour la synchronisation mobile"""
-    permission_classes = [AllowAny]  # TODO: Ajouter authentification en production
+    permission_classes = [IsAuthenticated]
+
+    def _get_livreur_for_request(self, request, livreur_id):
+        """Retourne le LivreurDistribution autorisé pour cette requête, ou lève PermissionDenied."""
+        livreur = get_object_or_404(LivreurDistribution, id=livreur_id)
+        if request.user.is_staff or request.user.is_superuser:
+            return livreur
+        try:
+            user_livreur = request.user.livreur_distribution_profile
+        except LivreurDistribution.DoesNotExist:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Votre compte n'est pas lié à un profil livreur.")
+        if user_livreur.id != livreur.id:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Vous ne pouvez synchroniser que vos propres données.")
+        return livreur
 
     @action(detail=False, methods=['post'])
     def pull(self, request):
@@ -2994,7 +3005,7 @@ class SyncViewSet(viewsets.ViewSet):
         livreur_id = serializer.validated_data['livreur_id']
         derniere_sync = serializer.validated_data.get('derniere_sync')
 
-        livreur = get_object_or_404(LivreurDistribution, id=livreur_id)
+        livreur = self._get_livreur_for_request(request, livreur_id)
 
         # Récupérer les tournées modifiées depuis la dernière sync
         tournees = TourneeMobile.objects.filter(livreur=livreur)
@@ -3040,7 +3051,7 @@ class SyncViewSet(viewsets.ViewSet):
         serializer.is_valid(raise_exception=True)
 
         livreur_id = serializer.validated_data['livreur_id']
-        livreur = get_object_or_404(LivreurDistribution, id=livreur_id)
+        livreur = self._get_livreur_for_request(request, livreur_id)
 
         nb_ventes = 0
         nb_arrets = 0
@@ -3175,7 +3186,7 @@ class StatsLivreursAPIView(APIView):
     API pour les statistiques détaillées des livreurs
     GET /API/distribution/stats-livreurs/?date_debut=YYYY-MM-DD&date_fin=YYYY-MM-DD&livreur_id=X
     """
-    permission_classes = [AllowAny]  # Accessible depuis le frontend avec session auth
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         # Récupérer les paramètres

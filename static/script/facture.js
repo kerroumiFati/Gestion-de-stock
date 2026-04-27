@@ -45,6 +45,7 @@
     if(f.statut === 'issued'){
       actions.push('<button class="btn btn-sm btn-warning act-pay" data-id="'+f.id+'" title="Marquer payée"><i class="fas fa-money-bill"></i></button>');
     }
+    actions.push('<button class="btn btn-sm btn-danger act-delete" data-id="'+f.id+'" data-num="'+(f.numero||f.id)+'" title="Supprimer"><i class="fas fa-trash"></i></button>');
     return actions.join(' ');
   }
 
@@ -172,6 +173,14 @@
       $.ajax({ url: API_BASE + '/factures/'+id+'/pay/', method: 'POST', headers:{ 'X-CSRFToken': getCSRFToken() } })
         .done(function(){ renderFacturesList(); })
         .fail(function(xhr){ alert('Erreur paiement: ' + (xhr.responseText || xhr.statusText)); });
+    });
+    $(document).off('click', '.act-delete').on('click', '.act-delete', function(){
+      const id = $(this).data('id');
+      const num = $(this).data('num');
+      if(!confirm('Supprimer la facture ' + num + ' ? Cette action est irréversible.')) return;
+      $.ajax({ url: API_BASE + '/factures/'+id+'/', method: 'DELETE', headers:{ 'X-CSRFToken': getCSRFToken() } })
+        .done(function(){ renderFacturesList(); })
+        .fail(function(xhr){ alert('Erreur suppression: ' + (xhr.responseText || xhr.statusText)); });
     });
   }
 

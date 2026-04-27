@@ -6,7 +6,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>{% trans "Market" %}</title>
+    <title>{% trans "NextGate" %}</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E📦%3C/text%3E%3C/svg%3E">
 
     <meta charset="utf-8">
@@ -278,7 +278,7 @@
     <nav id="sidebar" class="sidebar-wrapper">
         <div class="sidebar-content">
             <div class="sidebar-brand">
-                <a href="./" class="h2 pt-2">{% trans "Market" %}</a>
+                <a href="./" class="h2 pt-2">{% trans "NextGate" %}</a>
                 <div id="close-sidebar">
                     <i class="fas fa-times"></i>
                 </div>
@@ -553,6 +553,16 @@
     <!-- page-content" -->
 </div>
 <!-- page-wrapper -->
+
+<!-- Barre de progression (navigation pages) -->
+<div id="page-progress-bar" aria-hidden="true"></div>
+
+<!-- Overlay spinner global (opérations API) -->
+<div id="global-loading-overlay" aria-hidden="true" role="status">
+    <div class="overlay-spinner"></div>
+</div>
+
+<script src="{% static 'js/loading.js' %}"></script>
 <script src="{% static 'script/redirect.js' %}"></script>
 <script src="{% static 'js/main.js' %}"></script>
 <script src="{% static 'js/sidebar-enhancements.js' %}"></script>

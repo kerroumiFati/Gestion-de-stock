@@ -1788,6 +1788,600 @@
     setInterval(updateClock, 1000);
   }
 
+  // ==================== INVOICE PRINTING FUNCTIONS ====================
+  let COMPANY_INFO = null;
+  let CURRENT_SALE_FOR_PRINT = null;
+
+  // Charger les informations de l'entreprise
+  async function loadCompanyInfo(){
+    if(COMPANY_INFO) return COMPANY_INFO;
+
+    try {
+      const response = await fetch('/API/companies/');
+      const data = await response.json();
+      if(data && data.length > 0){
+        COMPANY_INFO = {
+          nom: data[0].name || 'Distribution Pro',
+          adresse: data[0].adresse || 'Alger, Algérie',
+          telephone: data[0].telephone || '+213 XX XX XX XX',
+          email: data[0].email || '',
+          rc: '', // Registre de commerce
+          nif: data[0].tax_id || '', // Numéro d'identification fiscale
+          nis: '' // Numéro d'identification statistique
+        };
+      } else {
+        COMPANY_INFO = {
+          nom: 'Distribution Pro',
+          adresse: 'Alger, Algérie',
+          telephone: '+213 XX XX XX XX',
+          email: '',
+          rc: '',
+          nif: '',
+          nis: ''
+        };
+      }
+      return COMPANY_INFO;
+    } catch(error){
+      console.error('Erreur lors du chargement des infos entreprise:', error);
+      COMPANY_INFO = {
+        nom: 'Distribution Pro',
+        adresse: 'Alger, Algérie',
+        telephone: '+213 XX XX XX XX',
+        email: '',
+        rc: '',
+        nif: '',
+        nis: ''
+      };
+      return COMPANY_INFO;
+    }
+  }
+
+  // Convertir les données de vente en format facture
+  function saleToInvoiceData(sale, company){
+    const now = new Date();
+    const date = now.toLocaleDateString('fr-FR');
+    const heure = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+
+    const lignes = (sale.lignes || []).map(l => ({
+      designation: l.designation || l.produit_designation || 'Produit',
+      quantite: parseInt(l.quantite || 0, 10),
+      prixUnitaire: parseFloat(l.prixU_snapshot || l.prix_unitaire || 0),
+      total: parseFloat(l.montant_total || (l.prixU_snapshot || l.prix_unitaire || 0) * (l.quantite || 0))
+    }));
+
+    const totalHT = parseFloat(sale.total_ht || sale.montant_ht || 0);
+    const totalTTC = parseFloat(sale.total_ttc || sale.montant_total || 0);
+    const tva = totalTTC - totalHT;
+    const tauxTVA = totalHT > 0 ? ((tva / totalHT) * 100).toFixed(0) : 19;
+
+    return {
+      numeroFacture: sale.numero || sale.numero_vente || 'N/A',
+      date: date,
+      heure: heure,
+      entreprise: company,
+      client: {
+        nom: sale.client_nom || '',
+        adresse: sale.client_adresse || '',
+        telephone: sale.client_telephone || ''
+      },
+      lignes: lignes,
+      totalHT: totalHT,
+      tva: tva,
+      tauxTVA: parseInt(tauxTVA, 10),
+      totalTTC: totalTTC,
+      modePaiement: sale.type_paiement_display || sale.type_paiement || 'Espèces',
+      montantRecu: sale.montant_paye ? parseFloat(sale.montant_paye) : undefined,
+      monnaie: sale.montant_rendu ? parseFloat(sale.montant_rendu) : undefined
+    };
+  }
+
+  // Générer HTML pour facture complète
+  function generateInvoiceHTML(data){
+    const lignesHTML = data.lignes.map((ligne, index) => `
+      <tr>
+        <td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">${index + 1}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">${ligne.designation}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; text-align: center;">${ligne.quantite}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; text-align: right;">${ligne.prixUnitaire.toFixed(2)} DA</td>
+        <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; text-align: right;">${ligne.total.toFixed(2)} DA</td>
+      </tr>
+    `).join('');
+
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Facture ${data.numeroFacture}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Helvetica', 'Arial', sans-serif;
+      font-size: 12px;
+      color: #111827;
+      padding: 20px;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 2px solid #2563eb;
+    }
+    .company-name {
+      font-size: 24px;
+      font-weight: bold;
+      color: #2563eb;
+      margin-bottom: 5px;
+    }
+    .company-info {
+      font-size: 11px;
+      color: #6b7280;
+      line-height: 1.5;
+    }
+    .invoice-title {
+      text-align: center;
+      font-size: 20px;
+      font-weight: bold;
+      color: #111827;
+      margin: 20px 0;
+      padding: 10px;
+      background-color: #f3f4f6;
+      border-radius: 8px;
+    }
+    .info-section {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    .info-box {
+      width: 48%;
+      padding: 12px;
+      background-color: #f9fafb;
+      border-radius: 8px;
+      border: 1px solid #e5e7eb;
+    }
+    .info-box h3 {
+      font-size: 12px;
+      color: #6b7280;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+    }
+    .info-box p {
+      font-size: 13px;
+      margin-bottom: 4px;
+    }
+    .info-box .name {
+      font-weight: bold;
+      font-size: 14px;
+      color: #111827;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+    }
+    th {
+      background-color: #2563eb;
+      color: white;
+      padding: 10px 8px;
+      text-align: left;
+      font-size: 11px;
+      text-transform: uppercase;
+    }
+    th:first-child { border-radius: 8px 0 0 0; }
+    th:last-child { border-radius: 0 8px 0 0; text-align: right; }
+    th:nth-child(3), th:nth-child(4) { text-align: center; }
+    td { font-size: 12px; }
+    .totals {
+      width: 300px;
+      margin-left: auto;
+      margin-bottom: 20px;
+    }
+    .totals-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .totals-row.total-ttc {
+      font-size: 16px;
+      font-weight: bold;
+      color: #2563eb;
+      border-bottom: none;
+      padding-top: 12px;
+      border-top: 2px solid #2563eb;
+    }
+    .payment-info {
+      background-color: #d1fae5;
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+    .payment-info h3 {
+      color: #10b981;
+      margin-bottom: 8px;
+    }
+    .signature-section {
+      margin-top: 30px;
+      padding-top: 20px;
+      border-top: 1px dashed #e5e7eb;
+    }
+    .signature-box {
+      display: inline-block;
+      width: 200px;
+      text-align: center;
+    }
+    .signature-line {
+      border-top: 1px solid #111827;
+      margin-top: 60px;
+      padding-top: 5px;
+    }
+    .footer {
+      text-align: center;
+      margin-top: 30px;
+      padding-top: 15px;
+      border-top: 1px solid #e5e7eb;
+      color: #6b7280;
+      font-size: 10px;
+    }
+    @media print {
+      body { padding: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="company-name">${data.entreprise.nom}</div>
+    <div class="company-info">
+      ${data.entreprise.adresse}<br>
+      Tel: ${data.entreprise.telephone}
+      ${data.entreprise.email ? ` | Email: ${data.entreprise.email}` : ''}
+      ${data.entreprise.rc ? `<br>RC: ${data.entreprise.rc}` : ''}
+      ${data.entreprise.nif ? ` | NIF: ${data.entreprise.nif}` : ''}
+      ${data.entreprise.nis ? ` | NIS: ${data.entreprise.nis}` : ''}
+    </div>
+  </div>
+
+  <div class="invoice-title">
+    FACTURE N° ${data.numeroFacture}
+  </div>
+
+  <div class="info-section">
+    <div class="info-box">
+      <h3>Facture</h3>
+      <p><strong>Date:</strong> ${data.date}</p>
+      <p><strong>Heure:</strong> ${data.heure}</p>
+    </div>
+    <div class="info-box">
+      <h3>Client</h3>
+      <p class="name">${data.client.nom}</p>
+      ${data.client.adresse ? `<p>${data.client.adresse}</p>` : ''}
+      ${data.client.telephone ? `<p>Tel: ${data.client.telephone}</p>` : ''}
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 40px;">#</th>
+        <th>Désignation</th>
+        <th style="width: 60px; text-align: center;">Qté</th>
+        <th style="width: 100px; text-align: right;">P.U.</th>
+        <th style="width: 100px; text-align: right;">Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${lignesHTML}
+    </tbody>
+  </table>
+
+  <div class="totals">
+    <div class="totals-row">
+      <span>Total HT</span>
+      <span>${data.totalHT.toFixed(2)} DA</span>
+    </div>
+    <div class="totals-row">
+      <span>TVA (${data.tauxTVA}%)</span>
+      <span>${data.tva.toFixed(2)} DA</span>
+    </div>
+    <div class="totals-row total-ttc">
+      <span>TOTAL TTC</span>
+      <span>${data.totalTTC.toFixed(2)} DA</span>
+    </div>
+  </div>
+
+  <div class="payment-info">
+    <h3>Règlement</h3>
+    <p><strong>Mode de paiement:</strong> ${data.modePaiement}</p>
+    ${data.montantRecu ? `<p><strong>Montant reçu:</strong> ${data.montantRecu.toFixed(2)} DA</p>` : ''}
+    ${data.monnaie ? `<p><strong>Monnaie rendue:</strong> ${data.monnaie.toFixed(2)} DA</p>` : ''}
+  </div>
+
+  <div class="signature-section">
+    <div class="signature-box" style="float: left;">
+      <p><strong>Signature Client</strong></p>
+      <div class="signature-line"></div>
+    </div>
+    <div class="signature-box" style="float: right;">
+      <p><strong>Signature Livreur</strong></p>
+      <div class="signature-line"></div>
+    </div>
+    <div style="clear: both;"></div>
+  </div>
+
+  <div class="footer">
+    <p>Merci pour votre confiance!</p>
+    <p>Document généré le ${data.date} à ${data.heure}</p>
+  </div>
+</body>
+</html>
+    `;
+  }
+
+  // Générer HTML pour bon de livraison
+  function generateDeliveryNoteHTML(data){
+    const lignesHTML = data.lignes.map((ligne, index) => `
+      <tr>
+        <td style="padding: 6px; border-bottom: 1px solid #e5e7eb;">${index + 1}</td>
+        <td style="padding: 6px; border-bottom: 1px solid #e5e7eb;">${ligne.designation}</td>
+        <td style="padding: 6px; border-bottom: 1px solid #e5e7eb; text-align: center;">${ligne.quantite}</td>
+      </tr>
+    `).join('');
+
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Bon de Livraison ${data.numeroFacture}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Helvetica', 'Arial', sans-serif;
+      font-size: 12px;
+      color: #111827;
+      padding: 15px;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #10b981;
+    }
+    .company-name {
+      font-size: 20px;
+      font-weight: bold;
+      color: #10b981;
+    }
+    .title {
+      text-align: center;
+      font-size: 18px;
+      font-weight: bold;
+      margin: 15px 0;
+      padding: 8px;
+      background-color: #d1fae5;
+      border-radius: 6px;
+      color: #10b981;
+    }
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 15px;
+      font-size: 12px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 15px;
+    }
+    th {
+      background-color: #10b981;
+      color: white;
+      padding: 8px;
+      text-align: left;
+      font-size: 11px;
+    }
+    .signature-section {
+      margin-top: 20px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .signature-box {
+      width: 45%;
+      text-align: center;
+    }
+    .signature-line {
+      border-top: 1px solid #111827;
+      margin-top: 50px;
+      padding-top: 5px;
+    }
+    @media print {
+      body { padding: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="company-name">${data.entreprise.nom}</div>
+    <div>${data.entreprise.telephone}</div>
+  </div>
+
+  <div class="title">BON DE LIVRAISON N° ${data.numeroFacture}</div>
+
+  <div class="info-row">
+    <div><strong>Date:</strong> ${data.date} ${data.heure}</div>
+    <div><strong>Client:</strong> ${data.client.nom}</div>
+  </div>
+  ${data.client.adresse ? `<div style="margin-bottom: 15px;"><strong>Adresse:</strong> ${data.client.adresse}</div>` : ''}
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 40px;">#</th>
+        <th>Désignation</th>
+        <th style="width: 80px; text-align: center;">Quantité</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${lignesHTML}
+    </tbody>
+  </table>
+
+  <div class="signature-section">
+    <div class="signature-box">
+      <p><strong>Réceptionnaire</strong></p>
+      <div class="signature-line"></div>
+    </div>
+    <div class="signature-box">
+      <p><strong>Livreur</strong></p>
+      <div class="signature-line"></div>
+    </div>
+  </div>
+</body>
+</html>
+    `;
+  }
+
+  // Générer HTML pour ticket de caisse
+  function generateReceiptHTML(data){
+    const lignesHTML = data.lignes.map(ligne => `
+      <tr>
+        <td style="padding: 2px 0;">${ligne.designation}</td>
+        <td style="text-align: right;">${ligne.quantite}x${ligne.prixUnitaire.toFixed(0)}</td>
+        <td style="text-align: right;">${ligne.total.toFixed(0)}</td>
+      </tr>
+    `).join('');
+
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Ticket ${data.numeroFacture}</title>
+  <style>
+    * { margin: 0; padding: 0; }
+    body {
+      font-family: 'Courier New', monospace;
+      font-size: 10px;
+      width: 280px;
+      padding: 5px;
+    }
+    .center { text-align: center; }
+    .bold { font-weight: bold; }
+    .line { border-top: 1px dashed #000; margin: 5px 0; }
+    table { width: 100%; }
+    .total-line { font-size: 12px; font-weight: bold; }
+    @media print {
+      body { width: auto; }
+    }
+  </style>
+</head>
+<body>
+  <div class="center bold" style="font-size: 14px;">${data.entreprise.nom}</div>
+  <div class="center">${data.entreprise.adresse}</div>
+  <div class="center">Tel: ${data.entreprise.telephone}</div>
+
+  <div class="line"></div>
+
+  <div class="center bold">TICKET DE CAISSE</div>
+  <div class="center">N° ${data.numeroFacture}</div>
+  <div class="center">${data.date} ${data.heure}</div>
+
+  <div class="line"></div>
+
+  <div>Client: ${data.client.nom}</div>
+
+  <div class="line"></div>
+
+  <table>
+    <tbody>
+      ${lignesHTML}
+    </tbody>
+  </table>
+
+  <div class="line"></div>
+
+  <table>
+    <tr>
+      <td>Total HT</td>
+      <td style="text-align: right;">${data.totalHT.toFixed(0)} DA</td>
+    </tr>
+    <tr>
+      <td>TVA ${data.tauxTVA}%</td>
+      <td style="text-align: right;">${data.tva.toFixed(0)} DA</td>
+    </tr>
+    <tr class="total-line">
+      <td>TOTAL TTC</td>
+      <td style="text-align: right;">${data.totalTTC.toFixed(0)} DA</td>
+    </tr>
+  </table>
+
+  <div class="line"></div>
+
+  <div>Mode: ${data.modePaiement}</div>
+  ${data.montantRecu ? `<div>Reçu: ${data.montantRecu.toFixed(0)} DA</div>` : ''}
+  ${data.monnaie ? `<div>Monnaie: ${data.monnaie.toFixed(0)} DA</div>` : ''}
+
+  <div class="line"></div>
+
+  <div class="center">Merci de votre visite!</div>
+  <div class="center" style="margin-top: 10px;">* * *</div>
+</body>
+</html>
+    `;
+  }
+
+  // Ouvrir le dialogue d'impression avec le format choisi
+  async function printSaleWithFormat(format){
+    if(!CURRENT_SALE_FOR_PRINT){
+      showMessage('Aucune vente sélectionnée', 'error');
+      return;
+    }
+
+    try {
+      // Charger les infos de l'entreprise
+      const company = await loadCompanyInfo();
+
+      // Convertir les données de vente
+      const invoiceData = saleToInvoiceData(CURRENT_SALE_FOR_PRINT, company);
+
+      // Générer le HTML selon le format
+      let html = '';
+      switch(format){
+        case 'delivery':
+          html = generateDeliveryNoteHTML(invoiceData);
+          break;
+        case 'receipt':
+          html = generateReceiptHTML(invoiceData);
+          break;
+        default:
+          html = generateInvoiceHTML(invoiceData);
+      }
+
+      // Ouvrir une nouvelle fenêtre et imprimer
+      const printWindow = window.open('', '_blank', 'width=800,height=600');
+      if(printWindow){
+        printWindow.document.write(html);
+        printWindow.document.close();
+
+        // Attendre que le contenu soit chargé puis imprimer
+        printWindow.onload = function(){
+          setTimeout(() => {
+            printWindow.print();
+          }, 250);
+        };
+      }
+
+      // Fermer la modal de sélection de format
+      $('#printFormatModal').modal('hide');
+    } catch(error){
+      console.error('Erreur lors de l\'impression:', error);
+      showMessage('Erreur lors de la génération du document', 'error');
+    }
+  }
+  // ==================== FIN INVOICE PRINTING FUNCTIONS ====================
+
   function init(){
     // Detect presence of vente UI
     if(!document.getElementById('vente_client') && !document.getElementById('vente_prod')){
@@ -1847,9 +2441,30 @@
       showSaleDetailsModal(id);
     });
 
-    // handle print button
+    // handle print button - open format selection modal
     $(document).off('click', '#printSaleDetails').on('click', '#printSaleDetails', function(){
-      window.print();
+      // Store the current sale data for printing
+      CURRENT_SALE_FOR_PRINT = $('#saleDetailsContent').data('sale');
+
+      if(!CURRENT_SALE_FOR_PRINT){
+        showMessage('Aucune vente sélectionnée', 'error');
+        return;
+      }
+
+      // Open the format selection modal
+      $('#printFormatModal').modal('show');
+    });
+
+    // handle format selection clicks
+    $(document).off('click', '.print-format-card').on('click', '.print-format-card', function(){
+      const format = $(this).data('format');
+
+      // Highlight selected card
+      $('.print-format-card').css('border-color', '#dee2e6');
+      $(this).css('border-color', '#2563eb');
+
+      // Print with selected format
+      printSaleWithFormat(format);
     });
 
     // reload list when switching to the list tab

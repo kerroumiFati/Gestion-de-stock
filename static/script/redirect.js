@@ -1,5 +1,19 @@
 // Dynamic content loader for master_page.html
 (function(){
+  // Barre de progression fine en haut de page
+  function progressStart() {
+    const bar = document.getElementById('page-progress-bar');
+    if (!bar) return;
+    bar.classList.remove('done');
+    bar.classList.add('running');
+  }
+  function progressDone() {
+    const bar = document.getElementById('page-progress-bar');
+    if (!bar) return;
+    bar.classList.remove('running');
+    bar.classList.add('done');
+    setTimeout(function() { bar.classList.remove('done'); }, 600);
+  }
   function setActive(name){
     // remove active from all submenu links
     document.querySelectorAll('#sidebar .sidebar-submenu a').forEach(function(a){
@@ -41,7 +55,9 @@
     setActive(name);
     const container = document.getElementById('main-content');
     if(!container){ return; }
-    container.innerHTML = '<div class="text-center p-5 text-muted">Chargement...</div>';
+    // Vider le contenu précédent et démarrer la barre de progression
+    container.innerHTML = '';
+    progressStart();
     const targetPath = prettyPathFor(name);
     if(!opts || opts.push !== false){
       if(targetPath){ history.pushState({page:name}, '', targetPath); }
@@ -54,12 +70,14 @@
       if(queryString) fetchUrl += '?' + queryString;
     }
     console.log('[REDIRECT] Fetching URL:', fetchUrl);
-    fetch(fetchUrl)
+    // _silent=true : la barre de progression est gérée ici, pas l'overlay global
+    fetch(fetchUrl, { _silent: true })
       .then(function(res){
         if(!res.ok) throw new Error('HTTP '+res.status);
         return res.text();
       })
       .then(function(html){
+        progressDone();
         container.innerHTML = html;
 
         // Execute script tags in the injected HTML
@@ -116,6 +134,7 @@
         } catch (e) { /* no-op */ }
       })
       .catch(function(err){
+        progressDone();
         container.innerHTML = '<div class="alert alert-danger m-3">Erreur de chargement: '+ err.message +'</div>';
       });
   };

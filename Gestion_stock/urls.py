@@ -21,7 +21,7 @@ from django.views.generic import TemplateView, RedirectView
 from frontoffice.create_admin import create_first_admin
 from frontoffice.check_admin import check_existing_admins
 from frontoffice.views_company import create_company_view, list_companies_view, delete_company_view
-from API.map_view import livreurs_map_view
+from API.map_view import livreurs_map_view, livreurs_map_data_view
 from django.conf import settings
 from django.conf.urls.static import static
 
@@ -45,6 +45,7 @@ urlpatterns = [
     path('admindash/tournees/', login_required(TemplateView.as_view(template_name='frontoffice/master_page.html')), name='tournees_page'),
     path('admindash/distribution/', login_required(TemplateView.as_view(template_name='frontoffice/master_page.html')), name='distribution_dashboard_page'),
     path('admindash/livreurs-map/', login_required(livreurs_map_view), name='livreurs_map'),
+    path('admindash/livreurs-map/data/', login_required(livreurs_map_data_view), name='livreurs_map_data'),
     path('livreur/app/', TemplateView.as_view(template_name='frontoffice/page/livreur_mobile.html'), name='livreur_app'),
 
     # Legacy SPA routes

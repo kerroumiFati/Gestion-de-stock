@@ -720,9 +720,12 @@ input[type="number"].form-control-product::-webkit-outer-spin-button {
                             <label class="form-label-product">{% trans "Qté Min" %}</label>
                             <input type="number" id="prix_prod_qte_min" class="form-control form-control-product" min="1" value="1">
                         </div>
-                        <div class="col-md-2 d-flex align-items-end">
-                            <button type="button" id="btn_add_prix_prod" class="btn btn-product-primary w-100">
+                        <div class="col-md-2 d-flex align-items-end gap-2">
+                            <button type="button" id="btn_add_prix_prod" class="btn btn-product-primary flex-fill">
                                 <i class="fa fa-plus"></i> {% trans "Ajouter" %}
+                            </button>
+                            <button type="button" id="btn_cancel_prix_prod" class="btn btn-product-secondary" style="display: none;" title="Annuler">
+                                <i class="fa fa-times"></i>
                             </button>
                         </div>
                     </div>

@@ -411,6 +411,12 @@ class Produit(models.Model):
             ['company', 'reference'],
             ['company', 'code_barre']
         ]
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(quantite__gte=0),
+                name='produit_quantite_non_negative',
+            ),
+        ]
     
     def __str__(self):
         currency_symbol = self.currency.symbol if self.currency else Currency.get_default().symbol if Currency.get_default() else 'DA'
@@ -923,6 +929,12 @@ class ProductStock(models.Model):
 
     class Meta:
         unique_together = ('produit', 'warehouse')
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(quantity__gte=0),
+                name='productstock_quantity_non_negative',
+            ),
+        ]
 
     def __str__(self):
         return f"{self.produit.reference} @ {self.warehouse.code}: {self.quantity}"

@@ -663,6 +663,9 @@ function getTourneeActions(tournee) {
             <button class="btn-danger" onclick="annulerTournee(${tournee.id})" title="Annuler">
                 <i class="fas fa-times"></i>
             </button>
+            <button class="btn-danger" onclick="supprimerTournee(${tournee.id})" title="Supprimer définitivement cette tournée" style="margin-left: 10px;">
+                <i class="fas fa-trash"></i>
+            </button>
         `;
     } else if (tournee.statut === 'en_cours') {
         actions += `
@@ -685,12 +688,27 @@ function getTourneeActions(tournee) {
             <button class="btn-danger" onclick="annulerTournee(${tournee.id})" title="Annuler">
                 <i class="fas fa-times"></i>
             </button>
+            <button class="btn-danger" onclick="supprimerTournee(${tournee.id})" title="Supprimer définitivement cette tournée" style="margin-left: 10px;">
+                <i class="fas fa-trash"></i>
+            </button>
         `;
     } else if (tournee.statut === 'terminee') {
         actions += `
-            <span style="color: #10b981; font-weight: 500;">
+            <span style="color: #10b981; font-weight: 500; margin-right: 10px;">
                 <i class="fas fa-check-circle"></i> Terminée
             </span>
+            <button class="btn-danger" onclick="supprimerTournee(${tournee.id})" title="Supprimer définitivement cette tournée">
+                <i class="fas fa-trash"></i> Supprimer
+            </button>
+        `;
+    } else if (tournee.statut === 'annulee') {
+        actions += `
+            <span style="color: #ef4444; font-weight: 500; margin-right: 10px;">
+                <i class="fas fa-times-circle"></i> Annulée
+            </span>
+            <button class="btn-danger" onclick="supprimerTournee(${tournee.id})" title="Supprimer définitivement cette tournée">
+                <i class="fas fa-trash"></i> Supprimer
+            </button>
         `;
     }
 
@@ -1119,6 +1137,56 @@ function annulerTournee(id) {
     .catch(error => {
         console.error('Erreur:', error);
         showMessage('Erreur lors de l\'annulation', 'error');
+    });
+}
+
+// Supprimer définitivement une tournée
+function supprimerTournee(id) {
+    // Récupérer les informations de la tournée pour vérifier son statut
+    const tournee = window.tournees ? window.tournees.find(t => t.id === id) : null;
+
+    let confirmMessage = '⚠️ ATTENTION : Êtes-vous sûr de vouloir supprimer définitivement cette tournée ?\n\n';
+
+    if (tournee && (tournee.statut === 'en_cours' || tournee.statut === 'planifiee')) {
+        confirmMessage += '🚨 ALERTE : Cette tournée est actuellement ' + (tournee.statut === 'en_cours' ? 'EN COURS' : 'PLANIFIÉE') + ' !\n\n';
+    }
+
+    confirmMessage += 'Cette action est IRRÉVERSIBLE et supprimera :\n';
+    confirmMessage += '- La tournée complète\n';
+    confirmMessage += '- Tous les arrêts associés\n';
+    confirmMessage += '- L\'historique des livraisons\n';
+    confirmMessage += '- Les données de géolocalisation\n\n';
+    confirmMessage += 'Voulez-vous vraiment continuer ?';
+
+    if (!confirm(confirmMessage)) {
+        return;
+    }
+
+    fetch(`/API/tournees/${id}/`, {
+        method: 'DELETE',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken')
+        }
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.text().then(text => {
+                throw new Error(`HTTP ${response.status}: ${text}`);
+            });
+        }
+        // DELETE retourne généralement 204 No Content, pas de JSON
+        if (response.status === 204) {
+            return null;
+        }
+        return response.json();
+    })
+    .then(() => {
+        loadTournees();
+        showMessage('Tournée supprimée avec succès', 'success');
+    })
+    .catch(error => {
+        console.error('Erreur lors de la suppression:', error);
+        showMessage('Erreur lors de la suppression de la tournée : ' + error.message, 'error');
     });
 }
 

@@ -2,6 +2,7 @@ import logging
 from decimal import InvalidOperation
 from django.contrib.auth import authenticate
 from django.shortcuts import render
+from django.db import transaction
 from django.db.models import Sum, Q, F, Max
 from rest_framework import viewsets, generics, status
 from rest_framework import permissions
@@ -157,12 +158,6 @@ class ClientViewSet(TenantFilterMixin, viewsets.ModelViewSet):
     queryset = Client.objects.all().order_by('nom')
     serializer_class = ClientSerializer
     permission_classes = [IsAuthenticated]
-
-    def get_permissions(self):
-        """Override pour permettre l'accès sans auth à certaines actions"""
-        if self.action == 'historique_paiements':
-            return [AllowAny()]
-        return super().get_permissions()
 
     def perform_create(self, serializer):
         """
@@ -989,21 +984,27 @@ class BonLivraisonViewSet(TenantFilterMixin, viewsets.ModelViewSet):
         bon = self.get_object()
         if bon.statut != 'draft':
             return Response({'detail': 'Seuls les bons en brouillon peuvent être validés.'}, status=400)
-        # Vérifier les stocks
-        insuffisants = []
-        for l in bon.lignes.select_related('produit'):
-            if l.produit.quantite < l.quantite:
-                insuffisants.append({'produit': l.produit.id, 'stock': l.produit.quantite, 'demande': l.quantite})
-        if insuffisants:
-            return Response({'detail': 'Stock insuffisant', 'lignes': insuffisants}, status=400)
-        # Décrémenter
-        for l in bon.lignes.select_related('produit'):
-            p = l.produit
-            p.quantite = p.quantite - l.quantite
-            p.save(update_fields=['quantite'])
-            StockMove.objects.create(produit=p, delta=-(l.quantite), source='BL', ref_id=str(bon.id), note=f'BL {bon.numero}')
-        bon.statut = 'validated'
-        bon.save(update_fields=['statut'])
+        with transaction.atomic():
+            bon = BonLivraison.objects.select_for_update().get(pk=bon.pk)
+            if bon.statut != 'draft':
+                return Response({'detail': 'Seuls les bons en brouillon peuvent être validés.'}, status=400)
+            lignes = list(bon.lignes.select_related('produit'))
+            produit_ids = [l.produit_id for l in lignes]
+            produits = {p.id: p for p in Produit.objects.select_for_update().filter(id__in=produit_ids).order_by('id')}
+            insuffisants = []
+            for l in lignes:
+                p = produits[l.produit_id]
+                if p.quantite < l.quantite:
+                    insuffisants.append({'produit': p.id, 'stock': p.quantite, 'demande': l.quantite})
+            if insuffisants:
+                return Response({'detail': 'Stock insuffisant', 'lignes': insuffisants}, status=400)
+            for l in lignes:
+                p = produits[l.produit_id]
+                p.quantite = p.quantite - l.quantite
+                p.save(update_fields=['quantite'])
+                StockMove.objects.create(produit=p, delta=-(l.quantite), source='BL', ref_id=str(bon.id), note=f'BL {bon.numero}')
+            bon.statut = 'validated'
+            bon.save(update_fields=['statut'])
         try:
             log_event(self.request, 'bonlivraison.validate', target=bon, metadata={'id': bon.id, 'numero': getattr(bon, 'numero', None)})
         except Exception:
@@ -1035,6 +1036,10 @@ class FactureViewSet(TenantFilterMixin, viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         if instance.statut in ('issued', 'paid'):
             raise serializers.ValidationError('Suppression interdite: la facture est émise ou payée.')
+        try:
+            log_event(self.request, 'facture.delete', metadata={'id': instance.id, 'numero': getattr(instance, 'numero', None), 'statut': instance.statut})
+        except Exception:
+            pass
         return super().perform_destroy(instance)
 
     @action(detail=False, methods=['post'])
@@ -1285,29 +1290,27 @@ class StockMoveViewSet(WarehouseRelatedTenantMixin, viewsets.ModelViewSet):
             w_to = Warehouse.objects.get(pk=int(to_wh))
         except (Produit.DoesNotExist, Warehouse.DoesNotExist):
             return Response({'detail': 'Produit ou Entrepôt introuvable'}, status=404)
-        # Check stock availability on source warehouse
-        src_stock, _ = ProductStock.objects.get_or_create(produit=p, warehouse=w_from, defaults={'quantity': 0})
-        if src_stock.quantity < qty:
-            return Response({'detail': 'Stock insuffisant dans l\'entrepôt source', 'stock': src_stock.quantity, 'demande': qty}, status=400)
-        # Perform transfer: decrement source, increment destination
-        src_stock.quantity -= qty
-        src_stock.save(update_fields=['quantity'])
-        dst_stock, _ = ProductStock.objects.get_or_create(produit=p, warehouse=w_to, defaults={'quantity': 0})
-        dst_stock.quantity += qty
-        dst_stock.save(update_fields=['quantity'])
-        # Create two moves with warehouses
+        with transaction.atomic():
+            p = Produit.objects.select_for_update().get(pk=p.pk)
+            src_stock, _ = ProductStock.objects.select_for_update().get_or_create(produit=p, warehouse=w_from, defaults={'quantity': 0})
+            if src_stock.quantity < qty:
+                return Response({'detail': 'Stock insuffisant dans l\'entrepôt source', 'stock': src_stock.quantity, 'demande': qty}, status=400)
+            src_stock.quantity -= qty
+            src_stock.save(update_fields=['quantity'])
+            dst_stock, _ = ProductStock.objects.select_for_update().get_or_create(produit=p, warehouse=w_to, defaults={'quantity': 0})
+            dst_stock.quantity += qty
+            dst_stock.save(update_fields=['quantity'])
+            out_note = f"Transfert sortie {w_from.code} -> {w_to.code}"
+            in_note = f"Transfert entrée {w_from.code} -> {w_to.code}"
+            out_move = StockMove.objects.create(produit=p, warehouse=w_from, delta=-qty, source='TRANS', ref_id='', note=out_note + (f" | {note}" if note else ''))
+            in_move = StockMove.objects.create(produit=p, warehouse=w_to, delta=qty, source='TRANS', ref_id='', note=in_note + (f" | {note}" if note else ''))
+            total = p.stocks.aggregate(total=Sum('quantity')).get('total') or 0
+            p.quantite = total
+            p.save(update_fields=['quantite'])
         try:
             log_event(self.request, 'stockmove.transfer', target=None, metadata={'produit': p.id, 'qty': qty, 'from': w_from.id, 'to': w_to.id, 'note': note})
         except Exception:
             pass
-        out_note = f"Transfert sortie {w_from.code} -> {w_to.code}"
-        in_note = f"Transfert entrée {w_from.code} -> {w_to.code}"
-        out_move = StockMove.objects.create(produit=p, warehouse=w_from, delta=-qty, source='TRANS', ref_id='', note=out_note + (f" | {note}" if note else ''))
-        in_move = StockMove.objects.create(produit=p, warehouse=w_to, delta=qty, source='TRANS', ref_id='', note=in_note + (f" | {note}" if note else ''))
-        # Aggregate total on product
-        total = p.stocks.aggregate(total=Sum('quantity')).get('total') or 0
-        p.quantite = total
-        p.save(update_fields=['quantite'])
         return Response({'detail': 'Transfert enregistré', 'out': StockMoveSerializer(out_move).data, 'in': StockMoveSerializer(in_move).data}, status=201)
 
     @action(detail=False, methods=['post'])
@@ -1334,15 +1337,17 @@ class StockMoveViewSet(WarehouseRelatedTenantMixin, viewsets.ModelViewSet):
             w = Warehouse.objects.get(pk=int(warehouse_id))
         except (Produit.DoesNotExist, Warehouse.DoesNotExist):
             return Response({'detail': 'Produit ou Entrepôt introuvable'}, status=404)
-        ps, _ = ProductStock.objects.get_or_create(produit=p, warehouse=w, defaults={'quantity': 0})
-        if ps.quantity < qty:
-            return Response({'detail': 'Stock insuffisant dans cet entrepôt', 'stock': ps.quantity, 'demande': qty}, status=400)
-        ps.quantity -= qty
-        ps.save(update_fields=['quantity'])
-        move = StockMove.objects.create(produit=p, warehouse=w, delta=-qty, source=move_type, ref_id='', note=note)
-        total = p.stocks.aggregate(total=Sum('quantity')).get('total') or 0
-        p.quantite = total
-        p.save(update_fields=['quantite'])
+        with transaction.atomic():
+            p = Produit.objects.select_for_update().get(pk=p.pk)
+            ps, _ = ProductStock.objects.select_for_update().get_or_create(produit=p, warehouse=w, defaults={'quantity': 0})
+            if ps.quantity < qty:
+                return Response({'detail': 'Stock insuffisant dans cet entrepôt', 'stock': ps.quantity, 'demande': qty}, status=400)
+            ps.quantity -= qty
+            ps.save(update_fields=['quantity'])
+            move = StockMove.objects.create(produit=p, warehouse=w, delta=-qty, source=move_type, ref_id='', note=note)
+            total = p.stocks.aggregate(total=Sum('quantity')).get('total') or 0
+            p.quantite = total
+            p.save(update_fields=['quantite'])
         return Response({'detail': 'Sortie enregistrée', 'move': StockMoveSerializer(move).data}, status=201)
 
     @action(detail=False, methods=['post'])
@@ -1361,7 +1366,6 @@ class StockMoveViewSet(WarehouseRelatedTenantMixin, viewsets.ModelViewSet):
         if qty <= 0:
             return Response({'detail': 'La quantité doit être > 0'}, status=400)
         note = request.data.get('note') or ''
-        note = request.data.get('note') or ''
         warehouse_id = request.data.get('warehouse') or request.data.get('warehouse_id')
         if not warehouse_id:
             return Response({'detail': 'warehouse requis'}, status=400)
@@ -1370,15 +1374,17 @@ class StockMoveViewSet(WarehouseRelatedTenantMixin, viewsets.ModelViewSet):
             w = Warehouse.objects.get(pk=int(warehouse_id))
         except (Produit.DoesNotExist, Warehouse.DoesNotExist):
             return Response({'detail': 'Produit ou Entrepôt introuvable'}, status=404)
-        ps, _ = ProductStock.objects.get_or_create(produit=p, warehouse=w, defaults={'quantity': 0})
-        if ps.quantity < qty:
-            return Response({'detail': 'Stock insuffisant dans cet entrepôt', 'stock': ps.quantity, 'demande': qty}, status=400)
-        ps.quantity -= qty
-        ps.save(update_fields=['quantity'])
-        move = StockMove.objects.create(produit=p, warehouse=w, delta=-qty, source=move_type, ref_id='', note=note)
-        total = p.stocks.aggregate(total=Sum('quantity')).get('total') or 0
-        p.quantite = total
-        p.save(update_fields=['quantite'])
+        with transaction.atomic():
+            p = Produit.objects.select_for_update().get(pk=p.pk)
+            ps, _ = ProductStock.objects.select_for_update().get_or_create(produit=p, warehouse=w, defaults={'quantity': 0})
+            if ps.quantity < qty:
+                return Response({'detail': 'Stock insuffisant dans cet entrepôt', 'stock': ps.quantity, 'demande': qty}, status=400)
+            ps.quantity -= qty
+            ps.save(update_fields=['quantity'])
+            move = StockMove.objects.create(produit=p, warehouse=w, delta=-qty, source=move_type, ref_id='', note=note)
+            total = p.stocks.aggregate(total=Sum('quantity')).get('total') or 0
+            p.quantite = total
+            p.save(update_fields=['quantite'])
         return Response({'detail': 'Sortie enregistrée', 'move': StockMoveSerializer(move).data}, status=201)
 
     @action(detail=False, methods=['post'])
@@ -1953,7 +1959,7 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated, IsAdminUser]
 
 class CountViewSet(APIView):
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [IsAuthenticated]
     def get(self, request, format=None):
         try:
             from django.db.models import Sum, Count, Q
@@ -2016,7 +2022,7 @@ class CountViewSet(APIView):
             return Response({'error': str(e)}, status=500)
 
 class StatisticsChartsViewSet(APIView):
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [IsAuthenticated]
     def get(self, request, format=None):
         try:
             from django.db.models import Sum, Count, Q
@@ -2199,7 +2205,7 @@ class StatisticsChartsViewSet(APIView):
 
 class AlertsView(APIView):
     """Aggregate alerts for stock levels: rupture, critical, low."""
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [IsAuthenticated]
     def get(self, request, format=None):
         limit = int(request.GET.get('limit', 5))
         low_qs = Produit.objects.filter(quantite__lte=F('seuil_alerte'), quantite__gt=F('seuil_critique')).order_by('quantite')
@@ -2298,65 +2304,73 @@ class VenteViewSet(TenantFilterMixin, viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def complete(self, request, pk=None):
         """Marquer une vente comme terminée"""
+        from .models import ProductStock, StockMove
+        from .serializers import BonLivraisonSerializer
+
         vente = self.get_object()
-        if vente.statut == 'draft':
-            # Vérifier les stocks
+        if vente.statut != 'draft':
+            return Response({'error': 'Vente déjà terminée ou annulée'}, status=400)
+
+        with transaction.atomic():
+            vente = Vente.objects.select_for_update().get(pk=vente.pk)
+            if vente.statut != 'draft':
+                return Response({'error': 'Vente déjà terminée ou annulée'}, status=400)
+
+            lignes = list(vente.lignes.select_related('produit'))
+            produit_ids = [l.produit_id for l in lignes]
+            produits = {p.id: p for p in Produit.objects.select_for_update().filter(id__in=produit_ids).order_by('id')}
+
             insuffisants = []
-            for ligne in vente.lignes.select_related('produit'):
-                if ligne.produit.quantite < ligne.quantite:
+            for ligne in lignes:
+                produit = produits[ligne.produit_id]
+                if produit.quantite < ligne.quantite:
                     insuffisants.append({
-                        'produit': ligne.produit.id, 
-                        'reference': ligne.produit.reference,
-                        'stock': ligne.produit.quantite, 
+                        'produit': produit.id,
+                        'reference': produit.reference,
+                        'stock': produit.quantite,
                         'demande': ligne.quantite
                     })
-            
+
             if insuffisants:
                 return Response({'detail': 'Stock insuffisant', 'lignes': insuffisants}, status=400)
-            
+
             vente.statut = 'completed'
             vente.save()
 
-            # Décrémenter les stocks maintenant que la vente est finalisée (passe de draft à completed)
-            from .models import ProductStock, StockMove
-            for ligne in vente.lignes.select_related('produit'):
-                produit = ligne.produit
+            for ligne in lignes:
+                produit = produits[ligne.produit_id]
                 qty = int(ligne.quantite or 0)
                 if qty > 0:
-                    # décrément agrégé (back-compat)
-                    produit.quantite = produit.quantite - qty
+                    produit.quantite -= qty
                     produit.save(update_fields=['quantite'])
-                    # décrément par entrepôt
-                    ps, _ = ProductStock.objects.get_or_create(
+                    ps, _ = ProductStock.objects.select_for_update().get_or_create(
                         produit=produit,
                         warehouse=vente.warehouse,
                         defaults={'quantity': 0}
                     )
                     ps.quantity = max(0, (ps.quantity or 0) - qty)
                     ps.save(update_fields=['quantity'])
-                    # mouvement de sortie rattaché à l'entrepôt
                     StockMove.objects.create(
                         produit=produit,
                         warehouse=vente.warehouse,
-                        delta=-(qty),
+                        delta=-qty,
                         source='VENTE',
                         ref_id=str(vente.id),
                         note=f"Vente {vente.numero} - finalisée"
                     )
 
-            # Créer automatiquement un Bon de Livraison validé si absent
             try:
                 if not vente.bon_livraison_id:
-                    from .serializers import BonLivraisonSerializer
-                    lignes_data = []
-                    for l in vente.lignes.select_related('produit'):
-                        lignes_data.append({
-                            'produit': l.produit.id,
+                    lignes_data = [
+                        {
+                            'produit': l.produit_id,
                             'quantite': int(l.quantite or 0),
-                            'prixU_snapshot': getattr(l, 'prixU_snapshot', getattr(l.produit, 'prixU', 0))
-                        })
+                            'prixU_snapshot': getattr(l, 'prixU_snapshot', getattr(produits[l.produit_id], 'prixU', 0))
+                        }
+                        for l in lignes
+                    ]
                     bl_payload = {
-                        'client': vente.client.id if vente.client_id else None,
+                        'client': vente.client_id,
                         'statut': 'validated',
                         'lignes': lignes_data,
                     }
@@ -2368,41 +2382,47 @@ class VenteViewSet(TenantFilterMixin, viewsets.ModelViewSet):
             except Exception as e:
                 logger.exception('Erreur creation BL lors de la finalisation de la vente: %s', e)
 
-            try:
-                log_event(self.request, 'vente.complete', target=vente, metadata={'id': vente.id, 'numero': getattr(vente, 'numero', None)})
-            except Exception:
-                pass
-            return Response({'status': 'Vente terminée'})
-        return Response({'error': 'Vente déjà terminée ou annulée'}, status=400)
+        try:
+            log_event(self.request, 'vente.complete', target=vente, metadata={'id': vente.id, 'numero': getattr(vente, 'numero', None)})
+        except Exception:
+            pass
+        return Response({'status': 'Vente terminée'})
     
     @action(detail=True, methods=['post'])
     def cancel(self, request, pk=None):
         """Annuler une vente et restaurer le stock"""
         vente = self.get_object()
-        if vente.statut in ['draft', 'completed']:
+        if vente.statut not in ['draft', 'completed']:
+            return Response({'error': 'Vente déjà annulée'}, status=400)
+
+        with transaction.atomic():
+            vente = Vente.objects.select_for_update().get(pk=vente.pk)
+            if vente.statut not in ['draft', 'completed']:
+                return Response({'error': 'Vente déjà annulée'}, status=400)
             old_statut = vente.statut
             vente.statut = 'canceled'
             vente.save()
 
-            # Restaurer le stock (car il a été décrémenté lors de la création de la vente)
-            for ligne in vente.lignes.select_related('produit'):
-                # Restaurer le stock agrégé
-                ligne.produit.quantite = ligne.produit.quantite + ligne.quantite
-                ligne.produit.save(update_fields=['quantite'])
+            lignes = list(vente.lignes.select_related('produit'))
+            produit_ids = [l.produit_id for l in lignes]
+            produits = {p.id: p for p in Produit.objects.select_for_update().filter(id__in=produit_ids).order_by('id')}
 
-                # Restaurer le stock par entrepôt si un entrepôt est associé
+            for ligne in lignes:
+                produit = produits[ligne.produit_id]
+                produit.quantite += ligne.quantite
+                produit.save(update_fields=['quantite'])
+
                 if vente.warehouse:
-                    ps, _ = ProductStock.objects.get_or_create(
-                        produit=ligne.produit,
+                    ps, _ = ProductStock.objects.select_for_update().get_or_create(
+                        produit=produit,
                         warehouse=vente.warehouse,
                         defaults={'quantity': 0}
                     )
-                    ps.quantity = ps.quantity + ligne.quantite
+                    ps.quantity += ligne.quantite
                     ps.save(update_fields=['quantity'])
 
-                # Créer un mouvement de correction
                 StockMove.objects.create(
-                    produit=ligne.produit,
+                    produit=produit,
                     warehouse=vente.warehouse,
                     delta=ligne.quantite,
                     source='CORR',
@@ -2410,12 +2430,11 @@ class VenteViewSet(TenantFilterMixin, viewsets.ModelViewSet):
                     note=f"Annulation vente {vente.numero}"
                 )
 
-            try:
-                log_event(self.request, 'vente.cancel', target=vente, metadata={'id': vente.id, 'numero': getattr(vente, 'numero', None), 'old_statut': old_statut})
-            except Exception:
-                pass
-            return Response({'status': 'Vente annulée'})
-        return Response({'error': 'Vente déjà annulée'}, status=400)
+        try:
+            log_event(self.request, 'vente.cancel', target=vente, metadata={'id': vente.id, 'numero': getattr(vente, 'numero', None), 'old_statut': old_statut})
+        except Exception:
+            pass
+        return Response({'status': 'Vente annulée'})
 
     @action(detail=True, methods=['patch'], url_path='update-line-price')
     def update_line_price(self, request, pk=None):
@@ -2815,11 +2834,7 @@ class WarehouseViewSet(TenantFilterMixin, viewsets.ModelViewSet):
     queryset = Warehouse.objects.all().order_by('name')
     serializer_class = WarehouseSerializer
 
-    def get_permissions(self):
-        """Permettre la lecture des entrepôts sans authentification"""
-        if self.action in ['list', 'retrieve']:
-            return [AllowAny()]
-        return [IsAuthenticated()]
+    permission_classes = [IsAuthenticated]
 
     def perform_create(self, serializer):
         # Assigner la company de l'utilisateur connecté
@@ -3402,7 +3417,7 @@ class CodePrixViewSet(viewsets.ModelViewSet):
     """API pour les codes promotionnels (STANDARD, AID, RAMADAN, etc.)"""
     queryset = CodePrix.objects.all().order_by('ordre', 'libelle')
     serializer_class = CodePrixSerializer
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [IsAuthenticated]
     filterset_fields = ['is_active', 'is_default']
 
     def perform_create(self, serializer):
@@ -3425,7 +3440,7 @@ class CodePrixViewSet(viewsets.ModelViewSet):
 class TypePrixViewSet(viewsets.ModelViewSet):
     queryset = TypePrix.objects.all().order_by('ordre', 'libelle')
     serializer_class = TypePrixSerializer
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [IsAuthenticated]
     filterset_fields = ['is_active', 'is_default']
 
     def perform_create(self, serializer):
@@ -3448,7 +3463,7 @@ class TypePrixViewSet(viewsets.ModelViewSet):
 class PrixProduitViewSet(viewsets.ModelViewSet):
     queryset = PrixProduit.objects.all().order_by('produit', 'code_prix__ordre', 'type_prix__ordre')
     serializer_class = PrixProduitSerializer
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [IsAuthenticated]
     filterset_fields = ['produit', 'code_prix', 'type_prix', 'is_active']
 
     def perform_create(self, serializer):

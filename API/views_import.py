@@ -60,6 +60,37 @@ class ImportPreviewView(APIView):
             # Remplacer les NaN par des chaînes vides
             df = df.fillna('')
 
+            # Enrichir les données pour les pricelists avec le nom de l'article
+            if import_type == 'pricelists':
+                # Ajouter une colonne pour le nom de l'article
+                designations = []
+                for idx, row in df.iterrows():
+                    code_article = str(row.get('code_article', '')).strip() if row.get('code_article') else ''
+                    reference = str(row.get('reference', '')).strip() if row.get('reference') else ''
+
+                    # Chercher le produit par code_barre ou référence
+                    produit = None
+                    if code_article:
+                        try:
+                            produit = Produit.objects.get(code_barre=code_article)
+                        except Produit.DoesNotExist:
+                            pass
+
+                    if not produit and reference:
+                        try:
+                            produit = Produit.objects.get(reference=reference)
+                        except Produit.DoesNotExist:
+                            pass
+
+                    # Ajouter la désignation ou un message si produit non trouvé
+                    if produit:
+                        designations.append(produit.designation)
+                    else:
+                        designations.append('⚠️ Produit introuvable')
+
+                # Insérer la colonne "nom_article" après la colonne code_article/reference
+                df.insert(1, 'nom_article', designations)
+
             # Convertir en format JSON
             headers = df.columns.tolist()
             rows = df.to_dict('records')
