@@ -1,5 +1,6 @@
+import html as _html
 import logging
-from decimal import InvalidOperation
+from decimal import Decimal, InvalidOperation
 from django.contrib.auth import authenticate
 from django.shortcuts import render
 from django.db import transaction
@@ -22,6 +23,76 @@ from .mixins import TenantFilterMixin, WarehouseRelatedTenantMixin
 
 # Configure logging
 logger = logging.getLogger(__name__)
+
+
+# ── Conversion nombre → lettres (français / dinars algériens) ───────────────
+def _nombre_en_lettres(montant):
+    """Retourne le montant en toutes lettres (Dinars et Centimes)."""
+    UNITES = ['', 'Un', 'Deux', 'Trois', 'Quatre', 'Cinq', 'Six', 'Sept', 'Huit', 'Neuf',
+              'Dix', 'Onze', 'Douze', 'Treize', 'Quatorze', 'Quinze', 'Seize',
+              'Dix-Sept', 'Dix-Huit', 'Dix-Neuf']
+    DIZAINES = ['', 'Dix', 'Vingt', 'Trente', 'Quarante', 'Cinquante',
+                'Soixante', 'Soixante', 'Quatre-Vingt', 'Quatre-Vingt']
+
+    def _inf100(n):
+        if n == 0:
+            return ''
+        if n < 20:
+            return UNITES[n]
+        d, u = divmod(n, 10)
+        if d == 7:
+            return ('Soixante-et-Onze' if u == 1
+                    else 'Soixante-' + UNITES[10 + u] if u else 'Soixante-Dix')
+        if d == 8:
+            return 'Quatre-Vingts' if u == 0 else 'Quatre-Vingt-' + UNITES[u]
+        if d == 9:
+            return 'Quatre-Vingt-' + UNITES[10 + u]
+        sep = '-et-' if u == 1 else '-'
+        return DIZAINES[d] + (sep + UNITES[u] if u else '')
+
+    def _inf1000(n):
+        if n == 0:
+            return ''
+        parts = []
+        c, reste = divmod(n, 100)
+        if c == 1:
+            parts.append('Cent' if reste else 'Cent')
+        elif c > 1:
+            parts.append(UNITES[c] + (' Cents' if reste == 0 else ' Cent'))
+        if reste:
+            parts.append(_inf100(reste))
+        return ' '.join(p for p in parts if p)
+
+    def _entier(n):
+        if n == 0:
+            return 'Zéro'
+        parts = []
+        milliards, n = divmod(n, 1_000_000_000)
+        if milliards == 1:
+            parts.append('Un Milliard')
+        elif milliards > 1:
+            parts.append(_inf1000(milliards) + ' Milliards')
+        millions, n = divmod(n, 1_000_000)
+        if millions == 1:
+            parts.append('Un Million')
+        elif millions > 1:
+            parts.append(_inf1000(millions) + ' Millions')
+        milliers, n = divmod(n, 1_000)
+        if milliers == 1:
+            parts.append('Mille')
+        elif milliers > 1:
+            parts.append(_inf1000(milliers) + ' Mille')
+        if n:
+            parts.append(_inf1000(n))
+        return ' '.join(p for p in parts if p)
+
+    montant = Decimal(str(montant))
+    entier = int(montant)
+    centimes = int(round((montant - entier) * 100))
+    result = _entier(entier) + ' Dinars'
+    if centimes:
+        result += ' et ' + (_inf100(centimes) or 'Zéro') + ' Centimes'
+    return result
 
 # Simple raw endpoint to fetch categories directly from DB for diagnostics
 from rest_framework.decorators import api_view, permission_classes
@@ -1123,51 +1194,401 @@ class FactureViewSet(TenantFilterMixin, viewsets.ModelViewSet):
     @action(detail=True, methods=['get'])
     def printable(self, request, pk=None):
         from django.http import HttpResponse
+
         f = self.get_object()
-        # Simple HTML imprimable (export via impression PDF navigateur)
-        rows = ''.join([
-            f"<tr><td>{i+1}</td><td>{l.designation}</td><td>{l.quantite}</td><td>{l.prixU_snapshot}</td><td>{l.quantite * l.prixU_snapshot}</td></tr>"
-            for i, l in enumerate(f.lignes.all())
-        ])
-        html = f"""<!DOCTYPE html>
-        <html><head><meta charset='utf-8'><title>Facture {f.numero}</title>
-        <style>
-            body {{ font-family: Arial, sans-serif; margin: 20px; }}
-            h2 {{ color: #333; }}
-            table {{ width: 100%; border-collapse: collapse; margin: 20px 0; }}
-            td, th {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
-            th {{ background-color: #f2f2f2; }}
-            .totals {{ margin-top: 20px; text-align: right; }}
-            @media print {{
-                button {{ display: none; }}
-            }}
-        </style>
-        </head><body>
-        <h2>Facture {f.numero}</h2>
-        <p><strong>Date:</strong> {f.date_emission}</p>
-        <p><strong>Client:</strong> {f.client.nom} {f.client.prenom}</p>
-        <p><strong>Statut:</strong> {f.statut}</p>
-        <table>
-            <thead>
-                <tr>
-                    <th>#</th>
-                    <th>Désignation</th>
-                    <th>Quantité</th>
-                    <th>Prix Unitaire</th>
-                    <th>Total</th>
-                </tr>
-            </thead>
-            <tbody>{rows}</tbody>
-        </table>
-        <div class="totals">
-            <p><strong>Total HT:</strong> {f.total_ht}</p>
-            <p><strong>TVA ({f.tva_rate}%):</strong> {f.total_tva}</p>
-            <p><strong>Total TTC:</strong> {f.total_ttc}</p>
-        </div>
-        <button onclick="window.print()">Imprimer</button>
-        </body></html>
-        """
-        return HttpResponse(html, content_type='text/html; charset=utf-8')
+        cfg = SystemConfig.get_solo()
+        company  = f.company
+        client   = f.client
+        bl       = f.bon_livraison
+
+        # ── Données entreprise ──────────────────────────────────────────────
+        def _e(v): return _html.escape(str(v or ''))
+
+        co_name    = _e(cfg.ticket_company_name or (company.name if company else ''))
+        co_adresse = _e(cfg.ticket_company_address or (company.adresse if company else ''))
+        co_tel     = _e(cfg.ticket_company_phone or (company.telephone if company else ''))
+        co_email   = _e(company.email if company else '')
+        co_tax     = _e(company.tax_id if company else '')
+
+        # ── Données client ──────────────────────────────────────────────────
+        cl_nom     = _e(f'{client.nom} {client.prenom}'.strip())
+        cl_adresse = _e(client.adresse or '')
+        cl_tel     = _e(client.telephone or '')
+        cl_email   = _e(client.email or '')
+        cl_rc      = _e(client.rc or '')
+        cl_nif     = _e(client.nif or '')
+        cl_nis     = _e(client.nis or '')
+        cl_ai      = _e(client.ai or '')
+
+        # ── Dates ───────────────────────────────────────────────────────────
+        fmt_date = lambda d: d.strftime('%d/%m/%Y') if d else '—'
+        date_facture = fmt_date(f.date_emission)
+        date_bl      = fmt_date(bl.date_creation) if bl else '—'
+        bl_numero    = _e(bl.numero if bl else '—')
+
+        # ── Formatage montants ──────────────────────────────────────────────
+        def fmt(v):
+            v = Decimal(str(v or 0))
+            entier, dec = f'{v:.2f}'.split('.')
+            entier_fmt = ''
+            for i, c in enumerate(reversed(entier)):
+                if i and i % 3 == 0:
+                    entier_fmt = ' ' + entier_fmt
+                entier_fmt = c + entier_fmt
+            return f'{entier_fmt},{dec} DA'
+
+        # ── Lignes du tableau ───────────────────────────────────────────────
+        lignes = list(f.lignes.all())
+        rows_html = ''
+        for l in lignes:
+            remise = Decimal('0')
+            montant_ht = l.prixU_snapshot * l.quantite
+            rows_html += f"""
+            <tr>
+              <td>{_e(l.designation)}</td>
+              <td class="r">{l.quantite:,} Unité(s)</td>
+              <td class="r">{l.prixU_snapshot:.4f}</td>
+              <td class="r">{remise:.2f}</td>
+              <td class="r">{int(f.tva_rate)}%</td>
+              <td class="r">{fmt(montant_ht)}</td>
+            </tr>"""
+
+        # ── Montant en lettres ──────────────────────────────────────────────
+        lettres = _nombre_en_lettres(f.total_ttc)
+
+        # ── Infos client fiscales (conditionnel) ────────────────────────────
+        fiscal_client = ''
+        if cl_rc or cl_nif:
+            fiscal_client += f'<div class="fiscal">RC : {cl_rc}&nbsp;&nbsp;&nbsp;NIF : {cl_nif}</div>'
+        if cl_nis or cl_ai:
+            fiscal_client += f'<div class="fiscal">NIS : {cl_nis}&nbsp;&nbsp;&nbsp;ART : {cl_ai}</div>'
+        if cl_tel or cl_email:
+            fiscal_client += f'<div class="fiscal">Tél : {cl_tel}'
+            if cl_email:
+                fiscal_client += f'&nbsp;&nbsp;&nbsp;Email : {cl_email}'
+            fiscal_client += '</div>'
+
+        html_doc = f"""<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Facture {_e(f.numero)}</title>
+  <style>
+    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    body {{
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 11px;
+      color: #222;
+      background: #fff;
+      padding: 28px 32px;
+    }}
+
+    /* ── En-tête ── */
+    .header {{
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 24px;
+    }}
+    .logo {{
+      font-size: 26px;
+      font-style: italic;
+      color: #b07830;
+      font-weight: 300;
+      letter-spacing: 1px;
+    }}
+    .company-info {{
+      text-align: right;
+      font-size: 10.5px;
+      color: #444;
+      line-height: 1.6;
+    }}
+    .company-info strong {{ font-size: 12px; color: #222; }}
+
+    /* ── Bloc client ── */
+    .client-block {{
+      margin-bottom: 18px;
+      font-size: 10.5px;
+      line-height: 1.7;
+    }}
+    .client-block .client-name {{
+      font-weight: bold;
+      font-size: 12px;
+      text-transform: uppercase;
+    }}
+    .fiscal {{ color: #444; }}
+
+    /* ── Titre facture ── */
+    .facture-title {{
+      font-size: 22px;
+      font-weight: bold;
+      color: #b07830;
+      margin: 20px 0 14px;
+    }}
+
+    /* ── Ligne de dates ── */
+    .dates-row {{
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 16px;
+    }}
+    .dates-row th {{
+      background: #f0f0f0;
+      border: 1px solid #ccc;
+      padding: 5px 10px;
+      font-size: 10px;
+      color: #666;
+      font-weight: normal;
+      text-align: center;
+    }}
+    .dates-row td {{
+      border: 1px solid #ccc;
+      padding: 5px 10px;
+      text-align: center;
+      font-size: 11px;
+    }}
+
+    /* ── Tableau des articles ── */
+    .items-table {{
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 18px;
+    }}
+    .items-table thead tr {{
+      background: #f0f0f0;
+      border-top: 2px solid #b07830;
+      border-bottom: 1px solid #ccc;
+    }}
+    .items-table th {{
+      padding: 7px 8px;
+      text-align: left;
+      font-size: 10.5px;
+      color: #444;
+      font-weight: bold;
+      border: 1px solid #ddd;
+    }}
+    .items-table td {{
+      padding: 6px 8px;
+      border: 1px solid #e0e0e0;
+      vertical-align: middle;
+    }}
+    .items-table tbody tr:nth-child(even) {{ background: #fafafa; }}
+    .r {{ text-align: right; }}
+
+    /* ── Bloc totaux ── */
+    .totals-wrap {{
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 14px;
+    }}
+    .totals-table {{
+      width: 340px;
+      border-collapse: collapse;
+      font-size: 11px;
+    }}
+    .totals-table td {{
+      padding: 5px 10px;
+      border: 1px solid #ddd;
+    }}
+    .totals-table .label {{ color: #444; }}
+    .totals-table .amount {{ text-align: right; font-weight: bold; }}
+    .totals-table .row-total {{ background: #f5c4a0; }}
+    .totals-table .row-ttc   {{ background: #e8935a; color: #fff; font-weight: bold; }}
+    .totals-table .mention   {{
+      font-size: 9px; color: #666; font-style: italic;
+      border: none; padding-top: 3px; text-align: right;
+    }}
+
+    /* ── Paiement + lettres ── */
+    .payment-block {{
+      margin-bottom: 14px;
+      font-size: 10.5px;
+      line-height: 1.8;
+      color: #333;
+    }}
+    .lettres {{
+      font-style: italic;
+      font-size: 10.5px;
+      color: #333;
+      border-top: 1px dashed #ccc;
+      padding-top: 8px;
+      margin-bottom: 32px;
+    }}
+
+    /* ── Zone signature ── */
+    .signature {{
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 40px;
+    }}
+    .signature-box {{
+      width: 200px;
+      border-top: 1px solid #999;
+      text-align: center;
+      padding-top: 6px;
+      font-size: 10px;
+      color: #666;
+    }}
+
+    /* ── Pied de page ── */
+    .footer {{
+      border-top: 1.5px solid #b07830;
+      padding-top: 10px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 9.5px;
+      color: #444;
+      line-height: 1.6;
+    }}
+    .footer-col {{ width: 32%; }}
+    .footer-col strong {{ color: #222; font-size: 10px; }}
+
+    /* ── Bouton impression ── */
+    .print-btn {{
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      padding: 8px 18px;
+      background: #b07830;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+      font-family: Arial, sans-serif;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    }}
+    .print-btn:hover {{ background: #8a5e22; }}
+
+    @media print {{
+      .print-btn {{ display: none; }}
+      body {{ padding: 10px 14px; }}
+    }}
+  </style>
+</head>
+<body>
+  <button class="print-btn" onclick="window.print()">🖨 Imprimer</button>
+
+  <!-- En-tête -->
+  <div class="header">
+    <div class="logo">{co_name}</div>
+    <div class="company-info">
+      <strong>{co_name}</strong><br>
+      {co_adresse.replace(chr(10), '<br>')}<br>
+      {'Tél : ' + co_tel if co_tel else ''}
+      {'&nbsp;&nbsp;|&nbsp;&nbsp;' + co_email if co_email else ''}
+    </div>
+  </div>
+
+  <!-- Bloc client -->
+  <div class="client-block">
+    <div class="client-name">{cl_nom}</div>
+    <div>{cl_adresse}</div>
+    {fiscal_client}
+  </div>
+
+  <!-- Titre facture -->
+  <div class="facture-title">Facture {_e(f.numero)}</div>
+
+  <!-- Ligne de dates -->
+  <table class="dates-row">
+    <thead>
+      <tr>
+        <th>Date d'émission</th>
+        <th>Date BL</th>
+        <th>Date facture</th>
+        <th>N° BL / Référence</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>{date_facture}</td>
+        <td>{date_bl}</td>
+        <td>{date_facture}</td>
+        <td>{bl_numero}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- Tableau des articles -->
+  <table class="items-table">
+    <thead>
+      <tr>
+        <th>Désignation</th>
+        <th class="r">Quantité</th>
+        <th class="r">Prix unitaire</th>
+        <th class="r">Remise</th>
+        <th class="r">TVA</th>
+        <th class="r">Montant</th>
+      </tr>
+    </thead>
+    <tbody>
+      {rows_html}
+    </tbody>
+  </table>
+
+  <!-- Totaux -->
+  <div class="totals-wrap">
+    <table class="totals-table">
+      <tr>
+        <td class="label">Montant hors taxes</td>
+        <td class="amount">{fmt(f.total_ht)}</td>
+      </tr>
+      <tr>
+        <td class="label">TVA {int(f.tva_rate)}%</td>
+        <td class="amount">{fmt(f.total_tva)}</td>
+      </tr>
+      <tr class="row-total">
+        <td class="label">Total</td>
+        <td class="amount">{fmt(f.total_ttc)}</td>
+      </tr>
+      <tr class="row-ttc">
+        <td>NET TTC</td>
+        <td class="amount">{fmt(f.total_ttc)}</td>
+      </tr>
+      <tr>
+        <td colspan="2" class="mention">Montant total en toutes lettres</td>
+      </tr>
+      <tr>
+        <td colspan="2" class="mention">Les montants sont indiqués en Dinars Algériens (DA)</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- Infos paiement -->
+  <div class="payment-block">
+    <strong>Confirmation de paiement :</strong> {_e(f.numero)}<br>
+    <strong>Mode de paiement :</strong> Virement
+  </div>
+
+  <!-- Montant en lettres -->
+  <div class="lettres">
+    <strong>Totalité en lettres :</strong> {_html.escape(lettres)}
+  </div>
+
+  <!-- Zone signature -->
+  <div class="signature">
+    <div class="signature-box">Signature &amp; Cachet</div>
+  </div>
+
+  <!-- Pied de page -->
+  <div class="footer">
+    <div class="footer-col">
+      <strong>{co_name}</strong><br>
+      {co_adresse.replace(chr(10), '<br>')}
+    </div>
+    <div class="footer-col">
+      {('NIF : ' + co_tax + '<br>') if co_tax else ''}
+    </div>
+    <div class="footer-col" style="text-align:right">
+      {('Tél : ' + co_tel + '<br>') if co_tel else ''}
+      {('Email : ' + co_email) if co_email else ''}
+    </div>
+  </div>
+
+</body>
+</html>"""
+        return HttpResponse(html_doc, content_type='text/html; charset=utf-8')
 
     @action(detail=True, methods=['post'])
     def issue(self, request, pk=None):
