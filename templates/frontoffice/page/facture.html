@@ -436,16 +436,11 @@
             var opt = document.createElement('div');
             opt.className = 'custom-select-option';
             opt.setAttribute('data-value', bl.id);
+            var clientName = [(bl.client_nom || ''), (bl.client_prenom || '')].filter(Boolean).join(' ');
             var label = (bl.numero ? bl.numero : 'BL #' + bl.id);
-            if (bl.date_creation) {
-                label += ' - ' + bl.date_creation.substring(0, 10);
-            }
-            if (bl.client_nom || bl.client_prenom) {
-                label += ' (' + [(bl.client_nom || ''), (bl.client_prenom || '')].filter(Boolean).join(' ') + ')';
-            }
-            if (bl.statut) {
-                label += ' [' + bl.statut + ']';
-            }
+            if (clientName) label += ' — ' + clientName;
+            if (bl.vente_numero) label += ' (' + bl.vente_numero + ')';
+            if (bl.date_creation) label += ' — ' + bl.date_creation.substring(0, 10);
             opt.textContent = label;
             opt.onclick = function() {
                 selectFactureOption('customSelectFactBL', bl.id, label, 'fact_bl');
@@ -496,11 +491,11 @@
             .then(function(response) { return response.json(); })
             .then(function(data) {
                 var list = Array.isArray(data) ? data : (data && data.results ? data.results : []);
-                // Filtrer côté client aussi au cas où l'API ne supporte pas le filtre statut
+                // Garder uniquement les BLs validés sans facture active
                 list = list.filter(function(bl) {
-                    return bl.statut === 'validated';
+                    return bl.statut === 'validated' && !bl.has_facture;
                 });
-                console.log('[Facture] Validated BLs loaded:', list.length);
+                console.log('[Facture] Validated BLs available:', list.length);
                 factureCustomSelectData.bls = list;
                 populateFactureBLs();
             })

@@ -273,6 +273,9 @@ class VenteTourneeMobile(models.Model):
     notes = models.TextField('Notes', blank=True)
 
 
+    bon_livraison = models.ForeignKey('BonLivraison', on_delete=models.SET_NULL,
+                                      null=True, blank=True, related_name='ventes_mobiles')
+
     # Multi-tenancy
     company = models.ForeignKey('Company', on_delete=models.CASCADE, related_name='ventes_tournees_mobiles',
                                null=True, blank=True,  # Temporarily nullable for migration

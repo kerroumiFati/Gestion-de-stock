@@ -317,13 +317,24 @@ class LigneLivraisonSerializer(serializers.ModelSerializer):
 
 class BonLivraisonSerializer(serializers.ModelSerializer):
     lignes = LigneLivraisonSerializer(many=True)
+    has_facture = serializers.SerializerMethodField()
+    client_nom = serializers.CharField(source='client.nom', read_only=True, allow_null=True)
+    client_prenom = serializers.CharField(source='client.prenom', read_only=True, allow_null=True)
+    vente_numero = serializers.SerializerMethodField()
 
     class Meta:
         model = BonLivraison
-        fields = ('id', 'numero', 'date_creation', 'client', 'statut', 'observations', 'lignes')
+        fields = ('id', 'numero', 'date_creation', 'client', 'client_nom', 'client_prenom', 'statut', 'observations', 'lignes', 'has_facture', 'vente_numero')
         extra_kwargs = {
-            'numero': {'required': False}  # Permet la génération automatique
+            'numero': {'required': False}
         }
+
+    def get_vente_numero(self, obj):
+        vente = obj.ventes.order_by('-date_vente').first()
+        return vente.numero if vente else None
+
+    def get_has_facture(self, obj):
+        return obj.factures.filter(statut__in=['draft', 'issued', 'paid']).exists()
 
     def create(self, validated_data):
         lignes_data = validated_data.pop('lignes', [])

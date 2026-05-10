@@ -220,9 +220,12 @@ else:
 # Directory where collectstatic will collect static files for deployment
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
-# Use whitenoise for serving static files in production
-# Use WhiteNoise with manifest hashing for cache-busting
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+# En développement : pas de hachage → les modifications JS/CSS sont visibles immédiatement
+# En production : hachage pour le cache-busting
+if config('DEBUG', default=True, cast=bool):
+    STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
+else:
+    STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # Media files (uploaded images, etc.)
 MEDIA_URL = '/media/'

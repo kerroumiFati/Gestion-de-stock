@@ -862,6 +862,14 @@
           else if(v.statut === 'draft') statutHtml = '<span class="badge badge-warning">Brouillon</span>';
           else if(v.statut === 'synced') statutHtml = '<span class="badge badge-info">Synchronisée</span>';
           else if(v.statut === 'canceled') statutHtml = '<span class="badge badge-danger">Annulée</span>';
+          // Indicateur BL
+          if(v.statut === 'completed'){
+            if(v.bon_livraison){
+              statutHtml += ' <span class="badge badge-primary" title="Bon de livraison lié"><i class="fa fa-truck"></i> BL</span>';
+            } else {
+              statutHtml += ' <span class="badge badge-danger" title="Pas de bon de livraison"><i class="fa fa-exclamation-triangle"></i> Sans BL</span>';
+            }
+          }
           tr.append('<td>'+ statutHtml +'</td>');
 
           const totalTtc = parseFloat(v.total_ttc) || 0;
@@ -878,6 +886,9 @@
             if((v.statut||'') === 'draft'){
               actions += '<button class="btn btn-sm btn-success finalize-sale" data-id="'+v.id+'"><i class="fa fa-check"></i> Finaliser</button> ';
             }
+            if((v.statut||'') === 'completed' && !v.bon_livraison){
+              actions += '<button class="btn btn-sm btn-warning create-bl" data-id="'+v.id+'" title="Créer le bon de livraison manquant"><i class="fa fa-truck"></i> Créer BL</button> ';
+            }
             actions += '<button class="btn btn-sm btn-info view-sale-details" data-id="'+v.id+'"><i class="fa fa-eye"></i> Détails</button> ';
             if(reste > 0) {
               actions += '<button class="btn btn-sm btn-primary add-payment" data-id="'+v.id+'" data-reste="'+reste+'"><i class="fa fa-money"></i> Payer</button>';
@@ -885,6 +896,9 @@
           } else {
             // Actions pour ventes mobiles
             actions += '<button class="btn btn-sm btn-info view-sale-details" data-id="'+v.id+'"><i class="fa fa-eye"></i> Détails</button> ';
+            if((v.statut||'') === 'completed' && !v.bon_livraison){
+              actions += '<button class="btn btn-sm btn-warning create-bl" data-id="'+v.id+'" title="Créer le bon de livraison manquant"><i class="fa fa-truck"></i> Créer BL</button> ';
+            }
             if(reste > 0) {
               actions += '<button class="btn btn-sm btn-primary add-payment" data-id="'+v.id+'" data-reste="'+reste+'" data-mobile="true"><i class="fa fa-money"></i> Payer</button> ';
             }
@@ -1395,7 +1409,14 @@
     const statutVente = sale.statut === 'completed' ? 'Finalisée' : (sale.statut === 'draft' ? 'Brouillon' : sale.statut);
     html += '<p class="mb-2"><strong><i class="fa fa-file-alt"></i> Statut de la vente:</strong> <span class="badge badge-'+(sale.statut==='completed'?'success':'warning')+'">'+statutVente+'</span></p>';
     html += '<p class="mb-2"><strong><i class="fa fa-credit-card"></i> Mode de paiement:</strong> '+(sale.type_paiement_display || sale.type_paiement || '')+'</p>';
-    html += '<p class="mb-0"><strong><i class="fa fa-warehouse"></i> Entrepôt:</strong> '+(sale.warehouse_name || sale.warehouse || 'N/A')+'</p>';
+    html += '<p class="mb-2"><strong><i class="fa fa-warehouse"></i> Entrepôt:</strong> '+(sale.warehouse_name || sale.warehouse || 'N/A')+'</p>';
+    if(sale.statut === 'completed'){
+      if(sale.bon_livraison){
+        html += '<p class="mb-0"><strong><i class="fa fa-truck"></i> Bon de livraison:</strong> <span class="badge badge-primary">BL #'+sale.bon_livraison+'</span></p>';
+      } else {
+        html += '<p class="mb-0"><strong><i class="fa fa-truck"></i> Bon de livraison:</strong> <span class="badge badge-danger"><i class="fa fa-exclamation-triangle"></i> Aucun BL</span> <button class="btn btn-xs btn-warning ml-2 create-bl" data-id="'+sale.id+'"><i class="fa fa-plus"></i> Créer</button></p>';
+      }
+    }
     html += '</div></div>';
     html += '</div>';
 
@@ -2346,6 +2367,20 @@
       // Convertir les données de vente
       const invoiceData = saleToInvoiceData(CURRENT_SALE_FOR_PRINT, company);
 
+      // Format facture : utiliser l'URL dédiée du serveur (même format que Gestion des Factures)
+      if(format === 'invoice'){
+        window.open(`/API/ventes/${CURRENT_SALE_FOR_PRINT.id}/printable/`, '_blank');
+        $('#printFormatModal').modal('hide');
+        return;
+      }
+
+      // Pour le BL : utiliser l'URL dédiée si un BL est lié à la vente
+      if(format === 'delivery' && CURRENT_SALE_FOR_PRINT.bon_livraison){
+        window.open(`/API/bons/${CURRENT_SALE_FOR_PRINT.bon_livraison}/printable/`, '_blank');
+        $('#printFormatModal').modal('hide');
+        return;
+      }
+
       // Générer le HTML selon le format
       let html = '';
       switch(format){
@@ -2424,6 +2459,32 @@
         .done(function(){ loadSalesList(); loadStats(); })
         .fail(function(xhr){ alert('Erreur finalisation: '+ (xhr.responseText || xhr.statusText)); })
         .always(function(){ $btn.prop('disabled', false).removeClass('disabled'); });
+    });
+
+    // handle create-bl click (pour ventes terminées sans BL)
+    $(document).off('click', '.create-bl').on('click', '.create-bl', function(e){
+      e.stopPropagation();
+      var id = $(this).data('id');
+      if(!id) return;
+      var $btn = $(this); $btn.prop('disabled', true).text('...');
+      var isMobileId = String(id).startsWith('mobile_');
+      var ajaxOpts;
+      if(isMobileId){
+        var mobileNumericId = String(id).replace('mobile_', '');
+        ajaxOpts = { url:'/API/ventes/create_mobile_bl/', method:'POST',
+                     data: JSON.stringify({mobile_id: mobileNumericId}),
+                     contentType: 'application/json',
+                     headers:{ 'X-CSRFToken': getCSRFToken() } };
+      } else {
+        ajaxOpts = { url:'/API/ventes/'+id+'/create_bl/', method:'POST', headers:{ 'X-CSRFToken': getCSRFToken() } };
+      }
+      $.ajax(ajaxOpts)
+        .done(function(resp){
+          alert('Bon de livraison créé : ' + (resp.bl_numero || resp.bl_id));
+          loadSalesList();
+        })
+        .fail(function(xhr){ alert('Erreur création BL: '+ (xhr.responseJSON && xhr.responseJSON.detail ? xhr.responseJSON.detail : xhr.responseText)); })
+        .always(function(){ $btn.prop('disabled', false).html('<i class="fa fa-truck"></i> Créer BL'); });
     });
 
     // handle view details click

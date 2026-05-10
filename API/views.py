@@ -1022,6 +1022,8 @@ class BonLivraisonViewSet(TenantFilterMixin, viewsets.ModelViewSet):
     queryset = BonLivraison.objects.all().order_by('-date_creation')
     serializer_class = BonLivraisonSerializer
     permission_classes = [IsAuthenticated]
+    pagination_class = None
+    filterset_fields = ['statut', 'client']
 
     def perform_create(self, serializer):
         # Assigner la company de l'utilisateur connecté
@@ -1082,6 +1084,219 @@ class BonLivraisonViewSet(TenantFilterMixin, viewsets.ModelViewSet):
             pass
         return Response({'detail': 'Bon validé'}, status=200)
 
+    @action(detail=True, methods=['get'])
+    def printable(self, request, pk=None):
+        from django.http import HttpResponse
+
+        bl  = self.get_object()
+        cfg = SystemConfig.get_solo()
+        company = bl.company
+        client  = bl.client
+
+        def _e(v): return _html.escape(str(v or ''))
+
+        co_name    = _e(cfg.ticket_company_name or (company.name if company else ''))
+        co_adresse = _e(cfg.ticket_company_address or (company.adresse if company else ''))
+        co_tel     = _e(cfg.ticket_company_phone or (company.telephone if company else ''))
+        co_email   = _e(company.email if company else '')
+        co_tax     = _e(company.tax_id if company else '')
+
+        cl_nom     = _e(f'{client.nom} {client.prenom}'.strip())
+        cl_adresse = _e(client.adresse or '')
+        cl_tel     = _e(client.telephone or '')
+        cl_email   = _e(client.email or '')
+        cl_rc      = _e(client.rc or '')
+        cl_nif     = _e(client.nif or '')
+        cl_nis     = _e(client.nis or '')
+        cl_ai      = _e(client.ai or '')
+
+        fmt_date = lambda d: d.strftime('%d/%m/%Y') if d else '—'
+        date_bl  = fmt_date(bl.date_creation)
+
+        # Vente liée (si elle existe)
+        vente_liee = bl.ventes.select_related().first()
+        date_vente  = fmt_date(vente_liee.date_vente.date() if vente_liee and hasattr(vente_liee.date_vente, 'date') else (vente_liee.date_vente if vente_liee else None))
+        vente_numero = _e(vente_liee.numero if vente_liee else '—')
+
+        def fmt(v):
+            v = Decimal(str(v or 0))
+            entier, dec = f'{v:.2f}'.split('.')
+            entier_fmt = ''
+            for i, c in enumerate(reversed(entier)):
+                if i and i % 3 == 0:
+                    entier_fmt = ' ' + entier_fmt
+                entier_fmt = c + entier_fmt
+            return f'{entier_fmt},{dec} DA'
+
+        lignes = list(bl.lignes.select_related('produit').all())
+        total_ht = Decimal('0')
+        rows_html = ''
+        for l in lignes:
+            designation = _e(getattr(l.produit, 'designation', '') or '')
+            montant = l.prixU_snapshot * l.quantite
+            total_ht += montant
+            rows_html += f"""
+            <tr>
+              <td>{designation}</td>
+              <td class="r">{l.quantite:,} Unité(s)</td>
+              <td class="r">{l.prixU_snapshot:.4f}</td>
+              <td class="r">—</td>
+              <td class="r">—</td>
+              <td class="r">{fmt(montant)}</td>
+            </tr>"""
+
+        lettres = _nombre_en_lettres(total_ht)
+
+        fiscal_client = ''
+        if cl_rc or cl_nif:
+            fiscal_client += f'<div class="fiscal">RC : {cl_rc}&nbsp;&nbsp;&nbsp;NIF : {cl_nif}</div>'
+        if cl_nis or cl_ai:
+            fiscal_client += f'<div class="fiscal">NIS : {cl_nis}&nbsp;&nbsp;&nbsp;ART : {cl_ai}</div>'
+        if cl_tel or cl_email:
+            fiscal_client += f'<div class="fiscal">Tél : {cl_tel}'
+            if cl_email:
+                fiscal_client += f'&nbsp;&nbsp;&nbsp;Email : {cl_email}'
+            fiscal_client += '</div>'
+
+        html_doc = f"""<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Bon de Livraison {_e(bl.numero)}</title>
+  <style>
+    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    body {{ font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #222; background: #fff; padding: 28px 32px; }}
+    .header {{ display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; }}
+    .logo {{ font-size: 26px; font-style: italic; color: #b07830; font-weight: 300; letter-spacing: 1px; }}
+    .company-info {{ text-align: right; font-size: 10.5px; color: #444; line-height: 1.6; }}
+    .company-info strong {{ font-size: 12px; color: #222; }}
+    .client-block {{ margin-bottom: 18px; font-size: 10.5px; line-height: 1.7; }}
+    .client-block .client-name {{ font-weight: bold; font-size: 12px; text-transform: uppercase; }}
+    .fiscal {{ color: #444; }}
+    .facture-title {{ font-size: 22px; font-weight: bold; color: #b07830; margin: 20px 0 14px; }}
+    .dates-row {{ width: 100%; border-collapse: collapse; margin-bottom: 16px; }}
+    .dates-row th {{ background: #f0f0f0; border: 1px solid #ccc; padding: 5px 10px; font-size: 10px; color: #666; font-weight: normal; text-align: center; }}
+    .dates-row td {{ border: 1px solid #ccc; padding: 5px 10px; text-align: center; font-size: 11px; }}
+    .items-table {{ width: 100%; border-collapse: collapse; margin-bottom: 18px; }}
+    .items-table thead tr {{ background: #f0f0f0; border-top: 2px solid #b07830; border-bottom: 1px solid #ccc; }}
+    .items-table th {{ padding: 7px 8px; text-align: left; font-size: 10.5px; color: #444; font-weight: bold; border: 1px solid #ddd; }}
+    .items-table td {{ padding: 6px 8px; border: 1px solid #e0e0e0; vertical-align: middle; }}
+    .items-table tbody tr:nth-child(even) {{ background: #fafafa; }}
+    .r {{ text-align: right; }}
+    .totals-wrap {{ display: flex; justify-content: flex-end; margin-bottom: 14px; }}
+    .totals-table {{ width: 340px; border-collapse: collapse; font-size: 11px; }}
+    .totals-table td {{ padding: 5px 10px; border: 1px solid #ddd; }}
+    .totals-table .label {{ color: #444; }}
+    .totals-table .amount {{ text-align: right; font-weight: bold; }}
+    .totals-table .row-total {{ background: #f5c4a0; }}
+    .totals-table .row-ttc {{ background: #e8935a; color: #fff; font-weight: bold; }}
+    .totals-table .mention {{ font-size: 9px; color: #666; font-style: italic; border: none; padding-top: 3px; text-align: right; }}
+    .lettres {{ font-style: italic; font-size: 10.5px; color: #333; border-top: 1px dashed #ccc; padding-top: 8px; margin-bottom: 32px; }}
+    .signatures {{ display: flex; justify-content: space-between; margin-bottom: 40px; }}
+    .sig-box {{ width: 200px; border-top: 1px solid #999; text-align: center; padding-top: 6px; font-size: 10px; color: #666; }}
+    .footer {{ border-top: 1.5px solid #b07830; padding-top: 10px; display: flex; justify-content: space-between; font-size: 9.5px; color: #444; line-height: 1.6; }}
+    .footer-col {{ width: 32%; }}
+    .footer-col strong {{ color: #222; font-size: 10px; }}
+    .print-btn {{ position: fixed; top: 16px; right: 16px; padding: 8px 18px; background: #b07830; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-family: Arial, sans-serif; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }}
+    .print-btn:hover {{ background: #8a5e22; }}
+    @media print {{ .print-btn {{ display: none; }} body {{ padding: 10px 14px; }} }}
+  </style>
+</head>
+<body>
+  <button class="print-btn" onclick="window.print()">🖨 Imprimer</button>
+
+  <div class="header">
+    <div class="logo">{co_name}</div>
+    <div class="company-info">
+      <strong>{co_name}</strong><br>
+      {co_adresse.replace(chr(10), '<br>')}<br>
+      {'Tél : ' + co_tel if co_tel else ''}
+      {'&nbsp;&nbsp;|&nbsp;&nbsp;' + co_email if co_email else ''}
+    </div>
+  </div>
+
+  <div class="client-block">
+    <div class="client-name">{cl_nom}</div>
+    <div>{cl_adresse}</div>
+    {fiscal_client}
+  </div>
+
+  <div class="facture-title">Bon de Livraison {_e(bl.numero)}</div>
+
+  <table class="dates-row">
+    <thead>
+      <tr>
+        <th>Date de livraison</th>
+        <th>Date de vente</th>
+        <th>N° BL</th>
+        <th>N° Vente / Référence</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>{date_bl}</td>
+        <td>{date_vente}</td>
+        <td>{_e(bl.numero)}</td>
+        <td>{vente_numero}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <table class="items-table">
+    <thead>
+      <tr>
+        <th>Désignation</th>
+        <th class="r">Quantité</th>
+        <th class="r">Prix unitaire</th>
+        <th class="r">Remise</th>
+        <th class="r">TVA</th>
+        <th class="r">Montant</th>
+      </tr>
+    </thead>
+    <tbody>{rows_html}</tbody>
+  </table>
+
+  <div class="totals-wrap">
+    <table class="totals-table">
+      <tr>
+        <td class="label">Montant hors taxes</td>
+        <td class="amount">{fmt(total_ht)}</td>
+      </tr>
+      <tr class="row-total">
+        <td class="label">Total</td>
+        <td class="amount">{fmt(total_ht)}</td>
+      </tr>
+      <tr class="row-ttc">
+        <td>NET TTC</td>
+        <td class="amount">{fmt(total_ht)}</td>
+      </tr>
+      <tr><td colspan="2" class="mention">Montant total en toutes lettres</td></tr>
+      <tr><td colspan="2" class="mention">Les montants sont indiqués en Dinars Algériens (DA)</td></tr>
+    </table>
+  </div>
+
+  <div class="lettres">
+    <strong>Totalité en lettres :</strong> {_html.escape(lettres)}
+  </div>
+
+  <div class="signatures">
+    <div class="sig-box">Réceptionnaire</div>
+    <div class="sig-box">Livreur</div>
+  </div>
+
+  <div class="footer">
+    <div class="footer-col"><strong>{co_name}</strong><br>{co_adresse.replace(chr(10), '<br>')}</div>
+    <div class="footer-col">{('NIF : ' + co_tax + '<br>') if co_tax else ''}</div>
+    <div class="footer-col" style="text-align:right">
+      {('Tél : ' + co_tel + '<br>') if co_tel else ''}
+      {('Email : ' + co_email) if co_email else ''}
+    </div>
+  </div>
+
+</body>
+</html>"""
+        return HttpResponse(html_doc, content_type='text/html; charset=utf-8')
+
 class FactureViewSet(TenantFilterMixin, viewsets.ModelViewSet):
     queryset = Facture.objects.all().order_by('-date_emission')
     serializer_class = FactureSerializer
@@ -1130,6 +1345,9 @@ class FactureViewSet(TenantFilterMixin, viewsets.ModelViewSet):
 
             if bl.statut != 'validated':
                 return Response({'detail': 'Le bon de livraison doit être validé'}, status=400)
+
+            if bl.factures.filter(statut__in=['draft', 'issued', 'paid']).exists():
+                return Response({'detail': 'Une facture existe déjà pour ce bon de livraison'}, status=400)
 
             if not bl.client:
                 return Response({'detail': 'Le bon de livraison doit avoir un client associé'}, status=400)
@@ -2780,8 +2998,9 @@ class VenteViewSet(TenantFilterMixin, viewsets.ModelViewSet):
                         note=f"Vente {vente.numero} - finalisée"
                     )
 
-            try:
-                if not vente.bon_livraison_id:
+            bl_error = None
+            if not vente.bon_livraison_id:
+                try:
                     lignes_data = [
                         {
                             'produit': l.produit_id,
@@ -2797,18 +3016,96 @@ class VenteViewSet(TenantFilterMixin, viewsets.ModelViewSet):
                     }
                     bl_ser = BonLivraisonSerializer(data=bl_payload)
                     bl_ser.is_valid(raise_exception=True)
-                    bl = bl_ser.save()
+                    bl = bl_ser.save(company=getattr(self.request, 'company', None))
                     vente.bon_livraison = bl
                     vente.save(update_fields=['bon_livraison'])
-            except Exception as e:
-                logger.exception('Erreur creation BL lors de la finalisation de la vente: %s', e)
+                except Exception as e:
+                    logger.exception('Erreur creation BL lors de la finalisation de la vente: %s', e)
+                    bl_error = str(e)
 
         try:
             log_event(self.request, 'vente.complete', target=vente, metadata={'id': vente.id, 'numero': getattr(vente, 'numero', None)})
         except Exception:
             pass
-        return Response({'status': 'Vente terminée'})
+
+        response_data = {'status': 'Vente terminée', 'bl_id': vente.bon_livraison_id}
+        if bl_error:
+            response_data['bl_warning'] = f'Vente terminée mais le bon de livraison n\'a pas pu être créé: {bl_error}'
+        return Response(response_data)
     
+    @action(detail=True, methods=['post'])
+    def create_bl(self, request, pk=None):
+        """Créer manuellement le BL pour une vente terminée qui n'en a pas"""
+        from .serializers import BonLivraisonSerializer
+        vente = self.get_object()
+        if vente.statut != 'completed':
+            return Response({'detail': 'La vente doit être terminée pour créer un bon de livraison.'}, status=400)
+        if vente.bon_livraison_id:
+            return Response({'detail': 'Un bon de livraison existe déjà pour cette vente.', 'bl_id': vente.bon_livraison_id}, status=400)
+        lignes = list(vente.lignes.select_related('produit'))
+        if not lignes:
+            return Response({'detail': 'La vente n\'a aucune ligne.'}, status=400)
+        lignes_data = [
+            {
+                'produit': l.produit_id,
+                'quantite': int(l.quantite or 0),
+                'prixU_snapshot': l.prixU_snapshot,
+            }
+            for l in lignes
+        ]
+        bl_payload = {
+            'client': vente.client_id,
+            'statut': 'validated',
+            'lignes': lignes_data,
+        }
+        bl_ser = BonLivraisonSerializer(data=bl_payload)
+        bl_ser.is_valid(raise_exception=True)
+        bl = bl_ser.save(company=getattr(request, 'company', None))
+        vente.bon_livraison = bl
+        vente.save(update_fields=['bon_livraison'])
+        return Response({'detail': 'Bon de livraison créé avec succès.', 'bl_id': bl.id, 'bl_numero': bl.numero}, status=201)
+
+    @action(detail=False, methods=['post'])
+    def create_mobile_bl(self, request):
+        """Créer un BL pour une vente mobile (VenteTourneeMobile)"""
+        from .distribution_models import VenteTourneeMobile
+        from .serializers import BonLivraisonSerializer
+
+        mobile_id = request.data.get('mobile_id')
+        if not mobile_id:
+            return Response({'detail': 'mobile_id requis.'}, status=400)
+        try:
+            vm = VenteTourneeMobile.objects.select_related('client').get(pk=int(mobile_id))
+        except (VenteTourneeMobile.DoesNotExist, ValueError):
+            return Response({'detail': 'Vente mobile introuvable.'}, status=404)
+
+        if vm.bon_livraison_id:
+            return Response({'detail': 'Un bon de livraison existe déjà pour cette vente.', 'bl_id': vm.bon_livraison_id}, status=400)
+
+        lignes = list(vm.lignes.select_related('produit').all())
+        if not lignes:
+            return Response({'detail': 'La vente mobile n\'a aucune ligne.'}, status=400)
+
+        lignes_data = [
+            {
+                'produit': l.produit_id,
+                'quantite': int(l.quantite or 0),
+                'prixU_snapshot': float(l.prix_unitaire or 0),
+            }
+            for l in lignes
+        ]
+        bl_payload = {
+            'client': vm.client_id,
+            'statut': 'validated',
+            'lignes': lignes_data,
+        }
+        bl_ser = BonLivraisonSerializer(data=bl_payload)
+        bl_ser.is_valid(raise_exception=True)
+        bl = bl_ser.save(company=getattr(request, 'company', None))
+        vm.bon_livraison = bl
+        vm.save(update_fields=['bon_livraison'])
+        return Response({'detail': 'Bon de livraison créé avec succès.', 'bl_id': bl.id, 'bl_numero': bl.numero}, status=201)
+
     @action(detail=True, methods=['post'])
     def cancel(self, request, pk=None):
         """Annuler une vente et restaurer le stock"""
@@ -2967,6 +3264,7 @@ class VenteViewSet(TenantFilterMixin, viewsets.ModelViewSet):
                 'montant_paye': float(v.get_montant_paye() if hasattr(v, 'get_montant_paye') else 0),
                 'reste_a_payer': float(v.get_reste_a_payer() if hasattr(v, 'get_reste_a_payer') else v.total_ttc or 0),
                 'type_paiement': v.type_paiement,
+                'bon_livraison': v.bon_livraison_id,
             })
 
         # Ventes mobiles
@@ -2988,6 +3286,7 @@ class VenteViewSet(TenantFilterMixin, viewsets.ModelViewSet):
                     'reste_a_payer': max(0, reste),
                     'type_paiement': vm.type_paiement,
                     'tournee': vm.tournee.numero_tournee if vm.tournee else None,
+                    'bon_livraison': vm.bon_livraison_id,
                 })
         except Exception as e:
             logger.warning(f"Erreur chargement ventes mobiles: {e}")
@@ -3073,25 +3372,221 @@ class VenteViewSet(TenantFilterMixin, viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'])
     def printable(self, request, pk=None):
-        """Version imprimable de la vente"""
+        """Version imprimable de la vente — même format que la facture"""
+        from django.http import HttpResponse
+        import html as _html
+
         vente = self.get_object()
-        rows = ''.join([
-            f"<tr><td>{i+1}</td><td>{l.designation}</td><td>{l.quantite}</td><td>{l.prixU_snapshot}</td><td>{l.quantite * l.prixU_snapshot}</td></tr>"
-            for i, l in enumerate(vente.lignes.all())
-        ])
-        html = f"""
-        <html><head><meta charset='utf-8'><title>Vente {vente.numero}</title>
-        <style>table{{width:100%;border-collapse:collapse}}td,th{{border:1px solid #ddd;padding:8px;text-align:left}}</style>
-        </head><body onload='window.print()'>
-        <h2>Vente {vente.numero}</h2>
-        <p>Date: {vente.date_vente} - Client: {vente.client.nom} {vente.client.prenom} - Statut: {vente.statut}</p>
-        <p>Type de paiement: {vente.get_type_paiement_display()}</p>
-        <table><thead><tr><th>#</th><th>Désignation</th><th>Qté</th><th>PU</th><th>Total</th></tr></thead>
-        <tbody>{rows}</tbody></table>
-        <h3>Total HT: {vente.total_ht} | Remise: {vente.remise_percent}% | Total TTC: {vente.total_ttc}</h3>
-        </body></html>
-        """
-        return Response(html, content_type='text/html')
+        cfg   = SystemConfig.get_solo()
+        company = vente.company
+        client  = vente.client
+        bl      = vente.bon_livraison
+
+        def _e(v): return _html.escape(str(v or ''))
+
+        co_name    = _e(cfg.ticket_company_name or (company.name if company else ''))
+        co_adresse = _e(cfg.ticket_company_address or (company.adresse if company else ''))
+        co_tel     = _e(cfg.ticket_company_phone or (company.telephone if company else ''))
+        co_email   = _e(company.email if company else '')
+        co_tax     = _e(company.tax_id if company else '')
+
+        cl_nom     = _e(f'{client.nom} {client.prenom}'.strip())
+        cl_adresse = _e(client.adresse or '')
+        cl_tel     = _e(client.telephone or '')
+        cl_email   = _e(client.email or '')
+        cl_rc      = _e(client.rc or '')
+        cl_nif     = _e(client.nif or '')
+        cl_nis     = _e(client.nis or '')
+        cl_ai      = _e(client.ai or '')
+
+        fmt_date = lambda d: d.strftime('%d/%m/%Y') if d else '—'
+        date_vente = fmt_date(vente.date_vente.date() if hasattr(vente.date_vente, 'date') else vente.date_vente)
+        date_bl    = fmt_date(bl.date_creation) if bl else '—'
+        bl_numero  = _e(bl.numero if bl else '—')
+
+        def fmt(v):
+            v = Decimal(str(v or 0))
+            entier, dec = f'{v:.2f}'.split('.')
+            entier_fmt = ''
+            for i, c in enumerate(reversed(entier)):
+                if i and i % 3 == 0:
+                    entier_fmt = ' ' + entier_fmt
+                entier_fmt = c + entier_fmt
+            return f'{entier_fmt},{dec} DA'
+
+        currency_sym = vente.currency.symbol if vente.currency else 'DA'
+
+        rows_html = ''
+        for l in vente.lignes.all():
+            montant = l.prixU_snapshot * l.quantite
+            rows_html += f"""
+            <tr>
+              <td>{_e(l.designation)}</td>
+              <td class="r">{l.quantite:,} Unité(s)</td>
+              <td class="r">{l.prixU_snapshot:.4f}</td>
+              <td class="r">—</td>
+              <td class="r">—</td>
+              <td class="r">{fmt(montant)}</td>
+            </tr>"""
+
+        remise_montant = Decimal(str(vente.total_ht or 0)) * Decimal(str(vente.remise_percent or 0)) / 100
+        lettres = _nombre_en_lettres(vente.total_ttc)
+
+        fiscal_client = ''
+        if cl_rc or cl_nif:
+            fiscal_client += f'<div class="fiscal">RC : {cl_rc}&nbsp;&nbsp;&nbsp;NIF : {cl_nif}</div>'
+        if cl_nis or cl_ai:
+            fiscal_client += f'<div class="fiscal">NIS : {cl_nis}&nbsp;&nbsp;&nbsp;ART : {cl_ai}</div>'
+        if cl_tel or cl_email:
+            fiscal_client += f'<div class="fiscal">Tél : {cl_tel}'
+            if cl_email:
+                fiscal_client += f'&nbsp;&nbsp;&nbsp;Email : {cl_email}'
+            fiscal_client += '</div>'
+
+        html_doc = f"""<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Vente {_e(vente.numero)}</title>
+  <style>
+    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    body {{ font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #222; background: #fff; padding: 28px 32px; }}
+    .header {{ display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; }}
+    .logo {{ font-size: 26px; font-style: italic; color: #b07830; font-weight: 300; letter-spacing: 1px; }}
+    .company-info {{ text-align: right; font-size: 10.5px; color: #444; line-height: 1.6; }}
+    .company-info strong {{ font-size: 12px; color: #222; }}
+    .client-block {{ margin-bottom: 18px; font-size: 10.5px; line-height: 1.7; }}
+    .client-block .client-name {{ font-weight: bold; font-size: 12px; text-transform: uppercase; }}
+    .fiscal {{ color: #444; }}
+    .facture-title {{ font-size: 22px; font-weight: bold; color: #b07830; margin: 20px 0 14px; }}
+    .dates-row {{ width: 100%; border-collapse: collapse; margin-bottom: 16px; }}
+    .dates-row th {{ background: #f0f0f0; border: 1px solid #ccc; padding: 5px 10px; font-size: 10px; color: #666; font-weight: normal; text-align: center; }}
+    .dates-row td {{ border: 1px solid #ccc; padding: 5px 10px; text-align: center; font-size: 11px; }}
+    .items-table {{ width: 100%; border-collapse: collapse; margin-bottom: 18px; }}
+    .items-table thead tr {{ background: #f0f0f0; border-top: 2px solid #b07830; border-bottom: 1px solid #ccc; }}
+    .items-table th {{ padding: 7px 8px; text-align: left; font-size: 10.5px; color: #444; font-weight: bold; border: 1px solid #ddd; }}
+    .items-table td {{ padding: 6px 8px; border: 1px solid #e0e0e0; vertical-align: middle; }}
+    .items-table tbody tr:nth-child(even) {{ background: #fafafa; }}
+    .r {{ text-align: right; }}
+    .totals-wrap {{ display: flex; justify-content: flex-end; margin-bottom: 14px; }}
+    .totals-table {{ width: 340px; border-collapse: collapse; font-size: 11px; }}
+    .totals-table td {{ padding: 5px 10px; border: 1px solid #ddd; }}
+    .totals-table .label {{ color: #444; }}
+    .totals-table .amount {{ text-align: right; font-weight: bold; }}
+    .totals-table .row-total {{ background: #f5c4a0; }}
+    .totals-table .row-ttc {{ background: #e8935a; color: #fff; font-weight: bold; }}
+    .totals-table .mention {{ font-size: 9px; color: #666; font-style: italic; border: none; padding-top: 3px; text-align: right; }}
+    .payment-block {{ margin-bottom: 14px; font-size: 10.5px; line-height: 1.8; color: #333; }}
+    .lettres {{ font-style: italic; font-size: 10.5px; color: #333; border-top: 1px dashed #ccc; padding-top: 8px; margin-bottom: 32px; }}
+    .signature {{ display: flex; justify-content: flex-end; margin-bottom: 40px; }}
+    .signature-box {{ width: 200px; border-top: 1px solid #999; text-align: center; padding-top: 6px; font-size: 10px; color: #666; }}
+    .footer {{ border-top: 1.5px solid #b07830; padding-top: 10px; display: flex; justify-content: space-between; font-size: 9.5px; color: #444; line-height: 1.6; }}
+    .footer-col {{ width: 32%; }}
+    .footer-col strong {{ color: #222; font-size: 10px; }}
+    .print-btn {{ position: fixed; top: 16px; right: 16px; padding: 8px 18px; background: #b07830; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-family: Arial, sans-serif; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }}
+    .print-btn:hover {{ background: #8a5e22; }}
+    @media print {{ .print-btn {{ display: none; }} body {{ padding: 10px 14px; }} }}
+  </style>
+</head>
+<body>
+  <button class="print-btn" onclick="window.print()">🖨 Imprimer</button>
+
+  <div class="header">
+    <div class="logo">{co_name}</div>
+    <div class="company-info">
+      <strong>{co_name}</strong><br>
+      {co_adresse.replace(chr(10), '<br>')}<br>
+      {'Tél : ' + co_tel if co_tel else ''}
+      {'&nbsp;&nbsp;|&nbsp;&nbsp;' + co_email if co_email else ''}
+    </div>
+  </div>
+
+  <div class="client-block">
+    <div class="client-name">{cl_nom}</div>
+    <div>{cl_adresse}</div>
+    {fiscal_client}
+  </div>
+
+  <div class="facture-title">Bon de Vente {_e(vente.numero)}</div>
+
+  <table class="dates-row">
+    <thead>
+      <tr>
+        <th>Date de vente</th>
+        <th>Date BL</th>
+        <th>N° Vente</th>
+        <th>N° BL / Référence</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>{date_vente}</td>
+        <td>{date_bl}</td>
+        <td>{_e(vente.numero)}</td>
+        <td>{bl_numero}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <table class="items-table">
+    <thead>
+      <tr>
+        <th>Désignation</th>
+        <th class="r">Quantité</th>
+        <th class="r">Prix unitaire</th>
+        <th class="r">Remise</th>
+        <th class="r">TVA</th>
+        <th class="r">Montant</th>
+      </tr>
+    </thead>
+    <tbody>{rows_html}</tbody>
+  </table>
+
+  <div class="totals-wrap">
+    <table class="totals-table">
+      <tr>
+        <td class="label">Montant hors taxes</td>
+        <td class="amount">{fmt(vente.total_ht)}</td>
+      </tr>
+      {'<tr><td class="label">Remise (' + str(vente.remise_percent) + '%)</td><td class="amount">- ' + fmt(remise_montant) + '</td></tr>' if vente.remise_percent else ''}
+      <tr class="row-total">
+        <td class="label">Total</td>
+        <td class="amount">{fmt(vente.total_ttc)}</td>
+      </tr>
+      <tr class="row-ttc">
+        <td>NET TTC</td>
+        <td class="amount">{fmt(vente.total_ttc)}</td>
+      </tr>
+      <tr><td colspan="2" class="mention">Montant total en toutes lettres</td></tr>
+      <tr><td colspan="2" class="mention">Les montants sont indiqués en Dinars Algériens (DA)</td></tr>
+    </table>
+  </div>
+
+  <div class="payment-block">
+    <strong>Confirmation de vente :</strong> {_e(vente.numero)}<br>
+    <strong>Mode de paiement :</strong> {_e(vente.get_type_paiement_display())}
+  </div>
+
+  <div class="lettres">
+    <strong>Totalité en lettres :</strong> {_html.escape(lettres)}
+  </div>
+
+  <div class="signature">
+    <div class="signature-box">Signature &amp; Cachet</div>
+  </div>
+
+  <div class="footer">
+    <div class="footer-col"><strong>{co_name}</strong><br>{co_adresse.replace(chr(10), '<br>')}</div>
+    <div class="footer-col">{('NIF : ' + co_tax + '<br>') if co_tax else ''}</div>
+    <div class="footer-col" style="text-align:right">
+      {('Tél : ' + co_tel + '<br>') if co_tel else ''}
+      {('Email : ' + co_email) if co_email else ''}
+    </div>
+  </div>
+
+</body>
+</html>"""
+        return HttpResponse(html_doc, content_type='text/html; charset=utf-8')
 
     @action(detail=True, methods=['get'])
     def ticket(self, request, pk=None):
