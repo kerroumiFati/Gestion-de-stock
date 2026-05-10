@@ -25,6 +25,9 @@ on:
         default: true
         type: boolean
 
+permissions:
+  contents: read
+
 jobs:
   deploy:
     name: Deploy to ${{ github.event.inputs.environment }}
@@ -33,6 +36,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Display deployment info
         run: |
