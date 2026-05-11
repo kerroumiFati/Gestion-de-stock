@@ -44,3 +44,4 @@ db.sqlite3
 __pycache__/
 *.pyc
 node_modules/
+tmp_rovodev_remote/
