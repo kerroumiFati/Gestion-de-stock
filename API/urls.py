@@ -445,6 +445,8 @@ urlpatterns = [
     path('reports/stock-valuation/', views.export_stock_valuation, name='export-stock-valuation'),
     path('reports/sales/', views.export_sales_report, name='export-sales-report'),
     path('reports/inventory/', views.export_inventory_report, name='export-inventory-report'),
+    path('reports/profit/', views.export_profit_report, name='export-profit-report'),
+    path('reports/profit-data/', views.profit_data, name='profit-data'),
 
     # Import de données - DOIT ÊTRE AVANT le router
     path('import/test/', test_import, name='import-test'),

@@ -614,3 +614,119 @@ def generate_inventory_report_pdf():
     gen.add_summary_box(summary_data)
 
     return gen.build()
+
+
+# ======================
+# RAPPORT DES BÉNÉFICES
+# ======================
+
+def _get_profit_data():
+    """Calcule prix_vente - prix_achat_moyen par produit. Retourne (list_rows, total_benefice)."""
+    from collections import defaultdict
+
+    # Prix d'achat moyen par produit (normalisé à la pièce)
+    product_prix_achat = defaultdict(list)
+    for achat in Achat.objects.all():
+        prix_piece = achat.get_prix_unitaire_piece()
+        if prix_piece:
+            product_prix_achat[achat.produit_id].append(Decimal(str(prix_piece)))
+
+    # Stock total par produit (tous entrepôts)
+    product_qty = defaultdict(int)
+    for ps in ProductStock.objects.filter(quantity__gt=0):
+        product_qty[ps.produit_id] += ps.quantity
+
+    products = Produit.objects.filter(is_active=True).select_related('categorie').order_by('designation')
+
+    rows = []
+    total_benefice = Decimal('0.00')
+
+    for product in products:
+        prix_vente = product.prixU or Decimal('0.00')
+        prix_achats = product_prix_achat.get(product.id, [])
+        avg_achat = sum(prix_achats) / len(prix_achats) if prix_achats else Decimal('0.00')
+        avg_achat = Decimal(str(round(float(avg_achat), 2)))
+
+        benefice_unit = prix_vente - avg_achat
+        qty = product_qty.get(product.id, 0)
+        benefice_total = benefice_unit * qty
+        total_benefice += benefice_total
+
+        rows.append({
+            'reference': product.reference,
+            'designation': product.designation,
+            'prix_vente': prix_vente,
+            'avg_achat': avg_achat,
+            'benefice_unit': benefice_unit,
+            'qty': qty,
+            'benefice_total': benefice_total,
+        })
+
+    return rows, total_benefice
+
+
+def generate_profit_report_excel():
+    """Rapport des bénéfices par produit (Excel) — prix vente - prix achat moyen."""
+    gen = ExcelReportGenerator()
+    gen.ws.title = "Bénéfices"
+
+    # Titre sur 7 colonnes
+    gen.ws.merge_cells('A1:G1')
+    cell = gen.ws['A1']
+    cell.value = "RAPPORT DES BÉNÉFICES PAR PRODUIT"
+    cell.font = gen.title_font
+    cell.alignment = Alignment(horizontal='center', vertical='center')
+    current_row = 2
+    current_row = gen.add_metadata(current_row)
+
+    headers = ['Référence', 'Désignation', 'Prix Vente', 'Prix Achat Moy.', 'Bénéfice Unit.', 'Qté Stock', 'Bénéfice Total']
+    gen.set_column_widths([15, 30, 15, 18, 18, 12, 18])
+    current_row = gen.add_header_row(headers, current_row)
+
+    rows, total_benefice = _get_profit_data()
+    data_rows = [
+        [r['reference'], r['designation'], float(r['prix_vente']), float(r['avg_achat']),
+         float(r['benefice_unit']), r['qty'], float(r['benefice_total'])]
+        for r in rows
+    ]
+    current_row = gen.add_data_rows(data_rows, current_row, number_columns=[3, 4, 5, 6, 7])
+
+    gen.add_total_row(current_row, 5, "BÉNÉFICE TOTAL", {7: float(total_benefice)})
+
+    return gen.save_to_buffer()
+
+
+def generate_profit_report_pdf():
+    """Rapport des bénéfices par produit (PDF) — prix vente - prix achat moyen."""
+    gen = PDFReportGenerator("RAPPORT DES BÉNÉFICES PAR PRODUIT", orientation='landscape')
+    gen.add_title()
+    gen.add_metadata()
+
+    rows, total_benefice = _get_profit_data()
+
+    table_data = [['Référence', 'Désignation', 'Prix Vente', 'Prix Achat Moy.', 'Bénéf. Unit.', 'Qté', 'Bénéf. Total']]
+    for r in rows:
+        table_data.append([
+            r['reference'],
+            r['designation'][:28],
+            f"{r['prix_vente']:.2f}",
+            f"{r['avg_achat']:.2f}",
+            f"{r['benefice_unit']:.2f}",
+            str(r['qty']),
+            f"{r['benefice_total']:.2f}",
+        ])
+    table_data.append(['', '', '', '', 'TOTAL', '', f"{total_benefice:.2f}"])
+
+    gen.add_table(table_data, col_widths=[1*inch, 2.2*inch, 1.1*inch, 1.2*inch, 1.1*inch, 0.7*inch, 1.2*inch])
+
+    products_positive = sum(1 for r in rows if r['benefice_unit'] > 0)
+    products_negative = sum(1 for r in rows if r['benefice_unit'] < 0)
+    summary_data = [
+        ['Total produits analysés:', str(len(rows))],
+        ['Produits bénéficiaires:', str(products_positive)],
+        ['Produits déficitaires:', str(products_negative)],
+        ['Bénéfice total estimé:', f"{total_benefice:.2f}"],
+    ]
+    gen.add_summary_box(summary_data)
+
+    return gen.build()

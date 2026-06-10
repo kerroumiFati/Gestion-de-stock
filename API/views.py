@@ -4185,7 +4185,10 @@ from .reports import (
     generate_sales_report_excel,
     generate_sales_report_pdf,
     generate_inventory_report_excel,
-    generate_inventory_report_pdf
+    generate_inventory_report_pdf,
+    generate_profit_report_excel,
+    generate_profit_report_pdf,
+    _get_profit_data,
 )
 
 
@@ -4323,6 +4326,55 @@ def export_inventory_report(request):
 
     except Exception as e:
         logger.exception(f"Erreur lors de l'export du rapport d'inventaire: {e}")
+        return Response({'error': str(e)}, status=500)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def profit_data(request):
+    """Données JSON pour le rapport des bénéfices (prix vente - prix achat moyen)."""
+    rows, total_benefice = _get_profit_data()
+    results = []
+    for r in rows:
+        results.append({
+            'reference': r['reference'],
+            'designation': r['designation'],
+            'prix_vente': float(r['prix_vente']),
+            'prix_achat_moy': float(r['avg_achat']),
+            'benefice_unit': float(r['benefice_unit']),
+            'quantite_stock': r['qty'],
+            'benefice_total': float(r['benefice_total']),
+        })
+    return Response({
+        'products': results,
+        'total_benefice': float(total_benefice),
+        'count': len(results),
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def export_profit_report(request):
+    """Export du rapport des bénéfices (Excel ou PDF)."""
+    export_format = request.GET.get('format', 'excel').lower()
+    try:
+        if export_format == 'pdf':
+            buffer = generate_profit_report_pdf()
+            response = HttpResponse(buffer, content_type='application/pdf')
+            filename = f'rapport_benefices_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf'
+        else:
+            buffer = generate_profit_report_excel()
+            response = HttpResponse(
+                buffer,
+                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+            filename = f'rapport_benefices_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        log_event(request, 'report.export_profit', target=None, metadata={'format': export_format, 'filename': filename})
+        return response
+    except Exception as e:
+        logger.exception(f"Erreur rapport bénéfices: {e}")
         return Response({'error': str(e)}, status=500)
 
 

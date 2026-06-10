@@ -48,6 +48,7 @@ urlpatterns = [
     path('reports/stock-valuation/', views_reports.export_stock_valuation, name='export-stock-valuation'),
     path('reports/sales/', views_reports.export_sales_report, name='export-sales-report'),
     path('reports/inventory/', views_reports.export_inventory_report, name='export-inventory-report'),
+    path('reports/profit/', views_reports.export_profit_report, name='export-profit-report'),
 
     # Users admin (nouvelle interface moderne)
     path('admin-users/', views.admin_users, name='admin_users'),

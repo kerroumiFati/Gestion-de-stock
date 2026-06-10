@@ -483,6 +483,9 @@
                             <li><a href="#" onclick="show('rapports');return false;">
                                 <i class="fas fa-file-export"></i>{% trans "Rapports" %}
                             </a></li>
+                            <li><a href="#" onclick="show('rapport_benefices');return false;">
+                                <i class="fas fa-coins"></i>{% trans "Rapport des Bénéfices" %}
+                            </a></li>
                             {% endif %}
                             {% if perms.API.manage_clients or user.is_superuser %}
                             <li><a href="/admindash/clients-solde-dashboard" class="sidebar-item" onclick="show('clients_solde_dashboard');return false;">

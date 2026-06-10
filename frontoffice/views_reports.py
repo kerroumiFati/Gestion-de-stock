@@ -10,7 +10,9 @@ from API.reports import (
     generate_sales_report_excel,
     generate_sales_report_pdf,
     generate_inventory_report_excel,
-    generate_inventory_report_pdf
+    generate_inventory_report_pdf,
+    generate_profit_report_excel,
+    generate_profit_report_pdf,
 )
 from API.audit import log_event
 
@@ -121,6 +123,38 @@ def export_inventory_report(request):
         log_event(
             request=request,
             action='report.export_inventory',
+            target=None,
+            metadata={'format': export_format, 'filename': filename}
+        )
+
+        return response
+    except Exception as e:
+        return HttpResponse(f'Erreur: {str(e)}', status=500)
+
+
+@login_required
+def export_profit_report(request):
+    """Export du rapport des bénéfices (prix vente - prix achat)"""
+    export_format = request.GET.get('format', 'excel').lower()
+
+    try:
+        if export_format == 'pdf':
+            buffer = generate_profit_report_pdf()
+            response = HttpResponse(buffer, content_type='application/pdf')
+            filename = f'rapport_benefices_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf'
+        else:
+            buffer = generate_profit_report_excel()
+            response = HttpResponse(
+                buffer,
+                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+            filename = f'rapport_benefices_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+
+        log_event(
+            request=request,
+            action='report.export_profit',
             target=None,
             metadata={'format': export_format, 'filename': filename}
         )
