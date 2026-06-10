@@ -160,9 +160,12 @@ class TourneeMobile(models.Model):
         arrets_echec = arrets.filter(statut='echec').count()
         arrets_en_attente = arrets.filter(statut='en_attente').count()
 
-        ca_total = sum(
-            vente.montant_total for vente in self.ventes.all()
-        )
+        try:
+            ca_total = float(sum(
+                vente.montant_total for vente in self.ventes.all()
+            ))
+        except Exception:
+            ca_total = 0
 
         return {
             'total_arrets': total_arrets,

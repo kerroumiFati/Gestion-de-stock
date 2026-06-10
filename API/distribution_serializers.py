@@ -203,7 +203,12 @@ class ArretTourneeSerializer(serializers.ModelSerializer):
     client_nom = serializers.CharField(source='client.nom', read_only=True)
     client_adresse = serializers.CharField(source='client.adresse', read_only=True)
     client_telephone = serializers.CharField(source='client.telephone', read_only=True)
-    client_code = serializers.CharField(source='client.code', read_only=True, allow_null=True)
+    client_code = serializers.SerializerMethodField()
+
+    def get_client_code(self, obj):
+        if obj.client:
+            return str(obj.client.uuid) if obj.client.uuid else str(obj.client.id)
+        return None
     # Coordonnées GPS du client
     client_lat = serializers.DecimalField(source='client.lat', max_digits=10, decimal_places=7, read_only=True, allow_null=True)
     client_lng = serializers.DecimalField(source='client.lng', max_digits=10, decimal_places=7, read_only=True, allow_null=True)
@@ -616,55 +621,56 @@ class TourneeSerializer(serializers.ModelSerializer):
 
     def get_statistiques(self, obj):
         import json
-        from decimal import Decimal
+        import logging
+        logger = logging.getLogger(__name__)
 
-        stats = obj.stats()
-
-        # Ajouter détails des arrêts par statut
-        arrets = obj.arrets.all().select_related('client')
-        arrets_visites = []
-        arrets_restants = []
-
-        for arret in arrets:
-            arret_data = {
-                'id': arret.id,
-                'client_nom': arret.client.nom if arret.client else 'Client inconnu',
-                'client_prenom': arret.client.prenom if arret.client else '',
-                'adresse': arret.client.adresse if arret.client else '',
-                # Coordonnées GPS du client
-                'client_lat': float(arret.client.lat) if arret.client and arret.client.lat else None,
-                'client_lng': float(arret.client.lng) if arret.client and arret.client.lng else None,
-                # Coordonnées GPS de l'arrêt (capturées lors de la livraison)
-                'latitude': float(arret.latitude) if arret.latitude else None,
-                'longitude': float(arret.longitude) if arret.longitude else None,
-                'ordre': arret.ordre_passage,
-                'heure_prevue': str(arret.heure_prevue) if arret.heure_prevue else None,
-                'statut': arret.statut,
-                'heure_arrivee': str(arret.heure_arrivee) if arret.heure_arrivee else None,
-                'nom_receptionnaire': arret.nom_receptionnaire or '',
-                'motif_echec': arret.motif_echec or ''
+        try:
+            stats = obj.stats()
+        except Exception as e:
+            logger.error(f"[TourneeSerializer] stats() failed for tournee {obj.id}: {e}")
+            stats = {
+                'total_arrets': 0, 'arrets_livres': 0, 'arrets_echec': 0,
+                'arrets_en_attente': 0, 'taux_reussite': 0, 'ca_total': 0,
+                'error': str(e),
             }
 
-            if arret.statut in ['livre', 'echec']:
-                arrets_visites.append(arret_data)
-            else:
-                arrets_restants.append(arret_data)
+        # Détail des arrêts (utilise le prefetch_related si disponible)
+        arrets_visites = []
+        arrets_restants = []
+        try:
+            for arret in obj.arrets.all():
+                arret_data = {
+                    'id': arret.id,
+                    'client_nom': arret.client.nom if arret.client else 'Client inconnu',
+                    'client_prenom': arret.client.prenom if arret.client else '',
+                    'adresse': arret.client.adresse if arret.client else '',
+                    'client_lat': float(arret.client.lat) if arret.client and arret.client.lat else None,
+                    'client_lng': float(arret.client.lng) if arret.client and arret.client.lng else None,
+                    'latitude': float(arret.latitude) if arret.latitude else None,
+                    'longitude': float(arret.longitude) if arret.longitude else None,
+                    'ordre': arret.ordre_passage,
+                    'heure_prevue': str(arret.heure_prevue) if arret.heure_prevue else None,
+                    'statut': arret.statut,
+                    'heure_arrivee': str(arret.heure_arrivee) if arret.heure_arrivee else None,
+                    'nom_receptionnaire': arret.nom_receptionnaire or '',
+                    'motif_echec': arret.motif_echec or '',
+                }
+                if arret.statut in ['livre', 'echec']:
+                    arrets_visites.append(arret_data)
+                else:
+                    arrets_restants.append(arret_data)
+        except Exception as e:
+            logger.error(f"[TourneeSerializer] arrets loop failed for tournee {obj.id}: {e}")
 
         stats['arrets_visites'] = arrets_visites
         stats['arrets_restants'] = arrets_restants
 
-        # Ajouter informations caisse si disponible
+        # Informations caisse
         try:
             rapport_caisse = obj.rapport_caisse
-
-            # Détail des billets
             detail_billets = {}
-            if hasattr(rapport_caisse, 'detail_billets_json') and rapport_caisse.detail_billets_json:
-                try:
-                    detail_billets = json.loads(rapport_caisse.detail_billets_json)
-                except (json.JSONDecodeError, ValueError):
-                    detail_billets = {}
-
+            if hasattr(rapport_caisse, 'detail_billets') and rapport_caisse.detail_billets:
+                detail_billets = rapport_caisse.detail_billets if isinstance(rapport_caisse.detail_billets, dict) else {}
             stats['caisse'] = {
                 'fonds_depart': float(rapport_caisse.fonds_depart or 0),
                 'total_especes': float(rapport_caisse.total_especes or 0),
@@ -677,10 +683,17 @@ class TourneeSerializer(serializers.ModelSerializer):
                 'solde_final_reel': float(rapport_caisse.solde_final_reel or 0),
                 'ecart': float(rapport_caisse.ecart or 0),
                 'detail_billets': detail_billets,
-                'statut': rapport_caisse.statut
+                'statut': rapport_caisse.statut,
             }
         except RapportCaisseMobile.DoesNotExist:
             stats['caisse'] = None
+        except Exception as e:
+            logger.error(f"[TourneeSerializer] rapport_caisse failed for tournee {obj.id}: {e}")
+            stats['caisse'] = None
+
+        # Convertir les Decimal en float pour la sérialisation JSON
+        if 'ca_total' in stats and hasattr(stats['ca_total'], '__float__'):
+            stats['ca_total'] = float(stats['ca_total'])
 
         return stats
 
