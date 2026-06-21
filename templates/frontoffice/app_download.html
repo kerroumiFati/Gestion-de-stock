@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Télécharger l'application</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #f0f4f8;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 40px 32px;
+            max-width: 420px;
+            width: 100%;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+            text-align: center;
+        }
+        .icon {
+            font-size: 64px;
+            margin-bottom: 16px;
+        }
+        h1 {
+            font-size: 22px;
+            color: #1a202c;
+            margin-bottom: 8px;
+        }
+        .subtitle {
+            color: #718096;
+            font-size: 14px;
+            margin-bottom: 32px;
+        }
+        .btn-download {
+            display: inline-block;
+            background: #2563eb;
+            color: white;
+            text-decoration: none;
+            padding: 14px 32px;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 28px;
+            transition: background 0.2s;
+        }
+        .btn-download:hover { background: #1d4ed8; }
+        .steps {
+            text-align: left;
+            background: #f7fafc;
+            border-radius: 10px;
+            padding: 20px 24px;
+        }
+        .steps h3 {
+            font-size: 13px;
+            font-weight: 700;
+            color: #4a5568;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 12px;
+        }
+        .step {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 10px;
+            font-size: 14px;
+            color: #4a5568;
+        }
+        .step:last-child { margin-bottom: 0; }
+        .step-num {
+            background: #2563eb;
+            color: white;
+            border-radius: 50%;
+            width: 22px;
+            height: 22px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 700;
+        }
+        .warning {
+            margin-top: 16px;
+            padding: 12px;
+            background: #fffbeb;
+            border: 1px solid #fcd34d;
+            border-radius: 8px;
+            font-size: 13px;
+            color: #92400e;
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="icon">📦</div>
+        <h1>Application GestionStock</h1>
+        <p class="subtitle">Application mobile pour les livreurs</p>
+
+        <a href="{{ apk_url }}" class="btn-download">
+            ⬇️ &nbsp;Télécharger l'APK
+        </a>
+
+        <div class="steps">
+            <h3>Comment installer</h3>
+            <div class="step">
+                <span class="step-num">1</span>
+                <span>Appuyez sur le bouton pour télécharger le fichier APK</span>
+            </div>
+            <div class="step">
+                <span class="step-num">2</span>
+                <span>Ouvrez le fichier téléchargé depuis vos notifications ou le dossier <strong>Téléchargements</strong></span>
+            </div>
+            <div class="step">
+                <span class="step-num">3</span>
+                <span>Si demandé, autorisez l'installation depuis des <strong>sources inconnues</strong> dans Paramètres → Sécurité</span>
+            </div>
+            <div class="step">
+                <span class="step-num">4</span>
+                <span>Appuyez sur <strong>Installer</strong> et patientez</span>
+            </div>
+        </div>
+
+        <div class="warning">
+            ⚠️ Cette application est réservée aux livreurs autorisés. Ne la partagez pas à l'extérieur.
+        </div>
+    </div>
+</body>
+</html>

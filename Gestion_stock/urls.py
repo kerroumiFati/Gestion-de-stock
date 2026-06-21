@@ -21,6 +21,7 @@ from django.views.generic import TemplateView, RedirectView
 from frontoffice.create_admin import create_first_admin
 from frontoffice.check_admin import check_existing_admins
 from frontoffice.views_company import create_company_view, list_companies_view, delete_company_view
+from frontoffice.views_app_download import app_download_page, app_download_redirect
 from API.map_view import livreurs_map_view, livreurs_map_data_view
 from django.conf import settings
 from django.conf.urls.static import static
@@ -47,6 +48,10 @@ urlpatterns = [
     path('admindash/livreurs-map/', login_required(livreurs_map_view), name='livreurs_map'),
     path('admindash/livreurs-map/data/', login_required(livreurs_map_data_view), name='livreurs_map_data'),
     path('livreur/app/', TemplateView.as_view(template_name='frontoffice/page/livreur_mobile.html'), name='livreur_app'),
+
+    # Téléchargement APK
+    path('telecharger-app/', app_download_page, name='app_download'),
+    path('telecharger-app/apk/', app_download_redirect, name='app_download_apk'),
 
     # Legacy SPA routes
     re_path(r'^admindash/$', login_required(TemplateView.as_view(template_name='frontoffice/master_page.html'))),
