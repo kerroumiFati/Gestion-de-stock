@@ -84,6 +84,7 @@ class LivreurViewSet(viewsets.ModelViewSet):
         password = f"{username}{jour}{mois}"
         return password
 
+    @transaction.atomic
     def create(self, request, *args, **kwargs):
         """Créer un livreur et son compte utilisateur automatiquement"""
         from django.contrib.auth.models import Group
@@ -92,6 +93,10 @@ class LivreurViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
 
         # Sauvegarder le livreur
+        # @transaction.atomic : si la création du compte User échoue après celle du
+        # livreur (ex: username en double), tout est annulé plutôt que de laisser un
+        # livreur orphelin sans compte, qui ferait échouer toutes les tentatives
+        # suivantes avec la même erreur.
         livreur = serializer.save()
 
         # Créer un compte utilisateur si pas encore créé

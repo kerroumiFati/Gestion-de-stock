@@ -304,6 +304,15 @@ function setupFormHandlers() {
         const url = id ? `/API/livreurs/${id}/` : '/API/livreurs/';
         const method = id ? 'PUT' : 'POST';
 
+        // Désactive le bouton pendant la requête pour donner un retour visuel immédiat
+        // et éviter les double-soumissions (qui prolongeaient la sensation de blocage).
+        const submitBtn = form.querySelector('button[type="submit"]');
+        const submitBtnOriginalText = submitBtn ? submitBtn.innerHTML : '';
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enregistrement...';
+        }
+
         fetch(url, {
             method: method,
             headers: {
@@ -312,13 +321,22 @@ function setupFormHandlers() {
             },
             body: JSON.stringify(data)
         })
-        .then(response => response.json())
-        .then(result => {
-            console.log('[LIVREURS] Réponse du serveur:', result);
-            console.log('[LIVREURS] ID:', id);
-            console.log('[LIVREURS] compte_cree:', result.compte_cree);
-            console.log('[LIVREURS] username:', result.username);
-            console.log('[LIVREURS] mot_de_passe_initial:', result.mot_de_passe_initial);
+        .then(response => response.json().then(result => ({ ok: response.ok, status: response.status, result })))
+        .then(({ ok, status, result }) => {
+            console.log('[LIVREURS] Réponse du serveur:', status, result);
+
+            if (!ok) {
+                // Avant ce correctif, une erreur serveur (ex: matricule dupliqué, champ
+                // manquant) était silencieusement traitée comme un succès car le code
+                // ne vérifiait jamais response.ok : le modal ne se fermait jamais et
+                // "Enregistrer" restait la seule action possible, sans jamais dire à
+                // l'utilisateur ce qui bloquait.
+                const msg = result && (result.detail || result.error || result.message)
+                    ? (result.detail || result.error || result.message)
+                    : `Erreur lors de l'enregistrement (HTTP ${status})`;
+                showMessage(msg, 'error');
+                return;
+            }
 
             closeLivreurModal();
             loadLivreurs();
@@ -335,6 +353,12 @@ function setupFormHandlers() {
         .catch(error => {
             console.error('Erreur:', error);
             showMessage('Erreur lors de l\'enregistrement', 'error');
+        })
+        .finally(() => {
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = submitBtnOriginalText;
+            }
         });
     });
 }
