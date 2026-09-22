@@ -254,6 +254,30 @@
 .select2-container .select2-results__options {
     background-color: #fff !important;
     max-height: 300px;
+    /* Le thème CDN n'est pas garanti : forcer l'ascenseur vertical, sinon la liste
+       est simplement coupée par l'overflow:hidden du dropdown. */
+    overflow-y: auto !important;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e0 #f1f1f1;
+}
+
+.select2-container .select2-results__options::-webkit-scrollbar {
+    width: 10px;
+}
+
+.select2-container .select2-results__options::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+.select2-container .select2-results__options::-webkit-scrollbar-thumb {
+    background: #cbd5e0;
+    border-radius: 5px;
+    border: 2px solid #f1f1f1;
+}
+
+.select2-container .select2-results__options::-webkit-scrollbar-thumb:hover {
+    background: #a0aec0;
 }
 
 .select2-container .select2-results__option {
