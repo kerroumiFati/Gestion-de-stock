@@ -896,6 +896,9 @@
           } else {
             // Actions pour ventes mobiles
             actions += '<button class="btn btn-sm btn-info view-sale-details" data-id="'+v.id+'"><i class="fa fa-eye"></i> Détails</button> ';
+            if((v.statut||'') === 'completed' && !v.bon_livraison){
+              actions += '<button class="btn btn-sm btn-warning create-bl" data-id="'+v.id+'" title="Créer le bon de livraison manquant"><i class="fa fa-truck"></i> Créer BL</button> ';
+            }
             if(reste > 0) {
               actions += '<button class="btn btn-sm btn-primary add-payment" data-id="'+v.id+'" data-reste="'+reste+'" data-mobile="true"><i class="fa fa-money"></i> Payer</button> ';
             }
@@ -2364,6 +2367,20 @@
       // Convertir les données de vente
       const invoiceData = saleToInvoiceData(CURRENT_SALE_FOR_PRINT, company);
 
+      // Format facture : utiliser l'URL dédiée du serveur (même format que Gestion des Factures)
+      if(format === 'invoice'){
+        window.open(`/API/ventes/${CURRENT_SALE_FOR_PRINT.id}/printable/`, '_blank');
+        $('#printFormatModal').modal('hide');
+        return;
+      }
+
+      // Pour le BL : utiliser l'URL dédiée si un BL est lié à la vente
+      if(format === 'delivery' && CURRENT_SALE_FOR_PRINT.bon_livraison){
+        window.open(`/API/bons/${CURRENT_SALE_FOR_PRINT.bon_livraison}/printable/`, '_blank');
+        $('#printFormatModal').modal('hide');
+        return;
+      }
+
       // Générer le HTML selon le format
       let html = '';
       switch(format){
@@ -2450,7 +2467,18 @@
       var id = $(this).data('id');
       if(!id) return;
       var $btn = $(this); $btn.prop('disabled', true).text('...');
-      $.ajax({ url:'/API/ventes/'+id+'/create_bl/', method:'POST', headers:{ 'X-CSRFToken': getCSRFToken() } })
+      var isMobileId = String(id).startsWith('mobile_');
+      var ajaxOpts;
+      if(isMobileId){
+        var mobileNumericId = String(id).replace('mobile_', '');
+        ajaxOpts = { url:'/API/ventes/create_mobile_bl/', method:'POST',
+                     data: JSON.stringify({mobile_id: mobileNumericId}),
+                     contentType: 'application/json',
+                     headers:{ 'X-CSRFToken': getCSRFToken() } };
+      } else {
+        ajaxOpts = { url:'/API/ventes/'+id+'/create_bl/', method:'POST', headers:{ 'X-CSRFToken': getCSRFToken() } };
+      }
+      $.ajax(ajaxOpts)
         .done(function(resp){
           alert('Bon de livraison créé : ' + (resp.bl_numero || resp.bl_id));
           loadSalesList();
