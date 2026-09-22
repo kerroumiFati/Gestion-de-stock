@@ -2,6 +2,7 @@
 Vue de la carte GPS des livreurs et clients
 """
 import json
+from django.conf import settings
 from django.shortcuts import render
 from django.http import JsonResponse
 from django.contrib.auth.decorators import login_required
@@ -92,6 +93,11 @@ def livreurs_map_view(request):
         'livreurs_count': len(livreurs_data),
         'clients_count': len(clients_data),
         'secteurs_count': len(secteurs_data),
+        'map_tile_url': settings.MAP_TILE_URL,
+        'map_tile_attribution': settings.MAP_TILE_ATTRIBUTION,
+        'map_tile_subdomains': settings.MAP_TILE_SUBDOMAINS,
+        'map_tile_max_zoom': settings.MAP_TILE_MAX_ZOOM,
+        'map_tile_max_native_zoom': settings.MAP_TILE_MAX_NATIVE_ZOOM,
     })
 
 

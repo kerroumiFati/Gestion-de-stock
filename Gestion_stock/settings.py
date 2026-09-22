@@ -256,6 +256,24 @@ CSRF_TRUSTED_ORIGINS = config(
 # uniquement d'un comportement par défaut fragile de gunicorn (non garanti).
 if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+# Fond de carte (page GPS livreurs/clients). Configurable par environnement :
+# tile.openstreetmap.org bloque les apps multi-utilisateurs (403) et CARTO exige
+# désormais une clé API. Par défaut : tuiles Esri World Street Map, utilisables
+# sans clé. Pour un fournisseur avec clé (MapTiler, Stadia...), définir dans .env :
+#   MAP_TILE_URL=https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=VOTRE_CLE
+#   MAP_TILE_ATTRIBUTION=&copy; MapTiler &copy; OpenStreetMap contributors
+MAP_TILE_URL = config(
+    'MAP_TILE_URL',
+    default='https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}'
+)
+MAP_TILE_ATTRIBUTION = config(
+    'MAP_TILE_ATTRIBUTION',
+    default='Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors'
+)
+MAP_TILE_SUBDOMAINS = config('MAP_TILE_SUBDOMAINS', default='abc')
+MAP_TILE_MAX_ZOOM = config('MAP_TILE_MAX_ZOOM', default=19, cast=int)
+MAP_TILE_MAX_NATIVE_ZOOM = config('MAP_TILE_MAX_NATIVE_ZOOM', default=18, cast=int)
+
 # Session configuration for Django 4.x compatibility
 SESSION_SERIALIZER = 'django.contrib.sessions.serializers.JSONSerializer'
 SESSION_COOKIE_AGE = 1209600  # 2 weeks

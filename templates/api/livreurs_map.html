@@ -507,14 +507,14 @@
         // Initialize map centered on Algeria
         const map = L.map('map').setView([36.7538, 3.0588], 6);
 
-        // Tuiles CARTO (basées sur les données OpenStreetMap) au lieu du serveur
-        // tile.openstreetmap.org, dont la politique d'usage (osm.wiki/Blocked) finit
-        // par bloquer les apps professionnelles avec plusieurs utilisateurs (403
-        // "Access blocked" sur toutes les tuiles).
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-            subdomains: 'abcd',
-            maxZoom: 19
+        // Fond de carte configurable via MAP_TILE_* dans settings/.env (voir settings.py) :
+        // tile.openstreetmap.org bloque les apps multi-utilisateurs (403) et CARTO
+        // exige une clé API. Défaut : Esri World Street Map (sans clé).
+        L.tileLayer('{{ map_tile_url|escapejs }}', {
+            attribution: '{{ map_tile_attribution|escapejs }}',
+            subdomains: '{{ map_tile_subdomains|escapejs }}',
+            maxZoom: {{ map_tile_max_zoom }},
+            maxNativeZoom: {{ map_tile_max_native_zoom }}
         }).addTo(map);
 
         // Layers pour livreurs et clients
