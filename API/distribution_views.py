@@ -8,6 +8,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
 from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
 from django.db import transaction, models
+from django.db.models.deletion import ProtectedError
 from django.shortcuts import get_object_or_404, render
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
@@ -57,6 +58,18 @@ class LivreurViewSet(viewsets.ModelViewSet):
         if self.action in ['create', 'destroy']:
             return [IsAuthenticated(), IsAdminUser()]
         return [IsAuthenticated()]
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        try:
+            return super().destroy(request, *args, **kwargs)
+        except ProtectedError:
+            nb_commandes = instance.commandes_prises.count()
+            return Response(
+                {'error': f"Impossible de supprimer ce livreur : {nb_commandes} commande(s) lui sont encore rattachée(s). "
+                          f"Réaffectez d'abord ces commandes à un autre livreur."},
+                status=status.HTTP_409_CONFLICT
+            )
 
     def generate_password(self, username):
         """

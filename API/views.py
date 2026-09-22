@@ -4,7 +4,8 @@ from decimal import Decimal, InvalidOperation
 from django.contrib.auth import authenticate
 from django.shortcuts import render
 from django.db import transaction
-from django.db.models import Sum, Q, F, Max
+from django.db.models import Sum, Q, F, Max, Prefetch
+from django.db.models.deletion import ProtectedError
 from rest_framework import viewsets, generics, status
 from rest_framework import permissions
 from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
@@ -224,6 +225,18 @@ class CategorieViewSet(TenantFilterMixin, viewsets.ModelViewSet):
             ).distinct().count(),
         }
         return Response(stats)
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        try:
+            return super().destroy(request, *args, **kwargs)
+        except ProtectedError:
+            nb_produits = instance.produits.count()
+            return Response(
+                {'error': f"Impossible de supprimer cette catégorie : {nb_produits} produit(s) y sont encore rattaché(s). "
+                          f"Déplacez ou supprimez d'abord ces produits."},
+                status=status.HTTP_409_CONFLICT
+            )
 
 class ClientViewSet(TenantFilterMixin, viewsets.ModelViewSet):
     queryset = Client.objects.all().order_by('nom')
@@ -821,7 +834,15 @@ class FournisseurViewSet(TenantFilterMixin, viewsets.ModelViewSet):
     pagination_class = None
 
 class ProduitViewSet(TenantFilterMixin, viewsets.ModelViewSet):
-    queryset = Produit.objects.filter(is_active=True).order_by('reference')
+    queryset = Produit.objects.filter(is_active=True).select_related(
+        'categorie', 'fournisseur', 'currency', 'company'
+    ).prefetch_related(
+        'mouvements',
+        Prefetch(
+            'prix_multiples',
+            queryset=PrixProduit.objects.select_related('code_prix', 'type_prix', 'currency')
+        ),
+    ).order_by('reference')
     serializer_class = ProduitSerializer
     permission_classes = [IsAuthenticated]
     filterset_fields = {
@@ -918,7 +939,11 @@ class ProduitViewSet(TenantFilterMixin, viewsets.ModelViewSet):
         except Exception:
             pass
 
+    @transaction.atomic
     def perform_update(self, serializer):
+        # Verrouille la ligne le temps de l'écriture pour éviter qu'une édition
+        # concurrente (formulaire produit vs mouvement de stock par entrepôt) ne soit perdue.
+        Produit.objects.select_for_update().get(pk=serializer.instance.pk)
         obj = serializer.save()
         try:
             log_event(self.request, 'produit.update', target=obj, metadata={'id': obj.id})
@@ -3798,23 +3823,29 @@ class ProductStockViewSet(WarehouseRelatedTenantMixin, viewsets.ModelViewSet):
     filterset_fields = ['produit', 'warehouse']
     pagination_class = None
 
-    def _recompute_product_total(self, produit):
+    def _recompute_product_total(self, produit_id):
+        # Verrouille la ligne produit le temps du recalcul pour éviter
+        # qu'une écriture concurrente (édition manuelle, autre mouvement) ne soit perdue.
+        produit = Produit.objects.select_for_update().get(pk=produit_id)
         total = produit.stocks.aggregate(total=Sum('quantity')).get('total') or 0
         produit.quantite = total
         produit.save(update_fields=['quantite'])
 
+    @transaction.atomic
     def perform_create(self, serializer):
         obj = serializer.save()
-        self._recompute_product_total(obj.produit)
+        self._recompute_product_total(obj.produit_id)
 
+    @transaction.atomic
     def perform_update(self, serializer):
         obj = serializer.save()
-        self._recompute_product_total(obj.produit)
+        self._recompute_product_total(obj.produit_id)
 
+    @transaction.atomic
     def perform_destroy(self, instance):
-        produit = instance.produit
+        produit_id = instance.produit_id
         super().perform_destroy(instance)
-        self._recompute_product_total(produit)
+        self._recompute_product_total(produit_id)
 
 class LigneVenteViewSet(viewsets.ModelViewSet):
     queryset = LigneVente.objects.all()

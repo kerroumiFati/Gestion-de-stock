@@ -239,21 +239,21 @@ class ProduitSerializer(serializers.ModelSerializer):
         }
     
     def get_stock_mouvements(self, obj):
-        from django.db.models import Sum
-        agg = obj.mouvements.aggregate(total=Sum('delta'))
-        total = agg.get('total') or 0
-        return total
-    
+        # Utilise le cache de prefetch_related('mouvements') du queryset plutôt qu'un
+        # .aggregate() qui ré-exécute une requête SQL par produit (N+1).
+        return sum(m.delta for m in obj.mouvements.all())
+
     def get_prix_formatted(self, obj):
         currency = obj.currency or Currency.get_default()
         symbol = currency.symbol if currency else 'DA'
         return f"{obj.prixU} {symbol}"
-    
+
     def get_stock_status(self, obj):
         return obj.get_stock_status()
 
     def get_nombre_prix(self, obj):
-        return obj.prix_multiples.filter(is_active=True).count()
+        # Idem: .filter().count() ignorerait le cache de prefetch_related('prix_multiples').
+        return sum(1 for p in obj.prix_multiples.all() if p.is_active)
 
 class ClientSerializer(serializers.ModelSerializer):
     produits = ProduitSerializer(many=True, read_only=True)

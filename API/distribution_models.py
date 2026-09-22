@@ -842,7 +842,7 @@ class CommandeClient(models.Model):
             }
         """
         from django.db import transaction
-        from .models import ProductStock, StockMove
+        from .models import ProductStock, StockMove, Produit
 
         # Vérifier que la commande a un livreur
         if not self.livreur:
@@ -885,19 +885,24 @@ class CommandeClient(models.Model):
                     if quantite_a_deduire <= 0:
                         continue
 
-                    # Récupérer ou créer le stock du van pour ce produit
+                    # Récupérer ou créer le stock du van pour ce produit, puis verrouiller
+                    # la ligne pour éviter qu'une déduction concurrente (autre livraison,
+                    # ajustement web) ne provoque une perte de mise à jour (lost update).
                     stock_van, created = ProductStock.objects.get_or_create(
                         produit=ligne.produit,
                         warehouse=van,
                         defaults={'quantity': 0}
                     )
+                    if not created:
+                        stock_van = ProductStock.objects.select_for_update().get(pk=stock_van.pk)
 
                     # Vérifier que le stock du van est suffisant
                     if stock_van.quantity < quantite_a_deduire:
-                        # Attention : stock insuffisant dans le van
-                        # On peut soit lever une erreur, soit déduire ce qui est disponible
-                        # Pour l'instant, on va quand même déduire (peut passer en négatif)
-                        pass
+                        raise ValueError(
+                            f"Stock insuffisant dans le van {van.name} pour "
+                            f"{ligne.produit.designation} : disponible {stock_van.quantity}, "
+                            f"demandé {quantite_a_deduire}."
+                        )
 
                     # Décrémenter le stock du van
                     stock_van.quantity -= quantite_a_deduire
@@ -915,16 +920,19 @@ class CommandeClient(models.Model):
                     mouvements_crees.append(mouvement)
 
                     # Mettre à jour Produit.quantite (somme de tous les stocks hors vans)
+                    # Verrouille la ligne produit pour éviter une perte de mise à jour si une
+                    # édition concurrente (web, autre livraison) touche le même produit.
                     from django.db.models import Sum
+                    produit_loc = Produit.objects.select_for_update().get(pk=ligne.produit_id)
                     total_stock = ProductStock.objects.filter(
-                        produit=ligne.produit,
+                        produit=produit_loc,
                         warehouse__is_active=True
                     ).exclude(
                         warehouse__code__icontains='van'
                     ).aggregate(total=Sum('quantity'))['total'] or 0
 
-                    ligne.produit.quantite = total_stock
-                    ligne.produit.save(update_fields=['quantite'])
+                    produit_loc.quantite = total_stock
+                    produit_loc.save(update_fields=['quantite'])
 
                 # Marquer la commande comme livrée si ce n'est pas déjà fait
                 if self.statut != 'delivered':
