@@ -71,14 +71,83 @@
         return;
       }
       // Filtrer les catégories actives uniquement
-      const activeCategories = Array.isArray(data) ? data.filter(c => c.is_active !== false) : data;
+      const activeCategories = Array.isArray(data) ? data.filter(c => c.is_active !== false) : [];
       console.log(`[Produit] ${activeCategories.length} catégories actives chargées`);
+
+      // Trier par chemin complet pour que les sous-catégories suivent leur parent
+      // ("Boissons" puis "Boissons > Jus"), au lieu d'une liste plate illisible.
+      const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+      activeCategories.sort((a, b) => String(a.full_path || a.nom).localeCompare(String(b.full_path || b.nom), 'fr'));
+
+      const current = sel.value;
       sel.innerHTML = '<option value="">Sélectionner une catégorie</option>' +
-        activeCategories.map(c=>`<option value="${c.id}">${c.nom}</option>`).join('');
+        activeCategories.map(c => {
+          const path = c.full_path || c.nom;
+          const parent = path.includes(' > ') ? path.slice(0, path.lastIndexOf(' > ')) : '';
+          return `<option value="${c.id}"`
+            + ` data-nom="${escapeHtml(c.nom)}"`
+            + ` data-parent="${escapeHtml(parent)}"`
+            + ` data-couleur="${escapeHtml(c.couleur || '')}"`
+            + ` data-count="${Number(c.products_count) || 0}"`
+            + `>${escapeHtml(path)}</option>`;
+        }).join('');
+      if(current) setCategorieValue(current);
+
+      initCategorieSelect2(sel);
     }catch(e){
       console.error('[Produit] Erreur chargement catégories:', e);
       showAlert('Erreur de chargement des catégories', 'warning');
     }
+  }
+
+  // Le select #categorie est transformé en widget Select2 (select2-init.js le fait
+  // globalement). Changer sa valeur en natif (.value = ...) ne met PAS à jour
+  // l'affichage du widget : il faut lui signaler le changement.
+  function setCategorieValue(value){
+    const sel = el('#categorie');
+    if(!sel) return;
+    sel.value = value == null ? '' : String(value);
+    if(window.jQuery && jQuery.fn && jQuery.fn.select2){
+      jQuery(sel).trigger('change.select2');
+    }
+  }
+
+  function initCategorieSelect2(sel){
+    if(!(window.jQuery && jQuery.fn && jQuery.fn.select2)) return;
+    const $sel = jQuery(sel);
+    try{
+      // Réinitialiser pour appliquer le rendu personnalisé même si l'init globale
+      // (select2-init.js) est passée avant le chargement des options.
+      if($sel.hasClass('select2-hidden-accessible')) $sel.select2('destroy');
+    }catch(_){}
+
+    const render = (opt, withCount) => {
+      if(!opt || !opt.id) return opt ? opt.text : '';
+      const o = opt.element;
+      const nom = (o && o.dataset.nom) || opt.text;
+      const parent = (o && o.dataset.parent) || '';
+      const couleur = (o && o.dataset.couleur) || '#cbd5e0';
+      const count = o ? Number(o.dataset.count) || 0 : 0;
+      const $r = jQuery('<span class="select2-cat-option"></span>');
+      $r.append(jQuery('<span class="select2-cat-dot"></span>').css('background-color', couleur));
+      if(parent) $r.append(jQuery('<span class="select2-cat-parent"></span>').text(parent + ' > '));
+      $r.append(jQuery('<span class="select2-cat-name"></span>').text(nom));
+      if(withCount && count) $r.append(jQuery('<span class="select2-cat-count"></span>').text(count + ' produit' + (count > 1 ? 's' : '')));
+      return $r;
+    };
+
+    $sel.select2({
+      theme: 'bootstrap4',
+      width: '100%',
+      allowClear: true,
+      placeholder: 'Sélectionner une catégorie',
+      templateResult: opt => render(opt, true),
+      templateSelection: opt => render(opt, false),
+      language: {
+        noResults: () => 'Aucune catégorie trouvée',
+        searching: () => 'Recherche en cours...'
+      }
+    });
   }
 
 
@@ -412,7 +481,7 @@
 
   function clearForm(){
     ['#id','#reference','#code_barre','#designation','#prixU'].forEach(s=>{ const n=el(s); if(n) n.value=''; });
-    if(el('#categorie')) el('#categorie').value='';
+    setCategorieValue('');
 
     // Effacer l'image
     const imageInput = el('#image');
@@ -462,7 +531,7 @@
           if(el('#reference')) el('#reference').value = p.reference||'';
           if(el('#code_barre')) el('#code_barre').value = p.code_barre||'';
           if(el('#designation')) el('#designation').value = p.designation||'';
-          if(el('#categorie')) el('#categorie').value = p.categorie||'';
+          setCategorieValue(p.categorie||'');
           if(el('#prixU')) el('#prixU').value = p.prixU!=null? Number(p.prixU): '';
 
           // Changer le texte du bouton en mode édition

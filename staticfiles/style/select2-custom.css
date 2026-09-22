@@ -204,6 +204,160 @@
     color: #ffdddd;
 }
 
+/* ------------------------------------------------------------------
+   Rendu opaque et lisible quel que soit le thème Select2 réellement chargé.
+   Les règles ci-dessus sont scopées sur .select2-container--bootstrap4 : si le
+   thème CDN "bootstrap4" n'est pas appliqué (CDN indisponible, select initialisé
+   sans theme, dropdown rattaché au body hors de tout conteneur stylé), le champ
+   et la liste déroulante se retrouvent sans fond -> transparents et illisibles.
+   ------------------------------------------------------------------ */
+.select2-container .select2-selection--single,
+.select2-container .select2-selection--multiple {
+    background-color: #fff !important;
+    border: 1px solid #cbd5e0 !important;
+    border-radius: 6px !important;
+    min-height: 38px !important;
+    height: 38px !important;
+    box-sizing: border-box;
+}
+
+.select2-container .select2-selection--single .select2-selection__rendered {
+    color: #2d3748 !important;
+    line-height: 36px !important;
+    padding-left: 12px;
+    padding-right: 28px;
+}
+
+.select2-container .select2-selection--single .select2-selection__arrow {
+    height: 36px !important;
+    right: 6px;
+}
+
+.select2-container .select2-selection__placeholder {
+    color: #a0aec0 !important;
+}
+
+.select2-container .select2-dropdown {
+    background-color: #fff !important;
+    border: 1px solid #cbd5e0 !important;
+    border-radius: 6px !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18) !important;
+    /* Au-dessus des modals Bootstrap (1050), de la sidebar et des overlays */
+    z-index: 100000 !important;
+    overflow: hidden;
+}
+
+.select2-container .select2-results {
+    background-color: #fff !important;
+}
+
+.select2-container .select2-results__options {
+    background-color: #fff !important;
+    max-height: 300px;
+}
+
+.select2-container .select2-results__option {
+    background-color: #fff;
+    color: #2d3748 !important;
+    padding: 9px 12px;
+    font-size: 0.95rem;
+    line-height: 1.4;
+    cursor: pointer;
+}
+
+.select2-container .select2-results__option--highlighted,
+.select2-container .select2-results__option--highlighted[aria-selected] {
+    background-color: #2d3748 !important;
+    color: #fff !important;
+}
+
+.select2-container .select2-results__option[aria-selected="true"]:not(.select2-results__option--highlighted),
+.select2-container .select2-results__option--selected:not(.select2-results__option--highlighted) {
+    background-color: #edf2f7 !important;
+    color: #2d3748 !important;
+    font-weight: 500;
+}
+
+.select2-container .select2-search--dropdown {
+    background-color: #f7fafc !important;
+    padding: 8px;
+}
+
+.select2-container .select2-search--dropdown .select2-search__field {
+    background-color: #fff !important;
+    color: #2d3748 !important;
+    border: 1px solid #cbd5e0 !important;
+    border-radius: 4px;
+    padding: 8px 12px;
+}
+
+/* Rendu personnalisé des options de catégorie (pastille couleur + hiérarchie) */
+.select2-cat-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.select2-cat-option .select2-cat-dot {
+    flex: 0 0 10px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 1px solid rgba(0, 0, 0, 0.15);
+}
+
+.select2-cat-option .select2-cat-parent {
+    color: #718096;
+    font-size: 0.85em;
+}
+
+.select2-results__option--highlighted .select2-cat-option .select2-cat-parent {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.select2-cat-option .select2-cat-count {
+    margin-left: auto;
+    color: #a0aec0;
+    font-size: 0.8em;
+    white-space: nowrap;
+}
+
+.select2-results__option--highlighted .select2-cat-option .select2-cat-count {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+/* Mode sombre de l'application */
+[data-theme="dark"] .select2-container .select2-selection--single,
+[data-theme="dark"] .select2-container .select2-selection--multiple,
+[data-theme="dark"] .select2-container .select2-dropdown,
+[data-theme="dark"] .select2-container .select2-results,
+[data-theme="dark"] .select2-container .select2-results__options,
+[data-theme="dark"] .select2-container .select2-results__option,
+[data-theme="dark"] .select2-container .select2-search--dropdown .select2-search__field {
+    background-color: #1f2937 !important;
+    color: #f9fafb !important;
+    border-color: #374151 !important;
+}
+
+[data-theme="dark"] .select2-container .select2-selection--single .select2-selection__rendered {
+    color: #f9fafb !important;
+}
+
+[data-theme="dark"] .select2-container .select2-search--dropdown {
+    background-color: #111827 !important;
+}
+
+[data-theme="dark"] .select2-container .select2-results__option--highlighted {
+    background-color: #2563eb !important;
+    color: #fff !important;
+}
+
+[data-theme="dark"] .select2-container .select2-results__option[aria-selected="true"]:not(.select2-results__option--highlighted),
+[data-theme="dark"] .select2-container .select2-results__option--selected:not(.select2-results__option--highlighted) {
+    background-color: #374151 !important;
+}
+
 /* Responsive - adapter pour les petits écrans */
 @media (max-width: 768px) {
     .select2-container--bootstrap4 .select2-dropdown {
