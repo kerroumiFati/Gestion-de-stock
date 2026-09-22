@@ -1179,10 +1179,15 @@
       });
   }
 
-  // Initialize when the produit fragment is loaded via redirect.js
+  // Initialize when the produit fragment is loaded via redirect.js.
+  // __rovodev_inited doit être remis à false ici : ce script n'est chargé/exécuté
+  // qu'une seule fois par session SPA (redirect.js ne réinjecte pas les <script>
+  // déjà vus), donc sans ce reset, revenir sur la page produits après avoir visité
+  // une autre page (fournisseur, etc.) ne relance jamais loadProduits()/loadCategories()
+  // et la liste reste vide jusqu'à un F5 complet.
   document.addEventListener('fragment:loaded', function(e){
     try{
-      if(e && e.detail && e.detail.name === 'produit'){ init(); }
+      if(e && e.detail && e.detail.name === 'produit'){ __rovodev_inited = false; init(); }
     }catch(_){}
   });
   // Also fallback to DOMContentLoaded in case the page is opened directly
