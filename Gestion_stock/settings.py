@@ -232,27 +232,30 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # CORS settings
-CORS_ALLOWED_ORIGINS = [
-    "https://your-vercel-domain.vercel.app",  # Remplacez par votre domaine Vercel
-    "http://localhost:3000",
-    "http://localhost:8000",
-    "http://127.0.0.1:8000",
-    "http://192.168.0.150:8000",
-    "http://localhost:19000",
-    "http://192.168.0.150:19000",
-]
+# Configurables via variables d'environnement (comme ALLOWED_HOSTS) pour pouvoir pointer
+# vers le vrai domaine de production. Avant : listes codées en dur ne contenant que des
+# adresses locales/LAN de dev, jamais reliées au domaine réel du VPS déployé.
+CORS_ALLOWED_ORIGINS = config(
+    'CORS_ALLOWED_ORIGINS',
+    default='http://localhost:3000,http://localhost:8000,http://127.0.0.1:8000,http://localhost:19000',
+    cast=Csv()
+)
 
 CORS_ALLOW_ALL_ORIGINS = config('CORS_ALLOW_ALL_ORIGINS', default=False, cast=bool)
 if DEBUG:
     CORS_ALLOW_ALL_ORIGINS = True
 
-CSRF_TRUSTED_ORIGINS = [
-    'http://localhost:8000',
-    'http://127.0.0.1:8000',
-    'http://192.168.0.150:8000',
-    'https://*.ngrok-free.dev',
-    'https://*.ngrok.io',
-]
+CSRF_TRUSTED_ORIGINS = config(
+    'CSRF_TRUSTED_ORIGINS',
+    default='http://localhost:8000,http://127.0.0.1:8000,https://*.ngrok-free.dev,https://*.ngrok.io',
+    cast=Csv()
+)
+
+# Le VPS de production est derrière un reverse-proxy (nginx) qui termine le SSL et
+# transmet X-Forwarded-Proto : sans ce réglage, la détection HTTPS par Django dépend
+# uniquement d'un comportement par défaut fragile de gunicorn (non garanti).
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 # Session configuration for Django 4.x compatibility
 SESSION_SERIALIZER = 'django.contrib.sessions.serializers.JSONSerializer'
 SESSION_COOKIE_AGE = 1209600  # 2 weeks

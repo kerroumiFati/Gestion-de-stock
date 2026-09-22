@@ -103,12 +103,31 @@ deploy:
         --exclude='*.log' \
         ./ ${VPS_USERNAME}@${VPS_HOST}:/home/gestionstock/app/
 
+    # S'assurer que le dossier media existe avec les bonnes permissions
+    # (sinon Django ne peut pas y écrire -> PermissionError -> 500 sur les endpoints
+    # qui manipulent des images, ex: /API/produits/, /API/categories/)
+    - echo "📁 Ensuring media directory exists with correct ownership..."
+    - |
+      ssh -i ~/.ssh/deploy_key -p ${VPS_PORT} ${VPS_USERNAME}@${VPS_HOST} << 'EOF'
+        mkdir -p /home/gestionstock/app/media
+        sudo chown -R gestionstock:gestionstock /home/gestionstock/app/media
+      EOF
+
     # Installer les dépendances et migrer
     - echo "📦 Installing dependencies and migrating..."
     - |
       ssh -i ~/.ssh/deploy_key -p ${VPS_PORT} ${VPS_USERNAME}@${VPS_HOST} << 'EOF'
         cd /home/gestionstock/app
         source venv/bin/activate
+
+        # IMPORTANT : charger les variables de .env (DATABASE_URL, DEBUG, ...) dans
+        # l'environnement du shell. Sans ça, "manage.py migrate" ne voit pas
+        # DATABASE_URL et retombe silencieusement sur SQLite au lieu de PostgreSQL
+        # (le service systemd, lui, a ces variables via EnvironmentFile, mais une
+        # commande manuelle en SSH ne les a pas automatiquement).
+        set -a
+        source .env
+        set +a
 
         echo "Installing dependencies..."
         pip install -r requirements.txt
@@ -143,10 +162,14 @@ deploy:
       EOF
 
     # Health check
+    # Utilise le vrai domaine public en HTTPS plutôt que http://${VPS_HOST} : si
+    # VPS_HOST est configuré avec l'IP nue, nginx renvoie 404 sur ce vhost par
+    # défaut (aucun server_name ne matche), ce qui faisait échouer le health check
+    # même après un déploiement réussi.
     - echo "🏥 Running health check..."
     - sleep 5
     - |
-      HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${VPS_HOST} || echo "000")
+      HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://rayannedistribution.com || echo "000")
       if [ "$HTTP_STATUS" == "200" ] || [ "$HTTP_STATUS" == "302" ] || [ "$HTTP_STATUS" == "301" ]; then
         echo "✓ Health check passed (HTTP $HTTP_STATUS)"
       else
@@ -159,7 +182,7 @@ deploy:
     - echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     - echo "Application: GestionStock"
     - echo "Environment: Production"
-    - echo "URL: http://${VPS_HOST}"
+    - echo "URL: https://rayannedistribution.com"
     - echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
   after_script:
@@ -176,4 +199,4 @@ deploy:
   # Environment
   environment:
     name: production
-    url: http://$VPS_HOST
+    url: https://rayannedistribution.com
