@@ -384,13 +384,20 @@ function deleteLivreur(id) {
         if (response.ok) {
             loadLivreurs();
             showMessage('Livreur supprimé avec succès', 'success');
-        } else {
-            throw new Error('Erreur lors de la suppression');
+            return;
         }
+        // Le backend renvoie un message explicite en 409 quand le livreur a encore des
+        // commandes rattachées (ProtectedError) : le lire au lieu d'un message générique,
+        // sinon l'utilisateur ne sait jamais pourquoi la suppression échoue.
+        return response.json()
+            .catch(() => ({}))
+            .then(body => {
+                throw new Error(body.error || body.detail || 'Erreur lors de la suppression');
+            });
     })
     .catch(error => {
         console.error('Erreur:', error);
-        showMessage('Erreur lors de la suppression', 'error');
+        showMessage(error.message || 'Erreur lors de la suppression', 'error');
     });
 }
 

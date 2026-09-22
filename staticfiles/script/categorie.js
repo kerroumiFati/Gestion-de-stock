@@ -387,12 +387,11 @@ try { console.log('[Categorie] script tag executed and dbg enabled'); } catch(e)
       })
       .fail(function (xhr) {
         dbg('deleteCategory: fail status =', xhr.status, ' response =', xhr.responseText || xhr.statusText, xhr.responseJSON);
-        if (xhr && xhr.status === 409) {
-          alert('Suppression impossible: la catégorie est utilisée par des produits. Vous pouvez l\'archiver en la mettant Inactive.');
-        } else {
-          const msg = (xhr.responseJSON && (xhr.responseJSON.detail || xhr.responseJSON.error)) || 'Impossible de supprimer cette catégorie';
-          alert(msg);
-        }
+        // Le backend renvoie déjà un message précis (nombre de produits rattachés) en
+        // 409 : l'utiliser plutôt qu'un message générique qui perdait cette info.
+        const msg = (xhr.responseJSON && (xhr.responseJSON.error || xhr.responseJSON.detail))
+          || 'Suppression impossible: la catégorie est utilisée par des produits. Vous pouvez l\'archiver en la mettant Inactive.';
+        alert(msg);
       });
   }
 
