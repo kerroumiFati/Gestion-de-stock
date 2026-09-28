@@ -3,7 +3,7 @@ import logging
 from decimal import Decimal, InvalidOperation
 from django.contrib.auth import authenticate
 from django.shortcuts import render
-from django.db import transaction
+from django.db import transaction, IntegrityError
 from django.db.models import Sum, Q, F, Max, Prefetch
 from django.db.models.deletion import ProtectedError
 from rest_framework import viewsets, generics, status
@@ -835,9 +835,10 @@ class FournisseurViewSet(TenantFilterMixin, viewsets.ModelViewSet):
 
 class ProduitViewSet(TenantFilterMixin, viewsets.ModelViewSet):
     queryset = Produit.objects.filter(is_active=True).select_related(
-        'categorie', 'fournisseur', 'currency', 'company'
+        'categorie', 'fournisseur', 'currency', 'company', 'entrepot_rattachement'
     ).prefetch_related(
         'mouvements',
+        'conditionnements',
         Prefetch(
             'prix_multiples',
             queryset=PrixProduit.objects.select_related('code_prix', 'type_prix', 'currency')
@@ -930,10 +931,18 @@ class ProduitViewSet(TenantFilterMixin, viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         # Assigner la company de l'utilisateur connecté
-        if hasattr(self.request, 'company') and self.request.company is not None:
-            obj = serializer.save(company=self.request.company)
-        else:
-            obj = serializer.save()
+        try:
+            with transaction.atomic():
+                if hasattr(self.request, 'company') and self.request.company is not None:
+                    obj = serializer.save(company=self.request.company)
+                else:
+                    obj = serializer.save()
+        except IntegrityError:
+            # Filet de sécurité : doublon (company, reference/code_barre) -> 400 au lieu de 500
+            from rest_framework.exceptions import ValidationError as DRFValidationError
+            raise DRFValidationError(
+                {'detail': "Un produit avec la même référence ou le même code-barres existe déjà."}
+            )
         try:
             log_event(self.request, 'produit.create', target=obj, metadata={'id': obj.id, 'reference': getattr(obj, 'reference', None)})
         except Exception:

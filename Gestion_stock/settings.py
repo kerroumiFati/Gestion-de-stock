@@ -115,6 +115,7 @@ TEMPLATES = [
                 'django.template.context_processors.i18n',  # Added for i18n
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'API.context_processors.upload_limits',
             ],
         },
     },
@@ -230,6 +231,13 @@ else:
 # Media files (uploaded images, etc.)
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# Taille maximale d'une image produit (en Mo), appliquee cote serveur (serializer) et
+# cote client (produit.js, via le context processor API.context_processors.upload_limits).
+# Doit rester en dessous du client_max_body_size Nginx (20M en prod, cf. deploy_vps.sh)
+# car le corps multipart contient aussi les autres champs du formulaire.
+PRODUIT_IMAGE_MAX_SIZE_MB = config('PRODUIT_IMAGE_MAX_SIZE_MB', default=10, cast=int)
+PRODUIT_IMAGE_MAX_SIZE = PRODUIT_IMAGE_MAX_SIZE_MB * 1024 * 1024
 
 # CORS settings
 # Configurables via variables d'environnement (comme ALLOWED_HOSTS) pour pouvoir pointer

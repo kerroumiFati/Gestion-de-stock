@@ -527,6 +527,11 @@
                                 <strong class="{% if stock.quantity <= 0 %}text-secondary{% elif stock.quantity <= stock.produit.seuil_critique %}text-danger{% elif stock.quantity <= stock.produit.seuil_alerte %}text-warning{% else %}text-success{% endif %}">
                                     {{ stock.quantity }}
                                 </strong>
+                                {% if stock.cartons_display %}
+                                <small class="d-block text-muted" title="1 carton = {{ stock.unites_par_carton }} unités">
+                                    <i class="fa fa-box"></i> {{ stock.cartons_display }}
+                                </small>
+                                {% endif %}
                             </td>
                             <td class="text-center">{{ stock.prix_effectif|floatformat:2 }} {{ currency.symbol|default:"DA" }}</td>
                             <td class="text-right">

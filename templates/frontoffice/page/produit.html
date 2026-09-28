@@ -69,6 +69,262 @@
     outline: none;
 }
 
+/* ---- Champ image : zone de depot ---- */
+.image-field-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.image-optional-badge {
+    font-size: 0.7rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #718096;
+    background: #edf2f7;
+    border-radius: 999px;
+    padding: 2px 8px;
+}
+
+/* Input natif masque mais toujours accessible (label + JS) */
+.image-input-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.image-dropzone {
+    border: 2px dashed #cbd5e0;
+    border-radius: 8px;
+    background: #f8fafc;
+    cursor: pointer;
+    transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.image-dropzone:hover {
+    border-color: #4a5568;
+    background: #f1f5f9;
+}
+
+.image-dropzone:focus-visible {
+    outline: none;
+    border-color: #4a5568;
+    box-shadow: 0 0 0 3px rgba(74, 85, 104, 0.15);
+}
+
+.image-dropzone.is-dragover {
+    border-color: #2d3748;
+    border-style: solid;
+    background: #e2e8f0;
+}
+
+.image-dropzone.is-invalid {
+    border-color: #e53e3e;
+    background: #fff5f5;
+}
+
+.image-dropzone.has-image {
+    cursor: default;
+    border-style: solid;
+    background: #fff;
+}
+
+.image-dropzone-empty {
+    padding: 26px 16px;
+    text-align: center;
+    color: #4a5568;
+}
+
+.image-dropzone-icon {
+    width: 46px;
+    height: 46px;
+    margin: 0 auto 10px;
+    border-radius: 50%;
+    background: #e2e8f0;
+    color: #4a5568;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    transition: transform 0.2s ease;
+}
+
+.image-dropzone:hover .image-dropzone-icon,
+.image-dropzone.is-dragover .image-dropzone-icon {
+    transform: translateY(-2px);
+}
+
+.image-dropzone-title {
+    font-weight: 600;
+    color: #2d3748;
+    font-size: 0.95rem;
+}
+
+.image-dropzone-subtitle {
+    font-size: 0.85rem;
+    color: #718096;
+    margin-top: 2px;
+}
+
+.image-dropzone-link {
+    color: #2d3748;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.image-dropzone-hint {
+    margin-top: 10px;
+    font-size: 0.75rem;
+    color: #a0aec0;
+}
+
+/* Etat avec apercu */
+.image-preview {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px;
+}
+
+.image-preview-thumb {
+    flex: 0 0 auto;
+    width: 96px;
+    height: 96px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc repeating-conic-gradient(#edf2f7 0% 25%, #fff 0% 50%) 50% / 16px 16px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.image-preview-thumb img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.image-preview-meta {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.image-preview-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 999px;
+    padding: 2px 9px;
+    margin-bottom: 6px;
+}
+
+.image-preview-status.is-new {
+    color: #276749;
+    background: #f0fff4;
+}
+
+.image-preview-status.is-existing {
+    color: #4a5568;
+    background: #edf2f7;
+}
+
+.image-preview-name {
+    font-weight: 600;
+    color: #2d3748;
+    font-size: 0.9rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.image-preview-details {
+    font-size: 0.8rem;
+    color: #718096;
+    margin-top: 2px;
+}
+
+.image-preview-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.image-preview-actions .btn-product {
+    padding: 5px 12px;
+    font-size: 0.8rem;
+}
+
+.btn-image-remove {
+    background: #fff;
+    color: #c53030;
+    border: 1px solid #fed7d7;
+}
+
+.btn-image-remove:hover {
+    background: #fff5f5;
+    color: #9b2c2c;
+    border-color: #feb2b2;
+}
+
+.image-field-error {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    margin-top: 6px;
+    font-size: 0.85rem;
+    color: #c53030;
+}
+
+.image-removal-notice {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    padding: 8px 12px;
+    font-size: 0.85rem;
+    color: #7b341e;
+    background: #fffaf0;
+    border: 1px solid #fbd38d;
+    border-radius: 6px;
+}
+
+.image-removal-undo {
+    margin-left: auto;
+    border: none;
+    background: none;
+    padding: 0;
+    color: #2d3748;
+    font-weight: 600;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+@media (max-width: 575.98px) {
+    .image-preview {
+        flex-direction: column;
+        align-items: stretch;
+        text-align: center;
+    }
+    .image-preview-thumb {
+        margin: 0 auto;
+    }
+    .image-preview-actions {
+        justify-content: center;
+    }
+}
+
 .btn-product {
     border-radius: 6px;
     padding: 10px 20px;
@@ -453,19 +709,60 @@ input[type="number"].form-control-product::-webkit-outer-spin-button {
                 <!-- Image du produit -->
                 <div class="row">
                     <div class="col-md-12 mb-3">
-                        <label for="image" class="form-label-product">
-                            <i class="fas fa-image"></i> {% trans "Image du produit" %} <small class="text-muted">(Optionnel, max 2 MB)</small>
+                        <label for="image" class="form-label-product image-field-label">
+                            <i class="fas fa-image"></i> {% trans "Image du produit" %}
+                            <span class="image-optional-badge">{% trans "Optionnel" %}</span>
                         </label>
-                        <input class="form-control form-control-product" type="file" id="image" accept="image/*">
-                        <div id="image-preview" class="mt-2" style="display: none;">
-                            <img id="preview-img" src="" alt="Aperçu" style="max-width: 200px; max-height: 200px; border-radius: 8px; border: 2px solid #ddd;">
-                            <button type="button" class="btn btn-sm btn-danger mt-2" id="remove-image">
-                                <i class="fas fa-times"></i> Supprimer
-                            </button>
+                        <input class="image-input-hidden" type="file" id="image"
+                               accept="image/jpeg,image/png,image/webp,image/gif"
+                               data-max-size-mb="{{ PRODUIT_IMAGE_MAX_SIZE_MB }}">
+
+                        <div id="image-dropzone" class="image-dropzone" tabindex="0" role="button"
+                             aria-label="{% trans 'Choisir une image du produit' %}">
+                            <!-- Etat vide : zone de depot -->
+                            <div id="image-dropzone-empty" class="image-dropzone-empty">
+                                <div class="image-dropzone-icon"><i class="fas fa-cloud-upload-alt"></i></div>
+                                <div class="image-dropzone-title">{% trans "Glissez-déposez une image ici" %}</div>
+                                <div class="image-dropzone-subtitle">
+                                    {% trans "ou" %} <span class="image-dropzone-link">{% trans "parcourez vos fichiers" %}</span>
+                                </div>
+                                <div class="image-dropzone-hint">
+                                    JPG, PNG, WEBP &middot; max {{ PRODUIT_IMAGE_MAX_SIZE_MB }} MB &middot; {% trans "compressée automatiquement" %}
+                                </div>
+                            </div>
+
+                            <!-- Etat avec image : apercu + infos -->
+                            <div id="image-preview" class="image-preview" style="display: none;">
+                                <div class="image-preview-thumb">
+                                    <img id="preview-img" src="" alt="{% trans 'Aperçu' %}">
+                                </div>
+                                <div class="image-preview-meta">
+                                    <div id="image-preview-status" class="image-preview-status is-new">
+                                        <i class="fas fa-check-circle"></i> <span>{% trans "Nouvelle image" %}</span>
+                                    </div>
+                                    <div id="image-preview-name" class="image-preview-name" title=""></div>
+                                    <div id="image-preview-details" class="image-preview-details"></div>
+                                    <div class="image-preview-actions">
+                                        <button type="button" class="btn btn-sm btn-product btn-product-secondary" id="replace-image">
+                                            <i class="fas fa-sync-alt"></i> {% trans "Remplacer" %}
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-product btn-image-remove" id="remove-image">
+                                            <i class="fas fa-trash-alt"></i> {% trans "Retirer" %}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <small class="form-text text-muted">
-                            <i class="fas fa-info-circle"></i> L'image sera automatiquement compressée et optimisée
-                        </small>
+
+                        <!-- Erreur de validation inline -->
+                        <div id="image-error" class="image-field-error" role="alert" style="display: none;"></div>
+
+                        <!-- Avis : image existante retiree, applique a l'enregistrement -->
+                        <div id="image-removal-notice" class="image-removal-notice" style="display: none;">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <span>{% trans "L'image actuelle sera supprimée à l'enregistrement." %}</span>
+                            <button type="button" class="image-removal-undo" id="undo-remove-image">{% trans "Annuler" %}</button>
+                        </div>
                     </div>
                 </div>
 
@@ -484,6 +781,37 @@ input[type="number"].form-control-product::-webkit-outer-spin-button {
                             <i class="fas fa-dollar-sign"></i> {% trans "Prix Unitaire" %}
                         </label>
                         <input class="form-control form-control-product" type="number" id="prixU" step="0.01" min="0" placeholder="0.00">
+                    </div>
+                </div>
+
+                <!-- Conditionnement (unites par carton) -->
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="unites_par_carton" class="form-label-product image-field-label">
+                            <i class="fas fa-box"></i> {% trans "Unités par carton" %}
+                            <span class="image-optional-badge">{% trans "Optionnel" %}</span>
+                        </label>
+                        <input class="form-control form-control-product" type="number" id="unites_par_carton" min="1" step="1" placeholder="{% trans 'Ex: 12' %}">
+                        <small class="form-text text-muted">
+                            {% trans "Permet de saisir et d'afficher les quantités en cartons sur tous les écrans. Le stock reste compté en unités." %}
+                        </small>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label for="cartons_par_colis" class="form-label-product image-field-label">
+                            <i class="fas fa-boxes"></i> {% trans "Cartons par colis" %}
+                            <span class="image-optional-badge">{% trans "Optionnel" %}</span>
+                        </label>
+                        <input class="form-control form-control-product" type="number" id="cartons_par_colis" min="1" step="1" placeholder="{% trans 'Ex: 4' %}">
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label for="entrepot_rattachement" class="form-label-product image-field-label">
+                            <i class="fas fa-warehouse"></i> {% trans "Entrepôt / gamme" %}
+                            <span class="image-optional-badge">{% trans "Optionnel" %}</span>
+                        </label>
+                        <select class="form-control form-control-product" id="entrepot_rattachement">
+                            <option value="">{% trans "Aucun" %}</option>
+                        </select>
+                        <small class="form-text text-muted">{% trans "Sert aux objectifs de vente par entrepôt." %}</small>
                     </div>
                 </div>
 

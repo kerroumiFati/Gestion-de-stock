@@ -452,7 +452,7 @@ function addProductRow() {
             </select>
         </td>
         <td><span id="stock-${rowCounter}" class="badge badge-info">-</span></td>
-        <td><input type="number" class="form-control quantity-input" min="1" placeholder="0"></td>
+        <td><input type="number" class="form-control quantity-input" min="1" placeholder="0" data-carton-product-fn="cartonProductFromRow"></td>
         <td><button type="button" class="btn btn-sm btn-danger" onclick="removeRow(${rowCounter})"><i class="fa fa-trash"></i></button></td>
     `;
     tbody.appendChild(row);
@@ -464,8 +464,29 @@ function addProductRow() {
 function updateStock(select, rowId) {
     const option = select.selectedOptions[0];
     const stock = option.dataset.stock || 0;
-    document.getElementById('stock-' + rowId).textContent = stock + ' unités';
+    const rowProduct = allProducts.find(p => p.reference === select.value);
+    const eq = (window.CartonInput && rowProduct) ? window.CartonInput.format(stock, rowProduct.unites_par_carton) : '';
+    document.getElementById('stock-' + rowId).textContent = stock + ' unités' + (eq ? ' (' + eq + ')' : '');
+    const qtyInput = select.closest('tr') && select.closest('tr').querySelector('.quantity-input');
+    if(qtyInput && window.CartonInput){ window.CartonInput.refresh(qtyInput); }
     updateSummary();
+}
+
+// --- Aide de saisie en cartons (carton_input.js) : resolution du produit ---
+function cartonProductFromRow(input){
+    const row = input.closest('tr');
+    const select = row ? row.querySelector('.product-select') : null;
+    if(!select || !select.value) return null;
+    return allProducts.find(p => p.reference === select.value) || null;
+}
+function cartonProductFromRef(input){
+    const ref = input.getAttribute('data-ref');
+    if(!ref) return null;
+    return allProducts.find(p => p.reference === ref) || null;
+}
+function cartonEqHtml(product, qty){
+    if(!window.CartonInput || !product) return '';
+    return window.CartonInput.formatHtml(qty, product.unites_par_carton);
 }
 
 // Supprimer une ligne
@@ -520,6 +541,7 @@ function renderScannedProducts() {
                     <div class="col-md-5"><strong>${escapeHtml(p.reference)}</strong> - ${escapeHtml(p.designation)}</div>
                     <div class="col-md-3">
                         <input type="number" class="form-control form-control-sm" value="${p.quantity}"
+                               data-ref="${escapeAttr(p.reference)}" data-carton-product-fn="cartonProductFromRef"
                                onchange="updateScannedQuantity(${idx}, this.value)" min="1">
                     </div>
                     <div class="col-md-2 text-right">
@@ -588,6 +610,7 @@ function renderCheckboxList() {
                                 <span class="badge ${stockBadgeClass}" style="font-size: 0.85rem;">
                                     <i class="fa fa-boxes"></i> ${stock}
                                 </span>
+                                ${cartonEqHtml(p, stock)}
                             </div>
                         </div>
                     </div>
@@ -608,6 +631,7 @@ function renderCheckboxList() {
                                 </div>
                                 <input type="number" class="form-control text-center" id="qty-${refId}"
                                        value="1" min="1" data-max="${stock}" style="max-width: 80px;"
+                                       data-ref="${refEscaped}" data-carton-product-fn="cartonProductFromRef"
                                        onchange='updateCheckboxQuantity("${refEscaped}")'>
                                 <div class="input-group-append">
                                     <button class="btn btn-outline-secondary" type="button" onclick='adjustQuantity("${refEscaped}", 1)'>
@@ -713,6 +737,7 @@ function adjustQuantity(reference, delta) {
     newQty = Math.max(min, Math.min(max, newQty));
 
     qtyInput.value = newQty;
+    if(window.CartonInput){ window.CartonInput.refresh(qtyInput); }
     updateSummary();
     updateSelectionCounter();
 }
@@ -729,6 +754,7 @@ function setQuantity(reference, quantity) {
 
     const max = parseInt(qtyInput.dataset.max) || 9999;
     qtyInput.value = Math.min(quantity, max);
+    if(window.CartonInput){ window.CartonInput.refresh(qtyInput); }
     updateSummary();
     updateSelectionCounter();
 }
@@ -872,7 +898,7 @@ function updateSummary() {
             <table class="table table-sm">
                 <thead><tr><th>Référence</th><th>Produit</th><th class="text-right">Quantité</th></tr></thead>
                 <tbody>
-                    ${products.map(p => `<tr><td><code>${escapeHtml(p.reference)}</code></td><td>${escapeHtml(p.designation)}</td><td class="text-right"><strong>${p.quantity}</strong></td></tr>`).join('')}
+                    ${products.map(p => `<tr><td><code>${escapeHtml(p.reference)}</code></td><td>${escapeHtml(p.designation)}</td><td class="text-right"><strong>${p.quantity}</strong>${cartonEqHtml(allProducts.find(ap => ap.reference === p.reference), p.quantity)}</td></tr>`).join('')}
                 </tbody>
             </table>
         </div>

@@ -13,6 +13,7 @@
     return $.ajax({ url: API_BASE + '/produits/?page_size=1000', method: 'GET', dataType: 'json' })
       .done(function(data){
         const items = asList(data);
+        if(window.CartonInput){ window.CartonInput.prime(items); }
         items.forEach(function(p){
           const label = (p.reference ? (p.reference + ' - ') : '') + (p.designation || ('Produit #' + p.id));
           $('<option>').val(p.id).text(label).appendTo($sel);
@@ -50,8 +51,11 @@
       lignes.forEach(function(l){
         const tr = $('<tr>');
         tr.append('<td>'+ (l.produit_reference ? (l.produit_reference + ' - ') : '') + (l.produit_designation || '') +'</td>');
-        tr.append('<td>'+ (l.snapshot_qty ?? '-') +'</td>');
-        tr.append('<td>'+ (l.counted_qty ?? '-') +'</td>');
+        // Equivalent en cartons (si le conditionnement du produit est connu)
+        const upc = window.CartonInput ? window.CartonInput.upcSync(l.produit) : null;
+        const eq = function(q){ return (upc && q != null && window.CartonInput) ? window.CartonInput.formatHtml(q, upc) : ''; };
+        tr.append('<td>'+ (l.snapshot_qty ?? '-') + eq(l.snapshot_qty) +'</td>');
+        tr.append('<td>'+ (l.counted_qty ?? '-') + eq(l.counted_qty) +'</td>');
         const variance = (typeof l.variance !== 'undefined' && l.variance !== null) ? l.variance : ( (l.counted_qty!=null && l.snapshot_qty!=null) ? (l.counted_qty - l.snapshot_qty) : '-' );
         tr.append('<td>'+ variance +'</td>');
         tr.append('<td>'+ (l.is_completed ? 'Compté' : 'Non compté') +'</td>');

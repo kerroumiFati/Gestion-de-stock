@@ -1,0 +1,207 @@
+{% load static %}
+{% load i18n %}
+<script>
+// Chargement unique du script (navigation SPA via redirect.js), meme mecanisme que livreurs.html
+if (!window.__objectifs_vendeurs_script_loaded__) {
+    window.__objectifs_vendeurs_script_loaded__ = true;
+    var s = document.createElement('script');
+    s.src = "{% static 'script/objectifs_vendeurs.js' %}";
+    s.onload = function () {
+        setTimeout(function () {
+            document.dispatchEvent(new CustomEvent('fragment:loaded', {
+                detail: { name: 'objectifs_vendeurs', container: document.getElementById('main-content') }
+            }));
+        }, 50);
+    };
+    document.head.appendChild(s);
+} else {
+    setTimeout(function () {
+        document.dispatchEvent(new CustomEvent('fragment:loaded', {
+            detail: { name: 'objectifs_vendeurs', container: document.getElementById('main-content') }
+        }));
+    }, 50);
+}
+</script>
+
+<style>
+.obj-page { padding: 20px 0; }
+.obj-title {
+    font-size: 1.8rem; font-weight: 600; color: #2d3748; margin-bottom: 25px; padding-bottom: 15px;
+    border-bottom: 2px solid #e2e8f0; display: flex; align-items: center; gap: 12px;
+}
+.obj-title i { color: #10b981; font-size: 2rem; }
+.obj-section {
+    background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 24px 30px;
+    margin-bottom: 25px; box-shadow: 0 1px 3px rgba(0,0,0,.05);
+}
+.obj-section-header {
+    font-size: 1.1rem; font-weight: 600; color: #2d3748; margin-bottom: 18px; padding-bottom: 12px;
+    border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; gap: 10px;
+}
+.obj-section-header i { color: #10b981; }
+.obj-filters { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; }
+.obj-filters .form-group { margin: 0; min-width: 150px; }
+.obj-filters label, .obj-form label { font-size: .85rem; font-weight: 600; color: #4a5568; margin-bottom: 4px; }
+.obj-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 16px; margin-bottom: 25px; }
+.obj-card { color: #fff; padding: 18px 20px; border-radius: 10px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); }
+.obj-card.success { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+.obj-card.warning { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+.obj-card.dark { background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%); }
+.obj-card-value { font-size: 1.7rem; font-weight: 700; }
+.obj-card-label { font-size: .85rem; opacity: .9; }
+.obj-form .row > div { margin-bottom: 12px; }
+.obj-table { width: 100%; border-collapse: collapse; }
+.obj-table th { font-size: .8rem; text-transform: uppercase; letter-spacing: .03em; color: #718096; border-bottom: 2px solid #e2e8f0; padding: 10px 8px; text-align: left; }
+.obj-table td { padding: 10px 8px; border-bottom: 1px solid #edf2f7; vertical-align: middle; font-size: .92rem; }
+.obj-table tr.obj-vendeur-row td { background: #f8fafc; font-weight: 600; color: #2d3748; }
+.obj-table .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.obj-perimetre { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: .8rem; font-weight: 600; }
+.obj-perimetre.entrepot { background: #ebf4ff; color: #2b6cb0; }
+.obj-perimetre.categorie { background: #faf5ff; color: #6b46c1; }
+.obj-progress { display: flex; align-items: center; gap: 10px; min-width: 190px; }
+.obj-progress-bar { flex: 1; height: 10px; border-radius: 999px; background: #e2e8f0; overflow: hidden; }
+.obj-progress-fill { height: 100%; border-radius: 999px; background: #f59e0b; transition: width .3s ease; }
+.obj-progress-fill.ok { background: #10b981; }
+.obj-progress-fill.low { background: #e53e3e; }
+.obj-taux { font-weight: 700; min-width: 58px; text-align: right; font-variant-numeric: tabular-nums; }
+.obj-taux.ok { color: #059669; }
+.obj-taux.mid { color: #d97706; }
+.obj-taux.low { color: #c53030; }
+.obj-badge { display: inline-block; padding: 3px 9px; border-radius: 10px; font-size: .75rem; font-weight: 600; }
+.obj-badge.ok { background: #d1fae5; color: #065f46; }
+.obj-badge.pending { background: #fef3c7; color: #92400e; }
+.obj-actions { display: flex; gap: 6px; white-space: nowrap; }
+.obj-actions .btn { padding: 4px 10px; font-size: .8rem; }
+.obj-empty { text-align: center; color: #a0aec0; padding: 40px 10px; }
+.obj-empty i { font-size: 2.2rem; margin-bottom: 10px; display: block; }
+.obj-help { font-size: .8rem; color: #718096; margin-top: 4px; }
+@media (max-width: 767.98px) {
+    .obj-section { padding: 16px; }
+    .obj-table th:nth-child(4), .obj-table td:nth-child(4) { display: none; }
+}
+</style>
+
+<div class="obj-page">
+    <h1 class="obj-title"><i class="fas fa-bullseye"></i> {% trans "Objectifs vendeurs" %}</h1>
+
+    <div id="obj-alerts"></div>
+
+    <!-- Periode -->
+    <div class="obj-section">
+        <div class="obj-filters">
+            <div class="form-group">
+                <label for="obj-filter-mois">{% trans "Mois" %}</label>
+                <select id="obj-filter-mois" class="form-control"></select>
+            </div>
+            <div class="form-group">
+                <label for="obj-filter-annee">{% trans "Année" %}</label>
+                <input type="number" id="obj-filter-annee" class="form-control" min="2000" max="2100">
+            </div>
+            <div class="form-group" style="min-width: 240px;">
+                <label for="obj-filter-livreur">{% trans "Vendeur" %}</label>
+                <select id="obj-filter-livreur" class="form-control">
+                    <option value="">{% trans "Tous les vendeurs" %}</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <button type="button" class="btn btn-primary" id="obj-btn-refresh">
+                    <i class="fas fa-sync-alt"></i> {% trans "Actualiser" %}
+                </button>
+            </div>
+            <div class="form-group">
+                <button type="button" class="btn btn-outline-secondary" id="obj-btn-copy-prev" title="{% trans 'Copie les objectifs du mois précédent vers ce mois (uniquement ceux qui n existent pas encore)' %}">
+                    <i class="fas fa-copy"></i> {% trans "Reprendre le mois précédent" %}
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Synthese -->
+    <div class="obj-cards">
+        <div class="obj-card">
+            <div class="obj-card-value" id="obj-card-nb">0</div>
+            <div class="obj-card-label">{% trans "Objectifs définis" %}</div>
+        </div>
+        <div class="obj-card success">
+            <div class="obj-card-value" id="obj-card-atteints">0</div>
+            <div class="obj-card-label">{% trans "Objectifs atteints" %}</div>
+        </div>
+        <div class="obj-card dark">
+            <div class="obj-card-value" id="obj-card-ca">0</div>
+            <div class="obj-card-label">{% trans "CA réalisé (TTC)" %}</div>
+        </div>
+        <div class="obj-card warning">
+            <div class="obj-card-value" id="obj-card-taux">-</div>
+            <div class="obj-card-label">{% trans "Taux global" %}</div>
+        </div>
+    </div>
+
+    <!-- Formulaire -->
+    <div class="obj-section">
+        <div class="obj-section-header"><i class="fas fa-edit"></i> <span id="obj-form-title">{% trans "Définir un objectif" %}</span></div>
+        <form id="obj-form" class="obj-form" autocomplete="off">
+            <input type="hidden" id="obj-id">
+            <div class="row">
+                <div class="col-md-3">
+                    <label for="obj-livreur">{% trans "Vendeur" %} *</label>
+                    <select id="obj-livreur" class="form-control" required></select>
+                </div>
+                <div class="col-md-2">
+                    <label for="obj-type">{% trans "Périmètre" %} *</label>
+                    <select id="obj-type" class="form-control">
+                        <option value="entrepot">{% trans "Entrepôt / gamme" %}</option>
+                        <option value="categorie">{% trans "Type de produit" %}</option>
+                    </select>
+                </div>
+                <div class="col-md-3" id="obj-entrepot-wrap">
+                    <label for="obj-entrepot">{% trans "Entrepôt / gamme" %} *</label>
+                    <select id="obj-entrepot" class="form-control"></select>
+                    <div class="obj-help">{% trans "CA des produits rattachés à cet entrepôt (fiche produit)." %}</div>
+                </div>
+                <div class="col-md-3" id="obj-categorie-wrap" style="display:none;">
+                    <label for="obj-categorie">{% trans "Type de produit" %} *</label>
+                    <select id="obj-categorie" class="form-control"></select>
+                    <div class="obj-help">{% trans "CA de la catégorie et de ses sous-catégories." %}</div>
+                </div>
+                <div class="col-md-2">
+                    <label for="obj-montant">{% trans "Objectif CA (TTC)" %} *</label>
+                    <input type="number" id="obj-montant" class="form-control" min="0.01" step="0.01" placeholder="0.00" required>
+                </div>
+                <div class="col-md-2">
+                    <label for="obj-note">{% trans "Note" %}</label>
+                    <input type="text" id="obj-note" class="form-control" maxlength="255">
+                </div>
+            </div>
+            <div class="d-flex" style="gap: 8px;">
+                <button type="submit" class="btn btn-success" id="obj-btn-save">
+                    <i class="fas fa-save"></i> {% trans "Enregistrer" %}
+                </button>
+                <button type="button" class="btn btn-outline-secondary" id="obj-btn-cancel" style="display:none;">
+                    <i class="fas fa-times"></i> {% trans "Annuler" %}
+                </button>
+                <span class="obj-help align-self-center">{% trans "L'objectif porte sur le mois et l'année sélectionnés ci-dessus." %}</span>
+            </div>
+        </form>
+    </div>
+
+    <!-- Suivi -->
+    <div class="obj-section">
+        <div class="obj-section-header"><i class="fas fa-chart-line"></i> {% trans "Suivi du mois" %} <span id="obj-period-label" class="text-muted" style="font-weight:400;"></span></div>
+        <div class="table-responsive">
+            <table class="obj-table" id="obj-table">
+                <thead>
+                    <tr>
+                        <th>{% trans "Vendeur" %}</th>
+                        <th>{% trans "Périmètre" %}</th>
+                        <th class="num">{% trans "Objectif" %}</th>
+                        <th class="num">{% trans "CA réalisé" %}</th>
+                        <th class="num">{% trans "Reste" %}</th>
+                        <th>{% trans "Taux de réussite" %}</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="obj-tbody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>

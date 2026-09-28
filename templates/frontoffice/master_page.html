@@ -506,6 +506,9 @@
                             <li><a href="#" onclick="show('stats_livreurs');return false;">
                                 <i class="fas fa-truck"></i>{% trans "Statistiques Livreurs" %}
                             </a></li>
+                            <li><a href="#" onclick="show('objectifs_vendeurs');return false;">
+                                <i class="fas fa-bullseye"></i>{% trans "Objectifs vendeurs" %}
+                            </a></li>
                         </ul>
                     </li>
                     {% endif %}
@@ -571,6 +574,8 @@
 <script src="{% static 'js/sidebar-enhancements.js' %}"></script>
 <!-- Initialisation globale de Select2 -->
 <script src="{% static 'script/select2-init.js' %}"></script>
+<!-- Saisie / affichage des quantites en cartons (data-carton-product sur les inputs) -->
+<script src="{% static 'script/carton_input.js' %}"></script>
 <script>
 (async function loadAlertsClassic(){
  try{

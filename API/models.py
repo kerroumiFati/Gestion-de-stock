@@ -393,12 +393,19 @@ class Produit(models.Model):
     
     # Image du produit
     image = models.ImageField("Image du produit", upload_to='produits/', blank=True, null=True,
-                             help_text="Image du produit (max 2 MB, sera compressée automatiquement)")
+                             help_text="Image du produit (sera compressée automatiquement ; taille max : "
+                                       "PRODUIT_IMAGE_MAX_SIZE_MB dans settings.py)")
 
     # Gestion
     fournisseur = models.ForeignKey(Fournisseur, on_delete=models.SET_NULL,
                                     null=True, blank=True,
                                     help_text="Fournisseur principal du produit (optionnel)")
+    # Entrepot / gamme de rattachement : sert a repartir le chiffre d'affaires des
+    # vendeurs par entrepot pour les objectifs mensuels (voir ObjectifVendeur).
+    entrepot_rattachement = models.ForeignKey('Warehouse', on_delete=models.SET_NULL,
+                                              null=True, blank=True, related_name='produits_rattaches',
+                                              verbose_name="Entrepôt / gamme de rattachement",
+                                              help_text="Entrepôt (gamme) auquel ce produit est rattaché pour les objectifs des vendeurs")
     is_active = models.BooleanField("Produit actif", default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -496,13 +503,60 @@ class Produit(models.Model):
             return max(self.seuil_alerte * 2, 30)
         return 0
 
+    # ------------------------------------------------------------------
+    # Conditionnement (unites par carton) : le stock reste TOUJOURS en
+    # unites ; le carton n'est qu'une aide de saisie / d'affichage.
+    # ------------------------------------------------------------------
+    def get_conditionnement_actif(self):
+        """Conditionnement actif du produit (utilise le cache prefetch si present)."""
+        cache = getattr(self, '_prefetched_objects_cache', None) or {}
+        if 'conditionnements' in cache:
+            for c in self.conditionnements.all():
+                if c.is_active:
+                    return c
+            return None
+        return self.conditionnements.filter(is_active=True).first()
+
+    def get_unites_par_carton(self):
+        """Unites par carton (1 = pas de conditionnement carton)."""
+        c = self.get_conditionnement_actif()
+        if c and c.unites_par_carton and c.unites_par_carton > 1:
+            return int(c.unites_par_carton)
+        return 1
+
+    def get_cartons_par_colis(self):
+        c = self.get_conditionnement_actif()
+        if c and c.cartons_par_colis and c.cartons_par_colis > 1:
+            return int(c.cartons_par_colis)
+        return 1
+
+    @staticmethod
+    def format_cartons(quantite, unites_par_carton):
+        """Texte court '3 ct + 2 u' pour une quantite en unites ('' si pas de carton)."""
+        try:
+            q = int(quantite or 0)
+            upc = int(unites_par_carton or 1)
+        except (TypeError, ValueError):
+            return ''
+        if upc <= 1:
+            return ''
+        signe = '-' if q < 0 else ''
+        q = abs(q)
+        cartons, reste = divmod(q, upc)
+        txt = f"{signe}{cartons} ct"
+        if reste:
+            txt += f" + {reste} u"
+        return txt
+
     def save(self, *args, **kwargs):
         """Override save pour compresser l'image automatiquement"""
-        if self.image:
+        # Ne compresser que les fichiers fraichement uploades (non encore ecrits sur le
+        # disque). Sinon chaque save() recompressait et dupliquait l'image existante.
+        if self.image and not getattr(self.image, '_committed', True):
             from PIL import Image
             from io import BytesIO
             from django.core.files.uploadedfile import InMemoryUploadedFile
-            import sys
+            import os
 
             # Ouvrir l'image
             img = Image.open(self.image)
@@ -525,12 +579,13 @@ class Produit(models.Model):
             output.seek(0)
 
             # Remplacer l'image par la version compressée
+            base_name = os.path.splitext(os.path.basename(self.image.name))[0] or 'produit'
             self.image = InMemoryUploadedFile(
                 output,
                 'ImageField',
-                f"{self.image.name.split('.')[0]}.jpg",
+                f"{base_name}.jpg",
                 'image/jpeg',
-                sys.getsizeof(output),
+                output.getbuffer().nbytes,
                 None
             )
 
@@ -774,17 +829,23 @@ class Achat(models.Model):
         help_text="Unité d'achat: pièce ou carton"
     )
 
-    # Quantité achetée (en cartons ou pièces selon unite_achat)
-    quantite = models.IntegerField()
+    # CONVENTION DE STOCKAGE (alignee sur achat.js et sur la mise a jour du stock dans
+    # AchatViewSet.perform_create) : `quantite` est TOUJOURS en pieces et `prix_achat`
+    # est TOUJOURS le prix d'une piece, quel que soit unite_achat. En mode carton,
+    # l'ecran convertit avant l'envoi (cartons x pieces_par_carton) et
+    # `pieces_par_carton` ne sert qu'a re-afficher la saisie en cartons.
+    # Bug historique : les methodes get_quantite_pieces / get_prix_unitaire_piece
+    # supposaient une quantite en cartons et re-multipliaient / re-divisaient.
+    quantite = models.IntegerField()  # toujours en pieces (voir convention ci-dessus)
 
-    # Nombre de pièces par carton (utilisé seulement si unite_achat='carton')
+    # Nombre de pièces par carton (information de saisie si unite_achat='carton')
     pieces_par_carton = models.IntegerField(
         "Pièces par carton",
         default=1,
         help_text="Nombre de pièces contenues dans un carton"
     )
 
-    # Prix d'achat unitaire (par carton ou par pièce selon unite_achat)
+    # Prix d'achat d'une pièce (toujours par pièce, même en mode carton)
     prix_achat = models.DecimalField(max_digits=12, decimal_places=2, default=0)
 
     fournisseur = models.ForeignKey(Fournisseur, on_delete=models.CASCADE, null=True, blank=True)
@@ -793,24 +854,34 @@ class Achat(models.Model):
                                  related_name='achats', help_text="Entrepôt de destination pour cet achat")
 
     def get_quantite_pieces(self):
-        """Retourne la quantité totale en pièces"""
-        if self.unite_achat == 'carton':
-            return self.quantite * self.pieces_par_carton
-        return self.quantite
+        """Retourne la quantité totale en pièces (la quantité est déjà stockée en pièces)."""
+        return self.quantite or 0
+
+    def get_nb_cartons(self):
+        """Nombre de cartons saisis (None si achat à la pièce ou carton invalide)."""
+        if self.unite_achat != 'carton' or not self.pieces_par_carton or self.pieces_par_carton <= 0:
+            return None
+        return (self.quantite or 0) // self.pieces_par_carton
 
     def get_prix_unitaire_piece(self):
-        """Retourne le prix unitaire par pièce"""
-        if self.unite_achat == 'carton':
-            return self.prix_achat / self.pieces_par_carton if self.pieces_par_carton > 0 else 0
-        return self.prix_achat
+        """Retourne le prix unitaire par pièce (le prix est déjà stocké par pièce)."""
+        return self.prix_achat or 0
+
+    def get_prix_carton(self):
+        """Prix d'un carton complet (None si achat à la pièce)."""
+        if self.unite_achat != 'carton' or not self.pieces_par_carton or self.pieces_par_carton <= 0:
+            return None
+        return (self.prix_achat or 0) * self.pieces_par_carton
 
     def get_prix_total(self):
-        """Retourne le prix total de l'achat"""
-        return self.quantite * self.prix_achat
+        """Retourne le prix total de l'achat (pièces x prix par pièce)."""
+        return (self.quantite or 0) * (self.prix_achat or 0)
 
     def __str__(self):
-        unite_display = dict(self.UNITE_CHOICES).get(self.unite_achat, 'unités')
-        return '{} - {} {}'.format(self.date_Achat, self.quantite, unite_display)
+        nb_cartons = self.get_nb_cartons()
+        if nb_cartons is not None:
+            return '{} - {} carton(s) x {} pcs'.format(self.date_Achat, nb_cartons, self.pieces_par_carton)
+        return '{} - {} pièce(s)'.format(self.date_Achat, self.quantite)
 
     class Meta:
         ordering = ['date_Achat',]

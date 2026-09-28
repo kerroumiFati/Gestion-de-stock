@@ -6,7 +6,8 @@
   const apiBase = '/API';
   const api = {
     produits: '/API/produits/',
-    categories: '/API/categories/'
+    categories: '/API/categories/',
+    entrepots: '/API/entrepots/'
   };
   let __cacheProduits = [];
   let __cacheCodesPrix = [];
@@ -59,6 +60,21 @@
       throw err;
     }
     return data;
+  }
+
+  // Entrepots (hors vans) pour le champ "Entrepot / gamme de rattachement"
+  async function loadEntrepots(){
+    const sel = el('#entrepot_rattachement');
+    if(!sel) return;
+    try{
+      const data = await fetchJSON(api.entrepots);
+      const list = (Array.isArray(data) ? data : (data.results || []))
+        .filter(w => w.is_active !== false && !String(w.code || '').toUpperCase().startsWith('VAN'));
+      const current = sel.value;
+      sel.innerHTML = '<option value="">Aucun</option>' + list.map(w =>
+        `<option value="${w.id}">${String(w.code || '')} - ${String(w.name || '').replace(/[<>&]/g, '')}</option>`).join('');
+      if(current) sel.value = current;
+    }catch(e){ console.warn('[Produit] Chargement entrepots echoue', e); }
   }
 
   async function loadCategories(){
@@ -361,6 +377,11 @@
       designation: el('#designation')?.value?.trim(),
       categorie: el('#categorie')?.value ? Number(el('#categorie').value) : null,
       prixU: el('#prixU')?.value ? Number(el('#prixU').value) : 0,
+      // Conditionnement : vide -> null (= pas de carton / pas de colis)
+      unites_par_carton: el('#unites_par_carton')?.value ? Number(el('#unites_par_carton').value) : null,
+      cartons_par_colis: el('#cartons_par_colis')?.value ? Number(el('#cartons_par_colis').value) : null,
+      // Entrepot / gamme de rattachement (objectifs vendeurs)
+      entrepot_rattachement: el('#entrepot_rattachement')?.value ? Number(el('#entrepot_rattachement').value) : null,
     };
 
     // IMPORTANT: Préserver la company lors de l'édition
@@ -372,11 +393,286 @@
       }
     }
 
-    // Ajouter l'image si présente
+    // Ajouter l'image si présente (input natif, ou fichier depose sans DataTransfer)
     const imageInput = el('#image');
-    const hasImage = imageInput && imageInput.files && imageInput.files.length > 0;
+    const inputFile = imageInput && imageInput.files && imageInput.files.length > 0 ? imageInput.files[0] : null;
+    const imageFile = inputFile || __imageDroppedFile || null;
+    const hasImage = !!imageFile;
 
-    return {id, payload, hasImage, imageFile: hasImage ? imageInput.files[0] : null};
+    // En edition : l'utilisateur a retire l'image existante sans en choisir une autre
+    if(id && !hasImage && __imageRemoveExisting){
+      payload.image = null;
+    }
+
+    return {id, payload, hasImage, imageFile};
+  }
+
+  // ---------------------------------------------------------------------------
+  // Champ image : limite, validation, apercu et zone de depot
+  // La limite vient de settings.PRODUIT_IMAGE_MAX_SIZE_MB via l'attribut
+  // data-max-size-mb de l'input #image (le serveur applique la meme limite).
+  // ---------------------------------------------------------------------------
+  const DEFAULT_IMAGE_MAX_SIZE_MB = 10;
+  const IMAGE_ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+  // Etat du champ image en mode edition : true si l'utilisateur a retire l'image
+  // existante (elle sera supprimee cote serveur a l'enregistrement).
+  let __imageRemoveExisting = false;
+  // Fichier depose quand le navigateur ne permet pas d'assigner input.files
+  let __imageDroppedFile = null;
+
+  function getImageMaxSizeMB(){
+    const input = el('#image');
+    const val = input ? parseFloat(input.dataset.maxSizeMb) : NaN;
+    return (isFinite(val) && val > 0) ? val : DEFAULT_IMAGE_MAX_SIZE_MB;
+  }
+
+  function formatBytes(bytes){
+    if(!isFinite(bytes) || bytes < 0) return '';
+    if(bytes < 1024) return bytes + ' o';
+    if(bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + ' Ko';
+    return (bytes / 1024 / 1024).toFixed(2) + ' MB';
+  }
+
+  // Retourne un message d'erreur, ou null si le fichier est acceptable.
+  function getImageFileError(file){
+    if(!file) return null;
+    const isImage = (file.type && file.type.startsWith('image/')) || /\.(jpe?g|png|webp|gif)$/i.test(file.name || '');
+    if(!isImage){
+      return 'Ce fichier n\'est pas une image. Formats acceptés : JPG, PNG, WEBP, GIF.';
+    }
+    if(file.type && file.type.startsWith('image/') && !IMAGE_ALLOWED_TYPES.includes(file.type)){
+      return `Format ${file.type.replace('image/', '').toUpperCase()} non pris en charge. Formats acceptés : JPG, PNG, WEBP, GIF.`;
+    }
+    const maxMB = getImageMaxSizeMB();
+    if(file.size > maxMB * 1024 * 1024){
+      return `L'image est trop grande (${formatBytes(file.size)}). Taille maximale : ${maxMB} MB.`;
+    }
+    return null;
+  }
+
+  function showImageError(msg){
+    const box = el('#image-error');
+    const zone = el('#image-dropzone');
+    if(box){
+      if(msg){
+        box.innerHTML = '<i class="fas fa-exclamation-circle"></i><span></span>';
+        box.querySelector('span').textContent = msg;
+        box.style.display = 'flex';
+      } else {
+        box.innerHTML = '';
+        box.style.display = 'none';
+      }
+    }
+    if(zone) zone.classList.toggle('is-invalid', !!msg);
+  }
+
+  // Valide le fichier, affiche l'erreur sous le champ. Retourne true si OK.
+  function checkImageSize(file){
+    const err = getImageFileError(file);
+    showImageError(err);
+    return !err;
+  }
+
+  function setImageRemovalNotice(visible){
+    const notice = el('#image-removal-notice');
+    if(notice) notice.style.display = visible ? 'flex' : 'none';
+  }
+
+  // Affiche l'apercu. opts = {src, name, sizeText, existing}
+  function showImagePreview(opts){
+    const zone = el('#image-dropzone');
+    const empty = el('#image-dropzone-empty');
+    const preview = el('#image-preview');
+    const img = el('#preview-img');
+    const status = el('#image-preview-status');
+    const name = el('#image-preview-name');
+    const details = el('#image-preview-details');
+    if(!zone || !preview || !img) return;
+
+    // Completer avec les dimensions une fois l'image chargee
+    img.onload = function(){
+      if(details && img.naturalWidth && img.naturalHeight){
+        const dims = `${img.naturalWidth} × ${img.naturalHeight} px`;
+        details.textContent = [opts.sizeText, dims].filter(Boolean).join(' · ');
+      }
+    };
+    img.src = opts.src || '';
+    if(name){
+      name.textContent = opts.name || '';
+      name.title = opts.name || '';
+    }
+    if(details) details.textContent = opts.sizeText || '';
+    if(status){
+      status.classList.toggle('is-existing', !!opts.existing);
+      status.classList.toggle('is-new', !opts.existing);
+      status.innerHTML = opts.existing
+        ? '<i class="fas fa-image"></i> <span>Image actuelle</span>'
+        : '<i class="fas fa-check-circle"></i> <span>Nouvelle image · sera compressée</span>';
+    }
+
+    if(empty) empty.style.display = 'none';
+    preview.style.display = 'flex';
+    zone.classList.add('has-image');
+    zone.classList.remove('is-dragover');
+    showImageError(null);
+  }
+
+  // Revient a l'etat vide (zone de depot)
+  function hideImagePreview(){
+    const zone = el('#image-dropzone');
+    const empty = el('#image-dropzone-empty');
+    const preview = el('#image-preview');
+    const img = el('#preview-img');
+    if(img){ img.onload = null; img.src = ''; }
+    if(preview) preview.style.display = 'none';
+    if(empty) empty.style.display = '';
+    if(zone) zone.classList.remove('has-image', 'is-dragover');
+  }
+
+  // Reinitialise completement le champ (creation ou apres enregistrement)
+  function resetImageField(){
+    const input = el('#image');
+    if(input) input.value = '';
+    __imageDroppedFile = null;
+    __imageRemoveExisting = false;
+    setImageRemovalNotice(false);
+    showImageError(null);
+    hideImagePreview();
+  }
+
+  // Affiche l'image deja enregistree d'un produit en cours d'edition
+  function showExistingProductImage(url){
+    const input = el('#image');
+    if(input) input.value = '';
+    __imageDroppedFile = null;
+    __imageRemoveExisting = false;
+    setImageRemovalNotice(false);
+    if(!url){ hideImagePreview(); return; }
+    let fileName = '';
+    try{ fileName = decodeURIComponent(url.split('?')[0].split('/').pop() || ''); }catch(_){ fileName = url.split('/').pop() || ''; }
+    showImagePreview({src: url, name: fileName, sizeText: 'Enregistrée sur le serveur', existing: true});
+  }
+
+  function getEditingProduct(){
+    const id = el('#id') && el('#id').value ? Number(el('#id').value) : null;
+    return id ? (__cacheProduits.find(p => p.id === id) || null) : null;
+  }
+
+  // Traite un fichier choisi (via l'input ou par glisser-deposer)
+  function handleImageFile(file){
+    const input = el('#image');
+    if(!file){ return; }
+    if(!checkImageSize(file)){
+      if(input) input.value = '';
+      __imageDroppedFile = null;
+      // Si on editait un produit avec image, on la re-affiche
+      const existing = getEditingProduct();
+      if(existing && existing.image && !__imageRemoveExisting){
+        showExistingProductImage(existing.image);
+      } else {
+        hideImagePreview();
+      }
+      return;
+    }
+    // Une nouvelle image remplace l'existante : plus besoin de la marquer a supprimer
+    __imageRemoveExisting = false;
+    setImageRemovalNotice(false);
+    const reader = new FileReader();
+    reader.onload = function(event){
+      showImagePreview({src: event.target.result, name: file.name, sizeText: formatBytes(file.size), existing: false});
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function initImageField(){
+    const input = el('#image');
+    const zone = el('#image-dropzone');
+    if(!input || !zone) return;
+
+    input.addEventListener('change', function(e){
+      __imageDroppedFile = null;
+      handleImageFile(e.target.files && e.target.files[0]);
+    });
+
+    // Clic / clavier sur la zone vide -> ouvrir le selecteur
+    zone.addEventListener('click', function(e){
+      if(zone.classList.contains('has-image')) return; // les boutons gerent cet etat
+      if(e.target.closest('button')) return;
+      input.click();
+    });
+    zone.addEventListener('keydown', function(e){
+      if(zone.classList.contains('has-image')) return;
+      if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); input.click(); }
+    });
+
+    // Glisser-deposer
+    ['dragenter', 'dragover'].forEach(evt => zone.addEventListener(evt, function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      zone.classList.add('is-dragover');
+    }));
+    ['dragleave', 'dragend'].forEach(evt => zone.addEventListener(evt, function(e){
+      e.preventDefault();
+      if(!zone.contains(e.relatedTarget)) zone.classList.remove('is-dragover');
+    }));
+    zone.addEventListener('drop', function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      zone.classList.remove('is-dragover');
+      const files = e.dataTransfer && e.dataTransfer.files;
+      if(!files || !files.length) return;
+      if(files.length > 1){ showImageError('Une seule image par produit : déposez un seul fichier.'); return; }
+      const file = files[0];
+      // Alimenter l'input pour que collectForm() recupere le fichier normalement
+      let assigned = false;
+      try{
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        input.files = dt.files;
+        assigned = input.files && input.files.length > 0;
+      }catch(_){ assigned = false; }
+      __imageDroppedFile = assigned ? null : file;
+      handleImageFile(file);
+    });
+
+    const replaceBtn = el('#replace-image');
+    if(replaceBtn){
+      replaceBtn.addEventListener('click', function(e){ e.stopPropagation(); input.click(); });
+    }
+
+    const removeBtn = el('#remove-image');
+    if(removeBtn){
+      removeBtn.addEventListener('click', function(e){
+        e.stopPropagation();
+        const existing = getEditingProduct();
+        const hadNewFile = (input.files && input.files.length > 0) || !!__imageDroppedFile;
+        input.value = '';
+        __imageDroppedFile = null;
+        if(existing && existing.image){
+          if(hadNewFile){
+            // On annule la nouvelle image : retour a l'image actuelle
+            showExistingProductImage(existing.image);
+          } else {
+            // On retire l'image existante : suppression a l'enregistrement
+            __imageRemoveExisting = true;
+            hideImagePreview();
+            setImageRemovalNotice(true);
+          }
+        } else {
+          hideImagePreview();
+        }
+        showImageError(null);
+      });
+    }
+
+    const undoBtn = el('#undo-remove-image');
+    if(undoBtn){
+      undoBtn.addEventListener('click', function(){
+        const existing = getEditingProduct();
+        if(existing && existing.image) showExistingProductImage(existing.image);
+        else resetImageField();
+      });
+    }
   }
 
   async function createOrUpdate(){
@@ -387,11 +683,12 @@
       return;
     }
 
-    // Valider la taille de l'image (max 2 MB)
+    // Valider l'image (limite lue depuis data-max-size-mb, alignee sur le serveur)
     if(hasImage && imageFile){
-      const maxSize = 2 * 1024 * 1024; // 2 MB en bytes
-      if(imageFile.size > maxSize){
-        showAlert(`L'image est trop grande (${(imageFile.size / 1024 / 1024).toFixed(2)} MB). Taille maximale: 2 MB`, 'danger');
+      const imgErr = getImageFileError(imageFile);
+      if(imgErr){
+        showImageError(imgErr);
+        showAlert(imgErr, 'danger');
         return;
       }
     }
@@ -417,7 +714,13 @@
         formData.append('designation', payload.designation);
         formData.append('categorie', payload.categorie);
         formData.append('prixU', payload.prixU);
+        // Conditionnement (chaine vide = null cote DRF pour un IntegerField allow_null)
+        formData.append('unites_par_carton', payload.unites_par_carton != null ? payload.unites_par_carton : '');
+        formData.append('cartons_par_colis', payload.cartons_par_colis != null ? payload.cartons_par_colis : '');
+        formData.append('entrepot_rattachement', payload.entrepot_rattachement != null ? payload.entrepot_rattachement : '');
         formData.append('image', imageFile);
+        // En multipart, un booleen absent est lu comme false par DRF : forcer actif
+        formData.append('is_active', 'true');
 
         // IMPORTANT: Inclure la company pour préserver l'affectation
         if(payload.company){
@@ -480,14 +783,11 @@
   }
 
   function clearForm(){
-    ['#id','#reference','#code_barre','#designation','#prixU'].forEach(s=>{ const n=el(s); if(n) n.value=''; });
+    ['#id','#reference','#code_barre','#designation','#prixU','#unites_par_carton','#cartons_par_colis','#entrepot_rattachement'].forEach(s=>{ const n=el(s); if(n) n.value=''; });
     setCategorieValue('');
 
-    // Effacer l'image
-    const imageInput = el('#image');
-    if(imageInput) imageInput.value = '';
-    const imagePreview = el('#image-preview');
-    if(imagePreview) imagePreview.style.display = 'none';
+    // Effacer l'image (input, apercu, avis de suppression)
+    resetImageField();
 
     // Remettre le texte du bouton en mode "Ajouter"
     const btnSubmit = el('#btn');
@@ -533,6 +833,13 @@
           if(el('#designation')) el('#designation').value = p.designation||'';
           setCategorieValue(p.categorie||'');
           if(el('#prixU')) el('#prixU').value = p.prixU!=null? Number(p.prixU): '';
+          // Conditionnement : 1 = pas de carton -> champ vide
+          if(el('#unites_par_carton')) el('#unites_par_carton').value = (p.unites_par_carton && p.unites_par_carton > 1) ? p.unites_par_carton : '';
+          if(el('#cartons_par_colis')) el('#cartons_par_colis').value = (p.cartons_par_colis && p.cartons_par_colis > 1) ? p.cartons_par_colis : '';
+          if(el('#entrepot_rattachement')) el('#entrepot_rattachement').value = p.entrepot_rattachement ? String(p.entrepot_rattachement) : '';
+
+          // Afficher l'image actuelle du produit (remplacable / retirable)
+          showExistingProductImage(p.image || '');
 
           // Changer le texte du bouton en mode édition
           const btnSubmit = el('#btn');
@@ -570,6 +877,7 @@
 
     // Charger les prix multiples
     loadCodesPrix();
+    loadEntrepots();
     loadTypesPrix();
     loadPrixProduits();
     loadAllPrixProduits();
@@ -578,45 +886,8 @@
     const btn = el('#btn');
     if(btn){ btn.addEventListener('click', createOrUpdate); }
 
-    // Event handlers pour l'image
-    const imageInput = el('#image');
-    if(imageInput){
-      imageInput.addEventListener('change', function(e){
-        const file = e.target.files[0];
-        if(!file) return;
-
-        // Vérifier la taille (max 2 MB)
-        const maxSize = 2 * 1024 * 1024;
-        if(file.size > maxSize){
-          showAlert(`L'image est trop grande (${(file.size / 1024 / 1024).toFixed(2)} MB). Taille maximale: 2 MB`, 'danger');
-          imageInput.value = '';
-          el('#image-preview').style.display = 'none';
-          return;
-        }
-
-        // Afficher l'aperçu
-        const reader = new FileReader();
-        reader.onload = function(event){
-          const previewImg = el('#preview-img');
-          const previewContainer = el('#image-preview');
-          if(previewImg && previewContainer){
-            previewImg.src = event.target.result;
-            previewContainer.style.display = 'block';
-          }
-        };
-        reader.readAsDataURL(file);
-      });
-    }
-
-    const removeImageBtn = el('#remove-image');
-    if(removeImageBtn){
-      removeImageBtn.addEventListener('click', function(){
-        const imageInput = el('#image');
-        if(imageInput) imageInput.value = '';
-        const imagePreview = el('#image-preview');
-        if(imagePreview) imagePreview.style.display = 'none';
-      });
-    }
+    // Champ image : zone de depot, apercu, remplacement / retrait
+    initImageField();
 
     // Event handler pour changer le type de prix affiché
     $(document).off('change', '#display_price_type').on('change', '#display_price_type', function(){

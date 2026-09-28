@@ -1410,3 +1410,121 @@ class VisiteClient(models.Model):
             'absents': qs.filter(resultat='absent').count(),
             'refuses': qs.filter(resultat='refuse').count(),
         }
+
+
+# ==========================================
+# OBJECTIFS MENSUELS DES VENDEURS
+# ==========================================
+
+class ObjectifVendeur(models.Model):
+    """
+    Objectif mensuel de chiffre d'affaires d'un vendeur (livreur), sur un perimetre :
+    - 'entrepot'  : CA des produits rattaches a un entrepot / gamme (Produit.entrepot_rattachement)
+    - 'categorie' : CA des produits d'un type de produit (categorie et ses sous-categories)
+    Un vendeur a typiquement deux objectifs distincts par mois, chacun avec son propre
+    taux de reussite. Le CA realise = somme des lignes de ventes de tournee (montant TTC)
+    du vendeur sur le mois, filtrees sur le perimetre.
+    """
+    TYPE_PERIMETRE_CHOICES = [
+        ('entrepot', 'Entrepôt / gamme'),
+        ('categorie', 'Type de produit'),
+    ]
+    MOIS_CHOICES = [(i, m) for i, m in enumerate(
+        ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août',
+         'Septembre', 'Octobre', 'Novembre', 'Décembre'], start=1)]
+
+    livreur = models.ForeignKey(LivreurDistribution, on_delete=models.CASCADE, related_name='objectifs',
+                                verbose_name='Vendeur')
+    annee = models.PositiveSmallIntegerField('Année')
+    mois = models.PositiveSmallIntegerField('Mois', choices=MOIS_CHOICES)
+    type_perimetre = models.CharField('Périmètre', max_length=20, choices=TYPE_PERIMETRE_CHOICES)
+    entrepot = models.ForeignKey('Warehouse', on_delete=models.CASCADE, null=True, blank=True,
+                                 related_name='objectifs_vendeurs', verbose_name='Entrepôt / gamme')
+    categorie = models.ForeignKey('Categorie', on_delete=models.CASCADE, null=True, blank=True,
+                                  related_name='objectifs_vendeurs', verbose_name='Type de produit')
+    montant_objectif = models.DecimalField('Objectif de CA (TTC)', max_digits=12, decimal_places=2)
+    note = models.CharField('Note', max_length=255, blank=True)
+
+    company = models.ForeignKey('Company', on_delete=models.CASCADE, related_name='objectifs_vendeurs',
+                                null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Objectif vendeur'
+        verbose_name_plural = 'Objectifs vendeurs'
+        ordering = ['-annee', '-mois', 'livreur__nom', 'type_perimetre']
+        constraints = [
+            # NB: une contrainte unique incluant les deux FK nullables serait inoperante
+            # (NULL n'est jamais egal a NULL) -> une contrainte par type de perimetre.
+            models.UniqueConstraint(
+                fields=['livreur', 'annee', 'mois', 'entrepot'],
+                condition=models.Q(type_perimetre='entrepot'),
+                name='objectif_vendeur_unique_entrepot_mois',
+            ),
+            models.UniqueConstraint(
+                fields=['livreur', 'annee', 'mois', 'categorie'],
+                condition=models.Q(type_perimetre='categorie'),
+                name='objectif_vendeur_unique_categorie_mois',
+            ),
+            models.CheckConstraint(check=models.Q(mois__gte=1, mois__lte=12), name='objectif_vendeur_mois_valide'),
+            models.CheckConstraint(check=models.Q(montant_objectif__gte=0), name='objectif_vendeur_montant_positif'),
+        ]
+
+    def __str__(self):
+        return f"{self.livreur.nom} - {self.get_mois_display()} {self.annee} - {self.perimetre_label}: {self.montant_objectif}"
+
+    @property
+    def perimetre_label(self):
+        if self.type_perimetre == 'entrepot':
+            return f"Entrepôt {self.entrepot.name}" if self.entrepot_id else 'Entrepôt (non défini)'
+        if self.categorie_id:
+            path = self.categorie.get_full_path() if hasattr(self.categorie, 'get_full_path') else self.categorie.nom
+            return f"Type {path}"
+        return 'Type de produit (non défini)'
+
+    def clean(self):
+        if self.type_perimetre == 'entrepot':
+            if not self.entrepot_id:
+                raise ValidationError({'entrepot': "Choisissez l'entrepôt / gamme de l'objectif."})
+            self.categorie = None
+        elif self.type_perimetre == 'categorie':
+            if not self.categorie_id:
+                raise ValidationError({'categorie': "Choisissez le type de produit de l'objectif."})
+            self.entrepot = None
+        if self.mois and not 1 <= self.mois <= 12:
+            raise ValidationError({'mois': 'Le mois doit être compris entre 1 et 12.'})
+
+    def lignes_ventes(self):
+        """Lignes de ventes de tournee du vendeur sur le mois, filtrees sur le perimetre."""
+        qs = LigneVenteTourneeMobile.objects.filter(
+            vente__tournee__livreur=self.livreur,
+            vente__date_vente__year=self.annee,
+            vente__date_vente__month=self.mois,
+        )
+        if self.type_perimetre == 'entrepot':
+            return qs.filter(produit__entrepot_rattachement=self.entrepot)
+        ids = [self.categorie_id] + [c.id for c in self.categorie.get_all_children()] if self.categorie_id else []
+        return qs.filter(produit__categorie_id__in=ids)
+
+    def calculer_ca_realise(self):
+        total = self.lignes_ventes().aggregate(total=models.Sum('montant_ttc'))['total']
+        return total or Decimal('0')
+
+    @staticmethod
+    def calculer_taux(ca_realise, montant_objectif):
+        """Taux de reussite en % (None si l'objectif est nul)."""
+        if not montant_objectif or montant_objectif <= 0:
+            return None
+        return round(float(ca_realise) / float(montant_objectif) * 100, 1)
+
+    def get_suivi(self):
+        """Dictionnaire pret a afficher : CA realise, reste, taux, atteint."""
+        ca = self.calculer_ca_realise()
+        taux = self.calculer_taux(ca, self.montant_objectif)
+        return {
+            'ca_realise': ca,
+            'reste': max(Decimal('0'), (self.montant_objectif or Decimal('0')) - ca),
+            'taux_reussite': taux,
+            'atteint': taux is not None and taux >= 100,
+        }

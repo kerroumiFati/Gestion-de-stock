@@ -15,6 +15,7 @@
 
   function loadProducts(selectors){
     return $.get(apiBase + '/produits/').then(function(items){
+      if(window.CartonInput){ window.CartonInput.prime(items); }
       const opts = ['<option value="">Sélectionner</option>'];
       const mvOpts = ['<option value="">Tous</option>'];
       items.forEach(p => {

@@ -9,7 +9,8 @@ from .distribution_views import (
     PlanningHebdomadaireViewSet, ClientLivreurHebdoViewSet,
     # BonLivraisonVanViewSet,  # TODO: Disabled - models not yet created
     ProduitMobileViewSet,
-    StatsLivreursAPIView
+    StatsLivreursAPIView,
+    ObjectifVendeurViewSet,
 )
 
 router = DefaultRouter()
@@ -24,6 +25,7 @@ router.register(r'clients-livreurs-hebdo', ClientLivreurHebdoViewSet, basename='
 # router.register(r'bons-livraison', BonLivraisonVanViewSet, basename='bon-livraison')  # TODO: Disabled - models not yet created
 router.register(r'produits', ProduitMobileViewSet, basename='produit-mobile')
 router.register(r'sync', SyncViewSet, basename='sync')
+router.register(r'objectifs-vendeurs', ObjectifVendeurViewSet, basename='objectif-vendeur')
 
 urlpatterns = [
     path('', include(router.urls)),

@@ -292,7 +292,7 @@
               </div>
               <div class="form-group col-md-2">
                 <label>{% trans "Quantité" %}</label>
-                <input id="mv_transfer_qty" type="number" min="0" step="1" class="form-control" />
+                <input id="mv_transfer_qty" type="number" min="0" step="1" class="form-control" data-carton-product="#mv_transfer_produit" />
               </div>
               <div class="form-group col-md-3">
                 <label>De (entrepôt)</label>
@@ -365,7 +365,7 @@
               </div>
               <div class="form-group col-md-2">
                 <label>{% trans "Quantité" %}</label>
-                <input id="mv_loss_qty" type="number" min="0" step="1" class="form-control" />
+                <input id="mv_loss_qty" type="number" min="0" step="1" class="form-control" data-carton-product="#mv_loss_produit" />
               </div>
               <div class="form-group col-md-3">
                 <label>Type</label>
@@ -426,7 +426,7 @@
               </div>
               <div class="form-group col-md-2">
                 <label>{% trans "Quantité" %}</label>
-                <input id="mv_outflow_qty" type="number" min="0" step="1" class="form-control" />
+                <input id="mv_outflow_qty" type="number" min="0" step="1" class="form-control" data-carton-product="#mv_outflow_produit" />
               </div>
               <div class="form-group col-md-3">
                 <label>Type</label>
@@ -490,7 +490,7 @@
               </div>
               <div class="form-group col-md-2">
                 <label><i class="fa fa-sort-numeric-up"></i> Quantité *</label>
-                <input id="mv_return_qty" type="number" min="1" step="1" class="form-control" placeholder="Ex: 5" />
+                <input id="mv_return_qty" type="number" min="1" step="1" class="form-control" placeholder="Ex: 5" data-carton-product="#mv_return_produit" />
               </div>
               <div class="form-group col-md-3">
                 <label><i class="fa fa-user-tie"></i> Fournisseur *</label>

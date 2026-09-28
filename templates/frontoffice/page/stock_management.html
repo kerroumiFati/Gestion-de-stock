@@ -834,7 +834,7 @@
                         <div class="col-md-6">
                             <div class="form-group">
                                 <label class="font-weight-bold">{% trans "Nouvelle quantité" %}</label>
-                                <input type="number" class="form-control" id="newQuantity" min="0" required>
+                                <input type="number" class="form-control" id="newQuantity" min="0" required data-carton-product="#adjustProductSelect">
                             </div>
                         </div>
                     </div>
@@ -1147,6 +1147,8 @@
                 hiddenSelect.appendChild(option);
             }
             hiddenSelect.value = value;
+            // Le select est masque : prevenir l'aide de saisie en cartons du changement
+            hiddenSelect.dispatchEvent(new Event('change', { bubbles: true }));
         }
 
         // Update stock display if this is the product select
@@ -1404,6 +1406,7 @@
                             ${p.quantite || 0}
                         </span>
                         <small class="text-muted d-block">${p.unite_mesure || 'unités'}</small>
+                        ${window.CartonInput ? window.CartonInput.formatHtml(p.quantite || 0, p.unites_par_carton) : ''}
                     </td>
                     <td>
                         <div class="stock-bar">

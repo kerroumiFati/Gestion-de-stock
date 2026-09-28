@@ -301,6 +301,7 @@
     $.ajax({ url: url, method: 'GET', dataType: 'json' })
       .done(function(data){
         const list = asList(data);
+        if(window.CartonInput){ window.CartonInput.prime(list); }
         fillSelect($sel, list, function(p){
           const text = (p.reference ? (p.reference + ' - ') : '') + (p.designation || ('Produit #' + p.id));
           return { value: p.id, text: text };

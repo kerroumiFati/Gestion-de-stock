@@ -67,6 +67,8 @@ def page(request, name: str):
         return render(request, 'frontoffice/page/nav_test.html')
     elif name == 'stats_livreurs':
         return render(request, 'frontoffice/page/stats_livreurs.html')
+    elif name == 'objectifs_vendeurs':
+        return render(request, 'frontoffice/page/objectifs_vendeurs.html')
     elif name == 'visites_clients':
         return render(request, 'frontoffice/page/visites_clients.html')
     elif name == 'historique_tournees':
@@ -409,7 +411,7 @@ def stocks_list(request):
     entrepot_id = request.GET.get('entrepot')
     client_id = request.GET.get('client')
 
-    stocks = ProductStock.objects.select_related('produit', 'warehouse').all()
+    stocks = ProductStock.objects.select_related('produit', 'warehouse').prefetch_related('produit__conditionnements').all()
 
     if entrepot_id:
         stocks = stocks.filter(warehouse_id=entrepot_id)
@@ -464,6 +466,9 @@ def stocks_list(request):
 
         stock.prix_effectif = prix_effectif
         stock.valeur = stock.quantity * prix_effectif if prix_effectif else 0
+        # Equivalent en cartons (vide si le produit n'a pas de conditionnement)
+        stock.unites_par_carton = stock.produit.get_unites_par_carton()
+        stock.cartons_display = Produit.format_cartons(stock.quantity, stock.unites_par_carton)
 
     entrepots = Warehouse.objects.all().order_by('code')
     clients = Client.objects.all().order_by('nom', 'prenom')

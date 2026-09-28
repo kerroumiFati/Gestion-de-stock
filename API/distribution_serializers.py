@@ -24,6 +24,10 @@ class ProduitMobileSerializer(serializers.ModelSerializer):
     categorie_nom = serializers.CharField(source='categorie.nom', read_only=True)
     unite_mesure_display = serializers.CharField(source='get_unite_mesure_display', read_only=True)
     stock = serializers.SerializerMethodField()
+    # Conditionnement : les quantites echangees restent en unites ; l'app mobile
+    # peut afficher / saisir en cartons grace a ces deux champs.
+    unites_par_carton = serializers.SerializerMethodField()
+    cartons_par_colis = serializers.SerializerMethodField()
 
     class Meta:
         model = Produit
@@ -32,8 +36,15 @@ class ProduitMobileSerializer(serializers.ModelSerializer):
             'categorie', 'categorie_nom',
             'prixU', 'unite_mesure', 'unite_mesure_display',
             'stock', 'quantite',
+            'unites_par_carton', 'cartons_par_colis',
             'is_active', 'updated_at'
         )
+
+    def get_unites_par_carton(self, obj):
+        return obj.get_unites_par_carton()
+
+    def get_cartons_par_colis(self, obj):
+        return obj.get_cartons_par_colis()
 
     def get_stock(self, obj):
         """
@@ -1325,3 +1336,99 @@ class ClientLivreurHebdoCreateSerializer(serializers.ModelSerializer):
             'date_fin': {'required': False, 'allow_null': True},
             'notes': {'required': False, 'allow_blank': True},
         }
+
+
+# ==========================================
+# OBJECTIFS MENSUELS DES VENDEURS
+# ==========================================
+
+class ObjectifVendeurSerializer(serializers.ModelSerializer):
+    """Objectif mensuel de CA d'un vendeur + suivi (CA realise, taux de reussite)."""
+    livreur_nom = serializers.CharField(source='livreur.nom', read_only=True)
+    livreur_matricule = serializers.CharField(source='livreur.matricule', read_only=True)
+    entrepot_code = serializers.CharField(source='entrepot.code', read_only=True, allow_null=True)
+    entrepot_nom = serializers.CharField(source='entrepot.name', read_only=True, allow_null=True)
+    categorie_nom = serializers.CharField(source='categorie.nom', read_only=True, allow_null=True)
+    type_perimetre_display = serializers.CharField(source='get_type_perimetre_display', read_only=True)
+    mois_display = serializers.CharField(source='get_mois_display', read_only=True)
+    perimetre_label = serializers.CharField(read_only=True)
+    ca_realise = serializers.SerializerMethodField()
+    reste = serializers.SerializerMethodField()
+    taux_reussite = serializers.SerializerMethodField()
+    atteint = serializers.SerializerMethodField()
+
+    class Meta:
+        from .distribution_models import ObjectifVendeur
+        model = ObjectifVendeur
+        fields = [
+            'id', 'livreur', 'livreur_nom', 'livreur_matricule',
+            'annee', 'mois', 'mois_display',
+            'type_perimetre', 'type_perimetre_display',
+            'entrepot', 'entrepot_code', 'entrepot_nom',
+            'categorie', 'categorie_nom', 'perimetre_label',
+            'montant_objectif', 'note',
+            'ca_realise', 'reste', 'taux_reussite', 'atteint',
+            'company', 'created_at', 'updated_at',
+        ]
+        read_only_fields = ['company', 'created_at', 'updated_at']
+        extra_kwargs = {
+            'entrepot': {'required': False, 'allow_null': True},
+            'categorie': {'required': False, 'allow_null': True},
+            'note': {'required': False, 'allow_blank': True},
+        }
+
+    # Le suivi est calcule une fois par objet (3 champs derives)
+    def _suivi(self, obj):
+        cache = self.context.setdefault('_suivi_cache', {})
+        if obj.pk not in cache:
+            cache[obj.pk] = obj.get_suivi()
+        return cache[obj.pk]
+
+    def get_ca_realise(self, obj):
+        return float(self._suivi(obj)['ca_realise'])
+
+    def get_reste(self, obj):
+        return float(self._suivi(obj)['reste'])
+
+    def get_taux_reussite(self, obj):
+        return self._suivi(obj)['taux_reussite']
+
+    def get_atteint(self, obj):
+        return self._suivi(obj)['atteint']
+
+    def validate(self, attrs):
+        type_perimetre = attrs.get('type_perimetre', getattr(self.instance, 'type_perimetre', None))
+        entrepot = attrs.get('entrepot', getattr(self.instance, 'entrepot', None))
+        categorie = attrs.get('categorie', getattr(self.instance, 'categorie', None))
+        mois = attrs.get('mois', getattr(self.instance, 'mois', None))
+        montant = attrs.get('montant_objectif', getattr(self.instance, 'montant_objectif', None))
+        errors = {}
+        if type_perimetre == 'entrepot':
+            if not entrepot:
+                errors['entrepot'] = "Choisissez l'entrepôt / gamme de l'objectif."
+            attrs['categorie'] = None
+        elif type_perimetre == 'categorie':
+            if not categorie:
+                errors['categorie'] = "Choisissez le type de produit de l'objectif."
+            attrs['entrepot'] = None
+        if mois is not None and not 1 <= int(mois) <= 12:
+            errors['mois'] = 'Le mois doit être compris entre 1 et 12.'
+        if montant is not None and montant <= 0:
+            errors['montant_objectif'] = "L'objectif doit être strictement positif."
+        if errors:
+            raise serializers.ValidationError(errors)
+
+        # Un seul objectif par vendeur, mois et perimetre
+        from .distribution_models import ObjectifVendeur
+        livreur = attrs.get('livreur', getattr(self.instance, 'livreur', None))
+        annee = attrs.get('annee', getattr(self.instance, 'annee', None))
+        if livreur is not None and annee is not None and mois is not None:
+            qs = ObjectifVendeur.objects.filter(livreur=livreur, annee=annee, mois=mois, type_perimetre=type_perimetre)
+            qs = qs.filter(entrepot=entrepot) if type_perimetre == 'entrepot' else qs.filter(categorie=categorie)
+            if self.instance is not None:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.exists():
+                raise serializers.ValidationError({
+                    'non_field_errors': ["Un objectif existe déjà pour ce vendeur, ce périmètre et ce mois. Modifiez-le plutôt."]
+                })
+        return attrs

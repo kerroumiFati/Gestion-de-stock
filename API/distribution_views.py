@@ -6,6 +6,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
 from django_filters.rest_framework import DjangoFilterBackend
+from .mixins import TenantFilterMixin
 from django.utils import timezone
 from django.db import transaction, models
 from django.db.models.deletion import ProtectedError
@@ -565,7 +566,7 @@ class LivreurViewSet(viewsets.ModelViewSet):
         # Récupérer tous les stocks du van
         stocks = ProductStock.objects.filter(
             warehouse=livreur.entrepot
-        ).select_related('produit', 'produit__categorie').prefetch_related('produit__prix_multiples').order_by('produit__reference')
+        ).select_related('produit', 'produit__categorie').prefetch_related('produit__prix_multiples', 'produit__conditionnements').order_by('produit__reference')
 
         # Filtrer les stocks vides si demandé
         hide_empty = request.query_params.get('hide_empty', 'false').lower() == 'true'
@@ -696,6 +697,9 @@ class LivreurViewSet(viewsets.ModelViewSet):
                     'code_prix_actif': code_prix_actif.code if code_prix_actif else None,
                     'valeur': product_value,
                     'unite_mesure': stock.produit.get_unite_mesure_display(),
+                    # Conditionnement : quantite toujours en unites, ce champ sert a
+                    # afficher / saisir en cartons dans l'app mobile
+                    'unites_par_carton': stock.produit.get_unites_par_carton(),
                     'seuil_alerte': stock.produit.seuil_alerte,
                     'seuil_critique': stock.produit.seuil_critique,
                     'stock_status': stock_status,
@@ -3166,7 +3170,7 @@ class ProduitMobileViewSet(viewsets.ReadOnlyModelViewSet):
     from .distribution_serializers import ProduitMobileSerializer
     from .models import Produit
 
-    queryset = Produit.objects.filter(is_active=True).order_by('designation')
+    queryset = Produit.objects.filter(is_active=True).prefetch_related('conditionnements').order_by('designation')
     serializer_class = ProduitMobileSerializer
     permission_classes = [IsAuthenticated]
     pagination_class = None  # Pas de pagination pour l'app mobile
@@ -3197,6 +3201,49 @@ from rest_framework.views import APIView
 from django.db.models import Sum, Count, Q, F
 from django.db.models.functions import TruncDate
 from collections import defaultdict
+
+
+class ObjectifVendeurViewSet(TenantFilterMixin, viewsets.ModelViewSet):
+    """
+    Objectifs mensuels de CA des vendeurs (livreurs), avec suivi.
+
+    GET /API/distribution/objectifs-vendeurs/?annee=2026&mois=9[&livreur=ID]
+      -> liste des objectifs avec ca_realise, reste, taux_reussite, atteint
+    GET /API/distribution/objectifs-vendeurs/synthese/?annee=2026&mois=9
+      -> totaux du mois (objectifs, atteints, CA realise, taux moyen)
+    Ecriture reservee aux administrateurs (is_staff).
+    """
+    from .distribution_models import ObjectifVendeur as _ObjectifVendeur
+    from .distribution_serializers import ObjectifVendeurSerializer as _ObjectifVendeurSerializer
+
+    queryset = _ObjectifVendeur.objects.select_related('livreur', 'entrepot', 'categorie', 'categorie__parent').all()
+    serializer_class = _ObjectifVendeurSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = None
+    filterset_fields = ['livreur', 'annee', 'mois', 'type_perimetre', 'entrepot', 'categorie']
+
+    def get_permissions(self):
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            return [IsAuthenticated(), IsAdminUser()]
+        return [IsAuthenticated()]
+
+    @action(detail=False, methods=['get'])
+    def synthese(self, request):
+        objectifs = self.filter_queryset(self.get_queryset())
+        data = self.get_serializer(objectifs, many=True).data
+        nb = len(data)
+        atteints = sum(1 for o in data if o['atteint'])
+        total_objectif = sum(float(o['montant_objectif']) for o in data)
+        total_realise = sum(o['ca_realise'] for o in data)
+        taux = [o['taux_reussite'] for o in data if o['taux_reussite'] is not None]
+        return Response({
+            'nb_objectifs': nb,
+            'nb_atteints': atteints,
+            'total_objectif': round(total_objectif, 2),
+            'total_realise': round(total_realise, 2),
+            'taux_moyen': round(sum(taux) / len(taux), 1) if taux else None,
+            'taux_global': round(total_realise / total_objectif * 100, 1) if total_objectif else None,
+        })
 
 
 class StatsLivreursAPIView(APIView):

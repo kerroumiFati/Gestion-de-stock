@@ -347,7 +347,7 @@
                 <div class="col-md-2">
                     <label>{% trans "Quantité" %}</label>
                     <input type="number" id="movement_quantity" class="form-control count-input"
-                           placeholder="0" min="0">
+                           placeholder="0" min="0" data-carton-product-fn="cartonSelectedProduct">
                 </div>
                 <div class="col-md-2 d-flex align-items-end">
                     <button class="btn btn-success w-100" onclick="executeQuickMovement()">
@@ -442,6 +442,14 @@
 // Variables globales
 let allProducts = [];
 let selectedProduct = null;
+
+// Produit courant pour l'aide de saisie en cartons (carton_input.js)
+function cartonSelectedProduct(){ return selectedProduct || null; }
+// Equivalent en cartons d'une quantite (vide si pas de conditionnement)
+function cartonEq(product, qty){
+    if(!window.CartonInput || !product) return '';
+    return window.CartonInput.formatHtml(qty != null ? qty : product.quantite, product.unites_par_carton);
+}
 let currentView = 'grid';
 let inventaireInitialized = false;
 
@@ -640,7 +648,7 @@ function displayProducts(products) {
                     </p>
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <span class="text-muted">Stock:</span>
-                        <strong class="fs-4 ${getStockColorClass(product)}">${product.quantite}</strong>
+                        <span class="text-end"><strong class="fs-4 ${getStockColorClass(product)}">${product.quantite}</strong>${cartonEq(product)}</span>
                     </div>
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <span class="text-muted">Seuil:</span>
@@ -673,7 +681,7 @@ function displayProducts(products) {
             <td><strong>${product.designation}</strong><br><small class="text-muted">${product.reference}</small></td>
             <td>${product.categorie_nom || 'N/A'}</td>
             <td><span class="warehouse-badge"><i class="fas fa-warehouse me-1"></i>Principal</span></td>
-            <td><strong class="fs-5 ${getStockColorClass(product)}">${product.quantite}</strong></td>
+            <td><strong class="fs-5 ${getStockColorClass(product)}">${product.quantite}</strong>${cartonEq(product)}</td>
             <td>${product.seuil_alerte || 0}</td>
             <td><span class="stock-level-badge ${getStockBadgeClass(product)}">${getStockStatusText(product)}</span></td>
             <td>${product.code_barre || '-'}</td>
@@ -761,7 +769,9 @@ function selectProduct(productId) {
         <strong>${selectedProduct.designation}</strong><br>
         <small>${selectedProduct.reference}</small>
     `;
-    document.getElementById('current_stock').value = selectedProduct.quantite;
+    document.getElementById('current_stock').value = selectedProduct.quantite
+        + (window.CartonInput ? (function(t){ return t ? ' (' + t + ')' : ''; })(window.CartonInput.format(selectedProduct.quantite, selectedProduct.unites_par_carton)) : '');
+    if(window.CartonInput){ window.CartonInput.refresh('#movement_quantity'); }
     document.getElementById('movement_quantity').focus();
 }
 

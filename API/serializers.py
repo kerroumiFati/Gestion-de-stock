@@ -199,14 +199,33 @@ class FournisseurSerializer(serializers.ModelSerializer):
     class Meta:
         model = Fournisseur
         fields = ('id','libelle', 'telephone','email','adresse', 'nif', 'nis', 'ai', 'rc')
+class _ConditionnementIntField(serializers.IntegerField):
+    """Champ entier non-modele : lu via une methode du Produit, ecrit dans le
+    Conditionnement actif (voir ProduitSerializer._save_conditionnement)."""
+    def __init__(self, getter, **kwargs):
+        self._getter = getter
+        kwargs.setdefault('required', False)
+        kwargs.setdefault('allow_null', True)
+        kwargs.setdefault('min_value', 1)
+        super().__init__(**kwargs)
+
+    def get_attribute(self, instance):
+        return getattr(instance, self._getter)()
+
+
 class ProduitSerializer(serializers.ModelSerializer):
     stock_mouvements = serializers.SerializerMethodField()
+    # Conditionnement : le stock reste en unites, ces champs alimentent le modele
+    # Conditionnement (unites par carton, cartons par colis) du produit.
+    unites_par_carton = _ConditionnementIntField('get_unites_par_carton')
+    cartons_par_colis = _ConditionnementIntField('get_cartons_par_colis')
     currency_code = serializers.CharField(source='currency.code', read_only=True)
     currency_symbol = serializers.CharField(source='currency.symbol', read_only=True)
     prix_formatted = serializers.SerializerMethodField()
     categorie_nom = serializers.CharField(source='categorie.nom', read_only=True)
     categorie_path = serializers.CharField(source='categorie.get_full_path', read_only=True)
     fournisseur_nom = serializers.CharField(source='fournisseur.libelle', read_only=True, allow_null=True)
+    entrepot_rattachement_nom = serializers.CharField(source='entrepot_rattachement.name', read_only=True, allow_null=True)
     stock_status = serializers.SerializerMethodField()
     stock_status_display = serializers.CharField(source='get_stock_status_display', read_only=True)
     stock_class = serializers.CharField(source='get_stock_class', read_only=True)
@@ -220,7 +239,9 @@ class ProduitSerializer(serializers.ModelSerializer):
             'categorie', 'categorie_nom', 'categorie_path',
             'prixU', 'currency', 'currency_code', 'currency_symbol', 'prix_formatted',
             'quantite', 'seuil_alerte', 'seuil_critique', 'unite_mesure',
+            'unites_par_carton', 'cartons_par_colis',
             'fournisseur', 'fournisseur_nom',
+            'entrepot_rattachement', 'entrepot_rattachement_nom',
             'stock_mouvements', 'stock_status', 'stock_status_display', 'stock_class',
             'prix_multiples', 'nombre_prix',
             'company',  # IMPORTANT: Inclure company pour préserver l'affectation lors de l'édition
@@ -228,6 +249,7 @@ class ProduitSerializer(serializers.ModelSerializer):
         )
         extra_kwargs = {
             'fournisseur': {'required': False, 'allow_null': True},
+            'entrepot_rattachement': {'required': False, 'allow_null': True},
             'company': {'required': False, 'allow_null': True},  # Company optionnelle pour compatibilité
             'quantite': {'required': False, 'default': 0},
             'description': {'required': False, 'allow_blank': True},
@@ -236,8 +258,99 @@ class ProduitSerializer(serializers.ModelSerializer):
             'seuil_alerte': {'required': False},
             'seuil_critique': {'required': False},
             'unite_mesure': {'required': False},
+            # IMPORTANT: en envoi multipart (avec image), un BooleanField absent est lu
+            # comme False par DRF -> le produit serait cree inactif et donc invisible.
+            'is_active': {'required': False, 'default': True},
         }
-    
+
+    def validate_image(self, image):
+        """Validation serveur de la taille de l'image. Avant, seule la limite JS
+        existait : un appel API direct pouvait envoyer n'importe quelle taille jusqu'au
+        plafond Nginx."""
+        if image is None:
+            return image
+        from django.conf import settings
+        max_size = settings.PRODUIT_IMAGE_MAX_SIZE
+        size = getattr(image, 'size', None)
+        if size is not None and size > max_size:
+            raise serializers.ValidationError(
+                f"L'image est trop grande ({size / 1024 / 1024:.2f} MB). "
+                f"Taille maximale : {settings.PRODUIT_IMAGE_MAX_SIZE_MB} MB."
+            )
+        return image
+
+    def validate(self, attrs):
+        """Verifie l'unicite (company, reference) et (company, code_barre) AVANT
+        l'insertion, produits inactifs inclus, pour renvoyer un 400 clair au lieu
+        d'une IntegrityError (500)."""
+        request = self.context.get('request')
+        company = attrs.get('company')
+        if company is None and request is not None and getattr(request, 'company', None) is not None:
+            company = request.company
+        if company is None and self.instance is not None:
+            company = self.instance.company
+
+        errors = {}
+        for field, label in (('reference', 'cette référence'), ('code_barre', 'ce code-barres')):
+            value = attrs.get(field)
+            if value in (None, ''):
+                continue
+            qs = Produit.objects.filter(company=company, **{field: value})
+            if self.instance is not None:
+                qs = qs.exclude(pk=self.instance.pk)
+            existing = qs.first()
+            if existing is not None:
+                msg = f"Un produit avec {label} existe déjà ({existing.designation})."
+                if not existing.is_active:
+                    msg += " Il est désactivé : réactivez-le ou choisissez une autre valeur."
+                errors[field] = msg
+        if errors:
+            raise serializers.ValidationError(errors)
+        return attrs
+
+    _COND_FIELDS = ('unites_par_carton', 'cartons_par_colis')
+
+    def _pop_conditionnement(self, validated_data):
+        """Retire les champs conditionnement de validated_data ; retourne (present, valeurs)."""
+        present = any(f in validated_data for f in self._COND_FIELDS)
+        values = {f: validated_data.pop(f, None) for f in self._COND_FIELDS}
+        return present, values
+
+    def _save_conditionnement(self, produit, present, values):
+        """Cree ou met a jour le Conditionnement actif du produit. Un champ absent
+        n'est pas touche ; null revient a 1 (pas de carton / pas de colis)."""
+        if not present:
+            return
+        cond = produit.get_conditionnement_actif()
+        upc = values.get('unites_par_carton')
+        cpc = values.get('cartons_par_colis')
+        if cond is None:
+            if (upc or 1) <= 1 and (cpc or 1) <= 1:
+                return  # rien a enregistrer
+            cond = Conditionnement(produit=produit)
+        if 'unites_par_carton' in self.initial_data or upc is not None:
+            cond.unites_par_carton = upc or 1
+        if 'cartons_par_colis' in self.initial_data or cpc is not None:
+            cond.cartons_par_colis = cpc or 1
+        cond.is_active = True
+        cond.save()
+        # Invalider un eventuel cache prefetch pour que la reponse soit a jour
+        cache = getattr(produit, '_prefetched_objects_cache', None)
+        if cache and 'conditionnements' in cache:
+            del cache['conditionnements']
+
+    def create(self, validated_data):
+        present, values = self._pop_conditionnement(validated_data)
+        produit = super().create(validated_data)
+        self._save_conditionnement(produit, present, values)
+        return produit
+
+    def update(self, instance, validated_data):
+        present, values = self._pop_conditionnement(validated_data)
+        produit = super().update(instance, validated_data)
+        self._save_conditionnement(produit, present, values)
+        return produit
+
     def get_stock_mouvements(self, obj):
         # Utilise le cache de prefetch_related('mouvements') du queryset plutôt qu'un
         # .aggregate() qui ré-exécute une requête SQL par produit (N+1).
@@ -279,6 +392,8 @@ class AchatSerializer(serializers.ModelSerializer):
     total_achat = serializers.SerializerMethodField()
     quantite_pieces = serializers.SerializerMethodField()
     prix_unitaire_piece = serializers.SerializerMethodField()
+    nb_cartons = serializers.SerializerMethodField()
+    prix_carton = serializers.SerializerMethodField()
     unite_achat_display = serializers.CharField(source='get_unite_achat_display', read_only=True)
 
     class Meta:
@@ -286,7 +401,8 @@ class AchatSerializer(serializers.ModelSerializer):
         fields = (
             'id','date_Achat','date_expiration',
             'unite_achat','unite_achat_display','quantite','pieces_par_carton',
-            'quantite_pieces','prix_achat','prix_unitaire_piece','total_achat','currency_symbol',
+            'quantite_pieces','nb_cartons','prix_achat','prix_unitaire_piece','prix_carton',
+            'total_achat','currency_symbol',
             'fournisseur','fournisseur_nom','fournisseur_prenom',
             'produit','produit_reference','produit_designation',
             'warehouse','warehouse_name'
@@ -309,6 +425,33 @@ class AchatSerializer(serializers.ModelSerializer):
             return obj.get_prix_unitaire_piece()
         except Exception:
             return obj.prix_achat
+
+    def get_nb_cartons(self, obj):
+        try:
+            return obj.get_nb_cartons()
+        except Exception:
+            return None
+
+    def get_prix_carton(self, obj):
+        try:
+            return obj.get_prix_carton()
+        except Exception:
+            return None
+
+    def validate(self, attrs):
+        """Coherence de la saisie en cartons : pieces_par_carton >= 1 et quantite (en
+        pieces) multiple de pieces_par_carton."""
+        unite = attrs.get('unite_achat', getattr(self.instance, 'unite_achat', 'piece'))
+        if unite == 'carton':
+            ppc = attrs.get('pieces_par_carton', getattr(self.instance, 'pieces_par_carton', 1))
+            qte = attrs.get('quantite', getattr(self.instance, 'quantite', 0))
+            if not ppc or ppc <= 0:
+                raise serializers.ValidationError({'pieces_par_carton': "Indiquez le nombre de pièces par carton (au moins 1)."})
+            if qte is not None and qte % ppc != 0:
+                raise serializers.ValidationError({
+                    'quantite': f"La quantité ({qte} pièces) doit être un multiple de {ppc} pièces par carton."
+                })
+        return attrs
 
 class LigneLivraisonSerializer(serializers.ModelSerializer):
     class Meta:

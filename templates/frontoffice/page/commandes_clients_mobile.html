@@ -1359,6 +1359,8 @@
                                class="form-control form-control-sm text-center"
                                value="${ligne.quantite}"
                                min="1"
+                               data-produit-id="${ligne.produit || ''}"
+                               data-carton-product-fn="cartonProductFromLigne"
                                onchange="updateLigneQuantite(${index}, this.value)"
                                style="width: 80px; display: inline-block;">
                     </td>
@@ -1388,6 +1390,12 @@
         document.getElementById('editTotalHT').textContent = formatCurrency(totalHT);
         document.getElementById('editTotalTTC').textContent = formatCurrency(totalTTC);
     }
+
+    // Aide de saisie en cartons (carton_input.js) : produit de la ligne editee
+    function cartonProductFromLigne(input) {
+        return parseInt(input.getAttribute('data-produit-id'), 10) || 0;
+    }
+    window.cartonProductFromLigne = cartonProductFromLigne;
 
     function updateLigneQuantite(index, newQuantite) {
         const quantite = parseInt(newQuantite) || 1;
