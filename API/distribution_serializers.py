@@ -10,7 +10,7 @@ from .distribution_models import (
     CommandeClient, LigneCommandeClient, PlanningHebdomadaire, ClientLivreurHebdo
     # BonLivraisonVan, LigneBonLivraisonVan  # TODO: Models not yet created
 )
-from .models import Client, Produit, Company, CodePrix, PrixProduit, TypePrix
+from .models import Client, Produit, Company, CodePrix, PrixProduit, TypePrix, Warehouse
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -611,13 +611,24 @@ class TourneeSerializer(serializers.ModelSerializer):
     livreur_matricule = serializers.CharField(source='livreur.matricule', read_only=True)
     code_prix_libelle = serializers.CharField(source='code_prix.libelle', read_only=True, allow_null=True)
     code_prix_code = serializers.CharField(source='code_prix.code', read_only=True, allow_null=True)
+    # Entrepôt de départ : le formulaire web envoie `warehouse`
+    warehouse = serializers.PrimaryKeyRelatedField(
+        source='entrepot_depart', queryset=Warehouse.objects.all(),
+        required=False, allow_null=True
+    )
+    warehouse_nom = serializers.CharField(source='entrepot_depart.name', read_only=True, allow_null=True)
+    warehouse_code = serializers.CharField(source='entrepot_depart.code', read_only=True, allow_null=True)
     arrets = ArretTourneeSerializer(many=True, read_only=True)
     statistiques = serializers.SerializerMethodField()
+
+    # Statuts pour lesquels le choix de l'entrepôt est reporté sur la fiche du livreur
+    STATUTS_SYNC_ENTREPOT = ('planifiee', 'en_cours')
 
     class Meta:
         model = TourneeMobile
         fields = [
             'id', 'livreur', 'livreur_nom', 'livreur_matricule',
+            'warehouse', 'warehouse_nom', 'warehouse_code',
             'date_tournee', 'numero_tournee', 'statut',
             'code_prix', 'code_prix_libelle', 'code_prix_code',
             'heure_debut', 'heure_fin',
@@ -629,6 +640,42 @@ class TourneeSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at'
         ]
         read_only_fields = ['created_at', 'updated_at', 'est_cloturee', 'date_cloture']
+
+    def _sync_entrepot_livreur(self, tournee):
+        """Reporte l'entrepôt de départ de la tournée sur la fiche du livreur.
+
+        Uniquement pour les tournées planifiées ou en cours : modifier une tournée
+        terminée / clôturée ne doit pas changer le van actuel du livreur.
+        """
+        livreur = tournee.livreur
+        entrepot = tournee.entrepot_depart
+        if not livreur or not entrepot:
+            return
+        if tournee.statut not in self.STATUTS_SYNC_ENTREPOT:
+            return
+        if livreur.entrepot_id != entrepot.id:
+            livreur.entrepot = entrepot
+            livreur.save(update_fields=['entrepot', 'updated_at'])
+
+    def create(self, validated_data):
+        # Aucun entrepôt choisi : reprendre celui de la fiche du livreur
+        if not validated_data.get('entrepot_depart'):
+            livreur = validated_data.get('livreur')
+            if livreur and livreur.entrepot_id:
+                validated_data['entrepot_depart'] = livreur.entrepot
+        tournee = super().create(validated_data)
+        self._sync_entrepot_livreur(tournee)
+        return tournee
+
+    def update(self, instance, validated_data):
+        # Un entrepôt vide envoyé par le formulaire ne doit pas effacer celui déjà enregistré
+        if 'entrepot_depart' in validated_data and validated_data['entrepot_depart'] is None:
+            validated_data.pop('entrepot_depart')
+        entrepot_envoye = 'entrepot_depart' in validated_data
+        tournee = super().update(instance, validated_data)
+        if entrepot_envoye:
+            self._sync_entrepot_livreur(tournee)
+        return tournee
 
     def get_statistiques(self, obj):
         import json

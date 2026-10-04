@@ -258,19 +258,49 @@
     color: #6c757d;
     font-style: italic;
 }
+
+/* ---- Inventaire : actions de session et saisie en masse ---- */
+.inv-actions .btn { margin-bottom: 6px; }
+.sm-toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 12px; }
+.sm-toolbar > div { min-width: 170px; }
+.sm-toolbar .sm-grow { flex: 1 1 240px; }
+.sm-toolbar label { font-size: .8rem; font-weight: 600; color: #4a5568; }
+.sm-paste { background: #f8fafc; border: 1px dashed #cbd5e0; border-radius: 8px; padding: 12px; margin-bottom: 12px; }
+.sm-paste textarea { font-family: "Courier New", monospace; font-size: .85rem; }
+.sm-table-wrap { max-height: 60vh; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; }
+.sm-table { margin-bottom: 0; }
+.sm-table thead th { position: sticky; top: 0; background: #f1f5f9; z-index: 2; font-size: .78rem; text-transform: uppercase; letter-spacing: .03em; color: #4a5568; }
+.sm-table td { vertical-align: middle; }
+.sm-table tr.sm-cat td { background: #2d3748; color: #fff; font-weight: 600; font-size: .85rem; padding: 5px 10px; }
+.sm-table tr.sm-modifie td { background: #fffbeb; }
+.sm-table tr.sm-erreur td { background: #fff5f5; }
+.sm-table .sm-num { color: #718096; text-align: center; font-variant-numeric: tabular-nums; }
+.sm-table .sm-ref { font-family: "Courier New", monospace; font-size: .85rem; }
+.sm-table input.sm-qty, .sm-table input.sm-ct, .sm-table input.sm-u { text-align: center; font-weight: 600; padding: 3px 6px; }
+.sm-table input.sm-qty { width: 100px; }
+.sm-table .sm-carton { display: flex; align-items: center; gap: 4px; font-size: .8rem; color: #718096; white-space: nowrap; }
+.sm-table .sm-carton input { width: 56px; }
+.sm-footer { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; margin-top: 12px; }
+.sm-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: .75rem; font-weight: 600; }
+.sm-badge.ok { background: #d1fae5; color: #065f46; }
+.sm-badge.todo { background: #edf2f7; color: #718096; }
+.sm-badge.edit { background: #fef3c7; color: #92400e; }
+.sm-badge.err { background: #fee2e2; color: #991b1b; }
 </style>
 
 <div class="container-fluid p-4">
     <!-- Navigation des Vues -->
     <div class="mb-4">
         <div class="btn-group" role="group">
-            <button type="button" class="btn btn-primary active" id="btn_view_sessions" onclick="switchToView('sessions')">
+            <button type="button" class="btn btn-primary active" id="btn_view_sessions" onclick="onInventaireTab('sessions')">
                 <i class="fas fa-list me-2"></i>Mes Sessions
             </button>
-            <button type="button" class="btn btn-outline-primary" id="btn_view_counting" onclick="switchToView('counting')" disabled>
+            <button type="button" class="btn btn-outline-primary" id="btn_view_counting" onclick="onInventaireTab('counting')"
+                    title="Ouvrez une session pour compter">
                 <i class="fas fa-clipboard-check me-2"></i>Comptage
             </button>
-            <button type="button" class="btn btn-outline-primary" id="btn_view_details" onclick="switchToView('details')" disabled>
+            <button type="button" class="btn btn-outline-primary" id="btn_view_details" onclick="onInventaireTab('details')"
+                    title="Ouvrez ou consultez une session pour voir ses détails">
                 <i class="fas fa-eye me-2"></i>Détails
             </button>
         </div>
@@ -356,14 +386,26 @@
         <div class="card mb-4" style="border-left: 4px solid #667eea;">
             <div class="card-body">
                 <div class="row align-items-center">
-                    <div class="col-md-8">
+                    <div class="col-lg-4">
                         <h5 class="mb-1" id="active_session_title">Session: INV-2025-XXXX</h5>
                         <small class="text-muted">
                             <i class="fas fa-user me-1"></i><span id="active_session_user">Admin</span>
                             <i class="fas fa-calendar ms-3 me-1"></i><span id="active_session_date">27/10/2025</span>
                         </small>
                     </div>
-                    <div class="col-md-4 text-end">
+                    <div class="col-lg-8 text-end inv-actions">
+                        <button type="button" class="btn btn-outline-secondary me-2" id="btn_feuille_comptage"
+                                title="Feuille imprimable, sans quantité théorique">
+                            <i class="fas fa-print me-2"></i>Feuille de comptage
+                        </button>
+                        <button type="button" class="btn btn-outline-primary me-2" id="btn_saisie_masse"
+                                title="Ressaisir la feuille papier, toutes les lignes d'un coup">
+                            <i class="fas fa-keyboard me-2"></i>Saisie en masse
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary me-2" id="btn_export_session"
+                                title="Exporter la session en Excel">
+                            <i class="fas fa-download me-2"></i>Exporter
+                        </button>
                         <button class="btn btn-warning me-2" id="btn_save_progress">
                             <i class="fas fa-save me-2"></i>Sauvegarder
                         </button>
@@ -386,6 +428,84 @@
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Saisie en masse (ressaisie de la feuille de comptage) -->
+        <div class="card mb-4" id="saisie_masse_panel" style="display: none; border-left: 4px solid #3b82f6;">
+            <div class="card-header d-flex justify-content-between align-items-center flex-wrap" style="gap: 8px;">
+                <h5 class="mb-0"><i class="fas fa-keyboard me-2"></i>Saisie en masse
+                    <small class="text-muted ms-2" id="sm_compteur"></small></h5>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="sm_btn_close">
+                    <i class="fas fa-times me-1"></i>Fermer
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="sm-toolbar">
+                    <div>
+                        <label class="form-label mb-1">Catégorie</label>
+                        <select id="sm_categorie" class="form-select form-select-sm"><option value="">Toutes</option></select>
+                    </div>
+                    <div>
+                        <label class="form-label mb-1">Afficher</label>
+                        <select id="sm_restants" class="form-select form-select-sm">
+                            <option value="">Tous les produits</option>
+                            <option value="1">Restants uniquement</option>
+                        </select>
+                    </div>
+                    <div class="sm-grow">
+                        <label class="form-label mb-1">Rechercher</label>
+                        <input type="text" id="sm_search" class="form-control form-control-sm" placeholder="N°, référence, désignation, code-barres…">
+                    </div>
+                    <div>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="sm_btn_paste">
+                            <i class="fas fa-paste me-1"></i>Coller depuis Excel
+                        </button>
+                    </div>
+                </div>
+
+                <div id="sm_paste_zone" class="sm-paste" style="display: none;">
+                    <label class="form-label mb-1">Collez deux colonnes : référence (ou code-barres, ou N° de ligne) puis quantité</label>
+                    <textarea id="sm_paste_text" class="form-control" rows="5" placeholder="REF-001&#9;24&#10;REF-002&#9;0&#10;3700123456789;12"></textarea>
+                    <div class="mt-2 d-flex" style="gap: 8px;">
+                        <button type="button" class="btn btn-sm btn-primary" id="sm_btn_paste_apply">Remplir le tableau</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="sm_btn_paste_cancel">Annuler</button>
+                    </div>
+                </div>
+
+                <div id="sm_messages"></div>
+
+                <div class="table-responsive sm-table-wrap">
+                    <table class="table table-sm table-hover sm-table" id="sm_table">
+                        <thead>
+                            <tr>
+                                <th style="width: 50px;">N°</th>
+                                <th style="width: 130px;">Référence</th>
+                                <th>Désignation</th>
+                                <th style="width: 190px;">Cartons + unités</th>
+                                <th style="width: 120px;">Quantité comptée</th>
+                                <th style="width: 110px;">État</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sm_tbody">
+                            <tr><td colspan="6" class="text-center text-muted py-4">Chargement…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="sm-footer">
+                    <span class="text-muted" id="sm_resume">Aucune modification</span>
+                    <div class="d-flex" style="gap: 8px;">
+                        <button type="button" class="btn btn-outline-secondary" id="sm_btn_reset">Annuler les modifications</button>
+                        <button type="button" class="btn btn-success" id="sm_btn_save" disabled>
+                            <i class="fas fa-save me-2"></i>Enregistrer la saisie
+                        </button>
+                    </div>
+                </div>
+                <small class="text-muted d-block mt-2">
+                    Les quantités théoriques ne sont pas affichées (comptage à l'aveugle). Entrée passe à la ligne suivante.
+                    Videz une quantité déjà saisie pour remettre le produit à « non compté ».
+                </small>
             </div>
         </div>
 
@@ -597,11 +717,15 @@
 
 <script>
 // Variables globales
-let currentView = 'sessions'; // 'sessions' ou 'counting'
-let activeSession = null;
-let sessionProducts = [];
-let displayMode = 'grid'; // 'grid' ou 'table'
-let allProducts = [];
+// NB : `var` et non `let`. La navigation re-injecte ce script a chaque visite de la page ;
+// avec `let`, la 2e injection echouait sur « already been declared » et plus rien ne repondait.
+var currentView = 'sessions'; // 'sessions', 'counting' ou 'details'
+var activeSession = null;
+var sessionProducts = [];
+var displayMode = 'grid'; // 'grid' ou 'table'
+var allProducts = [];
+// Etat de la saisie en masse : doit etre declare ici, AVANT initInventaire() qui l'utilise.
+var saisieMasse = { ouvert: false, lignes: [], modifs: {}, erreurs: {} };
 
 // Initialisation
 document.addEventListener('fragment:loaded', function(e) {
@@ -651,6 +775,15 @@ function setupEventListeners() {
         btnValidate.onclick = validateSession;
     }
 
+    // Feuille de comptage, saisie en masse, export
+    const btnFeuille = document.getElementById('btn_feuille_comptage');
+    if (btnFeuille) btnFeuille.onclick = openFeuilleComptage;
+    const btnMasse = document.getElementById('btn_saisie_masse');
+    if (btnMasse) btnMasse.onclick = toggleSaisieMasse;
+    const btnExport = document.getElementById('btn_export_session');
+    if (btnExport) btnExport.onclick = exportSessionDetails;
+    initSaisieMasse();
+
     // Recherche
     const searchInput = document.getElementById('search_product');
     if (searchInput) {
@@ -669,6 +802,33 @@ function setupEventListeners() {
     }
 }
 
+// Clic sur un onglet. Comptage et Details ont besoin d'une session : au lieu d'un bouton
+// desactive qui ne reagit pas, on explique quoi faire.
+function onInventaireTab(view) {
+    if (view === 'sessions') {
+        switchToView('sessions');
+        loadSessions();
+        return;
+    }
+    if (!activeSession) {
+        showToast('Choisissez d\'abord une session : cliquez sur « Ouvrir » dans la liste, ou créez-en une.', 'warning');
+        switchToView('sessions');
+        return;
+    }
+    if (view === 'counting') {
+        if (['validated', 'canceled'].includes(activeSession.statut)) {
+            showToast('Cette session est clôturée : elle se consulte dans l\'onglet Détails.', 'warning');
+            viewSession(activeSession.id);
+            return;
+        }
+        openSession(activeSession.id);
+        return;
+    }
+    if (view === 'details') {
+        viewSession(activeSession.id);
+    }
+}
+
 // Basculer entre vues
 function switchToView(view) {
     currentView = view;
@@ -677,9 +837,16 @@ function switchToView(view) {
     document.getElementById('view_counting').classList.toggle('active', view === 'counting');
     document.getElementById('view_details').classList.toggle('active', view === 'details');
 
-    document.getElementById('btn_view_sessions').classList.toggle('active', view === 'sessions');
-    document.getElementById('btn_view_counting').classList.toggle('active', view === 'counting');
-    document.getElementById('btn_view_details').classList.toggle('active', view === 'details');
+    // Onglet actif en plein, les autres en contour
+    [['btn_view_sessions', 'sessions'], ['btn_view_counting', 'counting'], ['btn_view_details', 'details']].forEach(function (pair) {
+        const btn = document.getElementById(pair[0]);
+        if (!btn) return;
+        const actif = view === pair[1];
+        btn.disabled = false;
+        btn.classList.toggle('active', actif);
+        btn.classList.toggle('btn-primary', actif);
+        btn.classList.toggle('btn-outline-primary', !actif);
+    });
 
     // Réinitialiser le custom select catégorie quand on passe en vue comptage
     if (view === 'counting') {
@@ -890,7 +1057,7 @@ async function viewSession(sessionId, event) {
         document.getElementById('current_session_indicator').innerHTML = `
             <i class="fas fa-eye me-1"></i>
             <strong>${session.numero}</strong>
-            <span class="badge bg-success ms-2">Validée</span>
+            <span class="badge ${session.statut === 'validated' ? 'bg-success' : 'bg-secondary'} ms-2">${session.statut_display || session.statut || ''}</span>
         `;
 
         // Activer le bouton détails
@@ -1003,8 +1170,9 @@ function displaySessionDetails(lignes) {
 function exportSessionDetails() {
     if (!activeSession) return;
 
-    // Redirection vers l'API d'export (à créer si nécessaire)
-    window.open(`/API/reports/inventory-session/?session_id=${activeSession.id}&format=excel`, '_blank');
+    // Export Excel de la session (action `export` du ViewSet inventaires).
+    // Avant : appel de /API/reports/inventory-session/, une URL qui n'a jamais existe.
+    window.location.href = `/API/inventaires/${activeSession.id}/export/`;
 }
 
 // Créer une nouvelle session
@@ -1582,8 +1750,16 @@ async function validateSession() {
         });
 
         if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || error.error || 'Erreur validation');
+            let error = {};
+            try { error = await response.json(); } catch (_) { /* reponse non JSON */ }
+            let message = error.detail || error.error || `Erreur validation (${response.status})`;
+            const manquants = error.missing_products_list || [];
+            if (manquants.length) {
+                message += '\n\nProduits non comptés :\n' + manquants.slice(0, 10)
+                    .map(p => `- ${p.reference || ''} ${p.designation || ''}`).join('\n');
+                if ((error.missing_products || 0) > 10) message += `\n… et ${error.missing_products - 10} autre(s)`;
+            }
+            throw new Error(message);
         }
 
         showToast('Session validée! Stock ajusté.', 'success');
@@ -1630,6 +1806,312 @@ function updateCountingStats() {
     const percentage = total > 0 ? Math.round((counted / total) * 100) : 0;
     document.getElementById('progress_bar').style.width = percentage + '%';
     document.getElementById('progress_text').textContent = percentage + '%';
+}
+
+// ---------------------------------------------------------------------------
+// Feuille de comptage imprimable (sans quantite theorique)
+// ---------------------------------------------------------------------------
+function openFeuilleComptage() {
+    if (!activeSession) { alert('Aucune session active'); return; }
+    const params = new URLSearchParams();
+    const cat = document.getElementById('sm_categorie');
+    const restants = document.getElementById('sm_restants');
+    // Si le panneau de saisie en masse est ouvert, imprimer avec les memes filtres
+    if (saisieMasse.ouvert) {
+        if (cat && cat.value) params.set('categorie', cat.value);
+        if (restants && restants.value) params.set('restants', '1');
+    }
+    const qs = params.toString();
+    window.open(`/API/inventaires/${activeSession.id}/feuille_comptage/${qs ? '?' + qs : ''}`, '_blank');
+}
+
+// ---------------------------------------------------------------------------
+// Saisie en masse : ressaisie de la feuille papier, enregistree en une requete
+// ---------------------------------------------------------------------------
+function smEsc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function initSaisieMasse() {
+    const panel = document.getElementById('saisie_masse_panel');
+    if (!panel || panel.dataset.inited) return;
+    panel.dataset.inited = '1';
+    saisieMasse.ouvert = false;
+    saisieMasse.modifs = {};
+    saisieMasse.erreurs = {};
+    const $ = id => document.getElementById(id);
+    $('sm_btn_close').onclick = toggleSaisieMasse;
+    $('sm_categorie').onchange = loadSaisieMasse;
+    $('sm_restants').onchange = loadSaisieMasse;
+    $('sm_search').oninput = renderSaisieMasse;
+    $('sm_btn_reset').onclick = function () { saisieMasse.modifs = {}; saisieMasse.erreurs = {}; renderSaisieMasse(); };
+    $('sm_btn_save').onclick = saveSaisieMasse;
+    $('sm_btn_paste').onclick = function () { const z = $('sm_paste_zone'); z.style.display = z.style.display === 'none' ? 'block' : 'none'; if (z.style.display === 'block') $('sm_paste_text').focus(); };
+    $('sm_btn_paste_cancel').onclick = function () { $('sm_paste_zone').style.display = 'none'; };
+    $('sm_btn_paste_apply').onclick = applyPasteSaisieMasse;
+
+    const tbody = $('sm_tbody');
+    tbody.addEventListener('input', function (e) {
+        const input = e.target;
+        const tr = input.closest('tr[data-produit]');
+        if (!tr) return;
+        const id = tr.getAttribute('data-produit');
+        const ligne = saisieMasse.lignes.find(l => String(l.produit_id) === id);
+        if (!ligne) return;
+        let valeur;
+        if (input.classList.contains('sm-qty')) {
+            valeur = input.value.trim();
+        } else {
+            // cartons + unites -> quantite en unites
+            const ct = tr.querySelector('.sm-ct').value.trim();
+            const u = tr.querySelector('.sm-u').value.trim();
+            valeur = (ct === '' && u === '') ? '' : String((parseInt(ct, 10) || 0) * ligne.unites_par_carton + (parseInt(u, 10) || 0));
+            tr.querySelector('.sm-qty').value = valeur;
+        }
+        smSetModif(ligne, valeur);
+        smRefreshRow(tr, ligne);
+        smUpdateResume();
+    });
+    tbody.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        const cls = e.target.classList.contains('sm-ct') ? 'sm-ct' : e.target.classList.contains('sm-u') ? 'sm-u' : 'sm-qty';
+        const inputs = Array.from(tbody.querySelectorAll('input.' + cls));
+        const next = inputs[inputs.indexOf(e.target) + (e.shiftKey ? -1 : 1)];
+        if (next) { next.focus(); next.select(); }
+    });
+}
+
+// Valeur saisie ('' = vide) comparee a la valeur enregistree
+function smSetModif(ligne, valeur) {
+    const initiale = ligne.counted_qty == null ? '' : String(ligne.counted_qty);
+    delete saisieMasse.erreurs[ligne.produit_id];
+    if (valeur === initiale) { delete saisieMasse.modifs[ligne.produit_id]; return; }
+    saisieMasse.modifs[ligne.produit_id] = valeur;
+    if (valeur !== '' && !/^\d+$/.test(valeur)) {
+        saisieMasse.erreurs[ligne.produit_id] = 'Nombre entier positif attendu';
+    }
+}
+
+function smValeurCourante(ligne) {
+    return Object.prototype.hasOwnProperty.call(saisieMasse.modifs, ligne.produit_id)
+        ? saisieMasse.modifs[ligne.produit_id]
+        : (ligne.counted_qty == null ? '' : String(ligne.counted_qty));
+}
+
+function smEtat(ligne) {
+    if (saisieMasse.erreurs[ligne.produit_id]) return `<span class="sm-badge err" title="${smEsc(saisieMasse.erreurs[ligne.produit_id])}">Erreur</span>`;
+    if (Object.prototype.hasOwnProperty.call(saisieMasse.modifs, ligne.produit_id)) {
+        return `<span class="sm-badge edit">${saisieMasse.modifs[ligne.produit_id] === '' ? 'À effacer' : 'Modifié'}</span>`;
+    }
+    return ligne.counted_qty == null ? '<span class="sm-badge todo">À compter</span>' : '<span class="sm-badge ok">Compté</span>';
+}
+
+function smRefreshRow(tr, ligne) {
+    tr.classList.toggle('sm-modifie', Object.prototype.hasOwnProperty.call(saisieMasse.modifs, ligne.produit_id) && !saisieMasse.erreurs[ligne.produit_id]);
+    tr.classList.toggle('sm-erreur', !!saisieMasse.erreurs[ligne.produit_id]);
+    const cell = tr.querySelector('.sm-etat');
+    if (cell) cell.innerHTML = smEtat(ligne);
+}
+
+function smUpdateResume() {
+    const nb = Object.keys(saisieMasse.modifs).length;
+    const nbErr = Object.keys(saisieMasse.erreurs).length;
+    const resume = document.getElementById('sm_resume');
+    const btn = document.getElementById('sm_btn_save');
+    if (resume) {
+        resume.textContent = nb === 0 ? 'Aucune modification'
+            : `${nb} ligne${nb > 1 ? 's' : ''} à enregistrer` + (nbErr ? ` · ${nbErr} en erreur` : '');
+    }
+    if (btn) btn.disabled = nb === 0 || nbErr > 0;
+    const compteur = document.getElementById('sm_compteur');
+    if (compteur) {
+        const comptes = saisieMasse.lignes.filter(l => smValeurCourante(l) !== '').length;
+        compteur.textContent = `${comptes} / ${saisieMasse.lignes.length} saisis`;
+    }
+}
+
+function toggleSaisieMasse() {
+    if (!activeSession) { alert('Aucune session active'); return; }
+    const panel = document.getElementById('saisie_masse_panel');
+    if (saisieMasse.ouvert && Object.keys(saisieMasse.modifs).length &&
+        !confirm('Des quantités saisies ne sont pas enregistrées. Fermer quand même ?')) return;
+    saisieMasse.ouvert = !saisieMasse.ouvert;
+    panel.style.display = saisieMasse.ouvert ? 'block' : 'none';
+    if (saisieMasse.ouvert) {
+        // Categories : reprendre celles deja chargees par la page
+        const sel = document.getElementById('sm_categorie');
+        const src = document.getElementById('filter_category');
+        if (sel && src && sel.options.length <= 1) {
+            Array.from(src.options).forEach(o => { if (o.value) sel.add(new Option(o.text, o.value)); });
+        }
+        saisieMasse.modifs = {}; saisieMasse.erreurs = {};
+        loadSaisieMasse();
+        panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+}
+
+async function loadSaisieMasse() {
+    if (!activeSession) return;
+    if (Object.keys(saisieMasse.modifs).length &&
+        !confirm('Changer de filtre abandonne les quantités non enregistrées. Continuer ?')) return;
+    saisieMasse.modifs = {}; saisieMasse.erreurs = {};
+    const tbody = document.getElementById('sm_tbody');
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4"><i class="fas fa-spinner fa-spin me-2"></i>Chargement…</td></tr>';
+    const params = new URLSearchParams();
+    const cat = document.getElementById('sm_categorie').value;
+    if (cat) params.set('categorie', cat);
+    if (document.getElementById('sm_restants').value) params.set('restants', '1');
+    try {
+        const response = await fetch(`/API/inventaires/${activeSession.id}/liste_comptage/?${params.toString()}`, { credentials: 'same-origin' });
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        const data = await response.json();
+        saisieMasse.lignes = data.lignes || [];
+        renderSaisieMasse();
+    } catch (error) {
+        console.error('[Inventaire] Chargement saisie en masse:', error);
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-danger py-4">Impossible de charger la liste de comptage.</td></tr>';
+    }
+}
+
+function renderSaisieMasse() {
+    const tbody = document.getElementById('sm_tbody');
+    const q = (document.getElementById('sm_search').value || '').trim().toLowerCase();
+    const lignes = saisieMasse.lignes.filter(l => !q ||
+        String(l.numero) === q ||
+        (l.reference || '').toLowerCase().includes(q) ||
+        (l.designation || '').toLowerCase().includes(q) ||
+        (l.code_barre || '').toLowerCase().includes(q));
+    if (!lignes.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">Aucun produit pour ces critères.</td></tr>';
+        smUpdateResume();
+        return;
+    }
+    let html = '';
+    let categorie = null;
+    lignes.forEach(l => {
+        if (l.categorie !== categorie) {
+            categorie = l.categorie;
+            html += `<tr class="sm-cat"><td colspan="6">${smEsc(categorie)}</td></tr>`;
+        }
+        const valeur = smValeurCourante(l);
+        const upc = l.unites_par_carton || 1;
+        let carton = '<span class="text-muted">–</span>';
+        if (upc > 1) {
+            const n = /^\d+$/.test(valeur) ? parseInt(valeur, 10) : null;
+            carton = `<div class="sm-carton">
+                <input type="number" min="0" step="1" class="form-control form-control-sm sm-ct" value="${n == null ? '' : Math.floor(n / upc)}" aria-label="Cartons">
+                <span>ct × ${upc} +</span>
+                <input type="number" min="0" step="1" class="form-control form-control-sm sm-u" value="${n == null ? '' : n % upc}" aria-label="Unités">
+                <span>u</span></div>`;
+        }
+        const modifie = Object.prototype.hasOwnProperty.call(saisieMasse.modifs, l.produit_id);
+        const erreur = saisieMasse.erreurs[l.produit_id];
+        html += `<tr data-produit="${l.produit_id}" class="${erreur ? 'sm-erreur' : (modifie ? 'sm-modifie' : '')}">
+            <td class="sm-num">${l.numero}</td>
+            <td class="sm-ref">${smEsc(l.reference)}</td>
+            <td>${smEsc(l.designation)}${l.code_barre ? `<br><small class="text-muted">${smEsc(l.code_barre)}</small>` : ''}</td>
+            <td>${carton}</td>
+            <td><input type="number" min="0" step="1" inputmode="numeric" class="form-control form-control-sm sm-qty" value="${smEsc(valeur)}" aria-label="Quantité comptée ligne ${l.numero}"></td>
+            <td class="sm-etat">${smEtat(l)}</td>
+        </tr>`;
+    });
+    tbody.innerHTML = html;
+    smUpdateResume();
+}
+
+function smMessage(html, type) {
+    const box = document.getElementById('sm_messages');
+    if (box) box.innerHTML = html ? `<div class="alert alert-${type || 'info'} py-2">${html}</div>` : '';
+}
+
+// Collage depuis Excel : "cle <tab ou ; ou ,> quantite", cle = reference, code-barres ou N° de ligne
+function applyPasteSaisieMasse() {
+    const texte = document.getElementById('sm_paste_text').value;
+    const index = {};
+    saisieMasse.lignes.forEach(l => {
+        if (l.reference) index['r:' + l.reference.toLowerCase()] = l;
+        if (l.code_barre) index['c:' + l.code_barre.toLowerCase()] = l;
+        index['n:' + l.numero] = l;
+    });
+    let remplies = 0;
+    const inconnues = [], invalides = [];
+    texte.split(/\r?\n/).forEach(brut => {
+        const ligneTxt = brut.trim();
+        if (!ligneTxt) return;
+        const parts = ligneTxt.split(/\t|;/).map(s => s.trim()).filter(s => s !== '');
+        if (parts.length < 2) { invalides.push(ligneTxt); return; }
+        const cle = parts[0].toLowerCase();
+        const qte = parts[parts.length - 1].replace(/\s/g, '');
+        const cible = index['r:' + cle] || index['c:' + cle] || index['n:' + cle];
+        if (!cible) { if (!/^(r[ée]f|code|n°|numero)/i.test(parts[0])) inconnues.push(parts[0]); return; }
+        if (!/^\d+$/.test(qte)) { invalides.push(ligneTxt); return; }
+        smSetModif(cible, String(parseInt(qte, 10)));
+        remplies++;
+    });
+    renderSaisieMasse();
+    let msg = `<strong>${remplies}</strong> ligne${remplies > 1 ? 's' : ''} remplie${remplies > 1 ? 's' : ''} depuis le collage. Vérifiez puis enregistrez.`;
+    if (inconnues.length) msg += `<br>Références introuvables dans la liste affichée : ${inconnues.slice(0, 15).map(smEsc).join(', ')}${inconnues.length > 15 ? '…' : ''}`;
+    if (invalides.length) msg += `<br>Lignes ignorées (quantité absente ou invalide) : ${invalides.length}`;
+    smMessage(msg, (inconnues.length || invalides.length) ? 'warning' : 'success');
+    if (remplies) document.getElementById('sm_paste_zone').style.display = 'none';
+}
+
+async function saveSaisieMasse() {
+    if (!activeSession) return;
+    const ids = Object.keys(saisieMasse.modifs);
+    if (!ids.length || Object.keys(saisieMasse.erreurs).length) return;
+    const lignes = ids.map(id => ({
+        produit_id: parseInt(id, 10),
+        counted_qty: saisieMasse.modifs[id] === '' ? null : parseInt(saisieMasse.modifs[id], 10)
+    }));
+    const btn = document.getElementById('sm_btn_save');
+    btn.disabled = true;
+    try {
+        const response = await fetch(`/API/inventaires/${activeSession.id}/saisie_masse/`, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+            body: JSON.stringify({ lignes: lignes })
+        });
+        let data = {};
+        try { data = await response.json(); } catch (_) { /* reponse non JSON */ }
+        if (!response.ok) throw new Error(data.detail || `Erreur ${response.status}`);
+
+        const r = data.rapport || {};
+        if (data.session) {
+            activeSession = data.session;
+            sessionProducts = data.session.lignes || [];
+            displayProductsForCounting();
+        }
+        // Reporter les erreurs serveur sur les lignes concernees
+        saisieMasse.modifs = {}; saisieMasse.erreurs = {};
+        const erreurs = r.erreurs || [];
+        erreurs.forEach(e => {
+            const envoye = lignes[(e.position || 0) - 1];
+            if (envoye) {
+                saisieMasse.modifs[envoye.produit_id] = envoye.counted_qty == null ? '' : String(envoye.counted_qty);
+                saisieMasse.erreurs[envoye.produit_id] = e.message;
+            }
+        });
+        // Recharger la liste sans perdre les lignes en erreur
+        const gardeModifs = saisieMasse.modifs, gardeErreurs = saisieMasse.erreurs;
+        saisieMasse.modifs = {};
+        await loadSaisieMasse();
+        saisieMasse.modifs = gardeModifs; saisieMasse.erreurs = gardeErreurs;
+        renderSaisieMasse();
+
+        const total = (r.creees || 0) + (r.mises_a_jour || 0) + (r.reinitialisees || 0);
+        let msg = `<strong>${total}</strong> ligne${total > 1 ? 's' : ''} enregistrée${total > 1 ? 's' : ''}` +
+                  ` (${r.creees || 0} nouvelle${(r.creees || 0) > 1 ? 's' : ''}, ${r.mises_a_jour || 0} modifiée${(r.mises_a_jour || 0) > 1 ? 's' : ''}, ${r.reinitialisees || 0} effacée${(r.reinitialisees || 0) > 1 ? 's' : ''}).`;
+        if (erreurs.length) msg += `<br>${erreurs.length} ligne${erreurs.length > 1 ? 's' : ''} en erreur : ` + erreurs.slice(0, 5).map(e => smEsc(e.message)).join(' ; ');
+        smMessage(msg, erreurs.length ? 'warning' : 'success');
+        showToast('Saisie en masse enregistrée', 'success');
+    } catch (error) {
+        console.error('[Inventaire] Saisie en masse:', error);
+        smMessage('Enregistrement impossible : ' + smEsc(error.message), 'danger');
+        btn.disabled = false;
+    }
 }
 
 // Utilitaires

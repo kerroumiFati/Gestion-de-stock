@@ -447,6 +447,10 @@ urlpatterns = [
     path('reports/inventory/', views.export_inventory_report, name='export-inventory-report'),
     path('reports/profit/', views.export_profit_report, name='export-profit-report'),
     path('reports/profit-data/', views.profit_data, name='profit-data'),
+    path('reports/benefices/acces/', views.benefices_acces, name='benefices-acces'),
+    path('reports/benefices/deverrouiller/', views.benefices_deverrouiller, name='benefices-deverrouiller'),
+    path('reports/benefices/verrouiller/', views.benefices_verrouiller, name='benefices-verrouiller'),
+    path('reports/benefices/pin/', views.benefices_definir_pin, name='benefices-pin'),
 
     # Import de données - DOIT ÊTRE AVANT le router
     path('import/test/', test_import, name='import-test'),

@@ -26,6 +26,21 @@
 .export-btn-excel { background: linear-gradient(135deg, #1e7e34 0%, #28a745 100%); color: white; border: none; border-radius: 10px; padding: 10px 20px; font-weight: 500; transition: all 0.2s ease; }
 .export-btn-excel:hover { background: linear-gradient(135deg, #155724 0%, #1e7e34 100%); color: white; transform: scale(1.02); }
 .export-btn-pdf   { background: linear-gradient(135deg, #bd2130 0%, #dc3545 100%); color: white; border: none; border-radius: 10px; padding: 10px 20px; font-weight: 500; transition: all 0.2s ease; }
+.pin-wrap { max-width: 440px; margin: 40px auto; background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 32px 30px; box-shadow: 0 10px 30px rgba(15,23,42,.08); text-align: center; }
+.pin-ico { width: 68px; height: 68px; margin: 0 auto 16px; border-radius: 50%; background: linear-gradient(135deg,#11998e,#38ef7d); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 1.7rem; }
+.pin-wrap h2 { font-size: 1.35rem; font-weight: 700; color: #1e293b; margin-bottom: 6px; }
+.pin-wrap p { color: #64748b; font-size: .95rem; }
+.pin-input { font-size: 1.6rem; letter-spacing: .5em; text-align: center; font-weight: 700; padding: 10px; border-radius: 10px; }
+.pin-label { display: block; text-align: left; font-size: .85rem; font-weight: 600; color: #475569; margin: 12px 0 4px; }
+.pin-msg { min-height: 1.4em; font-size: .9rem; margin-top: 10px; }
+.pin-msg.err { color: #b91c1c; }
+.pin-msg.ok { color: #047857; }
+.pin-btn { width: 100%; margin-top: 14px; padding: 11px; border-radius: 10px; font-weight: 600; background: linear-gradient(135deg,#11998e,#38ef7d); border: 0; color: #fff; }
+.pin-btn:disabled { opacity: .6; }
+.pin-link { background: none; border: 0; color: #2563eb; font-size: .88rem; margin-top: 12px; }
+.lock-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; justify-content: space-between; background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; border-radius: 10px; padding: 10px 14px; margin-bottom: 22px; font-size: .9rem; }
+.lock-bar .btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.lock-bar button { border-radius: 8px; font-size: .85rem; padding: 5px 12px; }
 .export-btn-pdf:hover { background: linear-gradient(135deg, #a71d2a 0%, #bd2130 100%); color: white; transform: scale(1.02); }
 .badge-positif  { background: #d4edda; color: #155724; border-radius: 8px; padding: 3px 10px; font-size: 0.8rem; font-weight: 600; }
 .badge-negatif  { background: #f8d7da; color: #721c24; border-radius: 8px; padding: 3px 10px; font-size: 0.8rem; font-weight: 600; }
@@ -39,6 +54,35 @@
     </h1>
 
     <!-- KPI Cards -->
+    <div id="pin-zone" class="pin-wrap" style="display:none;">
+        <div class="pin-ico"><i class="fas fa-lock"></i></div>
+        <h2 id="pin-titre">Tableau de bord protégé</h2>
+        <p id="pin-texte">Saisissez le code PIN de l'entreprise pour afficher les bénéfices.</p>
+        <form id="pin-form" autocomplete="off" onsubmit="return false;">
+            <div id="pin-actuel-bloc" style="display:none;">
+                <label class="pin-label" for="pin-actuel">Code PIN actuel</label>
+                <input type="password" inputmode="numeric" maxlength="8" id="pin-actuel" class="form-control pin-input" autocomplete="off">
+            </div>
+            <label class="pin-label" id="pin-label" for="pin-saisie">Code PIN</label>
+            <input type="password" inputmode="numeric" maxlength="8" id="pin-saisie" class="form-control pin-input" autocomplete="off">
+            <div id="pin-confirm-bloc" style="display:none;">
+                <label class="pin-label" for="pin-confirm">Confirmez le code PIN</label>
+                <input type="password" inputmode="numeric" maxlength="8" id="pin-confirm" class="form-control pin-input" autocomplete="off">
+            </div>
+            <div class="pin-msg" id="pin-msg"></div>
+            <button type="submit" class="pin-btn" id="pin-btn"><i class="fas fa-unlock"></i> Déverrouiller</button>
+            <button type="button" class="pin-link" id="pin-annuler" style="display:none;">Annuler</button>
+        </form>
+    </div>
+
+    <div id="benef-contenu" style="display:none;">
+    <div class="lock-bar">
+        <span><i class="fas fa-unlock"></i> Accès ouvert pour <b id="lock-reste">15</b> min, puis le code PIN sera redemandé.</span>
+        <span class="btns">
+            <button type="button" class="btn btn-outline-secondary" id="btn-changer-pin"><i class="fas fa-key"></i> Changer le code PIN</button>
+            <button type="button" class="btn btn-success" id="btn-verrouiller"><i class="fas fa-lock"></i> Verrouiller</button>
+        </span>
+    </div>
     <div class="row" id="kpi-row">
         <div class="col-md-3"><div class="kpi-card green"><div class="kpi-title"><i class="fas fa-boxes"></i> Total produits</div><div class="kpi-value" id="kpi-total">—</div></div></div>
         <div class="col-md-3"><div class="kpi-card blue"><div class="kpi-title"><i class="fas fa-arrow-up"></i> Produits bénéficiaires</div><div class="kpi-value" id="kpi-positif">—</div></div></div>
@@ -69,6 +113,7 @@
             </div>
         </div>
     </div>
+    </div><!-- /benef-contenu -->
 </div>
 
 <script>
@@ -78,6 +123,7 @@
 async function loadProfitData() {
     try {
         const res = await fetch('/API/reports/profit-data/', { credentials: 'include' });
+        if (res.status === 403) { const j = await res.json().catch(() => ({})); return verrouillerEcran(j.detail); }
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const data = await res.json();
 
@@ -148,6 +194,7 @@ function formatNum(val) {
 window.exportProfitReport = async function(format) {
     try {
         const res = await fetch(`/reports/profit/?format=${format}`, { credentials: 'include' });
+        if (res.status === 403) { return verrouillerEcran('Accès expiré : saisissez de nouveau le code PIN.'); }
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const blob = await res.blob();
         const url = window.URL.createObjectURL(blob);
@@ -165,6 +212,140 @@ window.exportProfitReport = async function(format) {
     }
 };
 
-loadProfitData();
+// ------------------------------------------------------------------
+// Code PIN : le tableau ne s'affiche qu'une fois le PIN accepté
+// ------------------------------------------------------------------
+const $ = (id) => document.getElementById(id);
+let mode = 'saisie';      // 'saisie' | 'creation' | 'changement'
+let etatAcces = null;
+let minuterie = null;
+
+function csrf() {
+    const m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : '';
+}
+async function appel(url, corps) {
+    const res = await fetch(url, {
+        method: corps ? 'POST' : 'GET', credentials: 'include',
+        headers: corps ? { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() } : {},
+        body: corps ? JSON.stringify(corps) : undefined,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        const brut = data.detail || ('Erreur ' + res.status);
+        // Jeton de sécurité expiré : message compréhensible plutôt que le texte technique
+        const e = new Error(/CSRF/i.test(brut) ? 'Session expirée : rechargez la page (F5) puis réessayez.' : brut);
+        e.raison = data.raison; throw e;
+    }
+    return data;
+}
+function message(txt, ok) { const m = $('pin-msg'); m.textContent = txt || ''; m.className = 'pin-msg ' + (ok ? 'ok' : 'err'); }
+
+function afficherFormulaire(nouveauMode, texte) {
+    mode = nouveauMode;
+    clearInterval(minuterie);
+    $('benef-contenu').style.display = 'none';
+    $('pin-zone').style.display = 'block';
+    $('pin-actuel-bloc').style.display = mode === 'changement' ? 'block' : 'none';
+    $('pin-confirm-bloc').style.display = mode === 'saisie' ? 'none' : 'block';
+    $('pin-annuler').style.display = mode === 'changement' ? 'inline-block' : 'none';
+    if (mode === 'creation') {
+        $('pin-titre').textContent = 'Choisissez le code PIN';
+        $('pin-texte').textContent = "Aucun code PIN n'est encore défini pour " + (etatAcces && etatAcces.entreprise || "l'entreprise") +
+            ". Choisissez-en un (4 à 8 chiffres) : il sera commun à tous les administrateurs.";
+        $('pin-label').textContent = 'Nouveau code PIN';
+        $('pin-btn').innerHTML = '<i class="fas fa-check"></i> Enregistrer le code PIN';
+    } else if (mode === 'changement') {
+        $('pin-titre').textContent = 'Changer le code PIN';
+        $('pin-texte').textContent = 'Le nouveau code remplacera le code actuel pour tous les administrateurs.';
+        $('pin-label').textContent = 'Nouveau code PIN';
+        $('pin-btn').innerHTML = '<i class="fas fa-check"></i> Changer le code PIN';
+    } else {
+        $('pin-titre').textContent = 'Tableau de bord protégé';
+        $('pin-texte').textContent = "Saisissez le code PIN de l'entreprise pour afficher les bénéfices.";
+        $('pin-label').textContent = 'Code PIN';
+        $('pin-btn').innerHTML = '<i class="fas fa-unlock"></i> Déverrouiller';
+    }
+    ['pin-actuel', 'pin-saisie', 'pin-confirm'].forEach(id => { $(id).value = ''; });
+    message(texte || '', false);
+    if (etatAcces && etatAcces.bloque_jusqua && mode !== 'creation') {
+        const h = new Date(etatAcces.bloque_jusqua).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+        message('Trop d’essais incorrects : accès bloqué jusqu’à ' + h + '.', false);
+    }
+    setTimeout(() => (mode === 'changement' ? $('pin-actuel') : $('pin-saisie')).focus(), 50);
+}
+
+function verrouillerEcran(texte) {
+    $('profit-table-container').style.display = 'none';
+    $('profit-table-container').innerHTML = '';
+    afficherFormulaire('saisie', texte);
+}
+
+function afficherContenu(etat) {
+    etatAcces = etat;
+    $('pin-zone').style.display = 'none';
+    $('benef-contenu').style.display = 'block';
+    const fin = etat.expire_le ? new Date(etat.expire_le) : null;
+    const maj = () => {
+        if (!fin) return;
+        const reste = Math.max(0, Math.ceil((fin - new Date()) / 60000));
+        $('lock-reste').textContent = reste;
+        if (fin <= new Date()) verrouillerEcran('Accès expiré : saisissez de nouveau le code PIN.');
+    };
+    clearInterval(minuterie);
+    maj();
+    minuterie = setInterval(maj, 20000);
+    $('profit-loading').style.display = 'block';
+    loadProfitData();
+}
+
+async function envoyer() {
+    const pin = $('pin-saisie').value.trim();
+    if (!/^\d{4,8}$/.test(pin)) return message('Le code PIN doit contenir de 4 à 8 chiffres.');
+    if (mode !== 'saisie' && pin !== $('pin-confirm').value.trim()) return message('Les deux codes PIN ne sont pas identiques.');
+    $('pin-btn').disabled = true;
+    try {
+        let etat;
+        if (mode === 'saisie') {
+            etat = await appel('/API/reports/benefices/deverrouiller/', { pin });
+        } else {
+            const corps = { pin, confirmation: $('pin-confirm').value.trim() };
+            if (mode === 'changement') corps.pin_actuel = $('pin-actuel').value.trim();
+            etat = await appel('/API/reports/benefices/pin/', corps);
+        }
+        afficherContenu(etat);
+    } catch (e) {
+        message(e.message);
+        $('pin-saisie').value = '';
+        $('pin-saisie').focus();
+    } finally {
+        $('pin-btn').disabled = false;
+    }
+}
+
+$('pin-form').addEventListener('submit', envoyer);
+$('pin-annuler').addEventListener('click', () => afficherContenu(etatAcces));
+$('btn-changer-pin').addEventListener('click', () => afficherFormulaire('changement'));
+$('btn-verrouiller').addEventListener('click', async () => {
+    try { etatAcces = await appel('/API/reports/benefices/verrouiller/', {}); } catch (e) { /* déjà verrouillé */ }
+    verrouillerEcran('Tableau de bord verrouillé.');
+});
+
+(async function demarrer() {
+    try {
+        etatAcces = await appel('/API/reports/benefices/acces/');
+    } catch (e) {
+        return afficherFormulaire('saisie', 'Impossible de vérifier l’accès : ' + e.message);
+    }
+    if (!etatAcces.admin) {
+        $('pin-zone').style.display = 'block';
+        $('pin-form').style.display = 'none';
+        $('pin-titre').textContent = 'Accès réservé';
+        $('pin-texte').textContent = "Le tableau de bord des bénéfices est réservé à l'administrateur de l'entreprise.";
+        return;
+    }
+    if (etatAcces.deverrouille) return afficherContenu(etatAcces);
+    afficherFormulaire(etatAcces.pin_defini ? 'saisie' : 'creation');
+})();
 })();
 </script>

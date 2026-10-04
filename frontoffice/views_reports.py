@@ -134,16 +134,22 @@ def export_inventory_report(request):
 
 @login_required
 def export_profit_report(request):
-    """Export du rapport des bénéfices (prix vente - prix achat)"""
+    """Export du rapport des bénéfices (prix vente - prix achat).
+    Réservé à l'administrateur de l'entreprise, après saisie du code PIN."""
+    from API.benefices_acces import AccesRefuse, verifier_acces
+    try:
+        company = verifier_acces(request)
+    except AccesRefuse as e:
+        return HttpResponse(e.message, status=e.code, content_type='text/plain; charset=utf-8')
     export_format = request.GET.get('format', 'excel').lower()
 
     try:
         if export_format == 'pdf':
-            buffer = generate_profit_report_pdf()
+            buffer = generate_profit_report_pdf(company)
             response = HttpResponse(buffer, content_type='application/pdf')
             filename = f'rapport_benefices_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf'
         else:
-            buffer = generate_profit_report_excel()
+            buffer = generate_profit_report_excel(company)
             response = HttpResponse(
                 buffer,
                 content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'

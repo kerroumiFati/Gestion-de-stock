@@ -620,23 +620,35 @@ def generate_inventory_report_pdf():
 # RAPPORT DES BÉNÉFICES
 # ======================
 
-def _get_profit_data():
-    """Calcule prix_vente - prix_achat_moyen par produit. Retourne (list_rows, total_benefice)."""
+def _get_profit_data(company=None):
+    """Calcule prix_vente - prix_achat_moyen par produit. Retourne (list_rows, total_benefice).
+
+    `company` : limite aux produits et achats de cette entreprise (produits partages,
+    sans entreprise, compris). None = toutes les entreprises (usage interne uniquement)."""
     from collections import defaultdict
+    from django.db.models import Q
+
+    achats = Achat.objects.all()
+    stocks = ProductStock.objects.filter(quantity__gt=0)
+    products = Produit.objects.filter(is_active=True)
+    if company is not None:
+        achats = achats.filter(company=company)
+        products = products.filter(Q(company=company) | Q(company__isnull=True))
+        stocks = stocks.filter(produit__in=products)
 
     # Prix d'achat moyen par produit (normalisé à la pièce)
     product_prix_achat = defaultdict(list)
-    for achat in Achat.objects.all():
+    for achat in achats:
         prix_piece = achat.get_prix_unitaire_piece()
         if prix_piece:
             product_prix_achat[achat.produit_id].append(Decimal(str(prix_piece)))
 
     # Stock total par produit (tous entrepôts)
     product_qty = defaultdict(int)
-    for ps in ProductStock.objects.filter(quantity__gt=0):
+    for ps in stocks:
         product_qty[ps.produit_id] += ps.quantity
 
-    products = Produit.objects.filter(is_active=True).select_related('categorie').order_by('designation')
+    products = products.select_related('categorie').order_by('designation')
 
     rows = []
     total_benefice = Decimal('0.00')
@@ -665,7 +677,7 @@ def _get_profit_data():
     return rows, total_benefice
 
 
-def generate_profit_report_excel():
+def generate_profit_report_excel(company=None):
     """Rapport des bénéfices par produit (Excel) — prix vente - prix achat moyen."""
     gen = ExcelReportGenerator()
     gen.ws.title = "Bénéfices"
@@ -683,7 +695,7 @@ def generate_profit_report_excel():
     gen.set_column_widths([15, 30, 15, 18, 18, 12, 18])
     current_row = gen.add_header_row(headers, current_row)
 
-    rows, total_benefice = _get_profit_data()
+    rows, total_benefice = _get_profit_data(company)
     data_rows = [
         [r['reference'], r['designation'], float(r['prix_vente']), float(r['avg_achat']),
          float(r['benefice_unit']), r['qty'], float(r['benefice_total'])]
@@ -696,13 +708,13 @@ def generate_profit_report_excel():
     return gen.save_to_buffer()
 
 
-def generate_profit_report_pdf():
+def generate_profit_report_pdf(company=None):
     """Rapport des bénéfices par produit (PDF) — prix vente - prix achat moyen."""
     gen = PDFReportGenerator("RAPPORT DES BÉNÉFICES PAR PRODUIT", orientation='landscape')
     gen.add_title()
     gen.add_metadata()
 
-    rows, total_benefice = _get_profit_data()
+    rows, total_benefice = _get_profit_data(company)
 
     table_data = [['Référence', 'Désignation', 'Prix Vente', 'Prix Achat Moy.', 'Bénéf. Unit.', 'Qté', 'Bénéf. Total']]
     for r in rows:

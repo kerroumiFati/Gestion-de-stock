@@ -1773,6 +1773,70 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
         print(f"[PARTIAL_UPDATE] ===== FIN (sauvegardé via serializer) =====")
         return Response(serializer.data)
 
+    @action(detail=False, methods=['post'], url_path='modifier_lignes')
+    def modifier_lignes(self, request):
+        """
+        Modification d'une commande par un prevendeur ou un livreur (le client change
+        d'avis sur un produit ou une quantite) : ajouts, retraits, quantites a la hausse
+        ou a la baisse. Regles dans API/commande_modification.py.
+
+        POST /API/distribution/commandes/modifier_lignes/
+        {
+            "id": 12            # ou "app_id": "commande-..." (identifiant cree par l'application)
+            "lignes": [{"produit": 5, "quantite": 10, "prix_unitaire_ht": 8.5}],
+            "notes": "..."      # optionnel
+        }
+        200 : commande a jour + "modifications" ; 400 / 403 / 404 / 409 : {"detail": "..."}
+        """
+        from .commande_modification import ModificationRefusee, modifier_lignes_commande
+
+        data = request.data if isinstance(request.data, dict) else {}
+        ident = data.get('id') or data.get('commande_id')
+        app_id = data.get('app_id')
+        if not ident and not app_id:
+            return Response({'detail': "Précisez la commande (« id » ou « app_id »)."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        commandes = CommandeClient.objects.all()
+        company = getattr(request, 'company', None)
+        if company is not None and not (request.user.is_staff or request.user.is_superuser):
+            commandes = commandes.filter(models.Q(company=company) | models.Q(company__isnull=True))
+        if ident:
+            commande = commandes.filter(pk=ident).first() if str(ident).isdigit() else None
+        else:
+            commande = commandes.filter(app_id=str(app_id)).first()
+        if commande is None:
+            return Response({'detail': 'Commande introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Droits : administrateur, ou vendeur (prevendeur / livreur) actif.
+        # La commande ne porte qu'un seul vendeur : apres affectation au livreur, le
+        # prevendeur qui l'a prise n'y figure plus. On ne peut donc pas exiger que
+        # l'auteur soit le vendeur de la commande ; l'auteur est trace dans la commande.
+        user = request.user
+        if not (user.is_staff or user.is_superuser):
+            profil = LivreurDistribution.objects.filter(user=user).first()
+            if profil is None:
+                return Response({'detail': "Seul un vendeur ou un administrateur peut modifier une commande."},
+                                status=status.HTTP_403_FORBIDDEN)
+            if profil.statut != 'actif':
+                return Response({'detail': "Votre compte vendeur n'est pas actif."},
+                                status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            commande, modifications = modifier_lignes_commande(
+                commande, data.get('lignes'), user, notes=data.get('notes') if 'notes' in data else None)
+        except ModificationRefusee as e:
+            reponse = {'detail': e.message}
+            if e.champ:
+                reponse['champ'] = e.champ
+            return Response(reponse, status=e.code)
+
+        resultat = CommandeClientSerializer(
+            CommandeClient.objects.select_related('client', 'livreur').prefetch_related('lignes', 'lignes__produit')
+            .get(pk=commande.pk)).data
+        resultat['modifications'] = modifications
+        return Response(resultat)
+
     @action(detail=True, methods=['patch'])
     def changer_statut(self, request, pk=None):
         """Changer le statut d'une commande"""
@@ -3552,3 +3616,108 @@ class LivraisonEchecView(APIView):
             'statut': arret.statut,
             'motif': motif
         })
+
+
+class IndicateursPerformanceAPIView(APIView):
+    """
+    Indicateurs de performance par vendeur (prevendeurs et livreurs) :
+    taux de visite, taux de reussite, taux de realisation (objectifs) et taux de
+    livraison des commandes. Formules dans API/indicateurs.py.
+
+    GET /API/distribution/indicateurs-performance/?date_debut=YYYY-MM-DD&date_fin=YYYY-MM-DD[&livreur_id=X]
+    Sans dates : mois en cours.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from .indicateurs import calculer_indicateurs
+
+        aujourd_hui = timezone.localdate()
+        date_debut_str = request.query_params.get('date_debut')
+        date_fin_str = request.query_params.get('date_fin')
+        try:
+            date_debut = (datetime.strptime(date_debut_str, '%Y-%m-%d').date()
+                          if date_debut_str else aujourd_hui.replace(day=1))
+            date_fin = (datetime.strptime(date_fin_str, '%Y-%m-%d').date()
+                        if date_fin_str else aujourd_hui)
+        except ValueError:
+            return Response({'error': 'Format de date invalide. Utilisez YYYY-MM-DD'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if date_debut > date_fin:
+            return Response({'error': 'date_debut doit être antérieure ou égale à date_fin'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if (date_fin - date_debut).days > 731:
+            return Response({'error': 'La période ne peut pas dépasser deux ans'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        livreur_id = request.query_params.get('livreur_id') or None
+        if livreur_id is not None and not str(livreur_id).isdigit():
+            return Response({'error': 'livreur_id invalide'}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(calculer_indicateurs(date_debut, date_fin, livreur_id=livreur_id))
+
+
+class CAVendeursAPIView(APIView):
+    """
+    Chiffre d'affaires par vendeur, mois par mois, et CA du mois en cours.
+
+    GET /API/distribution/ca-vendeurs/?annee=2026[&livreur_id=X]
+    Sans annee : annee en cours. CA TTC = ventes de tournee + commandes prises hors annulees.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from .indicateurs import calculer_ca_mensuel
+
+        annee = request.query_params.get('annee') or timezone.localdate().year
+        try:
+            annee = int(annee)
+            if not 2000 <= annee <= 2100:
+                raise ValueError
+        except (TypeError, ValueError):
+            return Response({'error': 'annee invalide (ex. 2026)'}, status=status.HTTP_400_BAD_REQUEST)
+
+        livreur_id = request.query_params.get('livreur_id') or None
+        if livreur_id is not None and not str(livreur_id).isdigit():
+            return Response({'error': 'livreur_id invalide'}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(calculer_ca_mensuel(annee, livreur_id=livreur_id))
+
+
+class EtatLivreursAPIView(APIView):
+    """
+    Etat des livreurs : « net », « écart » ou « à contrôler », avec le détail par tournée.
+    Calcul dans API/etat_livreurs.py.
+
+    GET /API/distribution/etat-livreurs/?date_debut=YYYY-MM-DD&date_fin=YYYY-MM-DD[&livreur_id=X]
+    Sans dates : les 30 derniers jours.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from .etat_livreurs import calculer_etat_livreurs
+
+        aujourd_hui = timezone.localdate()
+        try:
+            date_fin = (datetime.strptime(request.query_params['date_fin'], '%Y-%m-%d').date()
+                        if request.query_params.get('date_fin') else aujourd_hui)
+            date_debut = (datetime.strptime(request.query_params['date_debut'], '%Y-%m-%d').date()
+                          if request.query_params.get('date_debut') else date_fin - timedelta(days=29))
+        except ValueError:
+            return Response({'error': 'Format de date invalide. Utilisez YYYY-MM-DD'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if date_debut > date_fin:
+            return Response({'error': 'date_debut doit être antérieure ou égale à date_fin'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if (date_fin - date_debut).days > 731:
+            return Response({'error': 'La période ne peut pas dépasser deux ans'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        livreur_id = request.query_params.get('livreur_id') or None
+        if livreur_id is not None and not str(livreur_id).isdigit():
+            return Response({'error': 'livreur_id invalide'}, status=status.HTTP_400_BAD_REQUEST)
+
+        company = None
+        if not (request.user.is_staff or request.user.is_superuser):
+            company = getattr(request, 'company', None)
+        return Response(calculer_etat_livreurs(date_debut, date_fin, company=company, livreur_id=livreur_id))

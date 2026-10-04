@@ -2593,3 +2593,25 @@ class Secteur(models.Model):
     def get_clients_count(self):
         """Retourne le nombre de clients dans ce secteur"""
         return self.clients.count() if hasattr(self, 'clients') else 0
+
+
+class AccesTableauBenefices(models.Model):
+    """
+    Code PIN commun qui protege le tableau de bord des benefices d'une entreprise.
+    Un seul PIN par entreprise, partage par ses administrateurs. Le PIN n'est jamais
+    stocke en clair (hash Django). Regles d'acces : API/benefices_acces.py.
+    """
+    company = models.OneToOneField(Company, on_delete=models.CASCADE, related_name='acces_benefices')
+    pin_hash = models.CharField('PIN (chiffré)', max_length=128, blank=True)
+    echecs = models.PositiveSmallIntegerField('Essais incorrects consécutifs', default=0)
+    bloque_jusqua = models.DateTimeField('Bloqué jusqu’à', null=True, blank=True)
+    modifie_par = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                    related_name='+')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Accès au tableau des bénéfices'
+        verbose_name_plural = 'Accès au tableau des bénéfices'
+
+    def __str__(self):
+        return f"PIN bénéfices - {self.company}"

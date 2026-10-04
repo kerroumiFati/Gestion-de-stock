@@ -228,6 +228,39 @@
 }
 
 .taux-badge.excellent { background: #d4edda; color: #155724; }
+.taux-badge.neutre { background: #edf2f7; color: #718096; }
+
+/* CA par vendeur, mois par mois */
+.kpi-tile-accent { background: #ecfdf5; border-color: #a7f3d0; }
+.kpi-tile-accent .kpi-tile-value { color: #047857; }
+.ca-table th, .ca-table td { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ca-table th.ca-mois, .ca-table td.ca-mois { text-align: right; min-width: 92px; }
+.ca-table td.ca-zero { color: #cbd5e0; }
+.ca-table .ca-courant { background: #ecfdf5; font-weight: 600; }
+.ca-table th.ca-courant { color: #047857; }
+.ca-table .ca-total { text-align: right; font-weight: 700; background: #f8fafc; }
+.ca-table tfoot td { font-weight: 700; background: #f1f5f9; }
+.ca-table .ca-vendeur { position: sticky; left: 0; background: #fff; z-index: 1; min-width: 190px; }
+.ca-table tfoot .ca-vendeur { background: #f1f5f9; }
+/* En-tete : garder le fond sombre de la ligne (sinon texte blanc sur fond clair) */
+.ca-table thead th.ca-vendeur, .ca-table thead th.ca-total { background: #343a40; }
+
+/* Indicateurs de performance */
+.kpi-global { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; padding: 16px 20px; border-bottom: 1px solid #edf2f7; }
+.kpi-tile { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px; }
+.kpi-tile-label { font-size: .78rem; text-transform: uppercase; letter-spacing: .03em; color: #718096; font-weight: 600; }
+.kpi-tile-value { font-size: 1.6rem; font-weight: 700; color: #2d3748; line-height: 1.2; margin-top: 2px; }
+.kpi-tile-sub { font-size: .78rem; color: #718096; min-height: 1.1em; }
+.kpi-cell { min-width: 170px; }
+.kpi-cell-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.kpi-bar { height: 8px; border-radius: 999px; background: #e2e8f0; overflow: hidden; margin-top: 5px; }
+.kpi-bar-fill { height: 100%; border-radius: 999px; background: #f59e0b; }
+.kpi-bar-fill.excellent { background: #10b981; }
+.kpi-bar-fill.bon { background: #3b82f6; }
+.kpi-bar-fill.moyen { background: #f59e0b; }
+.kpi-bar-fill.faible { background: #e53e3e; }
+.kpi-detail { font-size: .75rem; color: #718096; margin-top: 3px; white-space: nowrap; }
+.kpi-legend { display: grid; gap: 4px; padding: 12px 20px 16px; font-size: .78rem; color: #718096; border-top: 1px solid #edf2f7; }
 .taux-badge.bon { background: #cce5ff; color: #004085; }
 .taux-badge.moyen { background: #fff3cd; color: #856404; }
 .taux-badge.faible { background: #f8d7da; color: #721c24; }
@@ -431,6 +464,112 @@
         </div>
     </div>
 
+    <!-- Indicateurs de performance -->
+    <div class="livreurs-table-card mb-4" id="indicateursCard">
+        <div class="card-header d-flex justify-content-between align-items-center flex-wrap" style="gap: 8px;">
+            <h5 class="mb-0"><i class="fas fa-tachometer-alt mr-2"></i>{% trans "Indicateurs de performance" %}</h5>
+            <small class="text-muted">{% trans "Prévendeurs et livreurs, mêmes formules pour tous" %}</small>
+        </div>
+        <div class="kpi-global" id="kpiGlobal">
+            <div class="kpi-tile">
+                <div class="kpi-tile-label">{% trans "Taux de visite" %}</div>
+                <div class="kpi-tile-value" id="kpiGlobalVisite">-</div>
+                <div class="kpi-tile-sub" id="kpiGlobalVisiteSub"></div>
+            </div>
+            <div class="kpi-tile">
+                <div class="kpi-tile-label">{% trans "Taux de réussite" %}</div>
+                <div class="kpi-tile-value" id="kpiGlobalReussite">-</div>
+                <div class="kpi-tile-sub" id="kpiGlobalReussiteSub"></div>
+            </div>
+            <div class="kpi-tile">
+                <div class="kpi-tile-label">{% trans "Taux de réalisation" %}</div>
+                <div class="kpi-tile-value" id="kpiGlobalRealisation">-</div>
+                <div class="kpi-tile-sub" id="kpiGlobalRealisationSub"></div>
+            </div>
+            <div class="kpi-tile">
+                <div class="kpi-tile-label">{% trans "Livraison des commandes" %}</div>
+                <div class="kpi-tile-value" id="kpiGlobalLivraison">-</div>
+                <div class="kpi-tile-sub" id="kpiGlobalLivraisonSub"></div>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table stats-table mb-0" id="indicateursTable">
+                <thead>
+                    <tr>
+                        <th>{% trans "Vendeur" %}</th>
+                        <th title="{% trans 'Clients planifiés visités / clients planifiés' %}">{% trans "Taux de visite" %}</th>
+                        <th title="{% trans 'Visites avec vente ou commande / visites effectuées' %}">{% trans "Taux de réussite" %}</th>
+                        <th title="{% trans 'CA réalisé / objectifs mensuels' %}">{% trans "Taux de réalisation" %}</th>
+                        <th title="{% trans 'Commandes livrées / commandes prises, en montant' %}">{% trans "Livraison commandes" %}</th>
+                    </tr>
+                </thead>
+                <tbody id="indicateursBody">
+                    <tr><td colspan="5" class="text-center py-4 text-muted">{% trans "Chargement..." %}</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="kpi-legend">
+            <span><strong>{% trans "Taux de visite" %}</strong> : {% trans "clients planifiés visités / clients planifiés (planning hebdomadaire et arrêts de tournée, jusqu'à aujourd'hui)" %}</span>
+            <span><strong>{% trans "Taux de réussite" %}</strong> : {% trans "visites ayant donné une vente ou une commande / visites effectuées" %}</span>
+            <span><strong>{% trans "Taux de réalisation" %}</strong> : {% trans "CA réalisé (ventes de tournée + commandes prises) / objectifs mensuels des mois couverts" %}</span>
+            <span><strong>{% trans "Livraison commandes" %}</strong> : {% trans "montant des commandes livrées / montant des commandes prises" %}</span>
+        </div>
+    </div>
+
+    <!-- Chiffre d'affaires par vendeur -->
+    <div class="livreurs-table-card mb-4" id="caVendeursCard">
+        <div class="card-header d-flex justify-content-between align-items-center flex-wrap" style="gap: 8px;">
+            <h5 class="mb-0"><i class="fas fa-coins mr-2"></i>{% trans "Chiffre d'affaires par vendeur" %}</h5>
+            <div class="d-flex align-items-center" style="gap: 8px;">
+                <label for="caAnnee" class="mb-0 text-muted small">{% trans "Année" %}</label>
+                <select id="caAnnee" class="form-control form-control-sm" style="width: auto;" onchange="loadCaMensuel()"></select>
+                <select id="caVue" class="form-control form-control-sm" style="width: auto;" onchange="renderCaMensuel()">
+                    <option value="total">{% trans "Total" %}</option>
+                    <option value="ventes">{% trans "Ventes de tournée" %}</option>
+                    <option value="commandes">{% trans "Commandes" %}</option>
+                </select>
+                <button class="btn btn-export btn-sm" onclick="exportCaMensuel()">
+                    <i class="fas fa-download mr-1"></i>{% trans "Exporter" %}
+                </button>
+            </div>
+        </div>
+        <div class="kpi-global">
+            <div class="kpi-tile kpi-tile-accent">
+                <div class="kpi-tile-label">{% trans "CA du mois en cours" %}</div>
+                <div class="kpi-tile-value" id="caMoisTotal">-</div>
+                <div class="kpi-tile-sub" id="caMoisLibelle"></div>
+            </div>
+            <div class="kpi-tile">
+                <div class="kpi-tile-label">{% trans "dont ventes de tournée" %}</div>
+                <div class="kpi-tile-value" id="caMoisVentes">-</div>
+                <div class="kpi-tile-sub">{% trans "encaissées ou à crédit" %}</div>
+            </div>
+            <div class="kpi-tile">
+                <div class="kpi-tile-label">{% trans "dont commandes prises" %}</div>
+                <div class="kpi-tile-value" id="caMoisCommandes">-</div>
+                <div class="kpi-tile-sub">{% trans "hors commandes annulées" %}</div>
+            </div>
+            <div class="kpi-tile">
+                <div class="kpi-tile-label">{% trans "CA cumulé de l'année" %}</div>
+                <div class="kpi-tile-value" id="caAnneeTotal">-</div>
+                <div class="kpi-tile-sub" id="caAnneeLibelle"></div>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table stats-table ca-table mb-0" id="caTable">
+                <thead id="caHead"></thead>
+                <tbody id="caBody">
+                    <tr><td class="text-center py-4 text-muted">{% trans "Chargement..." %}</td></tr>
+                </tbody>
+                <tfoot id="caFoot"></tfoot>
+            </table>
+        </div>
+        <div class="kpi-legend">
+            <span><strong>{% trans "CA" %}</strong> : {% trans "montants TTC. Ventes de tournée à la date de vente, plus commandes prises à la date de commande, hors commandes annulées. Même définition que les objectifs et le taux de réalisation." %}</span>
+            <span>{% trans "Le mois en cours est surligné. Le survol d'une cellule détaille ventes et commandes." %}</span>
+        </div>
+    </div>
+
     <!-- Graphiques -->
     <div class="row">
         <div class="col-md-8 mb-3">
@@ -462,7 +601,7 @@
                         <th>{% trans "Livreur" %}</th>
                         <th class="text-center">{% trans "Clients" %}</th>
                         <th class="text-center">{% trans "Tournées" %}</th>
-                        <th class="text-center">{% trans "Taux réussite" %}</th>
+                        <th class="text-center" title="{% trans 'Arrêts livrés / arrêts de tournée' %}">{% trans "Arrêts livrés" %}</th>
                         <th class="text-right">{% trans "Espèces" %}</th>
                         <th class="text-right">{% trans "Chèques" %}</th>
                         <th class="text-right">{% trans "Crédits" %}</th>
@@ -636,6 +775,11 @@
             return;
         }
 
+        // Indicateurs de performance (chargement independant des statistiques)
+        loadIndicateurs(dateDebut, dateFin, livreurId);
+        // CA par vendeur, mois par mois (suit le filtre vendeur, pas les dates : annee entiere)
+        loadCaMensuel();
+
         // Afficher le loading
         document.getElementById('statsTableBody').innerHTML = `
             <tr>
@@ -672,6 +816,203 @@
             `;
         }
     }
+
+    // ------------------------------------------------------------------
+    // Indicateurs de performance (taux de visite, reussite, realisation, livraison)
+    // ------------------------------------------------------------------
+    function kpiClass(t) {
+        if (t === null || t === undefined) return 'neutre';
+        if (t >= 90) return 'excellent';
+        if (t >= 75) return 'bon';
+        if (t >= 50) return 'moyen';
+        return 'faible';
+    }
+    function kpiText(t) { return (t === null || t === undefined) ? '-' : (Math.round(t * 10) / 10) + ' %'; }
+    function kpiEsc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+    function kpiCell(taux, detail, vide) {
+        const cls = kpiClass(taux);
+        const width = taux == null ? 0 : Math.max(0, Math.min(100, taux));
+        return `<td class="kpi-cell">
+            <div class="kpi-cell-top"><span class="taux-badge ${cls}">${kpiText(taux)}</span></div>
+            <div class="kpi-bar"><div class="kpi-bar-fill ${cls}" style="width:${width}%"></div></div>
+            <div class="kpi-detail">${taux == null ? vide : detail}</div>
+        </td>`;
+    }
+
+    async function loadIndicateurs(dateDebut, dateFin, livreurId) {
+        const tbody = document.getElementById('indicateursBody');
+        if (!tbody) return;
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center py-4 text-muted"><i class="fas fa-spinner fa-spin mr-2"></i>{% trans "Chargement des indicateurs..." %}</td></tr>`;
+        try {
+            let url = `/API/distribution/indicateurs-performance/?date_debut=${dateDebut}&date_fin=${dateFin}`;
+            if (livreurId) url += `&livreur_id=${livreurId}`;
+            const response = await fetch(url, { credentials: 'same-origin' });
+            if (!response.ok) throw new Error('HTTP ' + response.status);
+            renderIndicateurs(await response.json());
+        } catch (error) {
+            console.error('Erreur chargement indicateurs:', error);
+            tbody.innerHTML = `<tr><td colspan="5" class="text-center py-4 text-danger"><i class="fas fa-exclamation-triangle mr-2"></i>{% trans "Erreur lors du chargement des indicateurs" %}</td></tr>`;
+        }
+    }
+
+    function renderIndicateurs(data) {
+        const g = data.global || {};
+        const set = (id, v) => { const n = document.getElementById(id); if (n) n.textContent = v; };
+        set('kpiGlobalVisite', kpiText(g.taux_visite));
+        set('kpiGlobalVisiteSub', `${formatNumber(g.clients_planifies_visites || 0)} / ${formatNumber(g.clients_planifies || 0)} {% trans "clients planifiés" %}`);
+        set('kpiGlobalReussite', kpiText(g.taux_reussite));
+        set('kpiGlobalReussiteSub', `${formatNumber(g.visites_fructueuses || 0)} / ${formatNumber(g.visites || 0)} {% trans "visites" %}`);
+        set('kpiGlobalRealisation', kpiText(g.taux_realisation));
+        set('kpiGlobalRealisationSub', g.objectif_ca ? `${formatMoney(g.ca_realise_objectifs || 0)} / ${formatMoney(g.objectif_ca)}` : '{% trans "Aucun objectif défini" %}');
+        set('kpiGlobalLivraison', kpiText(g.taux_livraison));
+        set('kpiGlobalLivraisonSub', g.montant_commandes_prises ? `${formatMoney(g.montant_commandes_livrees || 0)} / ${formatMoney(g.montant_commandes_prises)}` : '{% trans "Aucune commande" %}');
+
+        const tbody = document.getElementById('indicateursBody');
+        const vendeurs = data.vendeurs || [];
+        if (!vendeurs.length) {
+            tbody.innerHTML = `<tr><td colspan="5" class="text-center py-4 text-muted"><i class="fas fa-inbox mr-2"></i>{% trans "Aucun vendeur pour cette période" %}</td></tr>`;
+            return;
+        }
+        tbody.innerHTML = vendeurs.map(v => {
+            const initials = String(v.nom || '?').split(' ').filter(Boolean).map(n => n[0]).join('').substring(0, 2).toUpperCase();
+            const horsPlanning = v.visites_hors_planning ? ` · ${v.visites_hors_planning} {% trans "hors planning" %}` : '';
+            return `<tr>
+                <td>
+                    <div class="livreur-info">
+                        <div class="livreur-avatar">${kpiEsc(initials)}</div>
+                        <div class="livreur-details"><h6>${kpiEsc(v.nom)}</h6><small>${kpiEsc(v.matricule || '')}</small></div>
+                    </div>
+                </td>
+                ${kpiCell(v.taux_visite, `${v.clients_planifies_visites} / ${v.clients_planifies} {% trans "planifiés" %}${horsPlanning}`, `{% trans "Aucun client planifié" %}${horsPlanning}`)}
+                ${kpiCell(v.taux_reussite, `${v.visites_fructueuses} / ${v.visites} {% trans "visites" %}`, '{% trans "Aucune visite" %}')}
+                ${kpiCell(v.taux_realisation, `${formatMoney(v.ca_realise_objectifs)} / ${formatMoney(v.objectif_ca)}`, '{% trans "Aucun objectif défini" %}')}
+                ${kpiCell(v.taux_livraison, `${v.commandes_livrees} / ${v.commandes_prises} {% trans "commandes" %} · ${formatMoney(v.montant_commandes_livrees)}`, '{% trans "Aucune commande" %}')}
+            </tr>`;
+        }).join('');
+    }
+
+    // ------------------------------------------------------------------
+    // Chiffre d'affaires par vendeur : mois en cours et tableau mois par mois
+    // ------------------------------------------------------------------
+    let caData = null;
+    const CA_MOIS_COURTS = ['Janv.', 'Févr.', 'Mars', 'Avr.', 'Mai', 'Juin', 'Juil.', 'Août', 'Sept.', 'Oct.', 'Nov.', 'Déc.'];
+
+    function caInitAnnees() {
+        const select = document.getElementById('caAnnee');
+        if (!select || select.options.length) return;
+        const courante = new Date().getFullYear();
+        for (let a = courante; a >= courante - 4; a--) {
+            const opt = document.createElement('option');
+            opt.value = String(a);
+            opt.textContent = String(a);
+            select.appendChild(opt);
+        }
+        select.value = String(courante);
+    }
+
+    window.loadCaMensuel = async function() {
+        const body = document.getElementById('caBody');
+        if (!body) return;
+        caInitAnnees();
+        const annee = document.getElementById('caAnnee').value;
+        const livreurId = document.getElementById('filterLivreur') ? document.getElementById('filterLivreur').value : '';
+        document.getElementById('caHead').innerHTML = '';
+        document.getElementById('caFoot').innerHTML = '';
+        body.innerHTML = `<tr><td class="text-center py-4 text-muted"><i class="fas fa-spinner fa-spin mr-2"></i>{% trans "Chargement du chiffre d'affaires..." %}</td></tr>`;
+        try {
+            let url = `/API/distribution/ca-vendeurs/?annee=${encodeURIComponent(annee)}`;
+            if (livreurId) url += `&livreur_id=${encodeURIComponent(livreurId)}`;
+            const response = await fetch(url, { credentials: 'same-origin' });
+            if (!response.ok) throw new Error('HTTP ' + response.status);
+            caData = await response.json();
+            renderCaMensuel();
+        } catch (error) {
+            console.error('Erreur chargement CA:', error);
+            caData = null;
+            body.innerHTML = `<tr><td class="text-center py-4 text-danger"><i class="fas fa-exclamation-triangle mr-2"></i>{% trans "Erreur lors du chargement du chiffre d'affaires" %}</td></tr>`;
+        }
+    };
+
+    window.renderCaMensuel = function() {
+        if (!caData) return;
+        const vue = (document.getElementById('caVue') || {}).value || 'total';
+        const set = (id, v) => { const n = document.getElementById(id); if (n) n.textContent = v; };
+
+        // Chiffres a part : mois en cours et cumul annuel
+        const mc = caData.mois_en_cours || {};
+        if (mc.mois) {
+            set('caMoisTotal', formatMoney(mc.total || 0));
+            set('caMoisVentes', formatMoney(mc.ventes || 0));
+            set('caMoisCommandes', formatMoney(mc.commandes || 0));
+            set('caMoisLibelle', mc.libelle || '');
+        } else {
+            set('caMoisTotal', '-'); set('caMoisVentes', '-'); set('caMoisCommandes', '-');
+            set('caMoisLibelle', '{% trans "Année passée : pas de mois en cours" %}');
+        }
+        set('caAnneeTotal', formatMoney(caData.total_annee || 0));
+        set('caAnneeLibelle', '{% trans "Année" %} ' + caData.annee);
+
+        const courant = caData.mois_courant;
+        const cls = m => 'ca-mois' + (m === courant ? ' ca-courant' : '');
+        const montant = v => v ? formatNumber(Math.round(v)) : '–';
+        const cleTotal = vue === 'ventes' ? 'total_ventes' : vue === 'commandes' ? 'total_commandes' : 'total_annee';
+
+        document.getElementById('caHead').innerHTML = '<tr><th class="ca-vendeur">{% trans "Vendeur" %}</th>' +
+            CA_MOIS_COURTS.map((m, i) => `<th class="${cls(i + 1)}">${m}</th>`).join('') +
+            '<th class="ca-total">{% trans "Total" %}</th></tr>';
+
+        const vendeurs = caData.vendeurs || [];
+        const body = document.getElementById('caBody');
+        if (!vendeurs.length) {
+            body.innerHTML = `<tr><td colspan="14" class="text-center py-4 text-muted"><i class="fas fa-inbox mr-2"></i>{% trans "Aucun vendeur pour cette année" %}</td></tr>`;
+            document.getElementById('caFoot').innerHTML = '';
+            return;
+        }
+        body.innerHTML = vendeurs.map(v => {
+            const initials = String(v.nom || '?').split(' ').filter(Boolean).map(n => n[0]).join('').substring(0, 2).toUpperCase();
+            return `<tr>
+                <td class="ca-vendeur">
+                    <div class="livreur-info">
+                        <div class="livreur-avatar">${kpiEsc(initials)}</div>
+                        <div class="livreur-details"><h6>${kpiEsc(v.nom)}</h6><small>${kpiEsc(v.matricule || '')}</small></div>
+                    </div>
+                </td>` +
+                v.mois.map(c => {
+                    const valeur = c[vue] || 0;
+                    const titre = `${caData.mois_libelles[c.mois - 1]} : ${formatMoney(c.total)} (ventes ${formatMoney(c.ventes)}, ${c.nb_ventes} vente(s) ; commandes ${formatMoney(c.commandes)}, ${c.nb_commandes} commande(s))`;
+                    return `<td class="${cls(c.mois)}${valeur ? '' : ' ca-zero'}" title="${kpiEsc(titre)}">${montant(valeur)}</td>`;
+                }).join('') +
+                `<td class="ca-total">${formatMoney(v[cleTotal] || 0)}</td></tr>`;
+        }).join('');
+
+        const totalGeneral = (caData.totaux_mois || []).reduce((s, t) => s + (t[vue] || 0), 0);
+        document.getElementById('caFoot').innerHTML = '<tr><td class="ca-vendeur">{% trans "TOTAL" %}</td>' +
+            (caData.totaux_mois || []).map(t => `<td class="${cls(t.mois)}">${montant(t[vue] || 0)}</td>`).join('') +
+            `<td class="ca-total">${formatMoney(totalGeneral)}</td></tr>`;
+    };
+
+    window.exportCaMensuel = function() {
+        if (!caData || !(caData.vendeurs || []).length) { alert('{% trans "Aucune donnée à exporter" %}'); return; }
+        const vue = (document.getElementById('caVue') || {}).value || 'total';
+        const csv = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+        const nombre = v => String(Math.round((v || 0) * 100) / 100).replace('.', ',');
+        const lignes = [['Vendeur', 'Matricule'].concat(caData.mois_libelles).concat(['Total ' + caData.annee]).map(csv).join(';')];
+        caData.vendeurs.forEach(v => {
+            const valeurs = v.mois.map(c => c[vue] || 0);
+            lignes.push([csv(v.nom), csv(v.matricule || '')].concat(valeurs.map(nombre))
+                .concat([nombre(valeurs.reduce((s, x) => s + x, 0))]).join(';'));
+        });
+        const totaux = (caData.totaux_mois || []).map(t => t[vue] || 0);
+        lignes.push([csv('TOTAL'), csv('')].concat(totaux.map(nombre)).concat([nombre(totaux.reduce((s, x) => s + x, 0))]).join(';'));
+        const blob = new Blob(['\ufeff' + lignes.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+        const lien = document.createElement('a');
+        lien.href = URL.createObjectURL(blob);
+        lien.download = `ca_vendeurs_${caData.annee}_${vue}.csv`;
+        document.body.appendChild(lien);
+        lien.click();
+        document.body.removeChild(lien);
+        setTimeout(() => URL.revokeObjectURL(lien.href), 1000);
+    };
 
     // Mettre à jour les cartes de résumé
     function updateSummaryCards(summary) {

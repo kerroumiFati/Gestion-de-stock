@@ -610,6 +610,9 @@ class StockMoveSerializer(serializers.ModelSerializer):
 class InventoryLineSerializer(serializers.ModelSerializer):
     produit_reference = serializers.CharField(source='produit.reference', read_only=True)
     produit_designation = serializers.CharField(source='produit.designation', read_only=True)
+    produit_code_barre = serializers.CharField(source='produit.code_barre', read_only=True)
+    # Attendu par l'ecran de details (la colonne Categorie affichait toujours N/A)
+    produit_categorie = serializers.CharField(source='produit.categorie.nom', read_only=True, default=None)
     variance = serializers.SerializerMethodField()
     is_completed = serializers.SerializerMethodField()
     counted_by_username = serializers.SerializerMethodField()
@@ -617,6 +620,7 @@ class InventoryLineSerializer(serializers.ModelSerializer):
     class Meta:
         model = InventoryLine
         fields = ('id', 'produit', 'produit_reference', 'produit_designation',
+                 'produit_code_barre', 'produit_categorie',
                  'counted_qty', 'snapshot_qty', 'variance', 'is_completed',
                  'counted_by', 'counted_by_username', 'counted_at')
 
@@ -627,10 +631,9 @@ class InventoryLineSerializer(serializers.ModelSerializer):
             return None
 
     def get_is_completed(self, obj):
-        try:
-            return obj.is_completed() if hasattr(obj, 'is_completed') else False
-        except Exception:
-            return False
+        # Une ligne est terminee quand une quantite comptee est saisie (0 compris).
+        # (Avant : appel d'une methode is_completed() inexistante -> toujours False.)
+        return obj.counted_qty is not None
 
     def get_counted_by_username(self, obj):
         try:

@@ -1,0 +1,1832 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Nouveautés NextGate</title>
+<meta name="description" content="Guide utilisateur des nouveautés NextGate : tournées, indicateurs, chiffre d'affaires, inventaire et modification de commande mobile.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Source+Sans+3:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Mise en page : rail de chapitres collant à gauche + colonne de lecture ; les captures débordent la colonne pour rester lisibles. */
+:root {
+  --paper: #f5f7fa;
+  --surface: #ffffff;
+  --sunken: #eef1f6;
+  --ink: #131a24;
+  --muted: #586478;
+  --line: #dde2ea;
+  --accent: #1f5fd6;
+  --accent-ink: #ffffff;
+  --accent-soft: #e5edfc;
+  --signal: #b77b00;
+  --signal-soft: #fdf3dc;
+  --ok: #12825a;
+  --ok-soft: #e1f4ec;
+  --danger: #c2372c;
+  --danger-soft: #fbe6e3;
+  --rail: #18202c;
+  --rail-ink: #c9d2df;
+  --rail-muted: #7f8ba0;
+  --shadow: 0 1px 2px rgba(19,26,36,.06), 0 8px 28px rgba(19,26,36,.08);
+
+  --f-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
+
+  --s-1: .25rem; --s-2: .5rem; --s-3: .75rem; --s-4: 1rem; --s-5: 1.5rem; --s-6: 2rem; --s-7: 3rem; --s-8: 4.5rem;
+  --r-sm: 6px; --r-md: 10px;
+  --read: 42rem;
+  --wide: 62rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0e131a; --surface: #151c26; --sunken: #1b2431; --ink: #e6ebf2; --muted: #9ba7b9; --line: #263142;
+    --accent: #6f9dff; --accent-ink: #0b1220; --accent-soft: #19284a; --signal: #f0be4b; --signal-soft: #2e2512;
+    --ok: #4cc690; --ok-soft: #12291f; --danger: #ff8478; --danger-soft: #331815;
+    --rail: #0a0e14; --rail-ink: #c9d2df; --rail-muted: #74819a;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0e131a; --surface: #151c26; --sunken: #1b2431; --ink: #e6ebf2; --muted: #9ba7b9; --line: #263142;
+  --accent: #6f9dff; --accent-ink: #0b1220; --accent-soft: #19284a; --signal: #f0be4b; --signal-soft: #2e2512;
+  --ok: #4cc690; --ok-soft: #12291f; --danger: #ff8478; --danger-soft: #331815;
+  --rail: #0a0e14; --rail-ink: #c9d2df; --rail-muted: #74819a;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 1.5rem; }
+body {
+  margin: 0; background: var(--paper); color: var(--ink);
+  font: 400 1.0625rem/1.65 var(--f-body);
+  -webkit-font-smoothing: antialiased;
+}
+img { max-width: 100%; display: block; }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; line-height: 1.15; margin: 0; }
+p { margin: 0; }
+code, kbd, .mono { font-family: var(--f-mono); font-size: .86em; }
+kbd {
+  padding: .05em .4em; border: 1px solid var(--line); border-bottom-width: 2px;
+  border-radius: 4px; background: var(--surface); white-space: nowrap;
+}
+b, strong { font-weight: 700; }
+
+/* ---------- Barre de progression ---------- */
+.progress {
+  position: fixed; inset: 0 0 auto 0; height: 3px; z-index: 50;
+  padding-top: env(safe-area-inset-top, 0px);
+  background: transparent; pointer-events: none;
+}
+.progress span { display: block; height: 3px; width: 100%; background: var(--accent); transform-origin: 0 50%; transform: scaleX(0); }
+
+/* ---------- Structure ---------- */
+.shell { display: grid; grid-template-columns: 17rem minmax(0, 1fr); min-height: 100vh; }
+.rail {
+  position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  background: var(--rail); color: var(--rail-ink);
+  padding: calc(var(--s-6) + env(safe-area-inset-top, 0px)) var(--s-5) var(--s-6);
+  display: flex; flex-direction: column; gap: var(--s-6);
+}
+.brand { display: flex; align-items: center; gap: var(--s-3); }
+.brand-mark {
+  width: 2.25rem; height: 2.25rem; border-radius: 8px; display: grid; place-items: center;
+  background: var(--accent); color: var(--accent-ink);
+  font: 800 1rem/1 var(--f-display); letter-spacing: -.02em;
+}
+.brand-name { font: 700 1.1rem/1.1 var(--f-display); color: #fff; }
+.brand-sub { font-size: .8rem; color: var(--rail-muted); }
+.rail nav { display: grid; gap: 2px; }
+.rail-label { font-size: .72rem; letter-spacing: .12em; text-transform: uppercase; color: var(--rail-muted); margin-bottom: var(--s-2); }
+.rail a {
+  display: grid; grid-template-columns: 1.6rem 1fr; align-items: baseline; gap: var(--s-2);
+  padding: .5rem .6rem; border-radius: var(--r-sm);
+  color: var(--rail-ink); text-decoration: none; font-size: .95rem; line-height: 1.3;
+  transition: background .2s, color .2s;
+}
+.rail a .n { font: 600 .78rem/1 var(--f-mono); color: var(--rail-muted); transition: color .2s; }
+.rail a:hover { background: rgba(255,255,255,.06); }
+.rail a.is-current { background: rgba(111,157,255,.16); color: #fff; }
+.rail a.is-current .n { color: #9dbcff; }
+.rail-foot { margin-top: auto; display: grid; gap: var(--s-3); font-size: .82rem; color: var(--rail-muted); }
+.theme-btn {
+  display: inline-flex; align-items: center; gap: var(--s-2); justify-self: start;
+  background: transparent; color: var(--rail-ink); border: 1px solid rgba(255,255,255,.16);
+  border-radius: 999px; padding: .35rem .8rem; font: 600 .82rem var(--f-body); cursor: pointer;
+}
+.theme-btn:hover { border-color: rgba(255,255,255,.35); }
+
+main { min-width: 0; padding-inline: clamp(1rem, 4vw, 3.5rem); padding-block: var(--s-7) var(--s-8); }
+.col { max-width: var(--wide); margin-inline: auto; }
+.read { max-width: var(--read); }
+
+/* ---------- En-tête ---------- */
+.hero { display: grid; gap: var(--s-5); padding-bottom: var(--s-7); border-bottom: 1px solid var(--line); }
+.eyebrow { font: 600 .78rem/1 var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.hero h1 { font-size: clamp(2.2rem, 5vw, 3.6rem); font-weight: 800; letter-spacing: -.03em; }
+.hero h1 em { font-style: normal; color: var(--accent); }
+.lede { font-size: 1.2rem; color: var(--muted); max-width: 38rem; }
+.hero-meta { display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-5); font-size: .92rem; color: var(--muted); }
+.hero-meta span { display: inline-flex; gap: .4rem; align-items: center; }
+.dot { width: .5rem; height: .5rem; border-radius: 50%; background: var(--ok); display: inline-block; }
+
+.chapters { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: var(--s-3); margin-top: var(--s-3); }
+.chap {
+  display: grid; grid-template-rows: auto auto 1fr auto; gap: var(--s-2);
+  padding: var(--s-4) var(--s-4) var(--s-4); border-radius: var(--r-md);
+  background: var(--surface); border: 1px solid var(--line);
+  text-decoration: none; color: var(--ink);
+  transition: transform .25s cubic-bezier(.2,.7,.2,1), border-color .25s, box-shadow .25s;
+}
+.chap:hover { transform: translateY(-3px); border-color: var(--accent); box-shadow: var(--shadow); }
+.chap .k { font: 600 .75rem/1 var(--f-mono); color: var(--muted); }
+.chap h3 { font-size: 1.12rem; font-weight: 700; }
+.chap p { font-size: .93rem; color: var(--muted); line-height: 1.45; }
+.chap .where { font-size: .8rem; color: var(--accent); font-weight: 600; }
+
+/* ---------- Chapitres ---------- */
+.chapter { padding-top: var(--s-8); display: grid; gap: var(--s-5); }
+.chapter-head { display: grid; gap: var(--s-3); }
+.chapter-num { font: 600 .8rem/1 var(--f-mono); color: var(--accent); letter-spacing: .06em; }
+.chapter h2 { font-size: clamp(1.7rem, 3.4vw, 2.4rem); font-weight: 800; letter-spacing: -.02em; }
+.chips { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.chip {
+  display: inline-flex; align-items: center; gap: .4rem; padding: .25rem .65rem; border-radius: 999px;
+  font-size: .82rem; font-weight: 600; background: var(--sunken); color: var(--muted); border: 1px solid var(--line);
+}
+.chip.path { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.chip svg { width: .9rem; height: .9rem; }
+
+h3.sub { font-size: 1.2rem; font-weight: 700; margin-top: var(--s-3); }
+
+/* Étapes : chaque étape peut être reliée à un repère sur la capture */
+.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-2); counter-reset: st; }
+.steps > li {
+  counter-increment: st; position: relative;
+  padding: .55rem .7rem .55rem 3.1rem; border-radius: var(--r-sm);
+  transition: background .2s;
+}
+.steps > li::before {
+  content: counter(st); display: grid; place-items: center;
+  position: absolute; left: .55rem; top: .5rem;
+  width: 1.75rem; height: 1.75rem; border-radius: 50%;
+  background: var(--surface); border: 1.5px solid var(--line); color: var(--muted);
+  font: 700 .82rem/1 var(--f-mono); transition: all .2s;
+}
+.steps > li[data-pin] { cursor: pointer; }
+.steps > li[data-pin]::before { border-color: var(--accent); color: var(--accent); }
+.steps > li.is-hot { background: var(--accent-soft); }
+.steps > li.is-hot::before { background: var(--accent); color: var(--accent-ink); }
+.steps ul { margin: .35rem 0 0; padding-left: 1.1rem; display: grid; gap: .2rem; }
+.steps ul li::marker { color: var(--muted); }
+
+.bullets { margin: 0; padding-left: 1.2rem; display: grid; gap: .45rem; }
+.bullets li::marker { color: var(--accent); }
+
+/* Encadrés */
+.note {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--s-3);
+  padding: var(--s-4); border-radius: var(--r-md);
+  background: var(--signal-soft); border-left: 3px solid var(--signal);
+  font-size: .98rem;
+}
+.note svg { width: 1.2rem; height: 1.2rem; color: var(--signal); margin-top: .2rem; }
+.note.info { background: var(--accent-soft); border-left-color: var(--accent); }
+.note.info svg { color: var(--accent); }
+.note b { display: block; margin-bottom: .15rem; }
+
+/* ---------- Captures annotées ---------- */
+.shot { margin: 0; display: grid; gap: var(--s-2); }
+.frame {
+  position: relative; border-radius: var(--r-md); overflow: hidden;
+  background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow);
+}
+.frame-bar {
+  display: flex; align-items: center; gap: var(--s-3);
+  padding: .5rem .8rem; background: var(--sunken); border-bottom: 1px solid var(--line);
+}
+.lights { display: flex; gap: 5px; }
+.lights i { width: 9px; height: 9px; border-radius: 50%; background: var(--line); }
+.url {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font: 400 .76rem/1.6 var(--f-mono); color: var(--muted);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 5px; padding: 0 .6rem;
+}
+.zoom-btn {
+  border: 0; background: transparent; color: var(--muted); cursor: zoom-in; padding: .2rem;
+  display: grid; place-items: center; border-radius: 4px;
+}
+.zoom-btn:hover { color: var(--accent); }
+.zoom-btn svg { width: 1rem; height: 1rem; }
+.canvas { position: relative; cursor: zoom-in; }
+.canvas img { width: 100%; height: auto; }
+figcaption { font-size: .88rem; color: var(--muted); }
+
+.pin {
+  position: absolute; transform: translate(-50%, -50%);
+  width: 1.75rem; height: 1.75rem; border-radius: 50%;
+  display: grid; place-items: center; border: 0; padding: 0; cursor: pointer;
+  background: var(--accent); color: var(--accent-ink);
+  font: 700 .8rem/1 var(--f-mono);
+  box-shadow: 0 0 0 3px rgba(255,255,255,.9), 0 4px 12px rgba(19,26,36,.35);
+  transition: transform .2s cubic-bezier(.2,.7,.2,1);
+  z-index: 2;
+}
+.pin::after {
+  content: ""; position: absolute; inset: -3px; border-radius: 50%;
+  border: 2px solid var(--accent); opacity: 0;
+  animation: ping 2.4s cubic-bezier(.2,.7,.2,1) infinite;
+}
+.pin:hover, .pin.is-hot { transform: translate(-50%, -50%) scale(1.22); }
+.pin .tip {
+  position: absolute; left: 50%; bottom: calc(100% + 10px); transform: translate(-50%, 4px);
+  width: max-content; max-width: 15rem; padding: .45rem .65rem; border-radius: var(--r-sm);
+  background: var(--ink); color: var(--paper); font: 600 .8rem/1.35 var(--f-body); text-align: left;
+  opacity: 0; pointer-events: none; transition: opacity .18s, transform .18s;
+}
+.pin.tip-below .tip { bottom: auto; top: calc(100% + 10px); transform: translate(-50%, -4px); }
+.pin.tip-left .tip { left: auto; right: -6px; transform: translate(0, 4px); }
+.pin.tip-left.tip-below .tip { transform: translate(0, -4px); }
+.pin:hover .tip, .pin.is-hot .tip, .pin:focus-visible .tip { opacity: 1; transform: translate(-50%, 0); }
+.pin.tip-left:hover .tip, .pin.tip-left.is-hot .tip, .pin.tip-left:focus-visible .tip { transform: translate(0, 0); }
+@keyframes ping {
+  0% { transform: scale(1); opacity: .7; }
+  70%, 100% { transform: scale(1.9); opacity: 0; }
+}
+
+/* Captures de téléphone */
+.phones { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: var(--s-5); align-items: start; }
+.phone-shot { margin: 0; display: grid; gap: var(--s-3); justify-items: center; text-align: center; font-size: .9rem; color: var(--muted); }
+.phone {
+  width: 100%; max-width: 17rem; padding: 10px; border-radius: 34px;
+  background: var(--rail); box-shadow: var(--shadow), inset 0 0 0 1px rgba(255,255,255,.08);
+  transition: transform .35s cubic-bezier(.2,.7,.2,1);
+}
+.phone .canvas { border-radius: 25px; overflow: hidden; background: var(--surface); }
+.phone-shot:hover .phone { transform: translateY(-4px) rotate(-.6deg); }
+.phone-shot figcaption { max-width: 17rem; }
+.phone-shot figcaption b { color: var(--ink); }
+
+/* Formule cartons */
+.formula {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--s-2) var(--s-3);
+  padding: var(--s-5); border-radius: var(--r-md); background: var(--surface); border: 1px solid var(--line);
+  font: 600 1.05rem/1.2 var(--f-mono);
+}
+.formula .tok { padding: .45rem .75rem; border-radius: 8px; background: var(--sunken); white-space: nowrap; }
+.formula .tok.ct { background: var(--accent-soft); color: var(--accent); }
+.formula .tok.res { background: var(--ok-soft); color: var(--ok); }
+.formula .op { color: var(--muted); }
+
+/* Où trouver cet écran */
+.where-box {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s-5); align-items: center;
+  padding: var(--s-5); border-radius: var(--r-md);
+  background: var(--surface); border: 1px solid var(--line); border-top: 3px solid var(--accent);
+}
+.where-text { display: grid; gap: var(--s-3); min-width: 0; }
+.where-title { display: flex; align-items: center; gap: var(--s-2); font: 700 .78rem/1 var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.where-title svg { width: 1.05rem; height: 1.05rem; }
+.route { display: grid; grid-template-columns: 7.5rem minmax(0, 1fr); gap: var(--s-3); align-items: center; }
+.route-label { font-size: .82rem; font-weight: 600; color: var(--muted); }
+.route-path { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; }
+.route-step {
+  padding: .3rem .65rem; border-radius: 6px; background: var(--sunken); border: 1px solid var(--line);
+  font-size: .9rem; font-weight: 600; color: var(--ink); white-space: nowrap;
+}
+.route-step:last-child { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.route-sep { color: var(--muted); font-weight: 700; }
+.where-note { font-size: .93rem; color: var(--muted); max-width: 34rem; }
+.where-note b { color: var(--ink); }
+.where-img { margin: 0; width: 13rem; }
+.where-img .canvas { border-radius: 8px; overflow: hidden; box-shadow: var(--shadow); }
+.where-img.phone { width: 10.5rem; padding: 6px; border-radius: 22px; background: var(--rail); }
+.where-img.phone .canvas { border-radius: 16px; box-shadow: none; }
+@media (max-width: 700px) {
+  .where-box { grid-template-columns: minmax(0, 1fr); }
+  .where-img { width: min(13rem, 100%); justify-self: center; }
+  .route { grid-template-columns: minmax(0, 1fr); gap: var(--s-1); }
+  .route-step { white-space: normal; }
+}
+
+/* Tableau des indicateurs */
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); }
+table { width: 100%; border-collapse: collapse; font-size: .95rem; }
+th, td { text-align: left; padding: .7rem .9rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 600 .74rem/1.2 var(--f-body); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); background: var(--sunken); }
+tr:last-child td { border-bottom: 0; }
+td:first-child { font-weight: 700; white-space: nowrap; }
+.frac { display: inline-grid; grid-template-rows: auto auto; text-align: center; font-size: .88rem; line-height: 1.25; vertical-align: middle; }
+.frac span:first-child { border-bottom: 1.5px solid currentColor; padding-bottom: 2px; }
+.frac span:last-child { padding-top: 2px; }
+
+/* Bloc à copier */
+.copy-block { position: relative; }
+pre {
+  margin: 0; padding: var(--s-4); border-radius: var(--r-md); overflow-x: auto;
+  background: var(--rail); color: #dfe6f0; font: 400 .9rem/1.7 var(--f-mono);
+}
+.copy-btn {
+  position: absolute; top: .6rem; right: .6rem;
+  border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.06); color: #dfe6f0;
+  border-radius: 6px; padding: .25rem .6rem; font: 600 .78rem var(--f-body); cursor: pointer;
+}
+.copy-btn:hover { background: rgba(255,255,255,.14); }
+
+/* États de la saisie en masse */
+.states { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.state { padding: .2rem .6rem; border-radius: 999px; font-size: .82rem; font-weight: 700; }
+.state.todo { background: var(--sunken); color: var(--muted); }
+.state.ok { background: var(--ok-soft); color: var(--ok); }
+.state.mod { background: var(--signal-soft); color: var(--signal); }
+.state.err { background: var(--danger-soft); color: var(--danger); }
+
+/* ---------- Parcours de synchronisation (mobile) ---------- */
+.flow {
+  position: relative; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s-3);
+  padding: var(--s-5); border-radius: var(--r-md); background: var(--surface); border: 1px solid var(--line);
+}
+.flow::before {
+  content: ""; position: absolute; left: calc(var(--s-5) + 1.1rem); right: calc(var(--s-5) + 1.1rem); top: calc(var(--s-5) + 1.1rem);
+  height: 2px; background: repeating-linear-gradient(90deg, var(--line) 0 6px, transparent 6px 11px);
+}
+.flow-runner {
+  position: absolute; top: calc(var(--s-5) + 1.1rem - 4px); left: calc(var(--s-5) + 1.1rem);
+  width: 10px; height: 10px; border-radius: 50%; background: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+  animation: run 5s cubic-bezier(.6,0,.4,1) infinite;
+}
+@keyframes run {
+  0% { left: calc(var(--s-5) + 1.1rem); opacity: 0; }
+  8% { opacity: 1; }
+  88% { opacity: 1; }
+  100% { left: calc(100% - var(--s-5) - 1.1rem - 10px); opacity: 0; }
+}
+.flow-step { position: relative; display: grid; gap: var(--s-2); align-content: start; }
+.flow-ico {
+  width: 2.2rem; height: 2.2rem; border-radius: 50%; display: grid; place-items: center;
+  background: var(--surface); border: 2px solid var(--accent); color: var(--accent); position: relative; z-index: 1;
+}
+.flow-ico svg { width: 1.05rem; height: 1.05rem; }
+.flow-step b { font-size: .95rem; line-height: 1.3; }
+.flow-step span { font-size: .86rem; color: var(--muted); line-height: 1.4; }
+.outcomes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-3); }
+.outcome { padding: var(--s-4); border-radius: var(--r-md); display: grid; gap: var(--s-2); font-size: .95rem; }
+.outcome.ok { background: var(--ok-soft); }
+.outcome.ko { background: var(--danger-soft); }
+.outcome h4 { margin: 0; font: 700 1rem/1.2 var(--f-display); }
+.outcome.ok h4 { color: var(--ok); }
+.outcome.ko h4 { color: var(--danger); }
+.banner-demo {
+  display: flex; gap: .5rem; align-items: flex-start; padding: .6rem .75rem; border-radius: 8px;
+  background: var(--surface); border: 1px solid var(--danger); color: var(--danger); font-size: .86rem; font-weight: 600;
+}
+
+.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-5); }
+.card { padding: var(--s-5); border-radius: var(--r-md); background: var(--surface); border: 1px solid var(--line); display: grid; gap: var(--s-3); align-content: start; }
+.card h3 { font-size: 1.15rem; }
+.card .who { font: 600 .74rem/1 var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+
+.rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: var(--s-3); }
+.rule { display: grid; grid-template-columns: auto minmax(0,1fr); gap: var(--s-2); padding: var(--s-3) var(--s-4); border-radius: var(--r-sm); background: var(--sunken); font-size: .93rem; line-height: 1.45; }
+.rule svg { width: 1rem; height: 1rem; color: var(--accent); margin-top: .2rem; }
+
+/* Téléchargement de l'application */
+.download-card {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--s-4); align-items: center;
+  padding: var(--s-5); border-radius: var(--r-md); background: var(--surface);
+  border: 1px solid var(--line); border-left: 4px solid var(--ok); box-shadow: var(--shadow);
+}
+.download-ico { width: 3rem; height: 3rem; border-radius: 12px; display: grid; place-items: center; background: var(--ok-soft); color: var(--ok); }
+.download-ico svg { width: 1.6rem; height: 1.6rem; }
+.download-text { display: grid; gap: .2rem; min-width: 0; }
+.download-text b { font-family: var(--f-display); font-size: 1.1rem; }
+.download-text span { color: var(--muted); font-size: .93rem; }
+.download-btn {
+  display: inline-flex; align-items: center; justify-content: center; padding: .7rem 1.2rem; border-radius: 10px;
+  background: var(--ok); color: #fff; font-weight: 700; text-decoration: none; white-space: nowrap;
+}
+.download-btn:hover { filter: brightness(1.08); }
+.copy-line { font-size: .93rem; color: var(--muted); overflow-wrap: anywhere; }
+.copy-mini { border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 6px; padding: .1rem .5rem; font: 600 .78rem var(--f-body); cursor: pointer; margin-left: .3rem; }
+.muted { color: var(--muted); font-size: .88rem; }
+@media (max-width: 700px) {
+  .download-card { grid-template-columns: auto minmax(0, 1fr); }
+  .download-btn { grid-column: 1 / -1; }
+}
+
+/* Mise en service */
+.setup { list-style: none; padding: 0; margin: 0; display: grid; gap: var(--s-3); counter-reset: su; }
+.setup li { counter-increment: su; display: grid; grid-template-columns: auto minmax(0,1fr); gap: var(--s-4); align-items: start; padding: var(--s-4); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); }
+.setup li::before { content: counter(su, decimal-leading-zero); font: 700 1.3rem/1 var(--f-display); color: var(--accent); }
+.setup a { overflow-wrap: anywhere; }
+.setup code { display: inline-block; margin-top: .3rem; background: var(--sunken); padding: .15rem .45rem; border-radius: 4px; }
+
+footer { margin-top: var(--s-8); padding-top: var(--s-5); border-top: 1px solid var(--line); color: var(--muted); font-size: .88rem; display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--s-3); }
+
+/* ---------- Visionneuse ---------- */
+.lightbox {
+  position: fixed; inset: 0; z-index: 100; display: grid; place-items: center;
+  padding: max(1rem, env(safe-area-inset-top, 0px)) 1rem max(1rem, env(safe-area-inset-bottom, 0px));
+  background: rgba(8, 12, 18, .82); backdrop-filter: blur(4px);
+  opacity: 0; transition: opacity .25s;
+}
+.lightbox.is-open { opacity: 1; }
+.lightbox img {
+  max-width: min(96vw, 1600px); max-height: 86vh; width: auto; height: auto;
+  border-radius: 8px; box-shadow: 0 20px 60px rgba(0,0,0,.5);
+  transform: scale(.96); transition: transform .3s cubic-bezier(.2,.7,.2,1);
+}
+.lightbox.is-open img { transform: scale(1); }
+.lightbox-bar { position: absolute; top: max(1rem, env(safe-area-inset-top, 0px)); left: 1rem; right: 1rem; display: flex; justify-content: space-between; align-items: center; gap: 1rem; color: #e6ebf2; font-size: .9rem; }
+.lightbox-close { border: 1px solid rgba(255,255,255,.25); background: rgba(255,255,255,.08); color: #fff; border-radius: 999px; padding: .35rem .9rem; font: 600 .85rem var(--f-body); cursor: pointer; }
+
+/* ---------- Animation d'ouverture ---------- */
+@keyframes rise { from { transform: translateY(14px); opacity: .35; } to { transform: none; opacity: 1; } }
+.hero > * { animation: rise .7s cubic-bezier(.2,.7,.2,1) both; }
+.hero > *:nth-child(2) { animation-delay: .06s; }
+.hero > *:nth-child(3) { animation-delay: .12s; }
+.hero > *:nth-child(4) { animation-delay: .18s; }
+.chap { animation: rise .7s cubic-bezier(.2,.7,.2,1) both; }
+.chap:nth-child(1) { animation-delay: .22s; } .chap:nth-child(2) { animation-delay: .28s; }
+.chap:nth-child(3) { animation-delay: .34s; } .chap:nth-child(4) { animation-delay: .40s; }
+.chap:nth-child(5) { animation-delay: .46s; } .chap:nth-child(6) { animation-delay: .52s; } .chap:nth-child(7) { animation-delay: .58s; } .chap:nth-child(8) { animation-delay: .64s; } .chap:nth-child(9) { animation-delay: .70s; } .chap:nth-child(10) { animation-delay: .76s; }
+/* Les captures se posent quand elles arrivent à l'écran ; elles restent visibles sans script. */
+.shot.will-land .frame { transform: translateY(18px) scale(.985); opacity: .5; }
+.shot .frame { transition: transform .8s cubic-bezier(.2,.7,.2,1), opacity .8s; }
+.shot.will-land .pin { transform: translate(-50%, -50%) scale(0); }
+.shot .pin { transition: transform .45s cubic-bezier(.3,1.6,.5,1); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  html { scroll-behavior: auto; }
+  .shot.will-land .frame { transform: none; opacity: 1; }
+  .shot.will-land .pin { transform: translate(-50%, -50%); }
+  .flow-runner { display: none; }
+}
+
+/* ---------- Écrans étroits ---------- */
+.mobile-top { display: none; }
+@media (max-width: 960px) {
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  .rail { display: none; }
+  .mobile-top {
+    display: flex; position: sticky; top: env(safe-area-inset-top, 0px); z-index: 40;
+    gap: var(--s-2); overflow-x: auto; padding: .6rem 1rem;
+    background: var(--rail); scrollbar-width: none;
+  }
+  .mobile-top a { flex: none; color: var(--rail-ink); text-decoration: none; font-size: .85rem; font-weight: 600; padding: .35rem .7rem; border-radius: 999px; border: 1px solid rgba(255,255,255,.14); }
+  .mobile-top a.is-current { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+  main { padding-block: var(--s-6) var(--s-7); }
+}
+@media (max-width: 700px) {
+  .two, .outcomes { grid-template-columns: minmax(0, 1fr); }
+  .flow { grid-template-columns: minmax(0, 1fr); }
+  .flow::before { left: calc(var(--s-5) + 1.1rem - 1px); right: auto; top: var(--s-5); bottom: var(--s-5); width: 2px; height: auto; background: repeating-linear-gradient(180deg, var(--line) 0 6px, transparent 6px 11px); }
+  .flow-step { grid-template-columns: 2.2rem minmax(0,1fr); column-gap: var(--s-3); }
+  .flow-step .flow-ico { grid-row: span 2; }
+  .flow-runner { display: none; }
+  .pin { width: 1.4rem; height: 1.4rem; font-size: .7rem; }
+  .pin .tip { display: none; }
+}
+</style>
+</head>
+<body>
+<div class="progress" aria-hidden="true"><span id="progressBar"></span></div>
+
+<div class="shell">
+  <aside class="rail" aria-label="Sommaire">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">NG</div>
+      <div>
+        <div class="brand-name">NextGate</div>
+        <div class="brand-sub">Guide des nouveautés</div>
+      </div>
+    </div>
+    <div>
+      <div class="rail-label">Chapitres</div>
+      <nav id="railNav">
+        <a href="#tournees"><span class="n">01</span>Van de départ d'une tournée</a>
+        <a href="#indicateurs"><span class="n">02</span>Indicateurs de performance</a>
+        <a href="#ca"><span class="n">03</span>Chiffre d'affaires par vendeur</a>
+        <a href="#inventaire"><span class="n">04</span>Inventaire</a>
+        <a href="#mobile"><span class="n">05</span>Modifier une commande (mobile)</a>
+        <a href="#cartons"><span class="n">06</span>Quantités en cartons</a>
+        <a href="#stock-prevendeur"><span class="n">07</span>Stock disponible (prévendeurs)</a>
+        <a href="#objectifs"><span class="n">08</span>Objectifs vendeurs</a>
+        <a href="#etat-livreurs"><span class="n">09</span>État des livreurs</a>
+        <a href="#benefices"><span class="n">10</span>Bénéfices protégés par PIN</a>
+        <a href="#mise-en-service"><span class="n">→</span>Mise en service</a>
+      </nav>
+    </div>
+    <div class="rail-foot">
+      <button class="theme-btn" id="themeBtn" type="button" aria-label="Changer de thème">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+        <span id="themeLabel">Thème sombre</span>
+      </button>
+      <span>Version de septembre 2026</span>
+    </div>
+  </aside>
+
+  <div style="min-width:0">
+    <nav class="mobile-top" id="mobileNav" aria-label="Sommaire">
+      <a href="#tournees">Tournées</a>
+      <a href="#indicateurs">Indicateurs</a>
+      <a href="#ca">Chiffre d'affaires</a>
+      <a href="#inventaire">Inventaire</a>
+      <a href="#mobile">Mobile</a>
+      <a href="#cartons">Cartons</a>
+      <a href="#stock-prevendeur">Stock prévendeur</a>
+      <a href="#objectifs">Objectifs</a>
+      <a href="#etat-livreurs">État livreurs</a>
+      <a href="#benefices">Bénéfices</a>
+      <a href="#mise-en-service">Mise en service</a>
+    </nav>
+
+    <main>
+      <div class="col">
+
+        <header class="hero">
+          <div class="eyebrow">Guide utilisateur · Septembre 2026</div>
+          <h1>Ce qui change dans <em>NextGate</em></h1>
+          <p class="lede">Dix fonctions nouvelles ou modifiées, expliquées pas à pas. Sur chaque capture, les repères numérotés correspondent aux étapes : survolez une étape pour voir où cliquer.</p>
+          <div class="hero-meta">
+            <span><i class="dot"></i>Testé : 45 tests serveur et 47 tests mobile réussis</span>
+            <span>Lecture : environ 10 minutes</span>
+            <span><a href="#mise-en-service">Télécharger l'application mobile</a></span>
+          </div>
+        </header>
+
+        <div class="chapters" style="margin-top: var(--s-6)">
+          <a class="chap" href="#tournees">
+            <span class="k">01 · Planification</span>
+            <h3>Van de départ d'une tournée</h3>
+            <p>Choisir le van au moment de créer la tournée. La fiche du livreur suit.</p>
+            <span class="where">Distribution › Tournées</span>
+          </a>
+          <a class="chap" href="#indicateurs">
+            <span class="k">02 · Pilotage</span>
+            <h3>Indicateurs de performance</h3>
+            <p>Taux de visite, de réussite, de réalisation et de livraison, par vendeur.</p>
+            <span class="where">Rapports & Analyses › Statistiques Livreurs</span>
+          </a>
+          <a class="chap" href="#ca">
+            <span class="k">03 · Pilotage</span>
+            <h3>Chiffre d'affaires par vendeur</h3>
+            <p>Le CA de chaque vendeur, mois par mois, avec le total de l'année.</p>
+            <span class="where">Rapports & Analyses › Statistiques Livreurs</span>
+          </a>
+          <a class="chap" href="#inventaire">
+            <span class="k">04 · Stock</span>
+            <h3>Inventaire</h3>
+            <p>Feuille de comptage à imprimer, saisie en masse et export Excel.</p>
+            <span class="where">Gestion de stock › Inventaire</span>
+          </a>
+          <a class="chap" href="#mobile">
+            <span class="k">05 · Terrain</span>
+            <h3>Modifier une commande</h3>
+            <p>Le prévendeur ou le livreur corrige la commande quand le client change d'avis.</p>
+            <span class="where">Application mobile</span>
+          </a>
+          <a class="chap" href="#cartons">
+            <span class="k">06 · Stock</span>
+            <h3>Quantités en cartons</h3>
+            <p>Saisir et lire les quantités en cartons + unités, sur le web et sur le téléphone.</p>
+            <span class="where">Web et application mobile</span>
+          </a>
+          <a class="chap" href="#stock-prevendeur">
+            <span class="k">07 · Terrain</span>
+            <h3>Stock disponible pour les prévendeurs</h3>
+            <p>Voir le stock du dépôt sur le téléphone avant de prendre la commande.</p>
+            <span class="where">Application mobile</span>
+          </a>
+          <a class="chap" href="#objectifs">
+            <span class="k">08 · Pilotage</span>
+            <h3>Objectifs vendeurs</h3>
+            <p>Deux objectifs par vendeur et par mois, un par gamme, suivis en taux de réussite.</p>
+            <span class="where">Rapports & Analyses › Objectifs vendeurs</span>
+          </a>
+          <a class="chap" href="#etat-livreurs">
+            <span class="k">09 · Caisse</span>
+            <h3>État des livreurs</h3>
+            <p>Savoir si chaque livreur est net ou présente un écart de caisse, avec le détail.</p>
+            <span class="where">Distribution › État des livreurs</span>
+          </a>
+          <a class="chap" href="#benefices">
+            <span class="k">10 · Sécurité</span>
+            <h3>Bénéfices protégés par PIN</h3>
+            <p>Le tableau des bénéfices est réservé à l'administrateur et s'ouvre avec un code PIN.</p>
+            <span class="where">Rapports & Analyses › Rapport des Bénéfices</span>
+          </a>
+        </div>
+
+        <!-- ================= 01 TOURNÉES ================= -->
+        <section class="chapter" id="tournees" data-chapter>
+          <div class="chapter-head">
+            <div class="chapter-num">CHAPITRE 01</div>
+            <h2>Choisir le van de départ d'une tournée</h2>
+            <div class="chips">
+              <span class="chip path">Distribution › Tournées</span>
+              <span class="chip">Pour : administrateur, planificateur</span>
+            </div>
+          </div>
+
+          <div class="where-box">
+            <div class="where-text">
+              <div class="where-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 21s-7-6.1-7-11.5A7 7 0 0 1 19 9.5C19 14.9 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>Où trouver cet écran</div>
+                <div class="route">
+                  <span class="route-label">Menu de gauche</span>
+                  <div class="route-path"><span class="route-step">Distribution</span><span class="route-sep" aria-hidden="true">›</span><span class="route-step">Tournées</span></div>
+                </div>
+                <p class="where-note">Cliquez sur <b>Distribution</b> pour ouvrir la liste, puis sur <b>Tournées</b>. Le bouton <b>Nouvelle Tournée</b> est en haut à droite de la page.</p>
+            </div>
+            <figure class="where-img menu"><div class="canvas"><img src="captures/M_menu_tournees.png" alt="Menu Distribution ouvert, entrée Tournées surlignée" width="260" height="392" loading="lazy"></div></figure>
+          </div>
+
+          <div class="read"><p>Chaque tournée part d'un van. Vous le choisissez dans le formulaire de la tournée, et il est reporté sur la fiche du livreur.</p></div>
+
+          <ol class="steps read" data-fig="fig1">
+            <li>Cliquez sur <b>Nouvelle Tournée</b>, ou sur le bouton <b>Modifier</b> d'une tournée existante.</li>
+            <li data-pin="2">Choisissez le <b>livreur</b>.</li>
+            <li data-pin="3">Ouvrez <b>Entrepôt de départ</b> et choisissez le van.
+              <ul>
+                <li>Seuls les <b>vans actifs</b> sont proposés : les entrepôts dont le code contient « van ».</li>
+                <li>Si vous laissez le champ vide, la tournée prend le van inscrit sur la fiche du livreur.</li>
+              </ul>
+            </li>
+            <li>Enregistrez.</li>
+          </ol>
+
+          <figure class="shot" id="fig1">
+            <div class="frame">
+              <div class="frame-bar"><span class="lights"><i></i><i></i><i></i></span><span class="url">/admindash/tournees · Nouvelle Tournée</span><button class="zoom-btn" type="button" aria-label="Agrandir la capture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button></div>
+              <div class="canvas">
+                <img src="captures/01_tournee_formulaire_van.png" alt="Formulaire Nouvelle Tournée avec la liste des vans ouverte" width="1440" height="900" loading="lazy">
+                <button class="pin tip-below" type="button" data-n="2" style="left:65%;top:24%">2<span class="tip">Livreur de la tournée</span></button>
+                <button class="pin" type="button" data-n="3" style="left:35%;top:37.2%">3<span class="tip">Entrepôt de départ : seuls les vans actifs sont listés</span></button>
+              </div>
+            </div>
+            <figcaption>Le formulaire de tournée, avec la liste des vans ouverte.</figcaption>
+          </figure>
+
+          <h3 class="sub read">Ce qui se passe ensuite</h3>
+          <ul class="bullets read">
+            <li>Si la tournée est <b>planifiée</b> ou <b>en cours</b>, le van choisi est inscrit sur la fiche du livreur. Sa prochaine tournée sera pré-remplie avec ce van.</li>
+            <li>Modifier une tournée <b>terminée</b> ou <b>clôturée</b> ne change pas le van actuel du livreur.</li>
+            <li>En modification, laisser le champ vide ne supprime pas le van déjà enregistré.</li>
+          </ul>
+
+          <ol class="steps read" data-fig="fig2" style="counter-reset: st 4">
+            <li data-pin="5">Pour vérifier, cliquez sur <b>Voir les détails</b> : la ligne <b>Entrepôt de départ</b> affiche le code et le nom du van.</li>
+          </ol>
+
+          <figure class="shot" id="fig2">
+            <div class="frame">
+              <div class="frame-bar"><span class="lights"><i></i><i></i><i></i></span><span class="url">/admindash/tournees · Détails de la tournée</span><button class="zoom-btn" type="button" aria-label="Agrandir la capture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button></div>
+              <div class="canvas">
+                <img src="captures/02_tournee_details_entrepot.png" alt="Détail d'une tournée avec la ligne Entrepôt de départ" width="1440" height="900" loading="lazy">
+                <button class="pin tip-below" type="button" data-n="5" style="left:34.2%;top:21%">5<span class="tip">Entrepôt de départ : code et nom</span></button>
+              </div>
+            </div>
+            <figcaption>Le détail d'une tournée affiche maintenant son entrepôt de départ.</figcaption>
+          </figure>
+
+          <div class="note info read">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+            <div><b>Tournées existantes</b>Les tournées créées avant la mise à jour ont reçu le van qui figurait sur la fiche de leur livreur.</div>
+          </div>
+        </section>
+
+        <!-- ================= 02 INDICATEURS ================= -->
+        <section class="chapter" id="indicateurs" data-chapter>
+          <div class="chapter-head">
+            <div class="chapter-num">CHAPITRE 02</div>
+            <h2>Indicateurs de performance des vendeurs</h2>
+            <div class="chips">
+              <span class="chip path">Rapports & Analyses › Statistiques Livreurs</span>
+              <span class="chip">Pour : responsable commercial</span>
+            </div>
+          </div>
+
+          <div class="where-box">
+            <div class="where-text">
+              <div class="where-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 21s-7-6.1-7-11.5A7 7 0 0 1 19 9.5C19 14.9 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>Où trouver cet écran</div>
+                <div class="route">
+                  <span class="route-label">Menu de gauche</span>
+                  <div class="route-path"><span class="route-step">Rapports & Analyses</span><span class="route-sep" aria-hidden="true">›</span><span class="route-step">Statistiques Livreurs</span></div>
+                </div>
+                <p class="where-note">Dans la page, descendez sous les filtres de date : le bloc <b>Indicateurs de performance</b> est le premier tableau.</p>
+            </div>
+            <figure class="where-img menu"><div class="canvas"><img src="captures/M_menu_rapports.png" alt="Menu Rapports et Analyses ouvert, Statistiques Livreurs surligné" width="260" height="455" loading="lazy"></div></figure>
+          </div>
+
+          <div class="read"><p>Le bloc <b>Indicateurs de performance</b> suit les filtres du haut de la page : la période (par défaut le mois en cours) et le livreur. Les quatre tuiles donnent le total de l'équipe ; le tableau donne le détail par vendeur.</p></div>
+
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Indicateur</th><th>Calcul</th><th>Bon à savoir</th></tr></thead>
+              <tbody>
+                <tr><td>Taux de visite</td><td><span class="frac"><span>clients planifiés visités</span><span>clients planifiés</span></span></td><td>Un client est planifié s'il figure au planning hebdomadaire du jour ou dans un arrêt de la tournée du jour. Les jours à venir ne comptent pas.</td></tr>
+                <tr><td>Taux de réussite</td><td><span class="frac"><span>visites avec vente ou commande</span><span>visites effectuées</span></span></td><td>Un client vu deux fois le même jour compte pour une seule visite.</td></tr>
+                <tr><td>Taux de réalisation</td><td><span class="frac"><span>CA réalisé</span><span>objectifs mensuels</span></span></td><td>Affiche « Aucun objectif défini » tant qu'aucun objectif n'est saisi pour le vendeur.</td></tr>
+                <tr><td>Livraison commandes</td><td><span class="frac"><span>montant des commandes livrées</span><span>montant des commandes prises</span></span></td><td>Calculé en montant, pas en nombre de commandes.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <ol class="steps read" data-fig="fig3">
+            <li data-pin="1">Lisez d'abord les <b>tuiles</b> : le résultat de toute l'équipe, avec le détail du calcul sous chaque taux.</li>
+            <li data-pin="2">Descendez dans le <b>tableau</b> pour comparer les vendeurs. La couleur de la pastille indique le niveau : rouge faible, orange moyen, vert bon.</li>
+            <li data-pin="3">En bas du bloc, un rappel donne la formule de chaque taux. Elle s'affiche aussi au survol des en-têtes de colonne.</li>
+          </ol>
+
+          <figure class="shot" id="fig3">
+            <div class="frame">
+              <div class="frame-bar"><span class="lights"><i></i><i></i><i></i></span><span class="url">/admindash/ · Statistiques Livreurs · Indicateurs de performance</span><button class="zoom-btn" type="button" aria-label="Agrandir la capture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button></div>
+              <div class="canvas">
+                <img src="captures/03_indicateurs_performance.png" alt="Bloc Indicateurs de performance : quatre tuiles et tableau par vendeur" width="1370" height="1220" loading="lazy">
+                <button class="pin tip-below" type="button" data-n="1" style="left:13%;top:9.8%">1<span class="tip">Résultat de toute l'équipe</span></button>
+                <button class="pin" type="button" data-n="2" style="left:27.4%;top:21.5%">2<span class="tip">Taux du vendeur, avec le détail du calcul</span></button>
+                <button class="pin" type="button" data-n="3" style="left:4%;top:94%">3<span class="tip">Rappel des formules</span></button>
+              </div>
+            </div>
+            <figcaption>Période du 1<sup>er</sup> novembre 2025 au 31 janvier 2026, tous vendeurs.</figcaption>
+          </figure>
+
+          <div class="note read">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01"/></svg>
+            <div><b>Changement de calcul des objectifs</b>Le CA réalisé d'un objectif compte maintenant les <b>ventes de tournée et les commandes prises</b>, en TTC, sans les commandes annulées. Avant, seules les ventes de tournée comptaient : le taux de réalisation des prévendeurs augmente donc. Livrer une commande ne crée pas de vente, rien n'est compté deux fois.</div>
+          </div>
+
+          <ul class="bullets read">
+            <li>Un prévendeur et un livreur sont mesurés avec les <b>mêmes règles</b>.</li>
+            <li>Un tiret « - » signifie que le taux ne peut pas être calculé : rien de planifié, aucune visite ou aucune commande.</li>
+            <li>La période choisie ne peut pas dépasser deux ans.</li>
+          </ul>
+        </section>
+
+        <!-- ================= 03 CA ================= -->
+        <section class="chapter" id="ca" data-chapter>
+          <div class="chapter-head">
+            <div class="chapter-num">CHAPITRE 03</div>
+            <h2>Chiffre d'affaires par vendeur, mois par mois</h2>
+            <div class="chips">
+              <span class="chip path">Rapports & Analyses › Statistiques Livreurs</span>
+              <span class="chip">Pour : responsable commercial</span>
+            </div>
+          </div>
+
+          <div class="where-box">
+            <div class="where-text">
+              <div class="where-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 21s-7-6.1-7-11.5A7 7 0 0 1 19 9.5C19 14.9 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>Où trouver cet écran</div>
+                <div class="route">
+                  <span class="route-label">Menu de gauche</span>
+                  <div class="route-path"><span class="route-step">Rapports & Analyses</span><span class="route-sep" aria-hidden="true">›</span><span class="route-step">Statistiques Livreurs</span></div>
+                </div>
+                <p class="where-note">Même page que le chapitre 02 : le bloc <b>Chiffre d'affaires par vendeur</b> se trouve juste sous les indicateurs.</p>
+            </div>
+            <figure class="where-img menu"><div class="canvas"><img src="captures/M_menu_rapports.png" alt="Menu Rapports et Analyses ouvert, Statistiques Livreurs surligné" width="260" height="455" loading="lazy"></div></figure>
+          </div>
+
+          <ol class="steps read" data-fig="fig4">
+            <li data-pin="1">Choisissez l'<b>année</b>. Ce tableau couvre toujours l'année entière : il ignore les dates du haut de la page, mais suit le filtre livreur.</li>
+            <li data-pin="2">Choisissez ce que vous voulez voir : <b>Total</b> (ventes de tournée et commandes), <b>Ventes de tournée</b> seulement, ou <b>Commandes</b> seulement (sans les commandes annulées).</li>
+            <li data-pin="3">Lisez les tuiles : CA du mois en cours, part des ventes, part des commandes et cumul de l'année.</li>
+            <li data-pin="4">Dans le tableau, une ligne par vendeur et une colonne par mois, puis le <b>Total</b>. Le mois en cours est surligné ; survolez une cellule pour voir le détail ventes et commandes.</li>
+            <li data-pin="5">Cliquez sur <b>Exporter</b> pour télécharger le tableau.</li>
+          </ol>
+
+          <figure class="shot" id="fig4">
+            <div class="frame">
+              <div class="frame-bar"><span class="lights"><i></i><i></i><i></i></span><span class="url">/admindash/ · Statistiques Livreurs · Chiffre d'affaires par vendeur</span><button class="zoom-btn" type="button" aria-label="Agrandir la capture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button></div>
+              <div class="canvas">
+                <img src="captures/04_ca_par_vendeur.png" alt="Tableau du chiffre d'affaires par vendeur pour l'année 2025" width="1370" height="1051" loading="lazy">
+                <button class="pin tip-below tip-left" type="button" data-n="1" style="left:76.6%;top:4.6%">1<span class="tip">Année</span></button>
+                <button class="pin tip-below tip-left" type="button" data-n="2" style="left:86.4%;top:4.6%">2<span class="tip">Total, ventes ou commandes</span></button>
+                <button class="pin tip-below tip-left" type="button" data-n="3" style="left:86.6%;top:15.2%">3<span class="tip">Cumul de l'année</span></button>
+                <button class="pin tip-left" type="button" data-n="4" style="left:96%;top:28.5%">4<span class="tip">Total annuel du vendeur</span></button>
+                <button class="pin tip-below tip-left" type="button" data-n="5" style="left:95%;top:4.6%">5<span class="tip">Exporter le tableau</span></button>
+              </div>
+            </div>
+            <figcaption>Année 2025, vue « Total ». Les montants sont en dinars, TTC.</figcaption>
+          </figure>
+        </section>
+
+        <!-- ================= 04 INVENTAIRE ================= -->
+        <section class="chapter" id="inventaire" data-chapter>
+          <div class="chapter-head">
+            <div class="chapter-num">CHAPITRE 04</div>
+            <h2>Inventaire : compter sur papier, saisir en une fois</h2>
+            <div class="chips">
+              <span class="chip path">Gestion de stock › Inventaire</span>
+              <span class="chip">Pour : magasinier, gestionnaire de stock</span>
+            </div>
+          </div>
+
+          <div class="where-box">
+            <div class="where-text">
+              <div class="where-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 21s-7-6.1-7-11.5A7 7 0 0 1 19 9.5C19 14.9 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>Où trouver cet écran</div>
+                <div class="route">
+                  <span class="route-label">Menu de gauche</span>
+                  <div class="route-path"><span class="route-step">Gestion de stock</span><span class="route-sep" aria-hidden="true">›</span><span class="route-step">Inventaire</span></div>
+                </div>
+                <p class="where-note">La page s'ouvre sur l'onglet <b>Mes Sessions</b>. Les boutons Feuille de comptage, Saisie en masse et Exporter apparaissent après avoir ouvert une session.</p>
+            </div>
+            <figure class="where-img menu"><div class="canvas"><img src="captures/M_menu_stock.png" alt="Menu Gestion de stock ouvert, Inventaire surligné" width="260" height="414" loading="lazy"></div></figure>
+          </div>
+
+          <div class="read"><p>Le comptage se fait en trois temps : imprimer la feuille, compter dans le dépôt, puis ressaisir la feuille en une seule fois. Les numéros de ligne sont les mêmes sur la feuille et à l'écran.</p></div>
+
+          <ol class="steps read" data-fig="fig5">
+            <li data-pin="1">Dans <b>Mes Sessions</b>, cliquez sur <b>Ouvrir</b> à côté d'une session en brouillon ou en cours. Les onglets <i>Comptage</i> et <i>Détails</i> demandent une session ouverte ; sinon un message vous l'indique.</li>
+          </ol>
+
+          <figure class="shot" id="fig5">
+            <div class="frame">
+              <div class="frame-bar"><span class="lights"><i></i><i></i><i></i></span><span class="url">/admindash/ · Inventaire · Mes Sessions</span><button class="zoom-btn" type="button" aria-label="Agrandir la capture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button></div>
+              <div class="canvas">
+                <img src="captures/05_inventaire_sessions.png" alt="Liste des sessions d'inventaire" width="1440" height="1000" loading="lazy">
+                <button class="pin tip-left" type="button" data-n="1" style="left:85.8%;top:60.2%">1<span class="tip">Ouvrir la session</span></button>
+              </div>
+            </div>
+          </figure>
+
+          <ol class="steps read" data-fig="fig6" style="counter-reset: st 1">
+            <li data-pin="2">Une fois la session ouverte, trois nouveaux boutons apparaissent : <b>Feuille de comptage</b>, <b>Saisie en masse</b> et <b>Exporter</b>.</li>
+          </ol>
+
+          <figure class="shot" id="fig6">
+            <div class="frame">
+              <div class="frame-bar"><span class="lights"><i></i><i></i><i></i></span><span class="url">/admindash/ · Inventaire · Comptage</span><button class="zoom-btn" type="button" aria-label="Agrandir la capture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button></div>
+              <div class="canvas">
+                <img src="captures/06_inventaire_session_boutons.png" alt="Session ouverte avec les boutons Feuille de comptage, Saisie en masse et Exporter" width="1440" height="1000" loading="lazy">
+                <button class="pin tip-below" type="button" data-n="2" style="left:66.8%;top:15.6%">2<span class="tip">Feuille de comptage · Saisie en masse · Exporter</span></button>
+              </div>
+            </div>
+          </figure>
+
+          <h3 class="sub read">Imprimer la feuille de comptage</h3>
+          <ol class="steps read" data-fig="fig9">
+            <li>Cliquez sur <b>Feuille de comptage</b>. La feuille A4 s'ouvre dans un nouvel onglet.</li>
+            <li data-pin="2">Cliquez sur <b>Imprimer</b>, ou faites <kbd>Ctrl</kbd> + <kbd>P</kbd>. <b>Restants uniquement</b> n'affiche que les produits pas encore comptés.</li>
+            <li data-pin="3">Dans le dépôt, notez pour chaque produit les <b>cartons</b> et les <b>unités</b>. Écrivez 0 si le produit est absent.</li>
+            <li data-pin="4">Les produits déjà saisis apparaissent en gris avec la mention <i>(déjà saisi)</i>.</li>
+          </ol>
+
+          <figure class="shot" id="fig9">
+            <div class="frame">
+              <div class="frame-bar"><span class="lights"><i></i><i></i><i></i></span><span class="url">/API/inventaires/4/feuille_comptage/</span><button class="zoom-btn" type="button" aria-label="Agrandir la capture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button></div>
+              <div class="canvas">
+                <img src="captures/09_feuille_comptage.png" alt="Feuille de comptage imprimable, sans quantité théorique" width="1100" height="1000" loading="lazy">
+                <button class="pin tip-below tip-left" type="button" data-n="2" style="left:83%;top:2.6%">2<span class="tip">Restants uniquement · Imprimer</span></button>
+                <button class="pin tip-below" type="button" data-n="3" style="left:61%;top:26.7%">3<span class="tip">Cartons + unités, écrits à la main</span></button>
+                <button class="pin" type="button" data-n="4" style="left:36%;top:53.3%">4<span class="tip">Produit déjà saisi</span></button>
+              </div>
+            </div>
+            <figcaption>Aucune quantité théorique n'est imprimée : le comptage se fait à l'aveugle.</figcaption>
+          </figure>
+
+          <div class="note info read">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+            <div><b>Imprimer une seule catégorie</b>Ouvrez d'abord la saisie en masse, choisissez la catégorie ou « Restants uniquement », puis cliquez sur <b>Feuille de comptage</b> : la feuille reprend les mêmes filtres.</div>
+          </div>
+
+          <h3 class="sub read">Ressaisir la feuille : saisie en masse</h3>
+          <ol class="steps read" data-fig="fig7">
+            <li data-pin="1">Cliquez sur <b>Saisie en masse</b>. Filtrez si besoin par <b>Catégorie</b>, par <b>Afficher</b> (tous ou restants) ou avec <b>Rechercher</b> (N°, référence, désignation, code-barres).</li>
+            <li data-pin="2">Repérez la ligne par son <b>N°</b> : c'est le même que sur la feuille papier.</li>
+            <li data-pin="3">Tapez la quantité dans <b>Quantité comptée</b>, ou remplissez <b>Cartons + unités</b> pour que le total soit calculé. <kbd>Entrée</kbd> passe à la ligne suivante.</li>
+            <li data-pin="4">Suivez la colonne <b>État</b> pour voir où en est chaque ligne.</li>
+            <li data-pin="5">Cliquez sur <b>Enregistrer la saisie</b>. Toutes les lignes partent en une fois ; les lignes en erreur restent affichées pour être corrigées.</li>
+          </ol>
+
+          <div class="states read" aria-label="États possibles d'une ligne">
+            <span class="state todo">À compter</span>
+            <span class="state ok">Compté</span>
+            <span class="state mod">Modifié</span>
+            <span class="state mod">À effacer</span>
+            <span class="state err">Erreur</span>
+          </div>
+
+          <figure class="shot" id="fig7">
+            <div class="frame">
+              <div class="frame-bar"><span class="lights"><i></i><i></i><i></i></span><span class="url">/admindash/ · Inventaire · Saisie en masse</span><button class="zoom-btn" type="button" aria-label="Agrandir la capture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button></div>
+              <div class="canvas">
+                <img src="captures/07_inventaire_saisie_masse.png" alt="Saisie en masse avec des lignes modifiées, à compter et comptées" width="1042" height="852" loading="lazy">
+                <button class="pin tip-below" type="button" data-n="1" style="left:13.4%;top:14.3%">1<span class="tip">Filtres</span></button>
+                <button class="pin" type="button" data-n="2" style="left:3.2%;top:31.6%">2<span class="tip">N° de ligne, comme sur la feuille</span></button>
+                <button class="pin" type="button" data-n="3" style="left:76.3%;top:31.7%">3<span class="tip">Quantité comptée</span></button>
+                <button class="pin tip-left" type="button" data-n="4" style="left:95%;top:31.7%">4<span class="tip">État de la ligne</span></button>
+                <button class="pin tip-left" type="button" data-n="5" style="left:80%;top:92%">5<span class="tip">Enregistrer la saisie</span></button>
+              </div>
+            </div>
+            <figcaption>Ligne 1 saisie en cartons : 2 cartons de 12 + 5 unités = 29. Rien n'est enregistré avant le clic sur Enregistrer la saisie.</figcaption>
+          </figure>
+
+          <h3 class="sub read">Coller depuis Excel</h3>
+          <ol class="steps read" data-fig="fig8">
+            <li data-pin="1">Cliquez sur <b>Coller depuis Excel</b>.</li>
+            <li data-pin="2">Collez deux colonnes : la <b>référence</b> (ou le code-barres, ou le N° de ligne), puis la <b>quantité</b>. Séparateurs acceptés : tabulation, <code>;</code> ou <code>,</code>.</li>
+            <li data-pin="3">Cliquez sur <b>Remplir le tableau</b>, vérifiez les lignes, puis <b>Enregistrer la saisie</b>.</li>
+          </ol>
+
+          <div class="copy-block read">
+            <pre id="pasteExample">NEWTEST	24
+COCA-500	0
+6111010111013;12</pre>
+            <button class="copy-btn" type="button" data-copy="pasteExample">Copier</button>
+          </div>
+
+          <figure class="shot" id="fig8">
+            <div class="frame">
+              <div class="frame-bar"><span class="lights"><i></i><i></i><i></i></span><span class="url">/admindash/ · Inventaire · Saisie en masse · Coller depuis Excel</span><button class="zoom-btn" type="button" aria-label="Agrandir la capture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button></div>
+              <div class="canvas">
+                <img src="captures/08_inventaire_coller_excel.png" alt="Zone Coller depuis Excel avec trois lignes d'exemple" width="1042" height="378" loading="lazy">
+                <button class="pin tip-below tip-left" type="button" data-n="1" style="left:88.7%;top:33.3%">1<span class="tip">Coller depuis Excel</span></button>
+                <button class="pin" type="button" data-n="2" style="left:48%;top:66%">2<span class="tip">Référence, puis quantité</span></button>
+                <button class="pin" type="button" data-n="3" style="left:20%;top:88%">3<span class="tip">Remplir le tableau</span></button>
+              </div>
+            </div>
+          </figure>
+
+          <div class="note read">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01"/></svg>
+            <div><b>0 n'est pas une case vide</b>0 veut dire « compté, absent du stock ». Une case vide veut dire « pas encore compté ». Vider une case déjà saisie remet le produit à « non compté ».</div>
+          </div>
+
+          <div class="two">
+            <div class="card">
+              <span class="who">Exporter</span>
+              <h3>La session en Excel</h3>
+              <p>Cliquez sur <b>Exporter</b>. Le fichier <code>inventaire_&lt;numéro&gt;.xlsx</code> donne, pour chaque produit, la quantité théorique, la quantité comptée et l'écart. Tant que la session est ouverte, tous les produits sont listés.</p>
+            </div>
+            <div class="card">
+              <span class="who">Valider</span>
+              <h3>Valider l'inventaire</h3>
+              <p>Si des produits ne sont pas comptés, la validation est refusée et le message donne le <b>nombre</b> et la <b>liste</b> des produits manquants. La validation est appliquée en entier ou pas du tout : jamais d'ajustement de stock à moitié.</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= 05 MOBILE ================= -->
+        <section class="chapter" id="mobile" data-chapter>
+          <div class="chapter-head">
+            <div class="chapter-num">CHAPITRE 05</div>
+            <h2>Modifier une commande directement sur le bon</h2>
+            <div class="chips">
+              <span class="chip path">Application mobile</span>
+              <span class="chip">Pour : prévendeur, livreur</span>
+            </div>
+          </div>
+
+          <div class="where-box">
+            <div class="where-text">
+              <div class="where-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 21s-7-6.1-7-11.5A7 7 0 0 1 19 9.5C19 14.9 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>Où trouver cet écran</div>
+                <div class="route">
+                  <span class="route-label">Prévendeur</span>
+                  <div class="route-path"><span class="route-step">Accueil</span><span class="route-sep" aria-hidden="true">›</span><span class="route-step">Historique</span><span class="route-sep" aria-hidden="true">›</span><span class="route-step">onglet Tournées</span><span class="route-sep" aria-hidden="true">›</span><span class="route-step">Voir tous les détails</span><span class="route-sep" aria-hidden="true">›</span><span class="route-step">le client</span><span class="route-sep" aria-hidden="true">›</span><span class="route-step">Voir tous les produits</span><span class="route-sep" aria-hidden="true">›</span><span class="route-step">Modifier la commande</span></div>
+                </div>
+                <div class="route">
+                  <span class="route-label">Livreur</span>
+                  <div class="route-path"><span class="route-step">Accueil</span><span class="route-sep" aria-hidden="true">›</span><span class="route-step">Commandes à livrer</span><span class="route-sep" aria-hidden="true">›</span><span class="route-step">Modifier la commande</span></div>
+                </div>
+                <p class="where-note">Sur l'écran <b>Accueil</b> de l'application, descendez jusqu'aux <b>Actions rapides</b> : <b>Commandes à livrer</b> et <b>Historique</b> sont en bas de la liste. Le bouton <b>Modifier la commande</b> est en haut du <b>bon de commande</b>.</p>
+            </div>
+            <figure class="where-img phone"><div class="canvas"><img src="captures/W_mobile_accueil.png" alt="Écran Accueil de l'application avec les actions rapides" width="540" height="1200" loading="lazy"></div></figure>
+          </div>
+
+          <div class="read"><p>Le client change d'avis devant vous : il ajoute un produit, en retire un ou change une quantité. Vous ouvrez le <b>bon de commande</b> sur le téléphone, vous le corrigez, et la modification part au serveur à la prochaine synchronisation. Le prévendeur et le livreur ont chacun leur bouton <b>Modifier la commande</b>.</p></div>
+
+          <h3 class="sub read">Prévendeur : depuis le bon de commande</h3>
+          <ol class="steps read">
+            <li>Ouvrez <b>Historique</b>, onglet <b>Tournées</b>, puis <b>Voir tous les détails</b> sur la tournée du jour.</li>
+            <li>Touchez le client, puis <b>Voir tous les produits</b> sous la commande : le bon s'ouvre.</li>
+            <li>Appuyez sur <b>Modifier la commande</b>, en haut du bon. Le bouton n'apparaît que si la tournée est <b>en cours</b> et que la commande n'est <b>ni livrée, ni annulée, ni entièrement payée</b>. Sinon, un message avec un cadenas en donne la raison, par exemple « Cette commande est déjà livrée ».</li>
+            <li>Changez les quantités (en unités ou en cartons), supprimez une ligne avec la corbeille ou ajoutez un produit. Les montants sont affichés <b>TTC</b>, comme sur le bon, et le total se met à jour.</li>
+            <li>Appuyez sur <b>Modifier commande</b>, en bas, pour enregistrer ; ou sur <b>Annuler</b> pour tout laisser comme avant.</li>
+          </ol>
+
+          <div class="phones">
+            <figure class="phone-shot">
+              <div class="phone"><div class="canvas"><img src="captures/B0_tournee_commandes.png" alt="Détails de la tournée : commandes du client Amrani" width="540" height="1200" loading="lazy"></div></div>
+              <figcaption><b>1.</b> Les commandes du client dans la tournée : <b>Voir tous les produits</b> ouvre le bon.</figcaption>
+            </figure>
+            <figure class="phone-shot">
+              <div class="phone"><div class="canvas"><img src="captures/B1_bon_modifier.png" alt="Bon de commande avec le bouton Modifier la commande" width="540" height="1200" loading="lazy"></div></div>
+              <figcaption><b>2.</b> Le <b>bon de commande</b>, avec le bouton <b>Modifier la commande</b> en haut.</figcaption>
+            </figure>
+            <figure class="phone-shot">
+              <div class="phone"><div class="canvas"><img src="captures/B2_prevendeur_modification.png" alt="Écran Modifier la commande, quantité passée à 2" width="540" height="1200" loading="lazy"></div></div>
+              <figcaption><b>3.</b> Coca-Cola passé de 1 à 2 : la ligne affiche <b>190,40 DZD TTC</b> et le bouton <b>Modifier commande (464,10 DZD)</b>.</figcaption>
+            </figure>
+          </div>
+
+          <h3 class="sub read">Livreur : depuis Commandes à livrer</h3>
+          <div class="phones">
+            <figure class="phone-shot">
+              <div class="phone"><div class="canvas"><img src="captures/M6_livreur_commandes_a_livrer.png" alt="Commandes à livrer avec le bouton Modifier la commande" width="540" height="1200" loading="lazy"></div></div>
+              <figcaption><b>1.</b> Dans <b>Commandes à livrer</b>, le bouton <b>Modifier la commande</b> sous chaque commande.</figcaption>
+            </figure>
+            <figure class="phone-shot">
+              <div class="phone"><div class="canvas"><img src="captures/M7_livreur_ajouter_produit_van.png" alt="Fenêtre Modifier la commande, recherche d'un produit du van" width="540" height="1035" loading="lazy"></div></div>
+              <figcaption><b>2.</b> <b>Ajouter un produit du van</b> : recherche par nom, référence ou code-barres.</figcaption>
+            </figure>
+            <figure class="phone-shot">
+              <div class="phone"><div class="canvas"><img src="captures/M8_livreur_modifier_cartons.png" alt="Ligne ajoutée avec 2 cartons et nouveau total" width="540" height="1035" loading="lazy"></div></div>
+              <figcaption><b>3.</b> Réglez la quantité en unités ou en cartons ; le <b>Nouveau total</b> suit.</figcaption>
+            </figure>
+          </div>
+
+          <div class="two">
+            <div class="card">
+              <span class="who">Prévendeur</span>
+              <h3>Depuis le bon de commande</h3>
+              <ol class="steps" style="counter-reset: st">
+                <li>Ouvrez le bon : <b>Historique › Tournées › Voir tous les détails › le client › Voir tous les produits</b>.</li>
+                <li>Appuyez sur <b>Modifier la commande</b>. Le bouton n'apparaît que si la tournée est en cours.</li>
+                <li>Changez les produits ou les quantités, puis appuyez sur <b>Modifier commande</b>.</li>
+              </ol>
+              <p style="font-size:.93rem;color:var(--muted)">Si vous modifiez plusieurs fois avant la synchronisation, seule la dernière version est envoyée.</p>
+            </div>
+            <div class="card">
+              <span class="who">Livreur</span>
+              <h3>Depuis Commandes à livrer</h3>
+              <ol class="steps" style="counter-reset: st">
+                <li>Ouvrez <b>Commandes à livrer</b>, puis la commande.</li>
+                <li>Appuyez sur <b>Modifier la commande</b>. Changez les quantités, retirez une ligne ou utilisez <b>Ajouter un produit</b> pour prendre un produit du van.</li>
+                <li>Vérifiez le <b>Nouveau total</b>, appuyez sur <b>Enregistrer</b>, puis livrez normalement.</li>
+              </ol>
+              <p style="font-size:.93rem;color:var(--muted)">La modification est envoyée avant la livraison.</p>
+            </div>
+          </div>
+
+          <h3 class="sub read">Le trajet d'une modification</h3>
+          <div class="flow" aria-label="Étapes d'envoi d'une modification">
+            <span class="flow-runner" aria-hidden="true"></span>
+            <div class="flow-step">
+              <span class="flow-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></span>
+              <b>Vous modifiez</b><span>Sur le téléphone, même sans réseau.</span>
+            </div>
+            <div class="flow-step">
+              <span class="flow-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/></svg></span>
+              <b>En attente d'envoi</b><span>La modification est gardée sur le téléphone.</span>
+            </div>
+            <div class="flow-step">
+              <span class="flow-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 0 1-15.5 6.2M3 12A9 9 0 0 1 18.5 5.8M21 4v5h-5M3 20v-5h5"/></svg></span>
+              <b>Synchronisation</b><span>Elle part dès que le réseau revient.</span>
+            </div>
+            <div class="flow-step">
+              <span class="flow-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="7" rx="1.5"/><rect x="3" y="14" width="18" height="7" rx="1.5"/><path d="M7 6.5h.01M7 17.5h.01"/></svg></span>
+              <b>Le serveur vérifie</b><span>Il applique les mêmes règles que le téléphone.</span>
+            </div>
+          </div>
+
+          <div class="outcomes">
+            <div class="outcome ok">
+              <h4>Acceptée</h4>
+              <p>La commande est à jour sur le serveur. Chaque modification est tracée dans la commande : auteur, date et changements.</p>
+            </div>
+            <div class="outcome ko">
+              <h4>Refusée</h4>
+              <p>Un bandeau rouge s'affiche sur la commande avec le motif. La modification n'est pas renvoyée en boucle : corrigez la commande ou voyez avec l'administrateur.</p>
+              <div class="banner-demo" role="img" aria-label="Exemple de bandeau de refus">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+                <span>Modification refusée par le serveur : la commande est entièrement payée.</span>
+              </div>
+            </div>
+          </div>
+
+          <h3 class="sub read">Les règles</h3>
+          <div class="rules">
+            <div class="rule"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg><span>La commande n'est ni livrée, ni annulée, ni entièrement payée.</span></div>
+            <div class="rule"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg><span>Le nouveau total n'est pas inférieur à ce qui est déjà encaissé.</span></div>
+            <div class="rule"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg><span>Au moins une ligne, avec des quantités supérieures à 0.</span></div>
+            <div class="rule"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg><span>Livreur : pas plus que le stock disponible dans le van.</span></div>
+            <div class="rule"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg><span>Une ligne existante garde son prix ; un produit ajouté prend le prix prévu pour le client.</span></div>
+          </div>
+
+          <div class="note info read">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+            <div><b>Correction associée</b>Une commande dont l'envoi a échoué reste marquée « non synchronisée ». Avant, elle pouvait être marquée envoyée à tort.</div>
+          </div>
+        </section>
+
+        <!-- ================= 06 CARTONS ================= -->
+        <section class="chapter" id="cartons" data-chapter>
+          <div class="chapter-head">
+            <div class="chapter-num">CHAPITRE 06</div>
+            <h2>Saisir et lire les quantités en cartons</h2>
+            <div class="chips">
+              <span class="chip path">Gestion des données › Produits · écrans de saisie · application</span>
+              <span class="chip">Pour : tous les utilisateurs</span>
+            </div>
+          </div>
+
+          <div class="where-box">
+            <div class="where-text">
+              <div class="where-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 21s-7-6.1-7-11.5A7 7 0 0 1 19 9.5C19 14.9 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>Où trouver cet écran</div>
+                <div class="route">
+                  <span class="route-label">Réglage</span>
+                  <div class="route-path"><span class="route-step">Gestion des données</span><span class="route-sep" aria-hidden="true">›</span><span class="route-step">Produits</span><span class="route-sep" aria-hidden="true">›</span><span class="route-step">Modifier</span></div>
+                </div>
+                <div class="route">
+                  <span class="route-label">Saisie web</span>
+                  <div class="route-path"><span class="route-step">Commercial</span><span class="route-sep" aria-hidden="true">›</span><span class="route-step">Ventes</span></div>
+                </div>
+                <div class="route">
+                  <span class="route-label">Stock web</span>
+                  <div class="route-path"><span class="route-step">Gestion de stock</span><span class="route-sep" aria-hidden="true">›</span><span class="route-step">Mouvements / Gestion des Stocks</span></div>
+                </div>
+                <div class="route">
+                  <span class="route-label">Téléphone</span>
+                  <div class="route-path"><span class="route-step">Clients</span><span class="route-sep" aria-hidden="true">›</span><span class="route-step">Vente ou Cmd</span></div>
+                </div>
+                <div class="route">
+                  <span class="route-label">Téléphone</span>
+                  <div class="route-path"><span class="route-step">onglet Stock</span></div>
+                </div>
+                <p class="where-note">Le réglage se fait une fois par produit dans <b>Produits</b>. Ensuite, l'aide en cartons apparaît toute seule sur les écrans de saisie.</p>
+            </div>
+            <figure class="where-img menu"><div class="canvas"><img src="captures/M_menu_donnees.png" alt="Menu Gestion des données ouvert, Produits surligné" width="260" height="289" loading="lazy"></div></figure>
+          </div>
+
+          <div class="read"><p>Partout où vous tapez une quantité, vous pouvez la saisir en <b>cartons + unités</b>. Le logiciel convertit tout seul en unités : <b>le stock reste compté en unités</b>, le carton sert à saisir et à lire plus vite.</p></div>
+
+          <div class="formula" aria-label="Exemple de conversion">
+            <span class="tok ct">2 cartons</span><span class="op">×</span><span class="tok">24 u</span><span class="op">+</span><span class="tok">3 u</span><span class="op">=</span><span class="tok res">51 unités</span>
+          </div>
+
+          <h3 class="sub read">Indiquer le nombre d'unités par carton</h3>
+          <ol class="steps read" data-fig="fig10">
+            <li>Ouvrez <b>Gestion des données › Produits</b> et cliquez sur <b>Modifier</b> à côté du produit.</li>
+            <li data-pin="2">Remplissez <b>Unités par carton</b> (par exemple 24), puis cliquez sur <b>Modifier le produit</b>. Laissez vide si le produit ne se gère pas en carton.</li>
+            <li data-pin="3"><b>Cartons par colis</b> est facultatif.</li>
+          </ol>
+          <figure class="shot" id="fig10">
+            <div class="frame">
+              <div class="frame-bar"><span class="lights"><i></i><i></i><i></i></span><span class="url">/admindash/ · Produits · Ajouter / Modifier un Produit</span><button class="zoom-btn" type="button" aria-label="Agrandir la capture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button></div>
+              <div class="canvas">
+                <img src="captures/10_produit_unites_par_carton.png" alt="Fiche produit avec le champ Unités par carton à 24" width="1440" height="1000" loading="lazy">
+                <button class="pin" type="button" data-n="2" style="left:41%;top:50%">2<span class="tip">Unités par carton</span></button>
+                <button class="pin" type="button" data-n="3" style="left:68%;top:50%">3<span class="tip">Cartons par colis (facultatif)</span></button>
+              </div>
+            </div>
+            <figcaption>Coca-Cola 500ml : carton de 24.</figcaption>
+          </figure>
+
+          <h3 class="sub read">Saisir en cartons sur le web</h3>
+          <div class="read"><p>Dès qu'un produit a un carton, une petite ligne <b>cartons × N u + unités</b> apparaît sous le champ Quantité. Tapez l'un ou l'autre : les deux restent synchronisés.</p></div>
+          <ol class="steps read" data-fig="fig11">
+            <li data-pin="1">Choisissez le <b>produit</b>.</li>
+            <li data-pin="2">Tapez les <b>cartons</b> et les <b>unités</b> sous la quantité.</li>
+            <li data-pin="3">Le total en unités s'affiche (<b>= 51 u</b>) et remplit le champ Quantité.</li>
+          </ol>
+          <figure class="shot" id="fig11">
+            <div class="frame">
+              <div class="frame-bar"><span class="lights"><i></i><i></i><i></i></span><span class="url">/admindash/ · Commercial · Vente</span><button class="zoom-btn" type="button" aria-label="Agrandir la capture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button></div>
+              <div class="canvas">
+                <img src="captures/11_vente_cartons.png" alt="Vente : 2 cartons de 24 + 3 unités = 51" width="1440" height="1000" loading="lazy">
+                <button class="pin tip-below" type="button" data-n="1" style="left:70.7%;top:50%">1<span class="tip">Produit</span></button>
+                <button class="pin tip-left" type="button" data-n="2" style="left:86.8%;top:54.4%">2<span class="tip">Cartons + unités</span></button>
+                <button class="pin tip-left tip-below" type="button" data-n="3" style="left:93%;top:59.2%">3<span class="tip">Total en unités</span></button>
+              </div>
+            </div>
+            <figcaption>Écran Vente : 2 cartons + 3 unités = 51 unités.</figcaption>
+          </figure>
+
+          <div class="read"><p>La même aide existe sur les écrans <b>Vente</b>, <b>Caisse</b>, <b>Mouvements</b> (transfert, perte, échantillon, retour fournisseur), <b>Charger un van</b>, <b>Nouvel ajustement</b> de stock, <b>Commandes clients</b> et <b>Inventaire</b>.</p></div>
+          <figure class="shot" id="fig13">
+            <div class="frame">
+              <div class="frame-bar"><span class="lights"><i></i><i></i><i></i></span><span class="url">/admindash/ · Gestion de stock · Mouvements · Transfert</span><button class="zoom-btn" type="button" aria-label="Agrandir la capture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button></div>
+              <div class="canvas">
+                <img src="captures/13_mouvement_cartons.png" alt="Transfert de stock : 4 cartons = 96 unités" width="1440" height="1000" loading="lazy">
+                <button class="pin tip-below" type="button" data-n="1" style="left:32.6%;top:50.2%">1<span class="tip">Produit</span></button>
+                <button class="pin tip-below" type="button" data-n="2" style="left:51.4%;top:54.4%">2<span class="tip">4 cartons de 24</span></button>
+                <button class="pin" type="button" data-n="3" style="left:58%;top:57.3%">3<span class="tip">= 96 u</span></button>
+              </div>
+            </div>
+            <figcaption>Transfert de stock : 4 cartons = 96 unités.</figcaption>
+          </figure>
+
+          <h3 class="sub read">Lire le stock en cartons</h3>
+          <div class="read"><p>Sous chaque quantité en stock, l'équivalent en cartons s'affiche : <b>50 pièces = 2 ct + 2 u</b>. Sur la feuille de comptage d'inventaire, la colonne <b>Cond.</b> indique « ct de 24 » et les colonnes Cartons et Unités sont prêtes à remplir (chapitre 04).</p></div>
+          <figure class="shot" id="fig12">
+            <div class="frame">
+              <div class="frame-bar"><span class="lights"><i></i><i></i><i></i></span><span class="url">/admindash/ · Gestion de stock · Gestion des Stocks</span><button class="zoom-btn" type="button" aria-label="Agrandir la capture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button></div>
+              <div class="canvas">
+                <img src="captures/12_stock_cartons.png" alt="Liste du stock avec l'équivalent en cartons" width="1440" height="1000" loading="lazy">
+                <button class="pin tip-left" type="button" data-n="1" style="left:57%;top:80.3%">1<span class="tip">50 pièces = 2 ct + 2 u</span></button>
+                <button class="pin tip-left" type="button" data-n="2" style="left:57%;top:90.5%">2<span class="tip">40 pièces = 3 ct + 4 u</span></button>
+              </div>
+            </div>
+            <figcaption>Recherche « coca » : l'équivalent en cartons sous chaque stock.</figcaption>
+          </figure>
+
+          <h3 class="sub read">Sur le téléphone</h3>
+          <div class="read"><p>L'application suit les mêmes règles. Sur chaque ligne du panier ou de la commande, une ligne <b>cartons × 24 + unités</b> s'ajoute sous le compteur d'unités.</p></div>
+          <div class="phones">
+            <figure class="phone-shot">
+              <div class="phone"><div class="canvas"><img src="captures/M1_stock_van_cartons.png" alt="Stock du van : 75 pièces = 12 ct + 3 u" width="540" height="1200" loading="lazy"></div></div>
+              <figcaption><b>Stock du van</b> : 75 pièces = <b>12 ct + 3 u</b>.</figcaption>
+            </figure>
+            <figure class="phone-shot">
+              <div class="phone"><div class="canvas"><img src="captures/M2_vente_choix_produit.png" alt="Nouvelle vente : stock en cartons dans la liste des produits" width="540" height="1200" loading="lazy"></div></div>
+              <figcaption><b>Nouvelle vente</b> : le stock de chaque produit en cartons.</figcaption>
+            </figure>
+            <figure class="phone-shot">
+              <div class="phone"><div class="canvas"><img src="captures/M3_vente_saisie_cartons.png" alt="Panier : 2 cartons + 1 unité = 49" width="540" height="1200" loading="lazy"></div></div>
+              <figcaption><b>Panier</b> : 2 cartons + 1 unité = <b>49</b>, le total suit.</figcaption>
+            </figure>
+            <figure class="phone-shot">
+              <div class="phone"><div class="canvas"><img src="captures/M4_commande_choix_produit.png" alt="Nouvelle commande : carton de 24 sous le produit" width="540" height="1200" loading="lazy"></div></div>
+              <figcaption><b>Nouvelle commande</b> : « carton de 24 » sous chaque produit.</figcaption>
+            </figure>
+            <figure class="phone-shot">
+              <div class="phone"><div class="canvas"><img src="captures/M5_commande_saisie_cartons.png" alt="Commande : 5 cartons + 1 unité = 121" width="540" height="1065" loading="lazy"></div></div>
+              <figcaption><b>Commande</b> : 5 cartons tapés au clavier = <b>121</b> unités.</figcaption>
+            </figure>
+            <figure class="phone-shot">
+              <div class="phone"><div class="canvas"><img src="captures/M8_livreur_modifier_cartons.png" alt="Modification par le livreur en cartons" width="540" height="1035" loading="lazy"></div></div>
+              <figcaption><b>Modifier la commande</b> (livreur) : même saisie en cartons.</figcaption>
+            </figure>
+          </div>
+
+          <div class="note info read">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+            <div><b>Bon à savoir</b>Les limites de stock (stock du van, stock dépôt) et les prix restent calculés en unités. Un produit sans « Unités par carton » se saisit comme avant, en unités.</div>
+          </div>
+        </section>
+
+        <!-- ================= 07 STOCK PREVENDEUR ================= -->
+        <section class="chapter" id="stock-prevendeur" data-chapter>
+          <div class="chapter-head">
+            <div class="chapter-num">CHAPITRE 07</div>
+            <h2>Vérifier le stock avant de prendre une commande</h2>
+            <div class="chips">
+              <span class="chip path">Application mobile › Clients › Cmd</span>
+              <span class="chip">Pour : prévendeurs</span>
+            </div>
+          </div>
+
+          <div class="where-box">
+            <div class="where-text">
+              <div class="where-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 21s-7-6.1-7-11.5A7 7 0 0 1 19 9.5C19 14.9 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>Où trouver cet écran</div>
+                <div class="route">
+                  <span class="route-label">Téléphone</span>
+                  <div class="route-path"><span class="route-step">onglet Clients</span><span class="route-sep" aria-hidden="true">›</span><span class="route-step">Cmd</span><span class="route-sep" aria-hidden="true">›</span><span class="route-step">Ajouter des produits</span><span class="route-sep" aria-hidden="true">›</span><span class="route-step">Afficher</span></div>
+                </div>
+                <p class="where-note">Dans l'onglet <b>Clients</b> (en bas de l'écran), chaque client a un bouton bleu <b>Cmd</b> pour prendre une commande.</p>
+            </div>
+            <figure class="where-img phone"><div class="canvas"><img src="captures/W_mobile_clients.png" alt="Écran Clients de l'application avec les boutons Vente et Cmd" width="540" height="1200" loading="lazy"></div></figure>
+          </div>
+
+          <div class="read"><p>Le prévendeur voit sur son téléphone la quantité disponible <b>au dépôt</b> pour chaque produit. Il sait tout de suite s'il peut promettre la marchandise au client, sans appeler le magasin.</p></div>
+
+          <ol class="steps read">
+            <li>Dans <b>Clients</b>, appuyez sur <b>Cmd</b> à côté du client.</li>
+            <li>Sous <b>Ajouter des produits</b>, appuyez sur <b>Afficher</b>. Chaque produit indique son <b>Stock dépôt</b>.</li>
+            <li>Ajoutez les produits et réglez les quantités : l'app vous empêche de dépasser le stock disponible.</li>
+          </ol>
+
+          <div class="table-wrap read">
+            <table>
+              <thead><tr><th>Affichage</th><th>Signification</th><th>Ce que fait l'app</th></tr></thead>
+              <tbody>
+                <tr><td><span class="state ok">Stock dépôt : 119</span></td><td>Plus de 5 unités disponibles</td><td>Commande libre jusqu'à ce stock</td></tr>
+                <tr><td><span class="state mod">Stock dépôt : 3</span></td><td>5 unités ou moins : stock faible</td><td>Prévenez le client que la quantité est limitée</td></tr>
+                <tr><td><span class="state err">Rupture de stock</span></td><td>Plus rien au dépôt</td><td>Produit grisé ; l'ajout est refusé avec un message</td></tr>
+                <tr><td><span class="state todo">Stock inconnu</span></td><td>Produit pas encore synchronisé</td><td>Pas de limite ; synchronisez pour l'obtenir</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="phones">
+            <figure class="phone-shot">
+              <div class="phone"><div class="canvas"><img src="captures/P1_prevendeur_stock_depot.png" alt="Liste des produits avec le stock dépôt en couleur" width="540" height="1200" loading="lazy"></div></div>
+              <figcaption><b>Stock dépôt</b> sous chaque produit : vert, orange (3 et 5), rouge pour la rupture.</figcaption>
+            </figure>
+            <figure class="phone-shot">
+              <div class="phone"><div class="canvas"><img src="captures/P2_prevendeur_rupture.png" alt="Alerte Rupture de stock" width="540" height="1065" loading="lazy"></div></div>
+              <figcaption>Produit en rupture : <b>l'ajout est refusé</b> avec un message clair.</figcaption>
+            </figure>
+            <figure class="phone-shot">
+              <div class="phone"><div class="canvas"><img src="captures/P3_prevendeur_stock_insuffisant.png" alt="Alerte Stock insuffisant, quantité bloquée à 3" width="540" height="1065" loading="lazy"></div></div>
+              <figcaption>Quantité trop haute : elle est <b>ramenée au stock</b> (3) avec le message « Stock insuffisant ».</figcaption>
+            </figure>
+          </div>
+
+          <h3 class="sub read">D'où vient ce stock</h3>
+          <ul class="bullets read">
+            <li>C'est le stock de <b>tous les entrepôts actifs, hors vans</b> : la marchandise que le dépôt peut encore préparer pour une livraison.</li>
+            <li>Il est mis à jour à chaque <b>synchronisation</b> (automatique toutes les 2 minutes, ou bouton <b>Sync</b>). Sans réseau, l'app affiche le dernier stock connu.</li>
+            <li>Les produits gérés en cartons affichent aussi « carton de 24 » : voir le chapitre 06.</li>
+          </ul>
+
+          <div class="note read">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01"/></svg>
+            <div><b>Le stock affiché n'est pas réservé</b>Deux prévendeurs peuvent voir le même stock au même moment. Pour un produit en stock faible (orange), synchronisez juste avant de confirmer au client.</div>
+          </div>
+        </section>
+
+        <!-- ================= 08 OBJECTIFS ================= -->
+        <section class="chapter" id="objectifs" data-chapter>
+          <div class="chapter-head">
+            <div class="chapter-num">CHAPITRE 08</div>
+            <h2>Fixer et suivre les objectifs des vendeurs</h2>
+            <div class="chips">
+              <span class="chip path">Rapports & Analyses › Objectifs vendeurs</span>
+              <span class="chip">Pour : responsable commercial</span>
+            </div>
+          </div>
+
+          <div class="where-box">
+            <div class="where-text">
+              <div class="where-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 21s-7-6.1-7-11.5A7 7 0 0 1 19 9.5C19 14.9 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>Où trouver cet écran</div>
+                <div class="route">
+                  <span class="route-label">Menu de gauche</span>
+                  <div class="route-path"><span class="route-step">Rapports & Analyses</span><span class="route-sep" aria-hidden="true">›</span><span class="route-step">Objectifs vendeurs</span></div>
+                </div>
+                <p class="where-note">C'est la dernière entrée du menu <b>Rapports & Analyses</b>.</p>
+            </div>
+            <figure class="where-img menu"><div class="canvas"><img src="captures/M_menu_rapports.png" alt="Menu Rapports et Analyses ouvert, Objectifs vendeurs surligné" width="260" height="455" loading="lazy"></div></figure>
+          </div>
+
+          <div class="read"><p>Chaque entrepôt correspond à une gamme de produits. Vous fixez donc à chaque vendeur <b>un objectif de chiffre d'affaires par gamme et par mois</b>, en général deux, et l'écran calcule son <b>taux de réussite</b> en continu.</p></div>
+
+          <div class="formula" aria-label="Calcul du taux de réussite">
+            <span class="tok">CA réalisé</span><span class="op">÷</span><span class="tok">objectif</span><span class="op">=</span><span class="tok res">taux de réussite</span>
+          </div>
+
+          <h3 class="sub read">Avant de commencer : rattacher les produits à leur gamme</h3>
+          <div class="read"><p>Un objectif « par entrepôt » compte le CA des produits <b>rattachés</b> à cet entrepôt. Sur chaque fiche produit, remplissez le champ <b>Entrepôt / gamme</b> (visible sur la capture du chapitre 06, à droite des cartons). Un produit sans gamme ne compte dans aucun objectif d'entrepôt.</p></div>
+
+          <h3 class="sub read">Définir un objectif</h3>
+          <ol class="steps read" data-fig="fig15">
+            <li data-pin="1">En haut, choisissez le <b>mois</b> et l'<b>année</b> : l'objectif porte sur cette période.</li>
+            <li data-pin="2">Dans <b>Définir un objectif</b>, choisissez le <b>vendeur</b>.</li>
+            <li data-pin="3">Laissez <b>Périmètre</b> sur « Entrepôt / gamme » et choisissez l'<b>entrepôt</b>. (« Type de produit » permet aussi un objectif par catégorie.)</li>
+            <li data-pin="4">Tapez le montant de l'<b>Objectif CA (TTC)</b>, puis cliquez sur <b>Enregistrer</b>.</li>
+            <li>Recommencez pour la deuxième gamme. Un vendeur ne peut avoir qu'un seul objectif par entrepôt et par mois.</li>
+          </ol>
+          <figure class="shot" id="fig15">
+            <div class="frame">
+              <div class="frame-bar"><span class="lights"><i></i><i></i><i></i></span><span class="url">/admindash/ · Objectifs vendeurs · Définir un objectif</span><button class="zoom-btn" type="button" aria-label="Agrandir la capture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button></div>
+              <div class="canvas">
+                <img src="captures/15_objectifs_formulaire.png" alt="Formulaire Définir un objectif rempli pour Said, Entrepôt Principal, 1000" width="1440" height="1000" loading="lazy">
+                <button class="pin tip-below" type="button" data-n="1" style="left:35.6%;top:18.1%">1<span class="tip">Mois et année</span></button>
+                <button class="pin" type="button" data-n="2" style="left:29.6%;top:46.8%">2<span class="tip">Vendeur</span></button>
+                <button class="pin" type="button" data-n="3" style="left:64.3%;top:46.8%">3<span class="tip">Entrepôt / gamme</span></button>
+                <button class="pin tip-left" type="button" data-n="4" style="left:82.2%;top:46.8%">4<span class="tip">Objectif CA (TTC)</span></button>
+                <button class="pin tip-below" type="button" data-n="4" style="left:33.4%;top:59.3%">4<span class="tip">Enregistrer</span></button>
+              </div>
+            </div>
+            <figcaption>Objectif de 1 000 DA pour Said sur la gamme de l'Entrepôt Principal, décembre 2025.</figcaption>
+          </figure>
+
+          <div class="note info read">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+            <div><b>Gagner du temps chaque mois</b><b>Reprendre le mois précédent</b> copie les objectifs du mois d'avant vers le mois affiché. Seuls ceux qui n'existent pas encore sont créés ; une confirmation vous est demandée.</div>
+          </div>
+
+          <h3 class="sub read">Suivre les résultats</h3>
+          <ol class="steps read" data-fig="fig14">
+            <li data-pin="1">Les tuiles résument le mois : objectifs définis, objectifs <b>atteints</b>, CA réalisé et <b>taux global</b>.</li>
+            <li data-pin="2">Le tableau <b>Suivi du mois</b> regroupe les objectifs par vendeur, avec son taux <b>global</b> sur ses deux gammes.</li>
+            <li data-pin="3">Pour chaque gamme : objectif, CA réalisé, <b>reste</b> à faire et barre de progression. Le badge <b>Atteint</b> apparaît à 100 %.</li>
+            <li data-pin="4">Les boutons à droite servent à <b>modifier</b> ou <b>supprimer</b> un objectif.</li>
+          </ol>
+
+          <div class="states read" aria-label="Couleurs du taux">
+            <span class="state err">moins de 60 %</span>
+            <span class="state mod">de 60 à 99 %</span>
+            <span class="state ok">100 % et plus : Atteint</span>
+          </div>
+          <figure class="shot" id="fig14">
+            <div class="frame">
+              <div class="frame-bar"><span class="lights"><i></i><i></i><i></i></span><span class="url">/admindash/ · Objectifs vendeurs · Suivi du mois</span><button class="zoom-btn" type="button" aria-label="Agrandir la capture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button></div>
+              <div class="canvas">
+                <img src="captures/14_objectifs_liste.png" alt="Suivi des objectifs de décembre 2025 : trois vendeurs, deux gammes chacun" width="1440" height="1331" loading="lazy">
+                <button class="pin tip-below" type="button" data-n="1" style="left:21.6%;top:20.2%">1<span class="tip">Résumé du mois</span></button>
+                <button class="pin" type="button" data-n="2" style="left:80.6%;top:61.8%">2<span class="tip">Taux global du vendeur</span></button>
+                <button class="pin tip-below" type="button" data-n="3" style="left:67.2%;top:69.1%">3<span class="tip">Barre de progression et badge Atteint</span></button>
+                <button class="pin tip-left" type="button" data-n="4" style="left:94.4%;top:63.4%">4<span class="tip">Modifier · Supprimer</span></button>
+              </div>
+            </div>
+            <figcaption>Ahmed Benali : 67,5 % sur la gamme Principal et 133,3 % (atteint) sur la gamme Secondaire.</figcaption>
+          </figure>
+
+          <h3 class="sub read">Ce qui compte dans le CA réalisé</h3>
+          <ul class="bullets read">
+            <li>Les <b>ventes de tournée</b> du vendeur et les <b>commandes qu'il a prises</b> (hors commandes annulées), en TTC, sur le mois de l'objectif.</li>
+            <li>Seuls les produits de la gamme de l'objectif sont comptés.</li>
+            <li>Livrer une commande ne crée pas de vente : rien n'est compté deux fois.</li>
+            <li>Les mêmes chiffres alimentent le <b>taux de réalisation</b> du chapitre 02.</li>
+          </ul>
+        </section>
+
+        <!-- ================= 09 ÉTAT DES LIVREURS ================= -->
+        <section class="chapter" id="etat-livreurs" data-chapter>
+          <div class="chapter-head">
+            <div class="chapter-num">CHAPITRE 09</div>
+            <h2>Suivre l'état des livreurs : net ou écart</h2>
+            <div class="chips">
+              <span class="chip path">Distribution › État des livreurs</span>
+              <span class="chip">Pour : responsable, caissier</span>
+            </div>
+          </div>
+
+          <div class="where-box">
+            <div class="where-text">
+              <div class="where-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 21s-7-6.1-7-11.5A7 7 0 0 1 19 9.5C19 14.9 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>Où trouver cet écran</div>
+                <div class="route">
+                  <span class="route-label">Menu de gauche</span>
+                  <div class="route-path"><span class="route-step">Distribution</span><span class="route-sep" aria-hidden="true">›</span><span class="route-step">État des livreurs</span></div>
+                </div>
+                <p class="where-note">C'est la troisième entrée du menu <b>Distribution</b>, juste sous <b>Tournées</b>.</p>
+            </div>
+            <figure class="where-img menu"><div class="canvas"><img src="captures/M_menu_etat.png" alt="Menu Distribution ouvert, État des livreurs surligné" width="260" height="433" loading="lazy"></div></figure>
+          </div>
+
+          <div class="read"><p>À la fin de chaque tournée, le livreur rend l'argent et un <b>rapport de caisse</b> est validé. Cet écran compare, pour chaque livreur, l'argent <b>rapporté</b> à l'argent <b>attendu</b>, et dit en un coup d'œil s'il est <b>net</b> ou s'il présente un <b>écart</b>.</p></div>
+
+          <div class="formula" aria-label="Calcul de l'écart">
+            <span class="tok">fonds de départ</span><span class="op">+</span><span class="tok">espèces encaissées</span><span class="op">−</span><span class="tok">dépenses</span><span class="op">=</span><span class="tok ct">attendu</span>
+            <span class="op" style="flex-basis:100%;height:0"></span>
+            <span class="tok">rapporté</span><span class="op">−</span><span class="tok ct">attendu</span><span class="op">=</span><span class="tok res">écart</span>
+          </div>
+
+          <div class="table-wrap read">
+            <table>
+              <thead><tr><th>État</th><th>Signification</th><th>Que faire</th></tr></thead>
+              <tbody>
+                <tr><td><span class="state ok">Net</span></td><td>Sur toutes ses tournées terminées, l'argent rapporté correspond à l'argent attendu, à 10 DA près.</td><td>Rien.</td></tr>
+                <tr><td><span class="state err">Écart</span></td><td>Au moins une tournée avec un <b>manquant</b> (rapporté &lt; attendu) ou un <b>excédent</b> (rapporté &gt; attendu).</td><td>Ouvrez le détail, lisez la justification, régularisez avec le livreur.</td></tr>
+                <tr><td><span class="state mod">À contrôler</span></td><td>Une tournée terminée n'a pas de rapport de caisse, ou son rapport n'est pas encore validé.</td><td>Faites saisir et valider le rapport de caisse.</td></tr>
+                <tr><td><span class="state todo">Aucune tournée</span></td><td>Pas de tournée terminée sur la période.</td><td>Masqué par défaut ; cochez « Afficher les livreurs sans tournée ».</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <ol class="steps read" data-fig="fig16">
+            <li data-pin="1">Choisissez la <b>période</b> : dates <b>Du</b> / <b>Au</b>, ou les raccourcis 7 jours, 30 jours, Ce mois. Par défaut : les 30 derniers jours.</li>
+            <li data-pin="2">Lisez les <b>tuiles</b> : nombre de livreurs en écart, à contrôler et nets, et le manquant total. <b>Cliquez sur une tuile</b> pour n'afficher que ces livreurs.</li>
+            <li data-pin="3">Dans le tableau, chaque livreur a son <b>état</b>, son manquant, son excédent et son <b>écart net</b> (rouge : il manque de l'argent ; bleu : il y en a trop). Les livreurs en écart sont en haut.</li>
+            <li data-pin="4">Cliquez sur <b>Voir le détail</b> pour ouvrir le détail de ses tournées.</li>
+          </ol>
+          <figure class="shot" id="fig16">
+            <div class="frame">
+              <div class="frame-bar"><span class="lights"><i></i><i></i><i></i></span><span class="url">/admindash/ · Distribution · État des livreurs</span><button class="zoom-btn" type="button" aria-label="Agrandir la capture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button></div>
+              <div class="canvas">
+                <img src="captures/16_etat_livreurs.png" alt="État des livreurs : 2 en écart, 1 à contrôler, 1 net" width="1440" height="1000" loading="lazy">
+                <button class="pin tip-below" type="button" data-n="1" style="left:32.5%;top:21%">1<span class="tip">Période</span></button>
+                <button class="pin tip-below" type="button" data-n="2" style="left:20%;top:28.5%">2<span class="tip">Cliquer pour filtrer</span></button>
+                <button class="pin" type="button" data-n="3" style="left:65.8%;top:53.5%">3<span class="tip">Écart net du livreur</span></button>
+                <button class="pin tip-left" type="button" data-n="4" style="left:90.5%;top:53.5%">4<span class="tip">Voir le détail</span></button>
+              </div>
+            </div>
+            <figcaption>Période du 01/11/2025 au 31/01/2026 : Said2 a un manquant de 500 DA, Ahmed Benali un excédent de 50 DA.</figcaption>
+          </figure>
+
+          <h3 class="sub read">Lire le détail d'un écart</h3>
+          <ol class="steps read" data-fig="fig17" style="counter-reset: st 4">
+            <li data-pin="5">Une ligne par tournée, la plus récente en haut : <b>fonds de départ + espèces − dépenses = attendu</b>, puis ce qui a été <b>rapporté</b> et l'<b>écart</b>.</li>
+            <li data-pin="6">Sous la tournée : qui a validé le rapport, la <b>justification</b> saisie pour l'écart et les <b>billets rendus</b>.</li>
+          </ol>
+          <figure class="shot" id="fig17">
+            <div class="frame">
+              <div class="frame-bar"><span class="lights"><i></i><i></i><i></i></span><span class="url">/admindash/ · État des livreurs · Détail</span><button class="zoom-btn" type="button" aria-label="Agrandir la capture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button></div>
+              <div class="canvas">
+                <img src="captures/17_etat_livreurs_detail.png" alt="Détail des tournées de Said2 : manquant de 500 DA le 13/11/2025 avec justification" width="1120" height="1230" loading="lazy">
+                <button class="pin tip-left" type="button" data-n="5" style="left:64.3%;top:56.1%">5<span class="tip">Attendu 14 850 · rapporté 14 350 · écart −500</span></button>
+                <button class="pin" type="button" data-n="6" style="left:17.2%;top:71.8%">6<span class="tip">Justification et billets rendus</span></button>
+              </div>
+            </div>
+            <figcaption>Said2 : tournée du 13/11/2025 avec un manquant de 500 DA, justifié par un client qui a payé moins.</figcaption>
+          </figure>
+
+          <figure class="shot" id="fig18">
+            <div class="frame">
+              <div class="frame-bar"><span class="lights"><i></i><i></i><i></i></span><span class="url">/admindash/ · État des livreurs · Détail</span><button class="zoom-btn" type="button" aria-label="Agrandir la capture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button></div>
+              <div class="canvas">
+                <img src="captures/18_etat_detail_sans_rapport.png" alt="Détail d'Ahmed Benali avec une tournée sans rapport de caisse" width="1083" height="759" loading="lazy">
+                <button class="pin tip-below" type="button" data-n="7" style="left:40%;top:54.2%">7<span class="tip">Tournée sans rapport de caisse</span></button>
+              </div>
+            </div>
+            <figcaption>Ahmed Benali : la tournée du 25/11/2025 n'a pas de rapport de caisse (« À contrôler »). Son état reste « Écart » à cause de l'excédent de 50 DA du 27/11.</figcaption>
+          </figure>
+
+          <ul class="bullets read">
+            <li>Seules les tournées <b>terminées</b> ou <b>clôturées</b> comptent. Une tournée en cours n'a pas encore de résultat.</li>
+            <li>Les paiements par <b>carte, chèque ou à crédit</b> ne sont pas de l'argent à rapporter : ils ne créent pas d'écart.</li>
+            <li>Un écart de <b>10 DA ou moins</b> est toléré (arrondis, monnaie) : le livreur reste « Net ».</li>
+            <li>Si un livreur a à la fois un écart et une tournée à contrôler, il apparaît en <b>Écart</b> : c'est le plus urgent.</li>
+          </ul>
+
+          <div class="note info read">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+            <div><b>D'où viennent les chiffres</b>Du rapport de caisse de chaque tournée (fonds de départ, encaissements, dépenses, argent rendu, justification). Les mêmes rapports restent consultables dans <b>Rapports & Analyses › Historique tournées</b>.</div>
+          </div>
+        </section>
+
+        <!-- ================= 10 BÉNÉFICES PROTÉGÉS ================= -->
+        <section class="chapter" id="benefices" data-chapter>
+          <div class="chapter-head">
+            <div class="chapter-num">CHAPITRE 10</div>
+            <h2>Tableau des bénéfices protégé par code PIN</h2>
+            <div class="chips">
+              <span class="chip path">Rapports & Analyses › Rapport des Bénéfices</span>
+              <span class="chip">Pour : administrateur de l'entreprise uniquement</span>
+            </div>
+          </div>
+
+          <div class="where-box">
+            <div class="where-text">
+              <div class="where-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 21s-7-6.1-7-11.5A7 7 0 0 1 19 9.5C19 14.9 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>Où trouver cet écran</div>
+                <div class="route">
+                  <span class="route-label">Menu de gauche</span>
+                  <div class="route-path"><span class="route-step">Rapports & Analyses</span><span class="route-sep" aria-hidden="true">›</span><span class="route-step">Rapport des Bénéfices</span></div>
+                </div>
+                <p class="where-note">L'entrée porte un petit <b>cadenas</b>. Elle n'apparaît que pour les comptes dont le rôle dans l'entreprise est <b>Administrateur</b>.</p>
+            </div>
+            <figure class="where-img menu"><div class="canvas"><img src="captures/M_menu_benefices.png" alt="Menu Rapports et Analyses, Rapport des Bénéfices avec un cadenas" width="260" height="455" loading="lazy"></div></figure>
+          </div>
+
+          <div class="read"><p>Les bénéfices sont une information sensible : seul l'<b>administrateur de l'entreprise</b> peut les voir, et il doit saisir un <b>code PIN</b> à chaque ouverture. Le PIN est <b>commun</b> à tous les administrateurs de l'entreprise.</p></div>
+
+          <h3 class="sub read">Première ouverture : choisir le code PIN</h3>
+          <ol class="steps read" data-fig="fig19">
+            <li data-pin="1">Le premier administrateur qui ouvre la page choisit le code : <b>4 à 8 chiffres</b>, tapé deux fois.</li>
+            <li>Cliquez sur <b>Enregistrer le code PIN</b>. Le tableau s'ouvre, et le code vaut désormais pour tous les administrateurs de l'entreprise. Communiquez-le-leur de vive voix.</li>
+          </ol>
+          <figure class="shot" id="fig19">
+            <div class="frame">
+              <div class="frame-bar"><span class="lights"><i></i><i></i><i></i></span><span class="url">/admindash/ · Rapport des Bénéfices · Choisir le PIN</span><button class="zoom-btn" type="button" aria-label="Agrandir la capture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button></div>
+              <div class="canvas">
+                <img src="captures/19_benefices_creation_pin.png" alt="Écran Choisissez le code PIN" width="1440" height="1000" loading="lazy">
+                <button class="pin tip-left" type="button" data-n="1" style="left:59%;top:41.5%">1<span class="tip">Nouveau code PIN, puis confirmation</span></button>
+              </div>
+            </div>
+          </figure>
+
+          <h3 class="sub read">Ouvrir le tableau</h3>
+          <ol class="steps read" data-fig="fig21" style="counter-reset: st 2">
+            <li data-pin="3">Tapez le code PIN, puis <b>Déverrouiller</b>.</li>
+            <li data-pin="4">En cas d'erreur, le nombre d'essais restants s'affiche. Après <b>5 erreurs</b>, l'accès est <b>bloqué 15 minutes</b> pour toute l'entreprise, même avec le bon code.</li>
+          </ol>
+          <figure class="shot" id="fig21">
+            <div class="frame">
+              <div class="frame-bar"><span class="lights"><i></i><i></i><i></i></span><span class="url">/admindash/ · Rapport des Bénéfices · Saisie du PIN</span><button class="zoom-btn" type="button" aria-label="Agrandir la capture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button></div>
+              <div class="canvas">
+                <img src="captures/21_benefices_pin_incorrect.png" alt="Écran Tableau de bord protégé avec le message Code PIN incorrect, il reste 4 essais" width="1440" height="1000" loading="lazy">
+                <button class="pin tip-left" type="button" data-n="3" style="left:59%;top:39.3%">3<span class="tip">Code PIN</span></button>
+                <button class="pin" type="button" data-n="4" style="left:59%;top:44.1%">4<span class="tip">Essais restants</span></button>
+              </div>
+            </div>
+          </figure>
+
+          <ol class="steps read" data-fig="fig20" style="counter-reset: st 4">
+            <li data-pin="5">Une fois le PIN accepté, l'accès reste ouvert <b>15 minutes</b> sur cet ordinateur : vous pouvez changer de page et revenir sans retaper le code.</li>
+            <li data-pin="6"><b>Verrouiller</b> referme le tableau tout de suite (à faire en quittant votre poste). <b>Changer le code PIN</b> demande l'ancien code, puis le nouveau deux fois.</li>
+            <li data-pin="7">Les exports <b>Excel</b> et <b>PDF</b> ne fonctionnent que pendant que le tableau est ouvert.</li>
+          </ol>
+          <figure class="shot" id="fig20">
+            <div class="frame">
+              <div class="frame-bar"><span class="lights"><i></i><i></i><i></i></span><span class="url">/admindash/ · Rapport des Bénéfices · Ouvert</span><button class="zoom-btn" type="button" aria-label="Agrandir la capture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button></div>
+              <div class="canvas">
+                <img src="captures/20_benefices_ouvert.png" alt="Tableau des bénéfices ouvert avec la barre Accès ouvert pour 15 min" width="1440" height="1000" loading="lazy">
+                <button class="pin tip-below" type="button" data-n="5" style="left:23%;top:9.8%">5<span class="tip">Accès ouvert 15 min</span></button>
+                <button class="pin tip-left tip-below" type="button" data-n="6" style="left:73.5%;top:9.8%">6<span class="tip">Changer le PIN · Verrouiller</span></button>
+                <button class="pin tip-left tip-below" type="button" data-n="7" style="left:69.8%;top:38%">7<span class="tip">Exports Excel et PDF</span></button>
+              </div>
+            </div>
+            <figcaption>Les données ne sont chargées qu’après le code PIN.</figcaption>
+          </figure>
+
+          <h3 class="sub read">Pour les autres utilisateurs</h3>
+          <figure class="shot" id="fig23">
+            <div class="frame">
+              <div class="frame-bar"><span class="lights"><i></i><i></i><i></i></span><span class="url">/admindash/ · Rapport des Bénéfices · Accès refusé</span><button class="zoom-btn" type="button" aria-label="Agrandir la capture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button></div>
+              <div class="canvas">
+                <img src="captures/23_benefices_refuse.png" alt="Message Accès réservé pour un utilisateur non administrateur" width="1440" height="1000" loading="lazy">
+              </div>
+            </div>
+            <figcaption>Un comptable ne voit pas l’entrée dans le menu. S’il force l’adresse, il obtient ce message, et aucune donnée.</figcaption>
+          </figure>
+
+          <ul class="bullets read">
+            <li>Seul le rôle <b>Administrateur</b> de l'entreprise donne accès. Un compte « staff » sans ce rôle est refusé.</li>
+            <li>Chaque administrateur ne voit que les bénéfices de <b>son entreprise</b>.</li>
+            <li>Le code PIN est enregistré <b>chiffré</b> : personne, même un informaticien qui lit la base, ne peut le relire.</li>
+            <li>Chaque ouverture, erreur de code et changement de code est noté dans <b>Rapports & Analyses › Journaux d'audit</b>.</li>
+          </ul>
+
+          <div class="note read">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01"/></svg>
+            <div><b>Code PIN oublié</b>Si aucun administrateur ne connaît plus le code, il faut le réinitialiser depuis l'administration technique (Django admin › Accès au tableau des bénéfices › supprimer la ligne de l'entreprise). Le prochain administrateur qui ouvre la page en choisira un nouveau.</div>
+          </div>
+        </section>
+
+        <!-- ================= MISE EN SERVICE ================= -->
+        <section class="chapter" id="mise-en-service" data-chapter>
+          <div class="chapter-head">
+            <div class="chapter-num">POUR L'ADMINISTRATEUR</div>
+            <h2>Mise en service</h2>
+          </div>
+          <div class="download-card">
+            <div class="download-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M12 7v7m-3-3 3 3 3-3M10 18h4"/></svg></div>
+            <div class="download-text">
+              <b>Application mobile NextGate — version 0.2.0</b>
+              <span>Pour Android. Contient toutes les nouveautés de ce guide. Déjà réglée sur le serveur <code>rayannedistribution.com</code>.</span>
+            </div>
+            <a class="download-btn" href="https://rayannedistribution.com/telecharger-app/" target="_blank" rel="noopener">Télécharger l'APK</a>
+          </div>
+          <div class="read copy-line">Lien à envoyer aux livreurs et prévendeurs : <code id="apkLink">https://rayannedistribution.com/telecharger-app/</code> <button class="copy-mini" type="button" data-copy-text="https://rayannedistribution.com/telecharger-app/">Copier</button></div>
+
+          <ol class="setup read">
+            <li><div>Sur le serveur, appliquez les migrations.<br><code>python manage.py migrate</code> <span class="muted">(0075 et 0076)</span></div></li>
+            <li><div>Dans le navigateur, rechargez la page Tournées en forçant le cache : <kbd>Ctrl</kbd> + <kbd>F5</kbd>.</div></li>
+            <li><div>Sur chaque téléphone de prévendeur et de livreur, ouvrez <a href="https://rayannedistribution.com/telecharger-app/" target="_blank" rel="noopener">https://rayannedistribution.com/telecharger-app/</a>, téléchargez l'APK et installez-le. Si Android le demande, autorisez l'installation depuis le navigateur (« sources inconnues »).</div></li>
+            <li><div>Au premier lancement, vérifiez dans <b>Paramètres</b> de l'application que le serveur est <code>https://rayannedistribution.com</code>, puis connectez-vous.</div></li>
+          </ol>
+        </section>
+
+        <footer>
+          <span>NextGate · Guide des nouveautés de septembre 2026</span>
+          <span>Captures réalisées sur une copie de démonstration de la base</span>
+        </footer>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+(function () {
+  var root = document.documentElement;
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ---- Thème ---- */
+  var themeBtn = document.getElementById('themeBtn');
+  var themeLabel = document.getElementById('themeLabel');
+  function isDark() {
+    var t = root.getAttribute('data-theme');
+    if (t) return t === 'dark';
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  }
+  function syncLabel() { themeLabel.textContent = isDark() ? 'Thème clair' : 'Thème sombre'; }
+  try { var saved = localStorage.getItem('ng-guide-theme'); if (saved) root.setAttribute('data-theme', saved); } catch (e) {}
+  syncLabel();
+  themeBtn.addEventListener('click', function () {
+    var next = isDark() ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('ng-guide-theme', next); } catch (e) {}
+    syncLabel();
+  });
+
+  /* ---- Barre de progression ---- */
+  var bar = document.getElementById('progressBar');
+  function onScroll() {
+    var h = document.documentElement.scrollHeight - window.innerHeight;
+    bar.style.transform = 'scaleX(' + (h > 0 ? Math.min(1, window.scrollY / h) : 0) + ')';
+  }
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+
+  /* ---- Chapitre courant dans le sommaire ---- */
+  var chapters = Array.prototype.slice.call(document.querySelectorAll('[data-chapter]'));
+  var links = Array.prototype.slice.call(document.querySelectorAll('#railNav a, #mobileNav a'));
+  function setCurrent(id) {
+    links.forEach(function (a) {
+      var on = a.getAttribute('href') === '#' + id;
+      a.classList.toggle('is-current', on);
+      if (on && a.parentElement.id === 'mobileNav') {
+        a.parentElement.scrollTo({ left: a.offsetLeft - 16, behavior: reduce ? 'auto' : 'smooth' });
+      }
+    });
+  }
+  function pickCurrent() {
+    var y = window.innerHeight * 0.3, current = null;
+    chapters.forEach(function (c) { if (c.getBoundingClientRect().top <= y) current = c.id; });
+    links.forEach(function (a) { a.classList.remove('is-current'); });
+    if (current) setCurrent(current);
+  }
+  window.addEventListener('scroll', pickCurrent, { passive: true });
+  pickCurrent();
+
+  /* ---- Captures : arrivée à l'écran ---- */
+  if (!reduce && 'IntersectionObserver' in window) {
+    var shots = document.querySelectorAll('.shot');
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (en.isIntersecting) {
+          var shot = en.target;
+          shot.classList.remove('will-land');
+          shot.querySelectorAll('.pin').forEach(function (p, i) { p.style.transitionDelay = (0.35 + i * 0.12) + 's'; });
+          setTimeout(function () { shot.querySelectorAll('.pin').forEach(function (p) { p.style.transitionDelay = ''; }); }, 1600);
+          io.unobserve(shot);
+        }
+      });
+    }, { rootMargin: '0px 0px -12% 0px' });
+    shots.forEach(function (s) {
+      var r = s.getBoundingClientRect();
+      if (r.top > window.innerHeight) { s.classList.add('will-land'); io.observe(s); }
+    });
+  }
+
+  /* ---- Étapes reliées aux repères ---- */
+  document.querySelectorAll('.steps[data-fig]').forEach(function (list) {
+    var fig = document.getElementById(list.getAttribute('data-fig'));
+    if (!fig) return;
+    list.querySelectorAll('li[data-pin]').forEach(function (li) {
+      var pin = fig.querySelector('.pin[data-n="' + li.getAttribute('data-pin') + '"]');
+      if (!pin) return;
+      var on = function () { li.classList.add('is-hot'); pin.classList.add('is-hot'); };
+      var off = function () { li.classList.remove('is-hot'); pin.classList.remove('is-hot'); };
+      li.addEventListener('mouseenter', on); li.addEventListener('mouseleave', off);
+      pin.addEventListener('mouseenter', on); pin.addEventListener('mouseleave', off);
+      pin.addEventListener('focus', on); pin.addEventListener('blur', off);
+      li.addEventListener('click', function (e) {
+        if (e.target.closest('a')) return;
+        var r = fig.getBoundingClientRect();
+        if (r.top < 0 || r.bottom > window.innerHeight) fig.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' });
+        on(); setTimeout(off, 1800);
+      });
+      pin.addEventListener('click', function (e) {
+        e.stopPropagation();
+        li.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' });
+        on(); setTimeout(off, 1800);
+      });
+    });
+  });
+
+  /* ---- Visionneuse ---- */
+  var box = null, lastFocus = null;
+  function closeBox() {
+    if (!box) return;
+    var b = box; box = null;
+    b.classList.remove('is-open');
+    setTimeout(function () { b.remove(); }, reduce ? 0 : 250);
+    document.removeEventListener('keydown', onKey);
+    if (lastFocus) lastFocus.focus();
+  }
+  function onKey(e) { if (e.key === 'Escape') closeBox(); }
+  function openBox(img) {
+    lastFocus = document.activeElement;
+    box = document.createElement('div');
+    box.className = 'lightbox';
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-modal', 'true');
+    box.setAttribute('aria-label', img.alt);
+    box.innerHTML = '<div class="lightbox-bar"><span></span><button class="lightbox-close" type="button">Fermer · Échap</button></div><img alt="">';
+    box.querySelector('span').textContent = img.alt;
+    var big = box.querySelector('img'); big.src = img.src; big.alt = img.alt;
+    box.addEventListener('click', function (e) { if (e.target === box || e.target.closest('.lightbox-close')) closeBox(); });
+    document.body.appendChild(box);
+    document.addEventListener('keydown', onKey);
+    requestAnimationFrame(function () { box.classList.add('is-open'); box.querySelector('.lightbox-close').focus(); });
+  }
+  document.querySelectorAll('.phone-shot, .where-img').forEach(function (shot) {
+    var img = shot.querySelector('img');
+    shot.querySelector('.canvas').style.cursor = 'zoom-in';
+    shot.querySelector('.canvas').addEventListener('click', function () { openBox(img); });
+  });
+  document.querySelectorAll('.shot').forEach(function (shot) {
+    var img = shot.querySelector('.canvas img');
+    shot.querySelector('.canvas').addEventListener('click', function (e) { if (!e.target.closest('.pin')) openBox(img); });
+    shot.querySelector('.zoom-btn').addEventListener('click', function () { openBox(img); });
+  });
+
+  /* ---- Copier le lien de l'APK ---- */
+  document.querySelectorAll('.copy-mini').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var t = btn.getAttribute('data-copy-text');
+      var ok = function () { btn.textContent = 'Copié'; setTimeout(function () { btn.textContent = 'Copier'; }, 1600); };
+      try { navigator.clipboard.writeText(t).then(ok, function () {}); } catch (e) {}
+    });
+  });
+
+  /* ---- Copier l'exemple ---- */
+  document.querySelectorAll('.copy-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var pre = document.getElementById(btn.getAttribute('data-copy'));
+      var done = function () { btn.textContent = 'Copié'; setTimeout(function () { btn.textContent = 'Copier'; }, 1600); };
+      var fallback = function () {
+        var r = document.createRange(); r.selectNodeContents(pre);
+        var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+        btn.textContent = 'Texte sélectionné';
+        setTimeout(function () { btn.textContent = 'Copier'; }, 1600);
+      };
+      try {
+        navigator.clipboard.writeText(pre.textContent).then(done, fallback);
+      } catch (e) { fallback(); }
+    });
+  });
+})();
+</script>
+</body>
+</html>

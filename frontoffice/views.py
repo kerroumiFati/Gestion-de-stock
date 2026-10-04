@@ -31,6 +31,16 @@ def page(request, name: str):
     if name == 'admin' and not (request.user.is_authenticated and request.user.is_staff):
         return HttpResponse('Accès refusé', status=403)
 
+    # Tableau des bénéfices : administrateur de l'entreprise uniquement (le PIN est
+    # demandé ensuite par la page et contrôlé par l'API)
+    if name == 'rapport_benefices':
+        from API.benefices_acces import est_admin
+        if not est_admin(request.user):
+            return render(request, 'frontoffice/page/acces_refuse.html', {
+                'titre': 'Accès réservé',
+                'message': "Le tableau de bord des bénéfices est réservé à l'administrateur de l'entreprise.",
+            })   # statut 200 : la navigation du site affiche ce message ; les données restent bloquées par l'API
+
     # Handle stock management pages with data
     if name == 'entrepots_list':
         return entrepots_list(request)
@@ -69,6 +79,8 @@ def page(request, name: str):
         return render(request, 'frontoffice/page/stats_livreurs.html')
     elif name == 'objectifs_vendeurs':
         return render(request, 'frontoffice/page/objectifs_vendeurs.html')
+    elif name == 'etat_livreurs':
+        return render(request, 'frontoffice/page/etat_livreurs.html')
     elif name == 'visites_clients':
         return render(request, 'frontoffice/page/visites_clients.html')
     elif name == 'historique_tournees':

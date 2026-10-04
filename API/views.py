@@ -2194,30 +2194,151 @@ class InventorySessionViewSet(TenantFilterMixin, viewsets.ModelViewSet):
         if session.statut not in ('draft', 'in_progress'):
             return Response({'detail': 'Seules les sessions en brouillon ou en cours peuvent être validées.'}, status=400)
         
-        # Vérifier que tous les produits ont été comptés
+        # Vérifier que tous les produits ont été comptés.
+        # (Avant : lecture de session.missing_products_count, attribut inexistant ->
+        #  AttributeError -> erreur 500 des que la validation etait incomplete.)
+        session.update_completion_percentage()
         if not session.can_be_validated():
+            manquants = session.get_missing_products().select_related('produit')
+            nb_manquants = manquants.count()
+            if session.total_products == 0:
+                detail = "Aucun produit n'a été compté : saisissez au moins un comptage avant de valider."
+            else:
+                detail = (f"Validation impossible : {nb_manquants} produit(s) de la session ne sont pas encore comptés. "
+                          "Comptez-les ou retirez-les, puis validez.")
             return Response({
-                'detail': 'Tous les produits doivent être comptés avant de valider l\'inventaire.',
-                'completion_percentage': session.completion_percentage,
-                'missing_products': session.missing_products_count
+                'detail': detail,
+                'completion_percentage': float(session.completion_percentage or 0),
+                'total_products': session.total_products,
+                'completed_products': session.completed_products,
+                'missing_products': nb_manquants,
+                'missing_products_list': [
+                    {'produit_id': l.produit_id, 'reference': l.produit.reference, 'designation': l.produit.designation}
+                    for l in manquants[:50]
+                ],
             }, status=400)
-        
+
         # pour chaque ligne, créer un mouvement d'écart et mettre à jour le stock produit
-        for l in session.lignes.select_related('produit'):
-            if l.counted_qty is not None:
-                # book stock: utiliser le champ produit.quantite (source actuelle de vérité), sinon somme des mouvements
-                book = l.snapshot_qty if l.snapshot_qty is not None else l.produit.quantite
-                delta = l.counted_qty - book
-                if delta != 0:
-                    StockMove.objects.create(produit=l.produit, delta=delta, source='INV', ref_id=str(session.id), note=f'Inventaire {session.numero}')
-                    # maintenir la cohérence avec le champ quantite
-                    l.produit.quantite = l.produit.quantite + delta
-                    l.produit.save(update_fields=['quantite'])
-        
-        session.statut = 'validated'
-        session.validated_by = request.user
-        session.save(update_fields=['statut', 'validated_by'])
+        # (atomique : une erreur en cours de route n'applique aucun ajustement partiel)
+        from django.db import transaction
+        with transaction.atomic():
+            for l in session.lignes.select_related('produit'):
+                if l.counted_qty is not None:
+                    # book stock: utiliser le champ produit.quantite (source actuelle de vérité), sinon somme des mouvements
+                    book = l.snapshot_qty if l.snapshot_qty is not None else l.produit.quantite
+                    delta = l.counted_qty - book
+                    if delta != 0:
+                        StockMove.objects.create(produit=l.produit, delta=delta, source='INV', ref_id=str(session.id), note=f'Inventaire {session.numero}')
+                        # maintenir la cohérence avec le champ quantite
+                        l.produit.quantite = l.produit.quantite + delta
+                        l.produit.save(update_fields=['quantite'])
+
+            session.statut = 'validated'
+            session.validated_by = request.user
+            session.save(update_fields=['statut', 'validated_by'])
         return Response({'detail': 'Inventaire validé'}, status=200)
+
+    # ------------------------------------------------------------------
+    # Feuille de comptage, saisie en masse, export
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _bool_param(value):
+        return str(value or '').strip().lower() in ('1', 'true', 'oui', 'yes', 'on')
+
+    @action(detail=True, methods=['get'])
+    def liste_comptage(self, request, pk=None):
+        """Liste ordonnee et numerotee des produits a compter (sans quantite theorique).
+        Meme liste et memes numeros que la feuille de comptage imprimee.
+        Params : categorie=<id>, restants=1"""
+        from .inventaire_utils import construire_liste_comptage
+        session = self.get_object()
+        elements = construire_liste_comptage(
+            session, request,
+            categorie_id=request.query_params.get('categorie') or None,
+            restants=self._bool_param(request.query_params.get('restants')))
+        return Response({
+            'session': {'id': session.id, 'numero': session.numero, 'statut': session.statut,
+                        'modifiable': session.statut in ('draft', 'in_progress')},
+            'total': len(elements),
+            'comptes': sum(1 for e in elements if e['counted_qty'] is not None),
+            'lignes': elements,
+        })
+
+    @action(detail=True, methods=['get'])
+    def feuille_comptage(self, request, pk=None):
+        """Feuille de comptage imprimable (HTML A4), SANS quantite theorique.
+        Params : categorie=<id>, restants=1"""
+        from django.template.loader import render_to_string
+        from django.utils import timezone
+        from .inventaire_utils import construire_liste_comptage, grouper_par_categorie
+        session = self.get_object()
+        categorie_id = request.query_params.get('categorie') or None
+        restants = self._bool_param(request.query_params.get('restants'))
+        elements = construire_liste_comptage(session, request, categorie_id=categorie_id, restants=restants)
+        categorie_nom = ''
+        if categorie_id:
+            cat = Categorie.objects.filter(pk=categorie_id).first() if str(categorie_id).isdigit() else None
+            categorie_nom = cat.get_full_path() if cat else ''
+        company = getattr(request, 'company', None) or session.company
+        html = render_to_string('frontoffice/print/feuille_comptage.html', {
+            'session': session,
+            'groupes': grouper_par_categorie(elements),
+            'total': len(elements),
+            'restants': restants,
+            'categorie_id': categorie_id if categorie_nom else '',
+            'categorie_nom': categorie_nom,
+            'societe': company.name if company else '',
+            'edite_le': timezone.localtime(),
+            'edite_par': request.user.get_full_name() or request.user.username,
+        })
+        return HttpResponse(html, content_type='text/html; charset=utf-8')
+
+    @action(detail=True, methods=['post'])
+    def saisie_masse(self, request, pk=None):
+        """Saisie / ressaisie en masse des quantites comptees.
+        Corps : {"lignes": [{"produit_id"|"reference"|"code_barre": ..., "counted_qty": 12}, ...]}
+        counted_qty null remet la ligne a « non compte ». Les lignes valides sont
+        enregistrees, les lignes en erreur sont renvoyees dans `rapport.erreurs`."""
+        from .inventaire_utils import saisir_en_masse
+        session = self.get_object()
+        if session.statut not in ('draft', 'in_progress'):
+            return Response({'detail': 'Cette session ne peut plus être modifiée.'}, status=400)
+        entrees = request.data.get('lignes') if isinstance(request.data, dict) else None
+        if not isinstance(entrees, list) or not entrees:
+            return Response({'detail': 'Aucune ligne à enregistrer (champ « lignes » vide).'}, status=400)
+        if len(entrees) > 5000:
+            return Response({'detail': 'Trop de lignes en une seule fois (5000 maximum).'}, status=400)
+
+        rapport = saisir_en_masse(session, entrees, request)
+        session.refresh_from_db()
+        try:
+            log_event(self.request, 'inventorysession.saisie_masse', target=session,
+                      metadata={k: (len(v) if isinstance(v, list) else v) for k, v in rapport.items()})
+        except Exception:
+            pass
+        return Response({
+            'detail': 'Saisie enregistrée',
+            'rapport': rapport,
+            'session': self.get_serializer(session).data,
+        })
+
+    @action(detail=True, methods=['get'])
+    def export(self, request, pk=None):
+        """Export Excel d'une session d'inventaire (theorique, compte, ecart).
+        NB : pas de parametre `format`, reserve par DRF (negociation de contenu)."""
+        from .inventaire_utils import exporter_session_excel
+        session = self.get_object()
+        buffer = exporter_session_excel(session, request)
+        nom = ''.join(c if c.isalnum() or c in '-_' else '_' for c in str(session.numero))
+        response = HttpResponse(
+            buffer.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = f'attachment; filename="inventaire_{nom}.xlsx"'
+        try:
+            log_event(self.request, 'inventorysession.export', target=session, metadata={'id': session.id})
+        except Exception:
+            pass
+        return response
 
     @action(detail=True, methods=['post'])
     def save_progress(self, request, pk=None):
@@ -4369,11 +4490,21 @@ def export_inventory_report(request):
         return Response({'error': str(e)}, status=500)
 
 
+def _refus_benefices(e):
+    return Response({'detail': e.message, 'raison': e.raison}, status=e.code)
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def profit_data(request):
-    """Données JSON pour le rapport des bénéfices (prix vente - prix achat moyen)."""
-    rows, total_benefice = _get_profit_data()
+    """Données JSON pour le rapport des bénéfices (prix vente - prix achat moyen).
+    Réservé à l'administrateur de l'entreprise, après saisie du code PIN."""
+    from .benefices_acces import AccesRefuse, verifier_acces
+    try:
+        company = verifier_acces(request)
+    except AccesRefuse as e:
+        return _refus_benefices(e)
+    rows, total_benefice = _get_profit_data(company)
     results = []
     for r in rows:
         results.append({
@@ -4395,15 +4526,20 @@ def profit_data(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def export_profit_report(request):
-    """Export du rapport des bénéfices (Excel ou PDF)."""
+    """Export du rapport des bénéfices (Excel ou PDF). Mêmes droits que profit_data."""
+    from .benefices_acces import AccesRefuse, verifier_acces
+    try:
+        company = verifier_acces(request)
+    except AccesRefuse as e:
+        return _refus_benefices(e)
     export_format = request.GET.get('format', 'excel').lower()
     try:
         if export_format == 'pdf':
-            buffer = generate_profit_report_pdf()
+            buffer = generate_profit_report_pdf(company)
             response = HttpResponse(buffer, content_type='application/pdf')
             filename = f'rapport_benefices_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf'
         else:
-            buffer = generate_profit_report_excel()
+            buffer = generate_profit_report_excel(company)
             response = HttpResponse(
                 buffer,
                 content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -4416,6 +4552,53 @@ def export_profit_report(request):
     except Exception as e:
         logger.exception(f"Erreur rapport bénéfices: {e}")
         return Response({'error': str(e)}, status=500)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def benefices_acces(request):
+    """État de l'accès au tableau des bénéfices (admin ? PIN défini ? déverrouillé ?).
+    Pose aussi le cookie CSRF, nécessaire aux POST de saisie du PIN."""
+    from django.middleware.csrf import get_token
+    from .benefices_acces import etat
+    get_token(request)
+    return Response(etat(request))
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def benefices_deverrouiller(request):
+    from .benefices_acces import AccesRefuse, deverrouiller
+    try:
+        res = deverrouiller(request, str(request.data.get('pin', '')))
+    except AccesRefuse as e:
+        log_event(request, 'benefices.pin_refuse', target=None, metadata={'raison': e.raison})
+        return _refus_benefices(e)
+    log_event(request, 'benefices.deverrouille', target=None, metadata={})
+    return Response(res)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def benefices_verrouiller(request):
+    from .benefices_acces import verrouiller
+    return Response(verrouiller(request))
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def benefices_definir_pin(request):
+    """Premier PIN de l'entreprise, ou changement (PIN actuel exigé)."""
+    from .benefices_acces import AccesRefuse, definir_pin
+    d = request.data
+    try:
+        res = definir_pin(request, str(d.get('pin', '')), str(d.get('confirmation', '')),
+                          actuel=str(d.get('pin_actuel', '')) if d.get('pin_actuel') is not None else None)
+    except AccesRefuse as e:
+        log_event(request, 'benefices.pin_change_refuse', target=None, metadata={'raison': e.raison})
+        return _refus_benefices(e)
+    log_event(request, 'benefices.pin_defini', target=None, metadata={})
+    return Response(res)
 
 
 ####################

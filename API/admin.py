@@ -7,7 +7,7 @@ from django.contrib import messages
 from django.db.models import Sum, Count, Q
 from django.http import HttpResponse
 from .models import (
-    Company, UserProfile, SystemConfig,
+    Company, UserProfile, SystemConfig, AccesTableauBenefices,
     Client, Fournisseur, Produit, Achat,
     Vente, LigneVente, Warehouse, ProductStock,
     TransfertStock, LigneTransfertStock, StockMove, Currency,
@@ -831,3 +831,19 @@ class PrixProduitAdmin(admin.ModelAdmin):
             'fields': ('is_active',)
         }),
     )
+
+
+@admin.register(AccesTableauBenefices)
+class AccesTableauBeneficesAdmin(admin.ModelAdmin):
+    """PIN du tableau des bénéfices. PIN oublié : supprimer la ligne de l'entreprise,
+    le prochain administrateur en choisira un nouveau. Le PIN chiffré n'est pas affiché."""
+    list_display = ('company', 'pin_defini', 'echecs', 'bloque_jusqua', 'modifie_par', 'updated_at')
+    fields = ('company', 'echecs', 'bloque_jusqua', 'modifie_par', 'updated_at')
+    readonly_fields = ('company', 'modifie_par', 'updated_at')
+
+    @admin.display(boolean=True, description='PIN défini')
+    def pin_defini(self, obj):
+        return bool(obj.pin_hash)
+
+    def has_add_permission(self, request):
+        return False

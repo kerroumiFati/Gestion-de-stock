@@ -10,3 +10,8 @@ def app_download_page(request):
 
 def app_download_redirect(request):
     return redirect(static('app/app.apk'))
+
+
+def guide_nouveautes(request):
+    """Guide des nouveautés : site statique dans static/guide/ (captures dans static/guide/captures/)."""
+    return redirect(static('guide/index.html'))

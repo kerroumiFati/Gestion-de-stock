@@ -104,6 +104,12 @@ class TourneeMobile(models.Model):
     argent_depart = models.DecimalField('Argent de départ', max_digits=12, decimal_places=2, default=0,
                                         help_text='Montant prédéfini donné au livreur en début de tournée')
 
+    # Entrepôt / van de départ choisi pour cette tournée
+    entrepot_depart = models.ForeignKey('Warehouse', on_delete=models.SET_NULL, null=True, blank=True,
+                                        related_name='tournees_depart',
+                                        verbose_name='Entrepôt de départ',
+                                        help_text="Entrepôt / van de départ de la tournée (reporté sur la fiche du livreur)")
+
     # Code de prix à utiliser pour les ventes de cette tournée
     code_prix = models.ForeignKey('CodePrix', on_delete=models.SET_NULL, null=True, blank=True,
                                   related_name='tournees_mobiles',
@@ -1422,8 +1428,11 @@ class ObjectifVendeur(models.Model):
     - 'entrepot'  : CA des produits rattaches a un entrepot / gamme (Produit.entrepot_rattachement)
     - 'categorie' : CA des produits d'un type de produit (categorie et ses sous-categories)
     Un vendeur a typiquement deux objectifs distincts par mois, chacun avec son propre
-    taux de reussite. Le CA realise = somme des lignes de ventes de tournee (montant TTC)
-    du vendeur sur le mois, filtrees sur le perimetre.
+    taux de reussite. Le CA realise = lignes de ventes de tournee + lignes de commandes
+    prises (hors annulees), en montant TTC, du vendeur sur le mois, filtrees sur le
+    perimetre. Les deux canaux sont comptes pour tous : un prevendeur realise son CA
+    par des commandes, un livreur par des ventes de tournee. Livrer une commande ne
+    cree pas de vente, il n'y a donc pas de double comptage.
     """
     TYPE_PERIMETRE_CHOICES = [
         ('entrepot', 'Entrepôt / gamme'),
@@ -1495,21 +1504,37 @@ class ObjectifVendeur(models.Model):
         if self.mois and not 1 <= self.mois <= 12:
             raise ValidationError({'mois': 'Le mois doit être compris entre 1 et 12.'})
 
-    def lignes_ventes(self):
-        """Lignes de ventes de tournee du vendeur sur le mois, filtrees sur le perimetre."""
-        qs = LigneVenteTourneeMobile.objects.filter(
-            vente__tournee__livreur=self.livreur,
-            vente__date_vente__year=self.annee,
-            vente__date_vente__month=self.mois,
-        )
+    def _filtrer_perimetre(self, qs):
+        """Restreint des lignes (vente ou commande) aux produits du perimetre."""
         if self.type_perimetre == 'entrepot':
             return qs.filter(produit__entrepot_rattachement=self.entrepot)
         ids = [self.categorie_id] + [c.id for c in self.categorie.get_all_children()] if self.categorie_id else []
         return qs.filter(produit__categorie_id__in=ids)
 
+    def lignes_ventes(self):
+        """Lignes de ventes de tournee du vendeur sur le mois, filtrees sur le perimetre."""
+        return self._filtrer_perimetre(LigneVenteTourneeMobile.objects.filter(
+            vente__tournee__livreur=self.livreur,
+            vente__date_vente__year=self.annee,
+            vente__date_vente__month=self.mois,
+        ))
+
+    def lignes_commandes(self):
+        """Lignes des commandes prises par le vendeur sur le mois (hors annulees)."""
+        return self._filtrer_perimetre(LigneCommandeClient.objects.filter(
+            commande__livreur=self.livreur,
+            commande__date_commande__year=self.annee,
+            commande__date_commande__month=self.mois,
+        ).exclude(commande__statut='cancelled'))
+
+    def calculer_ca_ventes(self):
+        return self.lignes_ventes().aggregate(total=models.Sum('montant_ttc'))['total'] or Decimal('0')
+
+    def calculer_ca_commandes(self):
+        return self.lignes_commandes().aggregate(total=models.Sum('montant_ttc'))['total'] or Decimal('0')
+
     def calculer_ca_realise(self):
-        total = self.lignes_ventes().aggregate(total=models.Sum('montant_ttc'))['total']
-        return total or Decimal('0')
+        return self.calculer_ca_ventes() + self.calculer_ca_commandes()
 
     @staticmethod
     def calculer_taux(ca_realise, montant_objectif):

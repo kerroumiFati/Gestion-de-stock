@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Feuille de comptage {{ session.numero }}</title>
+<style>
+    @page { size: A4 portrait; margin: 12mm 10mm 14mm; }
+    * { box-sizing: border-box; }
+    body { font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #1a202c; margin: 0; background: #edf2f7; }
+    .toolbar { position: sticky; top: 0; z-index: 5; background: #2d3748; color: #fff; padding: 10px 16px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .toolbar strong { font-size: 14px; margin-right: auto; }
+    .toolbar a, .toolbar button { font: inherit; font-size: 13px; padding: 7px 14px; border-radius: 6px; border: 1px solid #a0aec0; background: #fff; color: #2d3748; cursor: pointer; text-decoration: none; }
+    .toolbar button.primary { background: #10b981; border-color: #10b981; color: #fff; font-weight: 700; }
+    .toolbar .on { background: #ebf8ff; border-color: #63b3ed; }
+    .page { background: #fff; max-width: 210mm; margin: 14px auto; padding: 12mm 10mm; box-shadow: 0 2px 10px rgba(0,0,0,.12); }
+    .head { display: flex; justify-content: space-between; gap: 16px; border-bottom: 2px solid #1a202c; padding-bottom: 8px; margin-bottom: 10px; }
+    .head h1 { font-size: 18px; margin: 0 0 2px; letter-spacing: .02em; }
+    .head .societe { font-size: 12px; color: #4a5568; }
+    .head .ref { text-align: right; font-size: 12px; line-height: 1.5; }
+    .head .ref b { font-size: 14px; }
+    .fields { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 18px; margin-bottom: 10px; font-size: 11px; }
+    .field { display: flex; align-items: flex-end; gap: 6px; }
+    .field span { white-space: nowrap; color: #4a5568; }
+    .field i { flex: 1; border-bottom: 1px solid #4a5568; height: 16px; }
+    .consigne { font-size: 10px; color: #4a5568; border: 1px dashed #a0aec0; padding: 5px 8px; border-radius: 4px; margin-bottom: 10px; }
+    table { width: 100%; border-collapse: collapse; }
+    thead { display: table-header-group; }
+    tr { page-break-inside: avoid; break-inside: avoid; }
+    th, td { border: 1px solid #4a5568; padding: 4px 5px; vertical-align: middle; }
+    th { background: #e2e8f0; font-size: 10px; text-transform: uppercase; letter-spacing: .02em; }
+    td.n { width: 8mm; text-align: center; color: #4a5568; }
+    td.ref { width: 26mm; font-family: "Courier New", monospace; font-size: 10.5px; }
+    td.cb { width: 28mm; font-family: "Courier New", monospace; font-size: 10px; color: #4a5568; }
+    td.cond { width: 20mm; text-align: center; font-size: 10px; color: #4a5568; }
+    td.saisie { width: 17mm; height: 8.5mm; }
+    td.total { width: 20mm; height: 8.5mm; background: #f7fafc; }
+    td.obs { width: 26mm; }
+    tr.cat td { background: #2d3748; color: #fff; font-weight: 700; font-size: 11px; padding: 5px 6px; }
+    tr.deja td { color: #718096; }
+    .deja-mark { font-size: 9px; color: #718096; font-style: italic; }
+    .foot { margin-top: 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 24px; font-size: 11px; }
+    .sign { border: 1px solid #4a5568; height: 24mm; padding: 5px 7px; color: #4a5568; }
+    .meta { margin-top: 8px; font-size: 9px; color: #718096; text-align: center; }
+    .vide { text-align: center; padding: 30px; color: #718096; font-size: 13px; }
+    @media print {
+        body { background: #fff; }
+        .toolbar { display: none !important; }
+        .page { box-shadow: none; margin: 0; padding: 0; max-width: none; }
+        th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        tr.cat td, td.total { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+</style>
+</head>
+<body>
+<div class="toolbar">
+    <strong>Feuille de comptage &middot; {{ session.numero }}</strong>
+    <a href="?{% if categorie_id %}categorie={{ categorie_id }}&amp;{% endif %}{% if not restants %}restants=1{% endif %}" class="{% if restants %}on{% endif %}">
+        {% if restants %}&#10003; Restants uniquement{% else %}Restants uniquement{% endif %}
+    </a>
+    <button type="button" class="primary" onclick="window.print()">Imprimer</button>
+</div>
+
+<div class="page">
+    <div class="head">
+        <div>
+            <h1>FEUILLE DE COMPTAGE</h1>
+            <div class="societe">{{ societe|default:"" }}</div>
+            {% if categorie_nom %}<div class="societe">Catégorie : {{ categorie_nom }}</div>{% endif %}
+            {% if restants %}<div class="societe">Produits restant à compter uniquement</div>{% endif %}
+        </div>
+        <div class="ref">
+            Inventaire <b>{{ session.numero }}</b><br>
+            Date : {{ session.date|date:"d/m/Y" }}<br>
+            {{ total }} produit{{ total|pluralize }}
+        </div>
+    </div>
+
+    <div class="fields">
+        <div class="field"><span>Compté par</span><i></i></div>
+        <div class="field"><span>Zone / rayon</span><i></i></div>
+        <div class="field"><span>Date et heure</span><i></i></div>
+    </div>
+
+    <div class="consigne">
+        Comptez ce qui est physiquement présent, sans consulter le stock informatique.
+        Pour un produit conditionné, notez les cartons complets et les unités à part.
+        Écrivez 0 si le produit est absent. Une rature se corrige en barrant et en réécrivant à côté.
+    </div>
+
+    {% if groupes %}
+    <table>
+        <thead>
+            <tr>
+                <th>N°</th>
+                <th>Référence</th>
+                <th>Désignation</th>
+                <th>Code-barres</th>
+                <th>Cond.</th>
+                <th>Cartons</th>
+                <th>Unités</th>
+                <th>Total</th>
+                <th>Observations</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for categorie, elements in groupes %}
+            <tr class="cat"><td colspan="9">{{ categorie }} ({{ elements|length }})</td></tr>
+            {% for e in elements %}
+            <tr{% if e.counted_qty is not None %} class="deja"{% endif %}>
+                <td class="n">{{ e.numero }}</td>
+                <td class="ref">{{ e.reference }}</td>
+                <td>{{ e.designation }}{% if e.counted_qty is not None %} <span class="deja-mark">(déjà saisi)</span>{% endif %}</td>
+                <td class="cb">{{ e.code_barre }}</td>
+                <td class="cond">{% if e.unites_par_carton > 1 %}ct de {{ e.unites_par_carton }}{% else %}&ndash;{% endif %}</td>
+                <td class="saisie"{% if e.unites_par_carton <= 1 %} style="background:#edf2f7"{% endif %}></td>
+                <td class="saisie"></td>
+                <td class="total"></td>
+                <td class="obs"></td>
+            </tr>
+            {% endfor %}
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="vide">Aucun produit à compter pour ces critères.</div>
+    {% endif %}
+
+    <div class="foot">
+        <div class="sign">Signature du compteur</div>
+        <div class="sign">Signature du contrôleur</div>
+    </div>
+    <div class="meta">Inventaire {{ session.numero }} &middot; feuille éditée le {{ edite_le|date:"d/m/Y H:i" }} par {{ edite_par }} &middot; les numéros de ligne correspondent à l'écran de saisie en masse</div>
+</div>
+</body>
+</html>

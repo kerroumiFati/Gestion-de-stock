@@ -1,0 +1,204 @@
+{% load static %}
+{% load i18n %}
+<script>
+// Chargement unique du script (navigation SPA), meme mecanisme que objectifs_vendeurs.html
+if (!window.__etat_livreurs_script_loaded__) {
+    window.__etat_livreurs_script_loaded__ = true;
+    var s = document.createElement('script');
+    s.src = "{% static 'script/etat_livreurs.js' %}?v=20261004d";
+    s.onload = function () {
+        setTimeout(function () {
+            document.dispatchEvent(new CustomEvent('fragment:loaded', {
+                detail: { name: 'etat_livreurs', container: document.getElementById('main-content') }
+            }));
+        }, 50);
+    };
+    document.head.appendChild(s);
+} else {
+    setTimeout(function () {
+        document.dispatchEvent(new CustomEvent('fragment:loaded', {
+            detail: { name: 'etat_livreurs', container: document.getElementById('main-content') }
+        }));
+    }, 50);
+}
+</script>
+
+<style>
+.el-page { padding: 20px 0; }
+.el-title {
+    font-size: 1.8rem; font-weight: 600; color: #2d3748; margin-bottom: 8px;
+    display: flex; align-items: center; gap: 12px;
+}
+.el-title i { color: #2563eb; font-size: 1.8rem; }
+.el-sub { color: #64748b; margin-bottom: 22px; padding-bottom: 15px; border-bottom: 2px solid #e2e8f0; }
+.el-section {
+    background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px 24px;
+    margin-bottom: 22px; box-shadow: 0 1px 3px rgba(0,0,0,.05);
+}
+.el-filters { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; }
+.el-filters .form-group { margin: 0; }
+.el-filters label { font-size: .85rem; font-weight: 600; color: #475569; margin-bottom: 4px; display: block; }
+.el-quick { display: flex; gap: 6px; flex-wrap: wrap; }
+.el-quick button { border: 1px solid #cbd5e1; background: #fff; border-radius: 999px; padding: 5px 12px; font-size: .85rem; color: #334155; }
+.el-quick button.active, .el-quick button:hover { background: #2563eb; border-color: #2563eb; color: #fff; }
+
+.el-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 16px; margin-bottom: 22px; }
+.el-card { border-radius: 12px; padding: 18px 20px; color: #fff; cursor: pointer; transition: transform .15s, box-shadow .15s; border: 3px solid transparent; }
+.el-card:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(15,23,42,.15); }
+.el-card.selected { border-color: #0f172a; }
+.el-card .v { font-size: 2rem; font-weight: 700; line-height: 1.1; }
+.el-card .l { font-size: .92rem; opacity: .95; margin-top: 4px; }
+.el-card.ecart { background: linear-gradient(135deg, #ef4444, #b91c1c); }
+.el-card.controle { background: linear-gradient(135deg, #f59e0b, #d97706); }
+.el-card.net { background: linear-gradient(135deg, #10b981, #047857); }
+.el-card.argent { background: linear-gradient(135deg, #334155, #0f172a); cursor: default; }
+.el-card.argent:hover { transform: none; box-shadow: none; }
+
+.el-legend { display: flex; flex-wrap: wrap; gap: 18px; font-size: .85rem; color: #475569; margin-bottom: 14px; }
+.el-legend span { display: inline-flex; align-items: center; gap: 6px; }
+
+.el-table { width: 100%; border-collapse: collapse; }
+.el-table th { font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; color: #64748b; padding: 10px 12px; border-bottom: 2px solid #e2e8f0; text-align: left; white-space: nowrap; }
+.el-table td { padding: 12px; border-bottom: 1px solid #eef2f7; vertical-align: middle; }
+.el-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.el-table tr.el-row:hover { background: #f8fafc; }
+.el-name { font-weight: 600; color: #1e293b; }
+.el-name small { display: block; color: #94a3b8; font-weight: 400; }
+
+.el-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 11px; border-radius: 999px; font-weight: 700; font-size: .82rem; white-space: nowrap; }
+.el-badge.ecart { background: #fee2e2; color: #b91c1c; }
+.el-badge.a_controler { background: #fef3c7; color: #b45309; }
+.el-badge.net { background: #d1fae5; color: #047857; }
+.el-badge.aucune { background: #f1f5f9; color: #64748b; }
+.el-neg { color: #b91c1c; font-weight: 700; }
+.el-pos { color: #1d4ed8; font-weight: 700; }
+.el-zero { color: #94a3b8; }
+
+.el-btn-detail { border: 1px solid #2563eb; color: #2563eb; background: #fff; border-radius: 8px; padding: 5px 12px; font-size: .85rem; font-weight: 600; white-space: nowrap; }
+.el-btn-detail:hover, .el-btn-detail.open { background: #2563eb; color: #fff; }
+
+.el-detail-row > td { background: #f8fafc; padding: 0 !important; }
+.el-detail { padding: 16px 20px 20px; border-left: 4px solid #2563eb; }
+.el-detail h6 { font-weight: 700; color: #1e293b; margin-bottom: 12px; }
+.el-detail .el-table th { background: #fff; }
+.el-detail .el-table td { background: #fff; font-size: .9rem; }
+.el-motif { font-size: .82rem; color: #64748b; }
+.el-justif { margin-top: 6px; font-size: .82rem; background: #fffbeb; border-left: 3px solid #f59e0b; padding: 6px 8px; color: #78350f; }
+.el-billets { margin-top: 6px; font-size: .78rem; color: #64748b; }
+.el-empty { text-align: center; color: #94a3b8; padding: 30px; }
+.el-calc { font-size: .82rem; color: #64748b; margin-top: 10px; }
+.el-table-detail th, .el-table-detail td { padding: 8px 10px; font-size: .86rem; }
+.el-table-detail tr.el-t td { border-bottom: 0; padding-bottom: 2px; }
+.el-table-detail tr.el-sous td { padding-top: 0; }
+.el-table .nowrap { white-space: nowrap; }
+.el-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: .85rem; color: #475569; margin-left: auto; cursor: pointer; }
+@media (max-width: 900px) {
+    .el-table .hide-sm { display: none; }
+}
+/* Téléphone : tuiles 2 x 2 et lignes du tableau en cartes, sans défilement horizontal */
+@media (max-width: 700px) {
+    .el-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .el-card { padding: 12px 14px; }
+    .el-card .v { font-size: 1.4rem; }
+    .el-section { padding: 14px; }
+    .el-legend { flex-direction: column; gap: 8px; }
+    .el-toggle { margin-left: 0; }
+    .el-section .table-responsive { overflow: visible; }
+    .el-table, .el-table tbody, .el-table tr, .el-table td { display: block; width: 100%; }
+    .el-table thead { display: none; }
+    .el-table tr.el-row { border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; position: relative; }
+    .el-table tr.el-row td { border: 0; padding: 3px 0; text-align: left; }
+    .el-table tr.el-row td.hide-sm { display: block; }
+    .el-table td[data-label] { display: flex !important; justify-content: space-between; gap: 10px; }
+    .el-table td[data-label]::before { content: attr(data-label); color: #64748b; font-size: .82rem; }
+    .el-table tr.el-row td:nth-child(2) { position: absolute; top: 10px; right: 12px; width: auto; }
+    .el-cell-btn { margin-top: 6px; }
+    .el-cell-btn .el-btn-detail { width: 100%; }
+    .el-detail-row > td { background: transparent; }
+    .el-detail { padding: 10px 0 4px 10px; }
+    .el-table-detail tr.el-t { border: 1px solid #e2e8f0; border-bottom: 0; border-radius: 8px 8px 0 0; padding: 8px 10px 2px; background: #fff; }
+    .el-table-detail tr.el-sous { border: 1px solid #e2e8f0; border-top: 0; border-radius: 0 0 8px 8px; padding: 0 10px 8px; margin-bottom: 10px; background: #fff; }
+    .el-table-detail tr.el-sous td:first-child { display: none; }
+    .el-table-detail td { padding: 3px 0 !important; border: 0 !important; }
+    .el-detail .table-responsive { overflow: visible; }
+    .el-table-detail tr.el-sous td { white-space: normal; overflow-wrap: anywhere; }
+    .el-justif, .el-billets, .el-calc { white-space: normal; overflow-wrap: anywhere; }
+    .el-legend > span { flex-wrap: wrap; }
+}
+</style>
+
+<div class="el-page">
+    <h1 class="el-title"><i class="fas fa-balance-scale"></i> {% trans "État des livreurs" %}</h1>
+    <p class="el-sub">{% trans "Chaque livreur est-il net ? L'argent rapporté en fin de tournée est comparé à l'argent attendu." %}</p>
+
+    <div id="el-alerts"></div>
+
+    <div class="el-section">
+        <div class="el-filters">
+            <div class="form-group">
+                <label for="el-debut">{% trans "Du" %}</label>
+                <input type="date" id="el-debut" class="form-control">
+            </div>
+            <div class="form-group">
+                <label for="el-fin">{% trans "Au" %}</label>
+                <input type="date" id="el-fin" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>&nbsp;</label>
+                <div class="el-quick" id="el-quick">
+                    <button type="button" data-q="7">{% trans "7 jours" %}</button>
+                    <button type="button" data-q="30" class="active">{% trans "30 jours" %}</button>
+                    <button type="button" data-q="mois">{% trans "Ce mois" %}</button>
+                </div>
+            </div>
+            <div class="form-group" style="min-width: 220px;">
+                <label for="el-livreur">{% trans "Livreur" %}</label>
+                <select id="el-livreur" class="form-control"><option value="">{% trans "Tous les livreurs" %}</option></select>
+            </div>
+            <div class="form-group">
+                <button type="button" class="btn btn-primary" id="el-refresh"><i class="fas fa-sync-alt"></i> {% trans "Actualiser" %}</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="el-cards">
+        <div class="el-card ecart" data-filtre="ecart" title="{% trans 'Afficher seulement les livreurs en écart' %}">
+            <div class="v" id="el-n-ecart">0</div><div class="l">{% trans "En écart" %}</div>
+        </div>
+        <div class="el-card controle" data-filtre="a_controler" title="{% trans 'Afficher seulement les livreurs à contrôler' %}">
+            <div class="v" id="el-n-controle">0</div><div class="l">{% trans "À contrôler" %}</div>
+        </div>
+        <div class="el-card net" data-filtre="net" title="{% trans 'Afficher seulement les livreurs nets' %}">
+            <div class="v" id="el-n-net">0</div><div class="l">{% trans "Net" %}</div>
+        </div>
+        <div class="el-card argent">
+            <div class="v" id="el-manquant">0</div><div class="l">{% trans "Manquant total" %}</div>
+        </div>
+    </div>
+
+    <div class="el-section">
+        <div class="el-legend" style="align-items:center;">
+            <span><span class="el-badge net"><i class="fas fa-check-circle"></i> Net</span> {% trans "argent rapporté = argent attendu" %} (± <b id="el-tol">10</b> DA)</span>
+            <span><span class="el-badge ecart"><i class="fas fa-exclamation-circle"></i> Écart</span> {% trans "manquant ou excédent" %}</span>
+            <span><span class="el-badge a_controler"><i class="fas fa-clock"></i> À contrôler</span> {% trans "tournée terminée sans rapport de caisse validé" %}</span>
+            <label class="el-toggle"><input type="checkbox" id="el-sans"> {% trans "Afficher les livreurs sans tournée" %} (<span id="el-sans-n">0</span>)</label>
+        </div>
+        <div class="table-responsive">
+            <table class="el-table">
+                <thead>
+                    <tr>
+                        <th>{% trans "Livreur" %}</th>
+                        <th>{% trans "État" %}</th>
+                        <th class="num">{% trans "Tournées" %}</th>
+                        <th class="num hide-sm">{% trans "Manquant" %}</th>
+                        <th class="num hide-sm">{% trans "Excédent" %}</th>
+                        <th class="num">{% trans "Écart net" %}</th>
+                        <th class="hide-sm">{% trans "Dernière tournée" %}</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="el-tbody"><tr><td colspan="8" class="el-empty">{% trans "Chargement…" %}</td></tr></tbody>
+            </table>
+        </div>
+    </div>
+</div>

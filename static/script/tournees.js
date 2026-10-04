@@ -392,6 +392,8 @@ function transformTourneeData(apiData) {
         heure_retour_prevue: apiData.heure_fin || '--:--',
         commentaire: apiData.notes || '',
         warehouse: apiData.warehouse,
+        warehouse_nom: apiData.warehouse_nom || '',
+        warehouse_code: apiData.warehouse_code || '',
         arrets: apiData.arrets || [],
         nombre_arrets: stats.total_arrets || (apiData.arrets ? apiData.arrets.length : 0),
         arrets_livres: stats.arrets_livres || 0,
@@ -470,6 +472,12 @@ function loadClients() {
         });
 }
 
+// Un van est un entrepôt actif dont le code contient "van" (même règle que le backend)
+function isVanWarehouse(warehouse) {
+    if (!warehouse || warehouse.is_active === false) return false;
+    return String(warehouse.code || '').toLowerCase().includes('van');
+}
+
 // Charger les entrepôts
 function loadWarehouses() {
     return fetch('/API/entrepots/?page_size=1000', {
@@ -487,7 +495,10 @@ function loadWarehouses() {
         })
         .then(data => {
             // Gérer la pagination DRF (data.results) ou tableau direct
-            window.warehouses_tournees = Array.isArray(data) ? data : (data.results || []);
+            const tousLesEntrepots = Array.isArray(data) ? data : (data.results || []);
+            // Une tournée part toujours d'un van : ne proposer que les vans actifs
+            window.warehouses_tournees = tousLesEntrepots.filter(isVanWarehouse);
+            console.log('Entrepôts reçus:', tousLesEntrepots.length, '| vans actifs proposés:', window.warehouses_tournees.length);
             console.log('Entrepôts chargés:', window.warehouses_tournees.length);
             console.log('Liste des entrepôts:', window.warehouses_tournees.map(w => `${w.code} - ${w.name}`));
             return window.warehouses_tournees;
@@ -831,6 +842,20 @@ function getStatutArretDisplay(statut) {
     return statuts[statut] || statut;
 }
 
+// Libellé de l'entrepôt de départ d'une tournée ("CODE - Nom")
+function formatWarehouseLabel(tournee) {
+    if (!tournee) return 'Non défini';
+    var code = tournee.warehouse_code || '';
+    var nom = tournee.warehouse_nom || '';
+    if (!nom && tournee.warehouse && Array.isArray(window.warehouses_tournees)) {
+        // Repli : retrouver l'entrepôt dans la liste déjà chargée
+        var w = window.warehouses_tournees.find(function(x) { return x.id == tournee.warehouse; });
+        if (w) { code = w.code || ''; nom = w.name || ''; }
+    }
+    if (!nom && !code) return 'Non défini';
+    return code && nom ? code + ' - ' + nom : (nom || code);
+}
+
 // Afficher la modal des détails
 function showTourneeDetailsModal(tournee) {
     console.log('[TOURNEES] Ouverture modal détails pour:', tournee);
@@ -919,6 +944,7 @@ function showTourneeDetailsModal(tournee) {
             <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-bottom: 30px;">
                 <div><strong>Date:</strong> ${formatDate(tournee.date_tournee || tournee.date)}</div>
                 <div><strong>Livreur:</strong> ${tournee.livreur_nom || 'Non assigné'}</div>
+                <div><strong>Entrepôt de départ:</strong> ${formatWarehouseLabel(tournee)}</div>
                 <div><strong>Départ prévu:</strong> ${tournee.heure_debut || tournee.heure_depart_prevue || '-'}</div>
                 <div><strong>Retour prévu:</strong> ${tournee.heure_fin || tournee.heure_retour_prevue || '-'}</div>
                 <div><strong>Statut:</strong> <span class="badge badge-${tournee.statut}">${tournee.statut_display || getStatutDisplay(tournee.statut)}</span></div>
@@ -1749,6 +1775,16 @@ function submitTourneeForm(id, dateValue, livreurValue, warehouseValue, codePrix
         return response.json();
     })
     .then(tournee => {
+        // L'entrepôt choisi est reporté sur la fiche du livreur côté serveur :
+        // mettre à jour la liste en mémoire pour le prochain pré-remplissage
+        if (tournee && tournee.warehouse && Array.isArray(window.livreurs_tournees)) {
+            const livreurMaj = window.livreurs_tournees.find(l => l.id == tournee.livreur);
+            if (livreurMaj && ['planifiee', 'en_cours'].includes(tournee.statut)) {
+                livreurMaj.entrepot = tournee.warehouse;
+                livreurMaj.entrepot_nom = tournee.warehouse_nom;
+            }
+        }
+
         // Si c'est une modification, supprimer les anciens arrêts d'abord
         const arrets = collectArrets();
         if (id && arrets.length > 0) {
@@ -1947,7 +1983,29 @@ function loadTourneeData(id) {
                 console.log('[TOURNEES] Livreur défini:', livreurSelect.value);
             }
 
-            // Note: TourneeMobile n'a pas de champ warehouse, ignorer
+            // Entrepôt de départ enregistré sur la tournée
+            var warehouseSelect = document.getElementById('warehouse');
+            if (warehouseSelect && tournee.warehouse) {
+                var warehouseLabel = formatWarehouseLabel(tournee);
+                var whExists = Array.from(warehouseSelect.options).some(function(opt) {
+                    return opt.value == tournee.warehouse;
+                });
+                if (!whExists) {
+                    var whOption = document.createElement('option');
+                    whOption.value = tournee.warehouse;
+                    whOption.textContent = warehouseLabel;
+                    warehouseSelect.appendChild(whOption);
+                }
+                warehouseSelect.value = tournee.warehouse;
+                updateCustomSelectTrigger('warehouseTrigger', warehouseLabel);
+                var whOptions = document.getElementById('warehouseOptions');
+                if (whOptions) {
+                    whOptions.querySelectorAll('.custom-select-option').forEach(function(opt) {
+                        opt.classList.toggle('selected', opt.getAttribute('data-value') == tournee.warehouse);
+                    });
+                }
+                console.log('[TOURNEES] Entrepôt défini:', warehouseSelect.value);
+            }
 
             // Formater l'heure pour le champ input (HH:mm seulement)
             function formatTimeForInput(timeStr) {

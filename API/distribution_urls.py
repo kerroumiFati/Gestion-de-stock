@@ -11,6 +11,9 @@ from .distribution_views import (
     ProduitMobileViewSet,
     StatsLivreursAPIView,
     ObjectifVendeurViewSet,
+    IndicateursPerformanceAPIView,
+    CAVendeursAPIView,
+    EtatLivreursAPIView,
 )
 
 router = DefaultRouter()
@@ -30,4 +33,7 @@ router.register(r'objectifs-vendeurs', ObjectifVendeurViewSet, basename='objecti
 urlpatterns = [
     path('', include(router.urls)),
     path('stats-livreurs/', StatsLivreursAPIView.as_view(), name='stats-livreurs'),
+    path('indicateurs-performance/', IndicateursPerformanceAPIView.as_view(), name='indicateurs-performance'),
+    path('ca-vendeurs/', CAVendeursAPIView.as_view(), name='ca-vendeurs'),
+    path('etat-livreurs/', EtatLivreursAPIView.as_view(), name='etat-livreurs'),
 ]
