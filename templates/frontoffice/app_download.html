@@ -1,26 +1,37 @@
-<!DOCTYPE html>
+{% load static %}<!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Télécharger l'application</title>
+    <link rel="stylesheet" href="{% static 'css/nx-carousel.css' %}">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             background: #f0f4f8;
             min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
             padding: 20px;
+            color: #1a202c;
+        }
+        .page {
+            min-height: calc(100vh - 40px);
+            max-width: 1040px;
+            margin: 0 auto;
+            display: grid;
+            gap: 20px;
+            align-content: center;
+            grid-template-columns: minmax(0, 1fr);
+            grid-template-areas: "intro" "showcase";
         }
         .card {
+            grid-area: intro;
             background: white;
             border-radius: 16px;
             padding: 40px 32px;
-            max-width: 420px;
             width: 100%;
+            max-width: 420px;
+            justify-self: center;
             box-shadow: 0 4px 24px rgba(0,0,0,0.10);
             text-align: center;
         }
@@ -51,6 +62,7 @@
             transition: background 0.2s;
         }
         .btn-download:hover { background: #1d4ed8; }
+        .btn-download:focus-visible { outline: 3px solid #93c5fd; outline-offset: 3px; }
         .steps {
             text-align: left;
             background: #f7fafc;
@@ -97,9 +109,93 @@
             color: #92400e;
             text-align: left;
         }
+
+        /* Aperçu de l'application : carrousel de vraies captures */
+        .showcase {
+            grid-area: showcase;
+            min-width: 0;
+            border-radius: 16px;
+            padding: 28px 0 24px;
+            background: linear-gradient(165deg, #e6eeff 0%, #f5f8ff 55%, #ffffff 100%);
+            box-shadow: 0 4px 24px rgba(37,99,235,0.08), inset 0 0 0 1px rgba(37,99,235,0.08);
+            overflow: hidden;
+        }
+        .showcase-head { padding: 0 28px 18px; text-align: center; }
+        .showcase-head .eyebrow {
+            display: inline-block;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #2563eb;
+            background: rgba(37,99,235,0.10);
+            padding: 4px 10px;
+            border-radius: 999px;
+            margin-bottom: 10px;
+        }
+        .showcase-head h2 { font-size: 20px; margin-bottom: 4px; }
+        .showcase-head p { font-size: 14px; color: #718096; }
+        .screens {
+            --w: min(58vw, 236px);
+            --nxc-item: var(--w);
+            --nxc-gap: 18px;
+            --nxc-dim: .5;
+            --nxc-shrink: .88;
+            --nxc-accent: #2563eb;
+            --nxc-line: #cbd5e1;
+            --nxc-muted: #64748b;
+            display: flex;
+            gap: 18px;
+            overflow-x: auto;
+            padding: 6px calc(50% - var(--w) / 2) 4px;
+        }
+        .screen { margin: 0; flex: 0 0 var(--w); text-align: center; }
+        .device {
+            border-radius: 30px;
+            padding: 8px;
+            background: #0f172a;
+            box-shadow: 0 18px 40px rgba(15,23,42,0.22), inset 0 0 0 1px rgba(255,255,255,0.08);
+            transition: transform .35s cubic-bezier(.2,.7,.2,1), box-shadow .35s;
+        }
+        .device img, .device .nxc-missing {
+            display: block;
+            width: 100%;
+            height: auto;
+            aspect-ratio: 540 / 1200;
+            object-fit: cover;
+            object-position: top;
+            border-radius: 22px;
+            background: #e2e8f0;
+        }
+        .screen.is-current .device { box-shadow: 0 24px 50px rgba(37,99,235,0.28), inset 0 0 0 1px rgba(255,255,255,0.08); }
+        .screen.is-current:hover .device { transform: translateY(-4px); }
+        .screen figcaption { padding: 16px 2px 0; }
+        .screen h3 { font-size: 16px; margin-bottom: 4px; }
+        .screen p { font-size: 13px; line-height: 1.45; color: #4a5568; }
+        .showcase .nxc-controls { margin-top: 18px; }
+
+        @media (min-width: 900px) {
+            .page {
+                grid-template-columns: minmax(0, 1.25fr) minmax(360px, 420px);
+                grid-template-areas: "showcase intro";
+                align-items: center;
+                gap: 28px;
+            }
+            .card { max-width: none; }
+            .screens { --w: 236px; }
+        }
+        @media (max-width: 420px) {
+            body { padding: 12px; }
+            .card { padding: 32px 22px; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .device, .btn-download { transition: none; }
+            .screen.is-current:hover .device { transform: none; }
+        }
     </style>
 </head>
 <body>
+<main class="page">
     <div class="card">
         <div class="icon">📦</div>
         <h1>Application GestionStock</h1>
@@ -133,5 +229,30 @@
             ⚠️ Cette application est réservée aux livreurs autorisés. Ne la partagez pas à l'extérieur.
         </div>
     </div>
+
+    {% if screens %}
+    <section class="showcase" aria-labelledby="apercu-titre">
+        <div class="showcase-head">
+            <span class="eyebrow">Aperçu</span>
+            <h2 id="apercu-titre">Ce que vous trouverez dans l'application</h2>
+            <p>Faites glisser pour parcourir les écrans.</p>
+        </div>
+        <div class="screens" data-nx-carousel data-nx-label="Écrans de l'application" data-nx-item="Écran">
+            {% for screen in screens %}
+            <figure class="screen">
+                <div class="device">
+                    <img src="{{ screen.src }}" alt="{{ screen.alt }}" width="540" height="1200"{% if not forloop.first %} loading="lazy"{% endif %}>
+                </div>
+                <figcaption>
+                    <h3>{{ screen.title }}</h3>
+                    <p>{{ screen.text }}</p>
+                </figcaption>
+            </figure>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+</main>
+<script src="{% static 'js/nx-carousel.js' %}" defer></script>
 </body>
 </html>

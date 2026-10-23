@@ -1,0 +1,61 @@
+/* Carrousel nx-carousel (static/js/nx-carousel.js) : structure et commandes.
+   Chaque page règle ses couleurs avec les variables --nxc-* et la largeur des éléments
+   avec --nxc-item (par défaut 78 %). */
+.nxc {
+  display: flex !important;
+  gap: var(--nxc-gap, 1rem);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.nxc::-webkit-scrollbar { display: none; }
+.nxc > * {
+  flex: 0 0 var(--nxc-item, 78%);
+  min-width: 0;
+  scroll-snap-align: center;
+  transition: opacity .3s ease, transform .35s cubic-bezier(.2, .7, .2, 1);
+}
+.nxc > *:not(.is-current) { opacity: var(--nxc-dim, .55); transform: scale(var(--nxc-shrink, .94)); }
+.nxc:focus-visible { outline: 2px solid var(--nxc-accent, #2563eb); outline-offset: 4px; }
+
+.nxc-controls {
+  display: flex; align-items: center; justify-content: center; gap: .75rem;
+  margin-top: var(--nxc-controls-gap, 1rem);
+}
+.nxc-controls[hidden] { display: none; }
+.nxc-btn {
+  flex: none; width: 2.75rem; height: 2.75rem; display: grid; place-items: center;
+  border-radius: 50%; border: 1px solid var(--nxc-line, #d7dee8); cursor: pointer;
+  background: var(--nxc-surface, #fff); color: var(--nxc-ink, #1a202c);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .06);
+  transition: background .2s, color .2s, border-color .2s, opacity .2s, transform .15s;
+}
+.nxc-btn:hover:not(:disabled) { background: var(--nxc-accent, #2563eb); border-color: var(--nxc-accent, #2563eb); color: var(--nxc-accent-ink, #fff); }
+.nxc-btn:active:not(:disabled) { transform: scale(.94); }
+.nxc-btn:disabled { opacity: .35; cursor: default; }
+.nxc-btn:focus-visible, .nxc-dot:focus-visible { outline: 2px solid var(--nxc-accent, #2563eb); outline-offset: 2px; }
+.nxc-dots { display: flex; align-items: center; gap: .15rem; }
+/* zone cliquable de 24 px autour d'un point visible plus petit */
+.nxc-dot {
+  width: 1.5rem; height: 1.5rem; padding: 0; border: 0; background: none; cursor: pointer;
+  display: grid; place-items: center; border-radius: 999px;
+}
+.nxc-dot::before {
+  content: ''; width: .5rem; height: .5rem; border-radius: 999px;
+  background: var(--nxc-line, #cbd5e1); transition: width .3s cubic-bezier(.2, .7, .2, 1), background .3s;
+}
+.nxc-dot[aria-current="true"]::before { width: 1.4rem; background: var(--nxc-accent, #2563eb); }
+.nxc-count { min-width: 2.6rem; text-align: center; font-size: .85rem; font-weight: 600; color: var(--nxc-muted, #64748b); font-variant-numeric: tabular-nums; }
+.nxc-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.nxc-missing {
+  display: grid; place-items: center; aspect-ratio: 9 / 20; width: 100%;
+  border-radius: inherit; background: var(--nxc-line, #e2e8f0); color: var(--nxc-muted, #64748b);
+  font-size: .85rem; font-weight: 600; text-align: center; padding: 1rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nxc > *, .nxc-btn, .nxc-dot::before { transition: none; }
+  .nxc > *:not(.is-current) { transform: none; }
+}

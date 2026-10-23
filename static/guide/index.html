@@ -273,6 +273,18 @@ figcaption { font-size: .88rem; color: var(--muted); }
 .phone-shot figcaption { max-width: 17rem; }
 .phone-shot figcaption b { color: var(--ink); }
 
+/* Suites d'écrans de téléphone : carrousel sur écran étroit (static/js/nx-carousel.js) */
+.phones { --nxc-accent: var(--accent); --nxc-accent-ink: var(--accent-ink); --nxc-ink: var(--ink); --nxc-muted: var(--muted);
+  --nxc-surface: var(--surface); --nxc-line: var(--line); --nxc-item: 74%; --nxc-gap: var(--s-4); }
+@media (max-width: 700px) {
+  .phones.nxc {
+    margin-inline: calc(-1 * clamp(1rem, 4vw, 3.5rem)); padding: var(--s-2) clamp(1rem, 4vw, 3.5rem) var(--s-3);
+    scroll-padding-inline: clamp(1rem, 4vw, 3.5rem);
+  }
+  .phones.nxc > .phone-shot .phone { max-width: 15rem; }
+  .phones.nxc > .phone-shot:hover .phone { transform: none; }
+}
+
 /* Formule cartons */
 .formula {
   display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--s-2) var(--s-3);
@@ -496,6 +508,7 @@ footer { margin-top: var(--s-8); padding-top: var(--s-5); border-top: 1px solid 
   .pin .tip { display: none; }
 }
 </style>
+<link rel="stylesheet" href="../css/nx-carousel.css">
 </head>
 <body>
 <div class="progress" aria-hidden="true"><span id="progressBar"></span></div>
@@ -1012,7 +1025,7 @@ COCA-500	0
             <li>Appuyez sur <b>Modifier commande</b>, en bas, pour enregistrer ; ou sur <b>Annuler</b> pour tout laisser comme avant.</li>
           </ol>
 
-          <div class="phones">
+          <div class="phones" data-nx-carousel data-nx-max="700" data-nx-label="Prévendeur : modifier une commande depuis le bon" data-nx-item="Étape">
             <figure class="phone-shot">
               <div class="phone"><div class="canvas"><img src="captures/B0_tournee_commandes.png" alt="Détails de la tournée : commandes du client Amrani" width="540" height="1200" loading="lazy"></div></div>
               <figcaption><b>1.</b> Les commandes du client dans la tournée : <b>Voir tous les produits</b> ouvre le bon.</figcaption>
@@ -1028,7 +1041,7 @@ COCA-500	0
           </div>
 
           <h3 class="sub read">Livreur : depuis Commandes à livrer</h3>
-          <div class="phones">
+          <div class="phones" data-nx-carousel data-nx-max="700" data-nx-label="Livreur : modifier une commande depuis Commandes à livrer" data-nx-item="Étape">
             <figure class="phone-shot">
               <div class="phone"><div class="canvas"><img src="captures/M6_livreur_commandes_a_livrer.png" alt="Commandes à livrer avec le bouton Modifier la commande" width="540" height="1200" loading="lazy"></div></div>
               <figcaption><b>1.</b> Dans <b>Commandes à livrer</b>, le bouton <b>Modifier la commande</b> sous chaque commande.</figcaption>
@@ -1230,7 +1243,7 @@ COCA-500	0
 
           <h3 class="sub read">Sur le téléphone</h3>
           <div class="read"><p>L'application suit les mêmes règles. Sur chaque ligne du panier ou de la commande, une ligne <b>cartons × 24 + unités</b> s'ajoute sous le compteur d'unités.</p></div>
-          <div class="phones">
+          <div class="phones" data-nx-carousel data-nx-max="700" data-nx-label="Les cartons dans l'application" data-nx-item="Écran">
             <figure class="phone-shot">
               <div class="phone"><div class="canvas"><img src="captures/M1_stock_van_cartons.png" alt="Stock du van : 75 pièces = 12 ct + 3 u" width="540" height="1200" loading="lazy"></div></div>
               <figcaption><b>Stock du van</b> : 75 pièces = <b>12 ct + 3 u</b>.</figcaption>
@@ -1306,7 +1319,7 @@ COCA-500	0
             </table>
           </div>
 
-          <div class="phones">
+          <div class="phones" data-nx-carousel data-nx-max="700" data-nx-label="Contrôle du stock dépôt dans l'application" data-nx-item="Écran">
             <figure class="phone-shot">
               <div class="phone"><div class="canvas"><img src="captures/P1_prevendeur_stock_depot.png" alt="Liste des produits avec le stock dépôt en couleur" width="540" height="1200" loading="lazy"></div></div>
               <figcaption><b>Stock dépôt</b> sous chaque produit : vert, orange (3 et 5), rouge pour la rupture.</figcaption>
@@ -1665,6 +1678,7 @@ COCA-500	0
   </div>
 </div>
 
+<script src="../js/nx-carousel.js"></script>
 <script>
 (function () {
   var root = document.documentElement;
