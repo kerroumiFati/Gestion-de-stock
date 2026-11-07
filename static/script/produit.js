@@ -741,7 +741,11 @@
         response = await fetch(url, opts);
 
         if(!response.ok){
-          const errorData = await response.json();
+          // Une erreur serveur (500) renvoie une page HTML, pas du JSON
+          let errorData;
+          const raw = await response.text();
+          try { errorData = JSON.parse(raw); }
+          catch(_) { errorData = { detail: 'Erreur serveur (' + response.status + '). Réessayez ou essayez une autre image.' }; }
           throw { data: errorData };
         }
       } else {

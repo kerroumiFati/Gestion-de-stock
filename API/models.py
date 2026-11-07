@@ -553,41 +553,56 @@ class Produit(models.Model):
         # Ne compresser que les fichiers fraichement uploades (non encore ecrits sur le
         # disque). Sinon chaque save() recompressait et dupliquait l'image existante.
         if self.image and not getattr(self.image, '_committed', True):
-            from PIL import Image
+            from PIL import Image, ImageOps
             from io import BytesIO
             from django.core.files.uploadedfile import InMemoryUploadedFile
+            import logging
             import os
 
-            # Ouvrir l'image
-            img = Image.open(self.image)
+            try:
+                self.image.seek(0)
+                img = Image.open(self.image)
+                # Appliquer l'orientation EXIF (photos de telephone)
+                img = ImageOps.exif_transpose(img)
 
-            # Convertir en RGB si nécessaire (pour les PNG avec transparence)
-            if img.mode in ('RGBA', 'LA', 'P'):
-                background = Image.new('RGB', img.size, (255, 255, 255))
-                if img.mode == 'P':
+                # JPEG n'accepte que RGB / L / CMYK. Les autres modes (PNG 16 bits
+                # 'I;16', 'I', 'F', 'PA'...) faisaient planter img.save() -> erreur 500.
+                if img.mode in ('RGBA', 'LA', 'PA', 'P'):
                     img = img.convert('RGBA')
-                background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
-                img = background
+                    background = Image.new('RGB', img.size, (255, 255, 255))
+                    background.paste(img, mask=img.split()[-1])
+                    img = background
+                elif img.mode in ('I', 'I;16', 'I;16B', 'I;16L', 'F'):
+                    # Ramener les niveaux 16/32 bits sur 8 bits avant conversion
+                    img = img.point(lambda v: v * (1 / 256)).convert('L')
+                if img.mode not in ('RGB', 'L'):
+                    img = img.convert('RGB')
 
-            # Redimensionner si trop grande (max 800x800)
-            max_size = (800, 800)
-            img.thumbnail(max_size, Image.Resampling.LANCZOS)
+                # Redimensionner si trop grande (max 800x800)
+                img.thumbnail((800, 800), Image.Resampling.LANCZOS)
 
-            # Sauvegarder avec compression
-            output = BytesIO()
-            img.save(output, format='JPEG', quality=85, optimize=True)
-            output.seek(0)
+                output = BytesIO()
+                img.save(output, format='JPEG', quality=85, optimize=True)
+                output.seek(0)
 
-            # Remplacer l'image par la version compressée
-            base_name = os.path.splitext(os.path.basename(self.image.name))[0] or 'produit'
-            self.image = InMemoryUploadedFile(
-                output,
-                'ImageField',
-                f"{base_name}.jpg",
-                'image/jpeg',
-                output.getbuffer().nbytes,
-                None
-            )
+                base_name = os.path.splitext(os.path.basename(self.image.name))[0] or 'produit'
+                self.image = InMemoryUploadedFile(
+                    output,
+                    'ImageField',
+                    f"{base_name}.jpg",
+                    'image/jpeg',
+                    output.getbuffer().nbytes,
+                    None
+                )
+            except Exception:
+                # La compression est une optimisation : en cas d'echec on garde
+                # l'image d'origine plutot que de bloquer la creation du produit.
+                logging.getLogger(__name__).exception(
+                    "Compression de l'image produit impossible, image d'origine conservee")
+                try:
+                    self.image.seek(0)
+                except Exception:
+                    pass
 
         super(Produit, self).save(*args, **kwargs)
 
