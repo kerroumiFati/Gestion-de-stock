@@ -581,24 +581,55 @@ class ClientViewSet(TenantFilterMixin, viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Mettre à jour le solde du client
-        solde_actuel = client.solde or Decimal('0')
-        nouveau_solde = solde_actuel + montant_decimal
-        client.solde = nouveau_solde
-        client.save()
+        app_id = (request.data.get('app_id') or '').strip() or None
 
-        # Enregistrer le paiement dans l'historique
+        def _deja_enregistre(p):
+            return Response({
+                'message': 'Paiement déjà enregistré',
+                'deja_enregistre': True,
+                'paiement_id': p.id,
+                'client_id': p.client_id,
+                'montant_paye': float(p.montant),
+                'solde_avant': float(p.solde_avant),
+                'solde_apres': float(p.solde_apres),
+                'mode_paiement': p.mode_paiement,
+                'date_paiement': p.date_paiement.isoformat(),
+            }, status=status.HTTP_200_OK)
+
+        # Renvoi de la même opération par l'app (retry après timeout) : ne pas recréditer.
+        if app_id:
+            existant = PaiementSolde.objects.filter(app_id=app_id).first()
+            if existant:
+                return _deja_enregistre(existant)
+
         company = getattr(request, 'company', None) or getattr(request.user, 'selected_company', None)
-        paiement = PaiementSolde.objects.create(
-            client=client,
-            company=company,
-            montant=montant_decimal,
-            mode_paiement=mode_paiement,
-            solde_avant=solde_actuel,
-            solde_apres=nouveau_solde,
-            notes=notes,
-            enregistre_par=request.user
-        )
+        try:
+            with transaction.atomic():
+                # Verrou sur le client : deux paiements simultanés ne doivent pas
+                # s'écraser (lecture du solde puis écriture).
+                client = Client.objects.select_for_update().get(pk=client.pk)
+                solde_actuel = client.solde or Decimal('0')
+                nouveau_solde = solde_actuel + montant_decimal
+                client.solde = nouveau_solde
+                client.save()
+
+                # Enregistrer le paiement dans l'historique
+                paiement = PaiementSolde.objects.create(
+                    client=client,
+                    company=company,
+                    montant=montant_decimal,
+                    mode_paiement=mode_paiement,
+                    solde_avant=solde_actuel,
+                    solde_apres=nouveau_solde,
+                    notes=notes,
+                    enregistre_par=request.user,
+                    app_id=app_id,
+                )
+        except IntegrityError:
+            existant = PaiementSolde.objects.filter(app_id=app_id).first() if app_id else None
+            if existant:
+                return _deja_enregistre(existant)
+            raise
 
         # Log l'événement
         try:
@@ -1366,7 +1397,7 @@ class FactureViewSet(TenantFilterMixin, viewsets.ModelViewSet):
     def from_bl(self, request):
         try:
             bl_id = request.data.get('bon_livraison')
-            tva_rate = request.data.get('tva_rate', 20)
+            tva_rate = request.data.get('tva_rate', 0)  # 0 % par défaut (prix déjà définitifs)
             numero = request.data.get('numero')
 
             if not bl_id:
@@ -2768,9 +2799,9 @@ class CountViewSet(APIView):
             Vente_count = Vente.objects.filter(statut='completed').count()
             
             # Statistiques de stock
-            produits_stock_bas = Produit.objects.filter(quantite__lte=F('seuil_alerte')).count()
-            produits_stock_critique = Produit.objects.filter(quantite__lte=F('seuil_critique')).count()
-            produits_rupture = Produit.objects.filter(quantite__lte=0).count()
+            produits_stock_bas = Produit.objects.filter(is_active=True, quantite__lte=F('seuil_alerte')).count()
+            produits_stock_critique = Produit.objects.filter(is_active=True, quantite__lte=F('seuil_critique')).count()
+            produits_rupture = Produit.objects.filter(is_active=True, quantite__lte=0).count()
             
             # Chiffre d'affaires
             ca_total = Vente.objects.filter(statut='completed').aggregate(
@@ -3002,9 +3033,11 @@ class AlertsView(APIView):
     permission_classes = [IsAuthenticated]
     def get(self, request, format=None):
         limit = int(request.GET.get('limit', 5))
-        low_qs = Produit.objects.filter(quantite__lte=F('seuil_alerte'), quantite__gt=F('seuil_critique')).order_by('quantite')
-        critical_qs = Produit.objects.filter(quantite__lte=F('seuil_critique'), quantite__gt=0).order_by('quantite')
-        rupture_qs = Produit.objects.filter(quantite__lte=0).order_by('quantite')
+        # Pas d'alerte pour les produits supprimés (désactivés)
+        actifs = Produit.objects.filter(is_active=True)
+        low_qs = actifs.filter(quantite__lte=F('seuil_alerte'), quantite__gt=F('seuil_critique')).order_by('quantite')
+        critical_qs = actifs.filter(quantite__lte=F('seuil_critique'), quantite__gt=0).order_by('quantite')
+        rupture_qs = actifs.filter(quantite__lte=0).order_by('quantite')
         def map_items(qs, level):
             items = []
             for p in qs[:limit]:
@@ -3426,7 +3459,9 @@ class VenteViewSet(TenantFilterMixin, viewsets.ModelViewSet):
         mobile_sales = []
         try:
             for vm in VenteTourneeMobile.objects.all().select_related('client', 'tournee').order_by('-date_vente'):
-                reste = float(vm.montant_total or 0) - float(vm.montant_paye or 0)
+                # Espèces : l'app enregistre l'argent reçu et, à part, la monnaie rendue.
+                paye = float(vm.montant_paye or 0) - float(getattr(vm, 'montant_rendu', 0) or 0)
+                reste = float(vm.montant_total or 0) - paye
                 mobile_sales.append({
                     'id': f'mobile_{vm.id}',
                     'source': 'mobile',
@@ -3437,7 +3472,7 @@ class VenteViewSet(TenantFilterMixin, viewsets.ModelViewSet):
                     'client_prenom': vm.client.prenom if vm.client else '',
                     'statut': 'completed' if vm.est_synchronise else 'synced',
                     'total_ttc': float(vm.montant_total or 0),
-                    'montant_paye': float(vm.montant_paye or 0),
+                    'montant_paye': paye,
                     'reste_a_payer': max(0, reste),
                     'type_paiement': vm.type_paiement,
                     'tournee': vm.tournee.numero_tournee if vm.tournee else None,
@@ -3946,7 +3981,8 @@ class WarehouseViewSet(TenantFilterMixin, viewsets.ModelViewSet):
         return super().perform_destroy(instance)
 
 class ProductStockViewSet(WarehouseRelatedTenantMixin, viewsets.ModelViewSet):
-    queryset = ProductStock.objects.select_related('produit','warehouse').all()
+    # Les produits supprimés (désactivés) n'apparaissent plus dans les stocks
+    queryset = ProductStock.objects.select_related('produit','warehouse').filter(produit__is_active=True)
     serializer_class = ProductStockSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend]
@@ -4350,6 +4386,7 @@ from .reports import (
     generate_profit_report_excel,
     generate_profit_report_pdf,
     _get_profit_data,
+    perimetre_rapport,
 )
 
 
@@ -4367,12 +4404,12 @@ def export_stock_valuation(request):
 
     try:
         if export_format == 'pdf':
-            buffer = generate_stock_valuation_pdf(warehouse_id)
+            buffer = generate_stock_valuation_pdf(warehouse_id, perimetre_rapport(request))
             response = HttpResponse(buffer, content_type='application/pdf')
             filename = f'valorisation_stock_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf'
             response['Content-Disposition'] = f'attachment; filename="{filename}"'
         else:
-            buffer = generate_stock_valuation_excel(warehouse_id)
+            buffer = generate_stock_valuation_excel(warehouse_id, perimetre_rapport(request))
             response = HttpResponse(
                 buffer,
                 content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -4418,12 +4455,12 @@ def export_sales_report(request):
             end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
 
         if export_format == 'pdf':
-            buffer = generate_sales_report_pdf(start_date, end_date)
+            buffer = generate_sales_report_pdf(start_date, end_date, perimetre_rapport(request))
             response = HttpResponse(buffer, content_type='application/pdf')
             filename = f'rapport_ventes_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf'
             response['Content-Disposition'] = f'attachment; filename="{filename}"'
         else:
-            buffer = generate_sales_report_excel(start_date, end_date)
+            buffer = generate_sales_report_excel(start_date, end_date, perimetre_rapport(request))
             response = HttpResponse(
                 buffer,
                 content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -4463,12 +4500,12 @@ def export_inventory_report(request):
 
     try:
         if export_format == 'pdf':
-            buffer = generate_inventory_report_pdf()
+            buffer = generate_inventory_report_pdf(perimetre_rapport(request))
             response = HttpResponse(buffer, content_type='application/pdf')
             filename = f'inventaire_complet_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf'
             response['Content-Disposition'] = f'attachment; filename="{filename}"'
         else:
-            buffer = generate_inventory_report_excel()
+            buffer = generate_inventory_report_excel(perimetre_rapport(request))
             response = HttpResponse(
                 buffer,
                 content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -5079,7 +5116,7 @@ class ConditionnementViewSet(TenantFilterMixin, viewsets.ModelViewSet):
         if conditionnement:
             serializer = self.get_serializer(conditionnement)
             return Response(serializer.data)
-        return Response({'detail': 'Aucun conditionnement trouvé'}, status=404)
+        return Response({'detail': 'Aucun colisage trouvé'}, status=404)
 
 
 # ==========================================

@@ -601,7 +601,7 @@
             const select = document.getElementById('filterLivreur');
             select.innerHTML = '<option value="">{% trans "Tous les livreurs" %}</option>';
             livreurs.forEach(l => {
-                const nom = `${l.nom} ${l.prenom}`;
+                const nom = l.full_name || l.nom || ('Livreur #' + l.id);
                 select.innerHTML += `<option value="${l.id}">${nom}</option>`;
             });
         } catch (error) {
@@ -687,7 +687,7 @@
 
         let html = '';
         data.forEach(tournee => {
-            const livreurNom = tournee.livreur ? `${tournee.livreur.nom} ${tournee.livreur.prenom}` : '{% trans "Non assigné" %}';
+            const livreurNom = tournee.livreur ? (tournee.livreur.nom || '{% trans "Livreur" %}') : '{% trans "Non assigné" %}';
             const vehicule = tournee.livreur && tournee.livreur.vehicule_type ? tournee.livreur.vehicule_type : '-';
             const immatriculation = tournee.livreur && tournee.livreur.immatriculation ? tournee.livreur.immatriculation : '-';
 

@@ -112,6 +112,7 @@
 .module-card-8 .module-icon { background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%); }
 .module-card-9 .module-icon { background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%); }
 .module-card-10 .module-icon { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); }
+.module-card-trash .module-icon { background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%); }
 
 .module-title {
   font-size: 1.2rem;
@@ -267,7 +268,7 @@
         <i class="fas fa-arrow-right module-arrow"></i>
       </div>
 
-      <div class="admin-module-card module-card-3" onclick="window.location.href='/audit-logs/'">
+      <div class="admin-module-card module-card-3" onclick="loadPage && loadPage('audit')">
         <div class="module-icon">
           <i class="fas fa-history"></i>
         </div>
@@ -316,6 +317,17 @@
         <h5 class="module-title">Fournisseurs</h5>
         <p class="module-description">
           Gérer les fournisseurs et les relations d'achat
+        </p>
+        <i class="fas fa-arrow-right module-arrow"></i>
+      </div>
+
+      <div class="admin-module-card module-card-trash" onclick="loadPage && loadPage('produits_supprimes')">
+        <div class="module-icon">
+          <i class="fas fa-trash-restore"></i>
+        </div>
+        <h5 class="module-title">Produits supprimés</h5>
+        <p class="module-description">
+          Vérifier les produits désactivés, les réactiver ou les supprimer définitivement
         </p>
         <i class="fas fa-arrow-right module-arrow"></i>
       </div>

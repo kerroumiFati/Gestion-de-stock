@@ -18,8 +18,6 @@ from django.contrib import admin
 from django.contrib.auth.decorators import login_required
 from django.urls import path, include
 from django.views.generic import TemplateView, RedirectView
-from frontoffice.create_admin import create_first_admin
-from frontoffice.check_admin import check_existing_admins
 from frontoffice.views_company import create_company_view, list_companies_view, delete_company_view
 from frontoffice.views_app_download import app_download_page, app_download_redirect, guide_nouveautes
 from API.map_view import livreurs_map_view, livreurs_map_data_view
@@ -37,9 +35,10 @@ urlpatterns = [
     path('companies/create/', create_company_view, name='create_company'),
     path('companies/delete/<int:company_id>/', delete_company_view, name='delete_company'),
 
-    # Temporary endpoints for admin management
-    path('create-first-admin/', create_first_admin, name='create_first_admin'),
-    path('check-admins/', check_existing_admins, name='check_admins'),
+    # Les anciennes routes « temporaires » create-first-admin/ et check-admins/ ont été
+    # retirées : accessibles sans authentification, elles exposaient la liste des
+    # super-administrateurs et permettaient de créer le premier. Utiliser
+    # `python manage.py createsuperuser`.
 
     # Distribution module explicit routes (ensure availability regardless of frontoffice/urls)
     path('admindash/livreurs/', login_required(TemplateView.as_view(template_name='frontoffice/master_page.html')), name='livreurs_page'),

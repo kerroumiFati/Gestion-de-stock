@@ -391,6 +391,12 @@ def download_template_view(request):
     except Exception as e:
         return JsonResponse({'error': str(e), 'details': str(type(e))}, status=500)
 
+from .audit_journal import AuditJournalView, AuditJournalFiltresView
+from .produits_supprimes import (
+    ProduitsSupprimesListView, ProduitsSupprimesLotView,
+    ProduitSupprimeDetailView, ProduitSupprimeRestaurerView,
+)
+
 router = routers.DefaultRouter()
 router.register(r'categories', views.CategorieViewSet)
 router.register(r'clients', views.ClientViewSet)
@@ -460,6 +466,16 @@ urlpatterns = [
     path('import/execute/', ImportExecuteView.as_view(), name='import-execute'),
     path('import/template/', download_template_view, name='import-template'),  # Vue fonction au lieu de classe
     path('import/export-products/', ExportProductsView.as_view(), name='export-products'),  # Export liste des produits
+
+    # Journal d'audit lisible (interface d'administration)
+    path('audit-journal/', AuditJournalView.as_view(), name='audit-journal'),
+    path('audit-journal/filtres/', AuditJournalFiltresView.as_view(), name='audit-journal-filtres'),
+
+    # Corbeille des produits supprimés (désactivés) - admin uniquement
+    path('produits-supprimes/', ProduitsSupprimesListView.as_view(), name='produits-supprimes'),
+    path('produits-supprimes/supprimer-lot/', ProduitsSupprimesLotView.as_view(), name='produits-supprimes-lot'),
+    path('produits-supprimes/<int:pk>/', ProduitSupprimeDetailView.as_view(), name='produit-supprime-detail'),
+    path('produits-supprimes/<int:pk>/restaurer/', ProduitSupprimeRestaurerView.as_view(), name='produit-supprime-restaurer'),
 
     # Module de distribution mobile (nouveau système complet)
     path('distribution/', include('API.distribution_urls')),

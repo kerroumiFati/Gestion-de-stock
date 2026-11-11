@@ -1,6 +1,5 @@
-from django.shortcuts import render
+from django.shortcuts import redirect
 from django.contrib.auth.decorators import user_passes_test
-from API.models import AuditLog
 
 
 def staff_required(view):
@@ -8,5 +7,5 @@ def staff_required(view):
 
 @staff_required
 def audit_list(request):
-    logs = AuditLog.objects.select_related('actor').all()[:500]
-    return render(request, 'frontoffice/audit_list.html', {'logs': logs})
+    # L'ancienne page brute est remplacée par l'interface intégrée au tableau de bord
+    return redirect('/admindash/#audit')

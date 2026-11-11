@@ -28,17 +28,25 @@ class ProduitMobileSerializer(serializers.ModelSerializer):
     # peut afficher / saisir en cartons grace a ces deux champs.
     unites_par_carton = serializers.SerializerMethodField()
     cartons_par_colis = serializers.SerializerMethodField()
+    # Photo du produit : chemin relatif (/media/...), comme l'endpoint stock_van
+    image = serializers.SerializerMethodField()
 
     class Meta:
         model = Produit
         fields = (
-            'id', 'reference', 'code_barre', 'designation', 'description',
+            'id', 'reference', 'code_barre', 'designation', 'description', 'image',
             'categorie', 'categorie_nom',
             'prixU', 'unite_mesure', 'unite_mesure_display',
             'stock', 'quantite',
             'unites_par_carton', 'cartons_par_colis',
             'is_active', 'updated_at'
         )
+
+    def get_image(self, obj):
+        try:
+            return obj.image.url if obj.image else None
+        except Exception:
+            return None
 
     def get_unites_par_carton(self, obj):
         return obj.get_unites_par_carton()
@@ -371,6 +379,20 @@ class VenteMobileCreateSerializer(serializers.Serializer):
     lignes_vente = LigneVenteMobileSerializer(many=True)
 
     def create(self, validated_data):
+        """Atomique (vente + lignes + sorties de stock du van) et idempotente sur app_id,
+        y compris quand deux envois de la même vente arrivent en même temps."""
+        from django.db import IntegrityError, transaction
+        app_id = validated_data.get('app_id')
+        try:
+            with transaction.atomic():
+                return self._create(validated_data)
+        except IntegrityError:
+            existing = VenteTourneeMobile.objects.filter(app_id=app_id).first() if app_id else None
+            if existing:
+                return existing
+            raise
+
+    def _create(self, validated_data):
         import logging
         import uuid
         from API.models import ProductStock, Client as ClientModel
@@ -395,8 +417,10 @@ class VenteMobileCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError({'client': f'ID client invalide: {client_id_str}'})
 
         # Vérifier si une vente avec cet app_id existe déjà (déduplication)
+        # (avant : recherche de l'app_id complet dans numero_vente, qui n'en contient que
+        # les 8 derniers caractères → jamais trouvé → vente et stock dupliqués à chaque renvoi)
         if app_id:
-            existing_vente = VenteTourneeMobile.objects.filter(numero_vente__contains=app_id).first()
+            existing_vente = VenteTourneeMobile.objects.filter(app_id=app_id).first()
             if existing_vente:
                 logger.info(f"Vente déjà synchronisée avec app_id={app_id}, retour de la vente existante")
                 return existing_vente
@@ -502,6 +526,7 @@ class VenteMobileCreateSerializer(serializers.Serializer):
             tournee=tournee,  # Lier à la tournée
             arret=arret,      # Lier à l'arrêt
             numero_vente=numero_vente,
+            app_id=app_id or None,
             montant_total=montant_total,
             montant_paye=montant_paye,
             montant_rendu=montant_rendu,
@@ -888,6 +913,16 @@ class LigneCommandeClientCreateSerializer(serializers.Serializer):
     prix_unitaire_ht = serializers.DecimalField(max_digits=10, decimal_places=2)
     taux_tva = serializers.DecimalField(max_digits=5, decimal_places=2, required=False, default=0)
 
+    def to_internal_value(self, data):
+        # L'application mobile envoie `prix_unitaire` (et non `prix_unitaire_ht`) lors d'une
+        # livraison. En mise à jour partielle le champ n'est pas obligatoire : il était donc
+        # ignoré, la ligne recréée avec un prix NULL et le calcul des montants plantait (500).
+        if hasattr(data, 'get') and data.get('prix_unitaire_ht') in (None, '') \
+                and data.get('prix_unitaire') not in (None, ''):
+            data = dict(data.items())
+            data['prix_unitaire_ht'] = data['prix_unitaire']
+        return super().to_internal_value(data)
+
 
 class CommandeClientSerializer(serializers.ModelSerializer):
     """Serializer pour lire les commandes clients"""
@@ -1129,7 +1164,16 @@ class CommandeClientCreateSerializer(serializers.ModelSerializer):
         return commande
 
     def update(self, instance, validated_data):
-        """Mise à jour d'une commande avec ses lignes"""
+        """Mise à jour d'une commande avec ses lignes.
+
+        Atomique : avant, les lignes étaient supprimées puis recréées hors transaction, et
+        une erreur pendant la recréation laissait la commande SANS AUCUNE ligne.
+        """
+        from django.db import transaction
+        with transaction.atomic():
+            return self._update(instance, validated_data)
+
+    def _update(self, instance, validated_data):
         import logging
         logger = logging.getLogger(__name__)
 
@@ -1152,6 +1196,11 @@ class CommandeClientCreateSerializer(serializers.ModelSerializer):
             # Compter les lignes avant suppression
             nb_lignes_avant = instance.lignes.count()
             print(f"[COMMANDE UPDATE] Lignes avant suppression: {nb_lignes_avant}")
+
+            # Prix des lignes existantes : repli si une ligne reçue n'a pas de prix
+            anciens_prix = {
+                l.produit_id: (l.prix_unitaire_ht, l.taux_tva) for l in instance.lignes.all()
+            }
 
             # Supprimer les anciennes lignes
             instance.lignes.all().delete()
@@ -1180,6 +1229,15 @@ class CommandeClientCreateSerializer(serializers.ModelSerializer):
                 # Log des données avant création
                 print(f"[COMMANDE UPDATE] Données après nettoyage: {ligne_data}")
                 print(f"[COMMANDE UPDATE] Prix dans ligne_data: prix_unitaire_ht={ligne_data.get('prix_unitaire_ht', 'NON TROUVÉ')}")
+
+                if ligne_data.get('prix_unitaire_ht') is None:
+                    if produit.id not in anciens_prix:
+                        raise serializers.ValidationError({
+                            'lignes': f"Prix unitaire manquant pour le produit {produit.id}."
+                        })
+                    ligne_data['prix_unitaire_ht'] = anciens_prix[produit.id][0]
+                    if ligne_data.get('taux_tva') is None:
+                        ligne_data['taux_tva'] = anciens_prix[produit.id][1]
 
                 nouvelle_ligne = LigneCommandeClient.objects.create(
                     commande=instance,

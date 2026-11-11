@@ -13,6 +13,7 @@ from API.reports import (
     generate_inventory_report_pdf,
     generate_profit_report_excel,
     generate_profit_report_pdf,
+    perimetre_rapport,
 )
 from API.audit import log_event
 
@@ -25,11 +26,11 @@ def export_stock_valuation(request):
 
     try:
         if export_format == 'pdf':
-            buffer = generate_stock_valuation_pdf(warehouse_id)
+            buffer = generate_stock_valuation_pdf(warehouse_id, perimetre_rapport(request))
             response = HttpResponse(buffer, content_type='application/pdf')
             filename = f'valorisation_stock_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf'
         else:
-            buffer = generate_stock_valuation_excel(warehouse_id)
+            buffer = generate_stock_valuation_excel(warehouse_id, perimetre_rapport(request))
             response = HttpResponse(
                 buffer,
                 content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -68,11 +69,11 @@ def export_sales_report(request):
             end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
 
         if export_format == 'pdf':
-            buffer = generate_sales_report_pdf(start_date, end_date)
+            buffer = generate_sales_report_pdf(start_date, end_date, perimetre_rapport(request))
             response = HttpResponse(buffer, content_type='application/pdf')
             filename = f'rapport_ventes_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf'
         else:
-            buffer = generate_sales_report_excel(start_date, end_date)
+            buffer = generate_sales_report_excel(start_date, end_date, perimetre_rapport(request))
             response = HttpResponse(
                 buffer,
                 content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -106,11 +107,11 @@ def export_inventory_report(request):
 
     try:
         if export_format == 'pdf':
-            buffer = generate_inventory_report_pdf()
+            buffer = generate_inventory_report_pdf(perimetre_rapport(request))
             response = HttpResponse(buffer, content_type='application/pdf')
             filename = f'inventaire_complet_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf'
         else:
-            buffer = generate_inventory_report_excel()
+            buffer = generate_inventory_report_excel(perimetre_rapport(request))
             response = HttpResponse(
                 buffer,
                 content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'

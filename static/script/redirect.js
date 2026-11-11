@@ -118,6 +118,9 @@
             // Vérifier que la table a des colonnes définies dans thead
             var headerCols = $(this).find('thead th').length;
             if(headerCols === 0) return;
+            // DataTables ne gère pas les cellules fusionnées (colspan) dans le corps :
+            // ces tables (ligne « Aucun résultat », état vide…) ont leur propre filtrage JS.
+            if($(this).find('tbody td[colspan], tbody th[colspan]').length) return;
             if(!$.fn.dataTable.isDataTable(this)){
               try {
                 $(this).DataTable();

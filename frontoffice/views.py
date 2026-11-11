@@ -28,7 +28,7 @@ def dashboard(request):
 def page(request, name: str):
     # Serve partial pages used by the sidebar navigation
     # Protect the admin page for staff only
-    if name == 'admin' and not (request.user.is_authenticated and request.user.is_staff):
+    if name in ('admin', 'produits_supprimes', 'audit') and not (request.user.is_authenticated and request.user.is_staff):
         return HttpResponse('Accès refusé', status=403)
 
     # Tableau des bénéfices : administrateur de l'entreprise uniquement (le PIN est
@@ -335,10 +335,10 @@ def clients_solde_dashboard_page(request):
 
 @login_required
 def livreur_app_page(request):
-    # Vérifier que l'utilisateur est dans le groupe "livreurs"
-    if not request.user.groups.filter(name='livreurs').exists():
-        messages.error(request, 'Accès refusé. Seuls les livreurs peuvent accéder à cette application.')
-        return redirect('login')
+    # Même règle que le fragment page('livreur_mobile') : livreurs et administrateurs.
+    # L'utilisateur est déjà connecté : on refuse proprement au lieu de le renvoyer au login.
+    if not (request.user.is_staff or request.user.groups.filter(name='livreurs').exists()):
+        return HttpResponse('Accès refusé. Seuls les livreurs et administrateurs peuvent accéder à cette application.', status=403)
 
     # Render the master page - JavaScript will load the livreur mobile app content based on URL
     return render(request, 'frontoffice/master_page.html')
@@ -397,11 +397,13 @@ def entrepots_list(request):
     # Ajouter les statistiques pour chaque entrepôt
     for entrepot in entrepots:
         # Ne compter que les produits avec stock > 0
-        entrepot.nb_produits = entrepot.stocks.filter(quantity__gt=0).count()
-        entrepot.total_quantite = entrepot.stocks.aggregate(Sum('quantity'))['quantity__sum'] or 0
+        # Les produits supprimés (désactivés) ne comptent plus dans le stock
+        stocks_actifs = entrepot.stocks.filter(produit__is_active=True)
+        entrepot.nb_produits = stocks_actifs.filter(quantity__gt=0).count()
+        entrepot.total_quantite = stocks_actifs.aggregate(Sum('quantity'))['quantity__sum'] or 0
         entrepot.valeur_stock = sum(
             stock.quantity * stock.produit.prixU
-            for stock in entrepot.stocks.select_related('produit')
+            for stock in stocks_actifs.select_related('produit')
             if stock.produit.prixU
         )
         # Vérifier si c'est un van
@@ -423,7 +425,8 @@ def stocks_list(request):
     entrepot_id = request.GET.get('entrepot')
     client_id = request.GET.get('client')
 
-    stocks = ProductStock.objects.select_related('produit', 'warehouse').prefetch_related('produit__conditionnements').all()
+    # Produits supprimés (désactivés) exclus de la liste des stocks
+    stocks = ProductStock.objects.select_related('produit', 'warehouse').prefetch_related('produit__conditionnements').filter(produit__is_active=True)
 
     if entrepot_id:
         stocks = stocks.filter(warehouse_id=entrepot_id)
@@ -705,7 +708,7 @@ def stock_dashboard(request):
     # Statistiques par van
     van_stats = []
     for van in vans:
-        stocks = van.stocks.select_related('produit').all()
+        stocks = van.stocks.select_related('produit').filter(produit__is_active=True)
 
         # Si une date est sélectionnée, calculer le stock à cette date
         if selected_date_obj:
@@ -732,11 +735,15 @@ def stock_dashboard(request):
             stocks_alertes = [s for s in stocks_data if s['quantity'] > 0 and s['quantity'] <= s['produit'].seuil_alerte]
             display_stocks = stocks_data[:10]
         else:
-            total_produits = stocks.count()
-            total_quantite = sum(s.quantity for s in stocks)
-            valeur_stock = sum(s.quantity * s.produit.prixU for s in stocks)
-            stocks_alertes = [s for s in stocks if s.quantity > 0 and s.quantity <= s.produit.seuil_alerte]
-            display_stocks = stocks[:10]
+            # Comme pour une date choisie : on compte les produits réellement présents
+            # dans le van, et on les affiche avant les lignes vides.
+            stocks = list(stocks)
+            presents = [s for s in stocks if s.quantity > 0]
+            total_produits = len(presents)
+            total_quantite = sum(s.quantity for s in presents)
+            valeur_stock = sum(s.quantity * s.produit.prixU for s in presents)
+            stocks_alertes = [s for s in presents if s.quantity <= s.produit.seuil_alerte]
+            display_stocks = sorted(stocks, key=lambda s: (s.quantity <= 0, s.produit.reference))[:10]
 
         # Trouver le livreur associé
         livreur = LivreurDistribution.objects.filter(entrepot=van).first()

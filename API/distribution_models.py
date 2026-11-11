@@ -262,6 +262,10 @@ class VenteTourneeMobile(models.Model):
 
     # Référence
     numero_vente = models.CharField('N° Vente', max_length=50, unique=True, blank=True)
+    # Identifiant généré par l'application mobile : sert à reconnaître un renvoi de la
+    # même vente (retry après timeout) et à ne pas la créer ni déduire le stock deux fois.
+    app_id = models.CharField('ID application', max_length=200, unique=True, null=True,
+                              blank=True, editable=False)
     date_vente = models.DateTimeField('Date vente', default=timezone.now)
 
     # Montants
@@ -1006,6 +1010,34 @@ class LigneCommandeClient(models.Model):
         # car cela cause des calculs multiples. La vue appelle explicitement
         # calculer_totaux() UNE SEULE FOIS après toutes les mises à jour.
         # self.commande.calculer_totaux()
+
+
+class EncaissementCommande(models.Model):
+    """Paiement (total ou partiel) d'une commande encaissé par le livreur.
+
+    Avant, l'application gardait ces paiements sur le téléphone : ils n'arrivaient jamais
+    au serveur. `app_id` (unique) rend l'envoi idempotent : un renvoi après timeout
+    n'ajoute pas le montant une deuxième fois.
+    """
+    commande = models.ForeignKey(CommandeClient, on_delete=models.CASCADE,
+                                 related_name='encaissements')
+    app_id = models.CharField('ID application', max_length=200, unique=True)
+    montant = models.DecimalField('Montant', max_digits=12, decimal_places=2)
+    type_paiement = models.CharField('Type de paiement', max_length=20,
+                                     choices=CommandeClient.TYPE_PAIEMENT_CHOICES,
+                                     default='especes')
+    date_paiement = models.DateTimeField('Date du paiement', default=timezone.now)
+    enregistre_par = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
+                                       blank=True, related_name='encaissements_commandes')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Encaissement de commande'
+        verbose_name_plural = 'Encaissements de commandes'
+        ordering = ['-date_paiement']
+
+    def __str__(self):
+        return f'{self.montant} sur {self.commande.reference}'
 
 
 ###########################

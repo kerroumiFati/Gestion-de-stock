@@ -20,7 +20,8 @@ import string
 from .distribution_models import (
     LivreurDistribution, TourneeMobile, ArretTourneeMobile, VenteTourneeMobile,
     LigneVenteTourneeMobile, RapportCaisseMobile, DepenseTourneeMobile, SyncLogMobile,
-    CommandeClient, LigneCommandeClient, PlanningHebdomadaire, ClientLivreurHebdo
+    CommandeClient, LigneCommandeClient, PlanningHebdomadaire, ClientLivreurHebdo,
+    EncaissementCommande,
     # BonLivraisonVan, LigneBonLivraisonVan  # TODO: Models not yet created
 )
 from .distribution_serializers import (
@@ -564,8 +565,11 @@ class LivreurViewSet(viewsets.ModelViewSet):
         ).order_by('-priorite')
 
         # Récupérer tous les stocks du van
+        # Les produits supprimés dans le logiciel (suppression logique : is_active=False)
+        # ne doivent plus apparaître dans l'app mobile.
         stocks = ProductStock.objects.filter(
-            warehouse=livreur.entrepot
+            warehouse=livreur.entrepot,
+            produit__is_active=True,
         ).select_related('produit', 'produit__categorie').prefetch_related('produit__prix_multiples', 'produit__conditionnements').order_by('produit__reference')
 
         # Filtrer les stocks vides si demandé
@@ -700,6 +704,7 @@ class LivreurViewSet(viewsets.ModelViewSet):
                     # Conditionnement : quantite toujours en unites, ce champ sert a
                     # afficher / saisir en cartons dans l'app mobile
                     'unites_par_carton': stock.produit.get_unites_par_carton(),
+                    'cartons_par_colis': stock.produit.get_cartons_par_colis(),
                     'seuil_alerte': stock.produit.seuil_alerte,
                     'seuil_critique': stock.produit.seuil_critique,
                     'stock_status': stock_status,
@@ -1649,8 +1654,10 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
         print(f"[PARTIAL_UPDATE] Request data: {request.data}")
         print(f"[PARTIAL_UPDATE] PK: {kwargs.get('pk')}")
 
+        import logging
+        logger = logging.getLogger(__name__)
+
         commande = self.get_object()
-        ancien_statut = commande.statut  # Stocker l'ancien statut pour éviter double déduction
         nouveau_statut = request.data.get('statut')
         lignes_ajustees = request.data.get('lignes')
         date_livraison = request.data.get('date_livraison_reelle')
@@ -1658,6 +1665,9 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
         print(f"[PARTIAL_UPDATE] Commande {commande.id}: statut={nouveau_statut}, lignes={'OUI' if lignes_ajustees else 'NON'}")
         if lignes_ajustees:
             print(f"[PARTIAL_UPDATE] Nombre de lignes reçues: {len(lignes_ajustees)}")
+
+        if nouveau_statut == 'delivered':
+            return self._livrer_commande(commande, lignes_ajustees, date_livraison, logger)
 
         # Vérifier si on essaie d'ajuster les quantités d'une commande entièrement payée
         # Permettre l'ajustement pour paiements partiels (est_paye=False)
@@ -1667,97 +1677,6 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
                 {'error': 'Les quantités ne peuvent pas être ajustées pour une commande entièrement payée'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-
-        # Si la commande est marquée comme livrée avec des quantités ajustées
-        if nouveau_statut == 'delivered' and lignes_ajustees:
-            from decimal import Decimal
-            from django.db import transaction
-
-            # Utiliser une transaction pour garantir la cohérence
-            with transaction.atomic():
-                # Calculer les totaux en une seule passe
-                total_ht = Decimal('0')
-                total_ttc = Decimal('0')
-
-                # Mettre à jour chaque ligne
-                for ligne_data in lignes_ajustees:
-                    produit_id = ligne_data.get('produit')
-                    nouvelle_quantite = Decimal(str(ligne_data.get('quantite', 0)))
-
-                    try:
-                        ligne = commande.lignes.get(produit_id=produit_id)
-
-                        # Calculer les nouveaux montants
-                        montant_ht = nouvelle_quantite * ligne.prix_unitaire_ht
-                        montant_tva = montant_ht * (ligne.taux_tva / Decimal('100'))
-                        montant_ttc = montant_ht + montant_tva
-
-                        # Mettre à jour la ligne directement en DB (sans trigger)
-                        LigneCommandeClient.objects.filter(id=ligne.id).update(
-                            quantite=nouvelle_quantite,
-                            montant_ht=montant_ht,
-                            montant_tva=montant_tva,
-                            montant_ttc=montant_ttc
-                        )
-
-                        # Accumuler pour le total
-                        total_ht += montant_ht
-                        total_ttc += montant_ttc
-
-                    except LigneCommandeClient.DoesNotExist:
-                        logger.error(f"Ligne de commande introuvable pour produit {produit_id}")
-
-                # Mettre à jour les totaux de la commande DIRECTEMENT (sans calculer_totaux())
-                CommandeClient.objects.filter(id=commande.id).update(
-                    montant_total_ht=total_ht,
-                    montant_total_ttc=total_ttc
-                )
-
-                # Rafraîchir l'objet pour avoir les nouvelles valeurs
-                commande.refresh_from_db()
-
-        # Mettre à jour le statut et la date de livraison
-        fields_to_update = []
-
-        if nouveau_statut:
-            commande.statut = nouveau_statut
-            fields_to_update.append('statut')
-
-        if nouveau_statut == 'delivered':
-            commande.date_livraison_reelle = date_livraison or timezone.now()
-            fields_to_update.append('date_livraison_reelle')
-
-        # Sauvegarder seulement les champs modifiés (ne pas écraser les montants recalculés)
-        if fields_to_update:
-            commande.save(update_fields=fields_to_update)
-
-        # Rafraîchir l'objet pour récupérer les montants mis à jour
-        commande.refresh_from_db()
-
-        # Si livraison, déduire automatiquement le stock du van
-        # IMPORTANT: Ne déduire que si le statut CHANGE vers 'delivered' (pas si déjà livré)
-        if nouveau_statut == 'delivered' and ancien_statut != 'delivered':
-            # Préparer les quantités livrées si elles ont été ajustées
-            quantites_livrees = None
-            if lignes_ajustees:
-                quantites_livrees = {
-                    ligne_data.get('produit'): int(ligne_data.get('quantite', 0))
-                    for ligne_data in lignes_ajustees
-                }
-
-            # Déduire le stock du van
-            logger.info(f"[PARTIAL_UPDATE] Déduction stock pour commande {commande.id}: {ancien_statut} -> {nouveau_statut}")
-            resultat_stock = commande.livrer_et_deduire_stock_van(quantites_livrees)
-
-            # Ajouter l'info dans la réponse
-            serializer = CommandeClientSerializer(commande)
-            response_data = serializer.data
-            response_data['stock_deduction'] = {
-                'success': resultat_stock['success'],
-                'message': resultat_stock['message'],
-                'mouvements_count': len(resultat_stock['mouvements'])
-            }
-            return Response(response_data)
 
         # Cas normal: mise à jour standard (pas une livraison)
         # Utiliser le serializer pour gérer la mise à jour des champs et des lignes
@@ -1772,6 +1691,195 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
         serializer.save()
         print(f"[PARTIAL_UPDATE] ===== FIN (sauvegardé via serializer) =====")
         return Response(serializer.data)
+
+    def _livrer_commande(self, commande, lignes_ajustees, date_livraison, logger):
+        """Livraison d'une commande (PATCH statut='delivered'), éventuellement avec des
+        quantités ajustées.
+
+        - Idempotente : l'application renvoie la même opération tant qu'elle n'a pas reçu
+          de réponse (timeout, réseau coupé). Une commande déjà livrée est renvoyée telle
+          quelle, sans toucher aux lignes ni au stock. Avant, ce renvoi passait par le
+          serializer qui supprimait toutes les lignes.
+        - Atomique : quantités, statut et déduction du stock du van sont validés ensemble.
+          Avant, le statut était enregistré puis une erreur (logger non défini) empêchait
+          la déduction : commande « livrée » sans sortie de stock.
+        """
+        from decimal import Decimal
+
+        def _reponse(cmd, stock_info):
+            data = CommandeClientSerializer(cmd).data
+            data['stock_deduction'] = stock_info
+            return Response(data)
+
+        # Quantités demandées, indexées par id produit (entier)
+        quantites = None
+        if lignes_ajustees:
+            try:
+                quantites = {
+                    int(l.get('produit')): Decimal(str(l.get('quantite', 0)))
+                    for l in lignes_ajustees
+                }
+            except (TypeError, ValueError, ArithmeticError):
+                return Response({'error': 'Lignes de livraison invalides'},
+                                status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            commande = CommandeClient.objects.select_for_update().get(pk=commande.pk)
+
+            if commande.statut == 'delivered':
+                logger.info(f"[LIVRAISON] Commande {commande.id} déjà livrée : renvoi ignoré")
+                return _reponse(commande, {
+                    'success': True,
+                    'message': 'Commande déjà livrée',
+                    'mouvements_count': 0,
+                    'deja_livree': True,
+                })
+
+            lignes = {l.produit_id: l for l in commande.lignes.all()}
+
+            # Quantités identiques à la commande : rien à ajuster (évite aussi de refuser
+            # à vie la livraison d'une commande payée que l'app envoie avec ses lignes).
+            if quantites is not None and all(
+                pid in lignes and lignes[pid].quantite == q for pid, q in quantites.items()
+            ):
+                quantites = None
+
+            if quantites is not None:
+                if commande.est_paye:
+                    return Response(
+                        {'error': 'Les quantités ne peuvent pas être ajustées pour une commande entièrement payée'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                total_ht = Decimal('0')
+                total_ttc = Decimal('0')
+                for pid, ligne in lignes.items():
+                    q = quantites.get(pid, ligne.quantite)
+                    montant_ht = q * ligne.prix_unitaire_ht
+                    montant_tva = montant_ht * (ligne.taux_tva / Decimal('100'))
+                    montant_ttc = montant_ht + montant_tva
+                    LigneCommandeClient.objects.filter(id=ligne.id).update(
+                        quantite=q, montant_ht=montant_ht,
+                        montant_tva=montant_tva, montant_ttc=montant_ttc,
+                    )
+                    total_ht += montant_ht
+                    total_ttc += montant_ttc
+                for pid in set(quantites) - set(lignes):
+                    logger.error(f"[LIVRAISON] Commande {commande.id} : produit {pid} absent de la commande")
+                CommandeClient.objects.filter(id=commande.id).update(
+                    montant_total_ht=total_ht, montant_total_ttc=total_ttc
+                )
+
+            commande.statut = 'delivered'
+            commande.date_livraison_reelle = date_livraison or timezone.now()
+            commande.save(update_fields=['statut', 'date_livraison_reelle'])
+            commande.refresh_from_db()
+
+            quantites_livrees = (
+                {pid: int(q) for pid, q in quantites.items()} if quantites is not None else None
+            )
+            logger.info(f"[LIVRAISON] Déduction stock pour commande {commande.id}")
+            resultat_stock = commande.livrer_et_deduire_stock_van(quantites_livrees)
+            if not resultat_stock['success']:
+                logger.warning(f"[LIVRAISON] Commande {commande.id} : {resultat_stock['message']}")
+
+        return _reponse(commande, {
+            'success': resultat_stock['success'],
+            'message': resultat_stock['message'],
+            'mouvements_count': len(resultat_stock['mouvements']),
+        })
+
+    @action(detail=False, methods=['post'], url_path='encaisser')
+    def encaisser(self, request):
+        """
+        Encaissement (total ou partiel) d'une commande par le livreur.
+
+        POST /API/distribution/commandes/encaisser/
+        {
+            "app_id": "cmd-paiement-12-1731...",   # identifiant de l'opération (obligatoire)
+            "commande_id": 12,
+            "montant": 1500,
+            "type_paiement": "especes",            # especes | carte | cheque | virement | credit
+            "date_paiement": "2026-11-10T13:00:00Z"
+        }
+
+        Idempotent sur app_id : un renvoi renvoie 200 avec `deja_enregistre: true` sans
+        ajouter le montant une deuxième fois.
+        """
+        from decimal import Decimal, InvalidOperation
+        from django.db import IntegrityError
+        from django.utils.dateparse import parse_datetime
+
+        data = request.data
+        app_id = str(data.get('app_id') or '').strip()
+        if not app_id:
+            return Response({'error': 'app_id est requis'}, status=status.HTTP_400_BAD_REQUEST)
+
+        def _reponse(enc, deja):
+            cmd = CommandeClient.objects.get(pk=enc.commande_id)
+            return Response({
+                'deja_enregistre': deja,
+                'encaissement_id': enc.id,
+                'commande_id': cmd.id,
+                'montant': str(enc.montant),
+                'montant_paye': str(cmd.montant_paye),
+                'est_paye': cmd.est_paye,
+                'reste_a_payer': str(max(cmd.montant_total_ttc - cmd.montant_paye, Decimal('0'))),
+            }, status=status.HTTP_200_OK if deja else status.HTTP_201_CREATED)
+
+        existant = EncaissementCommande.objects.filter(app_id=app_id).first()
+        if existant:
+            return _reponse(existant, True)
+
+        try:
+            montant = Decimal(str(data.get('montant')))
+        except (InvalidOperation, TypeError, ValueError):
+            return Response({'error': 'Montant invalide'}, status=status.HTTP_400_BAD_REQUEST)
+        if montant <= 0:
+            return Response({'error': 'Le montant doit être supérieur à zéro'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        type_paiement = data.get('type_paiement') or 'especes'
+        types_valides = {c[0] for c in CommandeClient.TYPE_PAIEMENT_CHOICES} - {'non_paye'}
+        if type_paiement not in types_valides:
+            return Response({'error': f'Type de paiement invalide : {type_paiement}'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        date_paiement = parse_datetime(str(data.get('date_paiement') or '')) or timezone.now()
+
+        try:
+            with transaction.atomic():
+                # Restreint aux commandes visibles par l'utilisateur (entreprise, livreur)
+                # of=('self',) : PostgreSQL refuse FOR UPDATE sur le côté nullable d'un
+                # LEFT JOIN (select_related('livreur')).
+                commande = self.get_queryset().select_for_update(of=('self',)).filter(
+                    pk=data.get('commande_id')
+                ).first()
+                if commande is None:
+                    return Response({'error': 'Commande introuvable'}, status=status.HTTP_404_NOT_FOUND)
+                if commande.statut == 'cancelled':
+                    return Response({'error': 'Commande annulée : encaissement impossible'},
+                                    status=status.HTTP_409_CONFLICT)
+
+                enc = EncaissementCommande.objects.create(
+                    commande=commande, app_id=app_id, montant=montant,
+                    type_paiement=type_paiement, date_paiement=date_paiement,
+                    enregistre_par=request.user,
+                )
+                commande.montant_paye = (commande.montant_paye or Decimal('0')) + montant
+                commande.est_paye = commande.montant_paye >= commande.montant_total_ttc - Decimal('0.01')
+                commande.type_paiement = type_paiement
+                commande.date_paiement = date_paiement
+                commande.save(update_fields=['montant_paye', 'est_paye', 'type_paiement', 'date_paiement'])
+        except (ValueError, TypeError):
+            return Response({'error': 'commande_id invalide'}, status=status.HTTP_400_BAD_REQUEST)
+        except IntegrityError:
+            # Deux envois simultanés de la même opération
+            existant = EncaissementCommande.objects.filter(app_id=app_id).first()
+            if existant:
+                return _reponse(existant, True)
+            raise
+
+        return _reponse(enc, False)
 
     @action(detail=False, methods=['post'], url_path='modifier_lignes')
     def modifier_lignes(self, request):

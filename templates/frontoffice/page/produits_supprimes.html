@@ -1,0 +1,351 @@
+{% load static %}
+{% load i18n %}
+{% csrf_token %}
+
+<style>
+.ui-close { background: none; border: 0; font-size: 1.6rem; line-height: 1; color: #64748b; padding: 0 4px; margin-left: auto; cursor: pointer; }
+.ui-close:hover { color: #0f172a; }
+.ui-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ui-push { margin-left: auto; }
+.ui-mr { margin-right: 4px; }
+.ps-page { padding: 20px 0; }
+.ps-title {
+  font-size: 1.8rem; font-weight: 600; color: #2d3748;
+  margin-bottom: 8px; display: flex; align-items: center; gap: 12px;
+}
+.ps-title i { color: #dc2626; }
+.ps-subtitle { color: #718096; margin-bottom: 25px; }
+.ps-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px; }
+.ps-stat { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px; }
+.ps-stat-value { font-size: 1.8rem; font-weight: 700; color: #2d3748; }
+.ps-stat-label { color: #718096; font-size: .9rem; }
+.ps-stat.ok .ps-stat-value { color: #16a34a; }
+.ps-stat.ko .ps-stat-value { color: #d97706; }
+.ps-section { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px; }
+.ps-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin-bottom: 15px; }
+.ps-toolbar .ps-search { max-width: 320px; }
+.ps-info { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; border-radius: 8px; padding: 12px 15px; font-size: .9rem; margin-bottom: 15px; }
+.ps-table img { width: 42px; height: 42px; object-fit: cover; border-radius: 6px; background: #f1f5f9; }
+.ps-noimg { width: 42px; height: 42px; border-radius: 6px; background: #f1f5f9; display: flex; align-items: center; justify-content: center; color: #cbd5e0; }
+.ps-badge-ok { background: #dcfce7; color: #166534; }
+.ps-badge-ko { background: #fef3c7; color: #92400e; }
+.ps-blocages { font-size: .8rem; color: #92400e; margin: 4px 0 0; padding-left: 16px; }
+.ps-docs { font-size: .8rem; color: #475569; margin: 4px 0 0; padding-left: 16px; }
+.ps-stock { font-size: .8rem; color: #b91c1c; font-weight: 600; margin-top: 4px; }
+.ps-recap { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; margin-top: 10px; font-size: .9rem; }
+.ps-recap ul { margin: 4px 0 0; padding-left: 18px; }
+.ps-empty { text-align: center; padding: 50px 20px; color: #718096; }
+.ps-empty i { font-size: 3rem; color: #cbd5e0; margin-bottom: 10px; }
+.ps-actions { white-space: nowrap; }
+</style>
+
+<div class="container-fluid ps-page">
+  <div class="ps-title"><i class="fas fa-trash-restore"></i> Produits supprimés</div>
+  <p class="ps-subtitle">
+    Produits désactivés depuis la gestion des produits. Vous pouvez les réactiver ou les supprimer
+    définitivement pour alléger la base de données.
+  </p>
+
+  <div class="ps-stats">
+    <div class="ps-stat"><div class="ps-stat-value" id="ps-total">–</div><div class="ps-stat-label">Produits désactivés</div></div>
+    <div class="ps-stat ok"><div class="ps-stat-value" id="ps-sans-histo">–</div><div class="ps-stat-label">Sans historique (effacés entièrement)</div></div>
+    <div class="ps-stat ko"><div class="ps-stat-value" id="ps-avec-histo">–</div><div class="ps-stat-label">Présents dans des documents</div></div>
+  </div>
+
+  <div class="ps-section">
+    <div class="ps-info">
+      <i class="fas fa-info-circle"></i>
+      La suppression définitive efface le produit avec toutes ses données : stock et quantités (entrepôts et vans),
+      prix, colisage, promotions et photo. Les factures, bons de livraison, ventes, commandes et mouvements
+      déjà enregistrés ne sont pas modifiés : le produit y reste affiché, car ces opérations ont réellement eu lieu.
+    </div>
+
+    <div class="ps-toolbar">
+      <input type="search" class="form-control ps-search" id="ps-search" placeholder="Rechercher (référence, désignation, code-barres)">
+      <div class="ui-row">
+        <button class="btn btn-outline-secondary" id="ps-refresh"><i class="fas fa-sync-alt"></i> Actualiser</button>
+        <button class="btn btn-danger" id="ps-delete-selected" disabled>
+          <i class="fas fa-trash"></i> Supprimer la sélection (<span id="ps-selected-count">0</span>)
+        </button>
+      </div>
+    </div>
+
+    <div id="ps-alert"></div>
+
+    <div class="table-responsive">
+      <table class="table table-hover align-middle ps-table mb-0">
+        <thead>
+          <tr>
+            <th style="width:36px"><input type="checkbox" id="ps-check-all" title="Tout sélectionner"></th>
+            <th style="width:56px"></th>
+            <th>Référence</th>
+            <th>Désignation</th>
+            <th>Catégorie</th>
+            <th>Désactivé le</th>
+            <th>État</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="ps-tbody">
+          <tr><td colspan="8" class="text-center text-muted py-4"><i class="fas fa-spinner fa-spin"></i> Chargement…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Fenêtre de confirmation -->
+<div class="modal fade" id="ps-confirm-modal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="ps-confirm-title">Confirmation</h5>
+        <button type="button" class="close ui-close" data-dismiss="modal" data-bs-dismiss="modal" aria-label="Fermer">&times;</button>
+      </div>
+      <div class="modal-body" id="ps-confirm-body"></div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal" data-bs-dismiss="modal">Annuler</button>
+        <button type="button" class="btn btn-danger" id="ps-confirm-ok">Confirmer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const API = '/API/produits-supprimes/';
+  let produits = [];
+  const selection = new Set();
+
+  const $ = (id) => document.getElementById(id);
+  // Compatible Bootstrap 4 (jQuery, utilisé par le logiciel) et Bootstrap 5
+  function modalShow(el) {
+    if (window.jQuery && jQuery.fn && jQuery.fn.modal) jQuery(el).modal('show');
+    else if (window.bootstrap && bootstrap.Modal) bootstrap.Modal.getOrCreateInstance(el).show();
+  }
+  function modalHide(el) {
+    if (window.jQuery && jQuery.fn && jQuery.fn.modal) jQuery(el).modal('hide');
+    else if (window.bootstrap && bootstrap.Modal) bootstrap.Modal.getOrCreateInstance(el).hide();
+  }
+  function onModalHidden(el, cb) {
+    if (window.jQuery && jQuery.fn && jQuery.fn.modal) jQuery(el).one('hidden.bs.modal', cb);
+    else el.addEventListener('hidden.bs.modal', cb, { once: true });
+  }
+  const modalDispo = () => !!((window.jQuery && jQuery.fn && jQuery.fn.modal) || (window.bootstrap && bootstrap.Modal));
+
+  const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  function csrf() {
+    const m = document.cookie.split('; ').find((r) => r.startsWith('csrftoken='));
+    if (m) return decodeURIComponent(m.split('=')[1]);
+    const el = document.querySelector('input[name="csrfmiddlewaretoken"]');
+    return el ? el.value : '';
+  }
+
+  async function call(url, method, body) {
+    const res = await fetch(url, {
+      method: method || 'GET',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    let data = {};
+    try { data = await res.json(); } catch (e) { /* réponse vide */ }
+    if (!res.ok) throw new Error(data.error || data.detail || ('Erreur HTTP ' + res.status));
+    return data;
+  }
+
+  function alerte(message, type) {
+    $('ps-alert').innerHTML =
+      '<div class="alert alert-' + (type || 'success') + ' alert-dismissible fade show ui-row" role="alert">' +
+      '<div>' + message + '</div><button type="button" class="close ui-close" data-dismiss="alert" data-bs-dismiss="alert" aria-label="Fermer">&times;</button></div>';
+  }
+
+  function confirmer(titre, html, libelleOk) {
+    const modalEl = $('ps-confirm-modal');
+    $('ps-confirm-title').textContent = titre;
+    $('ps-confirm-body').innerHTML = html;
+    $('ps-confirm-ok').textContent = libelleOk || 'Confirmer';
+    if (!modalDispo()) {
+      return Promise.resolve(window.confirm(titre + '\n\n' + $('ps-confirm-body').textContent));
+    }
+    return new Promise((resolve) => {
+      let ok = false;
+      $('ps-confirm-ok').onclick = () => { ok = true; modalHide(modalEl); };
+      onModalHidden(modalEl, () => resolve(ok));
+      modalShow(modalEl);
+    });
+  }
+
+  function dateFr(iso) {
+    if (!iso) return '–';
+    const d = new Date(iso);
+    return d.toLocaleDateString('fr-FR') + ' ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function filtres() {
+    const q = ($('ps-search').value || '').trim().toLowerCase();
+    if (!q) return produits;
+    return produits.filter((p) =>
+      [p.reference, p.designation, p.code_barre, p.categorie].some((v) => String(v || '').toLowerCase().includes(q)));
+  }
+
+  function majSelection() {
+    $('ps-selected-count').textContent = selection.size;
+    $('ps-delete-selected').disabled = selection.size === 0;
+    const visibles = filtres();
+    $('ps-check-all').checked = visibles.length > 0 && visibles.every((p) => selection.has(p.id));
+  }
+
+  function rendu() {
+    const liste = filtres();
+    const tbody = $('ps-tbody');
+    if (!liste.length) {
+      tbody.innerHTML = '<tr><td colspan="8"><div class="ps-empty"><i class="fas fa-check-circle d-block"></i>' +
+        (produits.length ? 'Aucun produit ne correspond à la recherche.' : 'Aucun produit supprimé. La base est propre.') +
+        '</div></td></tr>';
+      majSelection();
+      return;
+    }
+    tbody.innerHTML = liste.map((p) => {
+      const img = p.image
+        ? '<img src="' + esc(p.image) + '" alt="" onerror="this.outerHTML=\'<div class=&quot;ps-noimg&quot;><i class=&quot;fas fa-image&quot;></i></div>\'">'
+        : '<div class="ps-noimg"><i class="fas fa-image"></i></div>';
+      const stock = p.stock_restant
+        ? '<div class="ps-stock"><i class="fas fa-boxes"></i> ' + p.stock_restant + ' unité(s) en stock seront supprimées</div>'
+        : '';
+      const etat = (p.avec_historique
+        ? '<span class="badge ps-badge-ko">Reste dans les documents</span><ul class="ps-docs">' +
+          p.historique.map((b) => '<li>' + esc(b.libelle) + '</li>').join('') + '</ul>'
+        : '<span class="badge ps-badge-ok">Aucun document</span>') + stock;
+      return '<tr>' +
+        '<td><input type="checkbox" class="ps-check" data-id="' + p.id + '"' +
+          (selection.has(p.id) ? ' checked' : '') + '></td>' +
+        '<td>' + img + '</td>' +
+        '<td><strong>' + esc(p.reference) + '</strong><div class="text-muted small">' + esc(p.code_barre) + '</div></td>' +
+        '<td>' + esc(p.designation) + '</td>' +
+        '<td>' + esc(p.categorie || '–') + '</td>' +
+        '<td>' + dateFr(p.date_desactivation) + '</td>' +
+        '<td>' + etat + '</td>' +
+        '<td class="text-end ps-actions">' +
+          '<button class="btn btn-sm btn-outline-success ui-mr ps-restore" data-id="' + p.id + '" title="Réactiver le produit">' +
+            '<i class="fas fa-undo"></i> Réactiver</button>' +
+          '<button class="btn btn-sm btn-outline-danger ps-delete" data-id="' + p.id + '" title="Supprimer définitivement">' +
+            '<i class="fas fa-trash"></i></button>' +
+        '</td></tr>';
+    }).join('');
+    majSelection();
+  }
+
+  async function charger() {
+    try {
+      const data = await call(API);
+      produits = data.results || [];
+      // Garder seulement la sélection encore valide
+      [...selection].forEach((id) => {
+        if (!produits.some((p) => p.id === id)) selection.delete(id);
+      });
+      $('ps-total').textContent = data.count;
+      $('ps-sans-histo').textContent = data.sans_historique;
+      $('ps-avec-histo').textContent = data.avec_historique;
+      rendu();
+    } catch (e) {
+      $('ps-tbody').innerHTML = '<tr><td colspan="8" class="text-center text-danger py-4">' + esc(e.message) + '</td></tr>';
+    }
+  }
+
+  async function restaurer(id) {
+    const p = produits.find((x) => x.id === id);
+    if (!p) return;
+    const ok = await confirmer('Réactiver le produit',
+      'Le produit <strong>' + esc(p.designation) + '</strong> redeviendra visible dans le logiciel et dans l\'application mobile.',
+      'Réactiver');
+    if (!ok) return;
+    try {
+      const r = await call(API + id + '/restaurer/', 'POST');
+      alerte(esc(r.message), 'success');
+      selection.delete(id);
+      charger();
+    } catch (e) { alerte(esc(e.message), 'danger'); }
+  }
+
+  // Résumé de ce qui sera effacé / conservé, affiché dans la confirmation
+  function recap(liste) {
+    const stockLignes = [];
+    liste.forEach((p) => (p.stocks || []).forEach((s) =>
+      stockLignes.push('<li>' + esc(p.designation) + ' : ' + s.quantite + ' dans ' + esc(s.entrepot) + '</li>')));
+    const avecDocs = liste.filter((p) => p.avec_historique);
+    let html = '<div class="ps-recap"><strong>Seront supprimés :</strong> stock, prix, colisage, promotions et photo.';
+    if (stockLignes.length) html += '<ul>' + stockLignes.join('') + '</ul>';
+    html += '</div>';
+    if (avecDocs.length) {
+      html += '<div class="ps-recap"><strong>Restent dans les documents</strong> (factures, BL, ventes, mouvements déjà faits) :<ul>' +
+        avecDocs.map((p) => '<li>' + esc(p.designation) + ' — ' + p.historique.map((h) => esc(h.libelle)).join(', ') + '</li>').join('') +
+        '</ul></div>';
+    }
+    return html;
+  }
+
+  async function supprimer(id) {
+    const p = produits.find((x) => x.id === id);
+    if (!p) return;
+    const ok = await confirmer('Suppression définitive',
+      'Supprimer définitivement <strong>' + esc(p.designation) + '</strong> (' + esc(p.reference) + ') ?<br>' +
+      '<span class="text-danger">Cette action est irréversible.</span>' + recap([p]),
+      'Supprimer définitivement');
+    if (!ok) return;
+    try {
+      const r = await call(API + id + '/', 'DELETE');
+      alerte('« ' + esc(p.designation) + ' » : ' + esc(r.message), 'success');
+      selection.delete(id);
+      charger();
+    } catch (e) { alerte(esc(e.message), 'danger'); }
+  }
+
+  async function supprimerSelection() {
+    const ids = [...selection];
+    if (!ids.length) return;
+    const choisis = produits.filter((p) => selection.has(p.id));
+    const ok = await confirmer('Suppression définitive',
+      'Supprimer définitivement <strong>' + ids.length + ' produit(s)</strong> ?<br>' +
+      '<span class="text-danger">Cette action est irréversible.</span>' + recap(choisis),
+      'Supprimer ' + ids.length + ' produit(s)');
+    if (!ok) return;
+    try {
+      const r = await call(API + 'supprimer-lot/', 'POST', { ids });
+      let msg = r.supprimes + ' produit(s) supprimé(s) définitivement avec leur stock et leurs données.';
+      if (r.refuses) {
+        msg += '<br>' + r.refuses + ' refusé(s) :<ul class="mb-0">' +
+          r.resultats.filter((x) => !x.supprime).map((x) => '<li>' + esc(x.designation) + ' — ' + esc(x.message) + '</li>').join('') + '</ul>';
+      }
+      alerte(msg, r.refuses ? 'warning' : 'success');
+      selection.clear();
+      charger();
+    } catch (e) { alerte(esc(e.message), 'danger'); }
+  }
+
+  // Événements
+  $('ps-tbody').addEventListener('click', (ev) => {
+    const btnR = ev.target.closest('.ps-restore');
+    if (btnR) return restaurer(Number(btnR.dataset.id));
+    const btnD = ev.target.closest('.ps-delete');
+    if (btnD) return supprimer(Number(btnD.dataset.id));
+  });
+  $('ps-tbody').addEventListener('change', (ev) => {
+    const cb = ev.target.closest('.ps-check');
+    if (!cb) return;
+    const id = Number(cb.dataset.id);
+    cb.checked ? selection.add(id) : selection.delete(id);
+    majSelection();
+  });
+  $('ps-check-all').addEventListener('change', (ev) => {
+    filtres().forEach((p) => ev.target.checked ? selection.add(p.id) : selection.delete(p.id));
+    rendu();
+  });
+  $('ps-search').addEventListener('input', rendu);
+  $('ps-refresh').addEventListener('click', charger);
+  $('ps-delete-selected').addEventListener('click', supprimerSelection);
+
+  charger();
+})();
+</script>

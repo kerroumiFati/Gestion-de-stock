@@ -691,7 +691,7 @@ function renderTypeConfig(type) {
                 <div class="alert alert-info">
                     <i class="fas fa-info-circle"></i>
                     Le prix de démunération sera appliqué pour la vente à l'unité depuis un carton ouvert.
-                    Configurez le prix dans le conditionnement du produit.
+                    Configurez le prix dans le colisage du produit.
                 </div>
             `;
             break;

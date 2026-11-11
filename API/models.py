@@ -407,6 +407,11 @@ class Produit(models.Model):
                                               verbose_name="Entrepôt / gamme de rattachement",
                                               help_text="Entrepôt (gamme) auquel ce produit est rattaché pour les objectifs des vendeurs")
     is_active = models.BooleanField("Produit actif", default=True)
+    # Suppression définitive d'un produit qui a de l'historique : stock, prix,
+    # conditionnement, promotions et photo sont effacés ; la fiche reste seulement
+    # pour que les factures, BL, ventes et mouvements continuent de l'afficher.
+    est_archive = models.BooleanField("Supprimé définitivement (archivé)", default=False)
+    archive_le = models.DateTimeField("Date de suppression définitive", null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -806,6 +811,11 @@ class PaiementSolde(models.Model):
         related_name='paiements_solde_enregistres',
         help_text="Utilisateur ayant enregistré ce paiement"
     )
+    # Identifiant de l'opération dans l'application mobile : un renvoi (retry après
+    # timeout) ne doit pas créditer le client une deuxième fois.
+    app_id = models.CharField(
+        "ID application", max_length=200, unique=True, null=True, blank=True, editable=False
+    )
 
     # Métadonnées
     created_at = models.DateTimeField(auto_now_add=True)
@@ -953,7 +963,7 @@ class Facture(models.Model):
     client = models.ForeignKey(Client, on_delete=models.PROTECT, related_name='factures')
     bon_livraison = models.ForeignKey(BonLivraison, on_delete=models.SET_NULL, null=True, blank=True, related_name='factures')
     statut = models.CharField(max_length=10, choices=STATUTS, default='draft')
-    tva_rate = models.DecimalField(max_digits=4, decimal_places=2, default=20.00)  # 20% par défaut
+    tva_rate = models.DecimalField(max_digits=4, decimal_places=2, default=0)  # 0 % par défaut (taux saisi à la création)
     total_ht = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     total_tva = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     total_ttc = models.DecimalField(max_digits=12, decimal_places=2, default=0)
@@ -2091,8 +2101,8 @@ class Conditionnement(models.Model):
 
     class Meta:
         ordering = ['produit__designation']
-        verbose_name = "Conditionnement"
-        verbose_name_plural = "Conditionnements"
+        verbose_name = "Colisage"
+        verbose_name_plural = "Colisages"
 
     def __str__(self):
         return f"{self.produit.designation} - {self.unites_par_carton} u/carton"
@@ -2289,11 +2299,11 @@ class Promotion(models.Model):
 
     # Conditionnement requis
     conditionnement_minimum = models.CharField(
-        "Conditionnement minimum",
+        "Colisage minimum",
         max_length=20,
         choices=UNITE_APPLICATION,
         default='unite',
-        help_text="Conditionnement minimum requis pour la promotion"
+        help_text="Colisage minimum requis pour la promotion"
     )
     carton_complet_requis = models.BooleanField(
         "Carton complet requis",

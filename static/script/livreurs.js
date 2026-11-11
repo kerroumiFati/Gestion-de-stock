@@ -250,14 +250,26 @@ function closeLivreurModal() {
     currentLivreurId = null;
 }
 
+// Nom propre : sans « undefined » / « null » ni espaces en trop
+function nettoyerNom(valeur) {
+    return String(valeur == null ? '' : valeur)
+        .split(/\s+/)
+        .filter(m => m && m !== 'undefined' && m !== 'null')
+        .join(' ');
+}
+
 // Charger les données d'un livreur
 function loadLivreurData(id) {
     fetch(`/API/livreurs/${id}/`)
         .then(response => response.json())
         .then(livreur => {
             document.getElementById('livreur-id').value = livreur.id;
-            document.getElementById('nom').value = livreur.nom;
-            document.getElementById('prenom').value = livreur.prenom;
+            // Le livreur n'a qu'un champ « nom » (nom complet) : on le répartit dans les
+            // deux cases du formulaire. Avant, la case Prénom recevait « undefined »,
+            // qui était ensuite enregistré dans le nom à chaque modification.
+            const parties = nettoyerNom(livreur.full_name || livreur.nom).split(' ').filter(Boolean);
+            document.getElementById('nom').value = parties.shift() || '';
+            document.getElementById('prenom').value = parties.join(' ');
             document.getElementById('telephone').value = livreur.telephone;
             document.getElementById('email').value = livreur.email || '';
             document.getElementById('adresse').value = livreur.adresse || '';
@@ -290,9 +302,11 @@ function setupFormHandlers() {
 
         const id = document.getElementById('livreur-id').value;
         const entrepotValue = document.getElementById('entrepot').value;
+        const nomComplet = nettoyerNom(
+            document.getElementById('nom').value + ' ' + document.getElementById('prenom').value
+        );
         const data = {
-            matricule: document.getElementById('nom').value.substring(0, 10).toUpperCase(),
-            nom: document.getElementById('nom').value + ' ' + document.getElementById('prenom').value,
+            nom: nomComplet,
             telephone: document.getElementById('telephone').value,
             email: document.getElementById('email').value,
             vehicule_marque: document.getElementById('vehicule_marque').value || document.getElementById('vehicule_type').value,
@@ -301,8 +315,14 @@ function setupFormHandlers() {
             entrepot: entrepotValue ? parseInt(entrepotValue) : null
         };
 
+        // Le matricule n'est calculé qu'à la création : le modifier à chaque
+        // enregistrement changeait l'identifiant du livreur.
+        if (!id) {
+            data.matricule = nomComplet.replace(/\s+/g, '').substring(0, 10).toUpperCase();
+        }
+
         const url = id ? `/API/livreurs/${id}/` : '/API/livreurs/';
-        const method = id ? 'PUT' : 'POST';
+        const method = id ? 'PATCH' : 'POST';
 
         // Désactive le bouton pendant la requête pour donner un retour visuel immédiat
         // et éviter les double-soumissions (qui prolongeaient la sensation de blocage).
@@ -816,7 +836,7 @@ function copyToClipboard(text, type) {
 }
 
 // Ajouter les animations CSS
-const style = document.createElement('style');
+(function () { const style = document.createElement('style');
 style.textContent = `
     @keyframes slideIn {
         from {
@@ -840,4 +860,4 @@ style.textContent = `
         }
     }
 `;
-document.head.appendChild(style);
+document.head.appendChild(style); })();

@@ -797,7 +797,7 @@ function getCookie(name) {
 }
 
 // Ajouter les animations CSS
-const style = document.createElement('style');
+(function () { const style = document.createElement('style');
 style.textContent = `
     @keyframes slideIn {
         from {
@@ -821,4 +821,4 @@ style.textContent = `
         }
     }
 `;
-document.head.appendChild(style);
+document.head.appendChild(style); })();

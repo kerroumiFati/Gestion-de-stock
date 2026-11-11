@@ -22,6 +22,29 @@ from django.utils import timezone
 from .models import Produit, Vente, LigneVente, Achat, StockMove, ProductStock, Warehouse
 
 
+# Périmètre « toutes les entreprises » : réservé au staff / superuser, comme dans
+# TenantFilterMixin (API/mixins.py). Valeur par défaut des générateurs.
+TOUTES_ENTREPRISES = object()
+
+
+def perimetre_rapport(request):
+    """Entreprise à laquelle limiter un rapport, selon les mêmes règles que l'API :
+    staff / superuser -> toutes ; sinon l'entreprise de l'utilisateur (None s'il n'en a pas)."""
+    user = request.user
+    if user.is_superuser or user.is_staff:
+        return TOUTES_ENTREPRISES
+    return getattr(request, 'company', None)
+
+
+def _filtrer_entreprise(qs, company, champ='company'):
+    """Limite `qs` à l'entreprise (+ données partagées sans entreprise)."""
+    if company is TOUTES_ENTREPRISES:
+        return qs
+    if company is None:
+        return qs.filter(**{f'{champ}__isnull': True})
+    return qs.filter(Q(**{champ: company}) | Q(**{f'{champ}__isnull': True}))
+
+
 class ExcelReportGenerator:
     """Générateur de rapports Excel avec styles professionnels"""
 
@@ -95,7 +118,7 @@ class ExcelReportGenerator:
                     else:
                         cell.number_format = '#,##0'
 
-        return row_idx + 1
+        return start_row + len(data)
 
     def add_total_row(self, row, label_col, label, value_cols_values):
         """Ajouter une ligne de total"""
@@ -235,7 +258,7 @@ class PDFReportGenerator:
 # RAPPORTS SPÉCIFIQUES
 # ======================
 
-def generate_stock_valuation_excel(warehouse_id=None):
+def generate_stock_valuation_excel(warehouse_id=None, company=TOUTES_ENTREPRISES):
     """
     Rapport de valorisation du stock (Excel)
     Montre la valeur totale du stock par produit
@@ -249,13 +272,14 @@ def generate_stock_valuation_excel(warehouse_id=None):
 
     if warehouse_id:
         # Stock par entrepôt spécifique
-        warehouse = Warehouse.objects.get(pk=warehouse_id)
+        warehouse = _filtrer_entreprise(Warehouse.objects.all(), company).get(pk=warehouse_id)
         gen.ws[f'A{current_row}'] = f"Entrepôt: {warehouse.name}"
         current_row += 2
 
         product_stocks = ProductStock.objects.filter(
             warehouse=warehouse,
-            quantity__gt=0
+            quantity__gt=0,
+            produit__is_active=True,
         ).select_related('produit', 'produit__categorie')
     else:
         # Tous les entrepôts - calculer la somme des stocks
@@ -263,9 +287,10 @@ def generate_stock_valuation_excel(warehouse_id=None):
         current_row += 2
 
         # Obtenir tous les stocks groupés par produit
-        product_stocks = ProductStock.objects.filter(
-            quantity__gt=0
-        ).select_related('produit', 'produit__categorie')
+        product_stocks = _filtrer_entreprise(ProductStock.objects.filter(
+            quantity__gt=0,
+            produit__is_active=True,
+        ), company, 'warehouse__company').select_related('produit', 'produit__categorie')
 
     # En-têtes
     headers = ['Référence', 'Désignation', 'Catégorie', 'Qté Stock', 'Prix Unit.', 'Valeur Stock', 'Statut']
@@ -321,7 +346,7 @@ def generate_stock_valuation_excel(warehouse_id=None):
     return gen.save_to_buffer()
 
 
-def generate_stock_valuation_pdf(warehouse_id=None):
+def generate_stock_valuation_pdf(warehouse_id=None, company=TOUTES_ENTREPRISES):
     """
     Rapport de valorisation du stock (PDF)
     """
@@ -331,22 +356,24 @@ def generate_stock_valuation_pdf(warehouse_id=None):
 
     if warehouse_id:
         # Stock par entrepôt spécifique
-        warehouse = Warehouse.objects.get(pk=warehouse_id)
+        warehouse = _filtrer_entreprise(Warehouse.objects.all(), company).get(pk=warehouse_id)
         gen.elements.append(Paragraph(f"<b>Entrepôt:</b> {warehouse.name}", gen.styles['Normal']))
         gen.elements.append(Spacer(1, 12))
 
         product_stocks = ProductStock.objects.filter(
             warehouse=warehouse,
-            quantity__gt=0
+            quantity__gt=0,
+            produit__is_active=True,
         ).select_related('produit', 'produit__categorie')
     else:
         # Tous les entrepôts
         gen.elements.append(Paragraph("<b>Tous les entrepôts</b>", gen.styles['Normal']))
         gen.elements.append(Spacer(1, 12))
 
-        product_stocks = ProductStock.objects.filter(
-            quantity__gt=0
-        ).select_related('produit', 'produit__categorie')
+        product_stocks = _filtrer_entreprise(ProductStock.objects.filter(
+            quantity__gt=0,
+            produit__is_active=True,
+        ), company, 'warehouse__company').select_related('produit', 'produit__categorie')
 
     # Regrouper les stocks par produit
     from collections import defaultdict
@@ -400,7 +427,7 @@ def generate_stock_valuation_pdf(warehouse_id=None):
     return gen.build()
 
 
-def generate_sales_report_excel(start_date=None, end_date=None):
+def generate_sales_report_excel(start_date=None, end_date=None, company=TOUTES_ENTREPRISES):
     """
     Rapport des ventes (Excel)
     """
@@ -421,7 +448,7 @@ def generate_sales_report_excel(start_date=None, end_date=None):
     current_row = gen.add_metadata(current_row)
 
     # Requête
-    ventes = Vente.objects.filter(statut='completed').select_related('client', 'warehouse')
+    ventes = _filtrer_entreprise(Vente.objects.filter(statut='completed'), company).select_related('client', 'warehouse')
 
     if start_date:
         ventes = ventes.filter(date_vente__gte=start_date)
@@ -465,7 +492,7 @@ def generate_sales_report_excel(start_date=None, end_date=None):
     return gen.save_to_buffer()
 
 
-def generate_sales_report_pdf(start_date=None, end_date=None):
+def generate_sales_report_pdf(start_date=None, end_date=None, company=TOUTES_ENTREPRISES):
     """
     Rapport des ventes (PDF)
     """
@@ -484,7 +511,7 @@ def generate_sales_report_pdf(start_date=None, end_date=None):
     gen.add_metadata()
 
     # Requête
-    ventes = Vente.objects.filter(statut='completed').select_related('client')
+    ventes = _filtrer_entreprise(Vente.objects.filter(statut='completed'), company).select_related('client')
 
     if start_date:
         ventes = ventes.filter(date_vente__gte=start_date)
@@ -533,7 +560,7 @@ def generate_sales_report_pdf(start_date=None, end_date=None):
     return gen.build()
 
 
-def generate_inventory_report_excel():
+def generate_inventory_report_excel(company=TOUTES_ENTREPRISES):
     """
     Rapport d'inventaire complet (Excel)
     """
@@ -550,7 +577,7 @@ def generate_inventory_report_excel():
     current_row = gen.add_header_row(headers, current_row)
 
     # Données
-    products = Produit.objects.filter(is_active=True).select_related('categorie', 'fournisseur').order_by('reference')
+    products = _filtrer_entreprise(Produit.objects.filter(is_active=True), company).select_related('categorie', 'fournisseur').order_by('reference')
 
     data_rows = []
     for product in products:
@@ -571,7 +598,7 @@ def generate_inventory_report_excel():
     return gen.save_to_buffer()
 
 
-def generate_inventory_report_pdf():
+def generate_inventory_report_pdf(company=TOUTES_ENTREPRISES):
     """
     Rapport d'inventaire complet (PDF)
     """
@@ -579,7 +606,7 @@ def generate_inventory_report_pdf():
     gen.add_title()
     gen.add_metadata()
 
-    products = Produit.objects.filter(is_active=True).select_related('categorie', 'fournisseur').order_by('reference')
+    products = _filtrer_entreprise(Produit.objects.filter(is_active=True), company).select_related('categorie', 'fournisseur').order_by('reference')
 
     # Tableau
     table_data = [['Réf.', 'Désignation', 'Catégorie', 'Fournisseur', 'Qté', 'Seuil', 'Prix', 'Statut']]
@@ -629,7 +656,7 @@ def _get_profit_data(company=None):
     from django.db.models import Q
 
     achats = Achat.objects.all()
-    stocks = ProductStock.objects.filter(quantity__gt=0)
+    stocks = ProductStock.objects.filter(quantity__gt=0, produit__is_active=True)
     products = Produit.objects.filter(is_active=True)
     if company is not None:
         achats = achats.filter(company=company)

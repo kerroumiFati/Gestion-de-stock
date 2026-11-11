@@ -90,7 +90,7 @@
           data: tableData,
           destroy: true,
           language: {
-            url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/fr-FR.json',
+            url: 'https://cdn.datatables.net/plug-ins/1.11.5/i18n/fr-FR.json',
             emptyTable: 'Aucune facture'
           },
           order: [[0, 'desc']],
@@ -127,7 +127,7 @@
   function createFactureFromBL(){
     const bl = $('#fact_bl').val();
     console.log('[Facture.js] Creating facture from BL:', bl);
-    const tva = parseFloat($('#fact_tva').val()||'20') || 0;
+    const tva = parseFloat($('#fact_tva').val()||'0') || 0;
     const numero = ($('#fact_num').val()||'').trim();
     if(!bl){ alert('Veuillez sélectionner un bon de livraison validé'); return; }
     const payload = { bon_livraison: parseInt(bl,10), tva_rate: tva };

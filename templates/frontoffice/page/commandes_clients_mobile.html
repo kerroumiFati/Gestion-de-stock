@@ -485,6 +485,8 @@
         placeholder.innerHTML = '<i class="fas fa-image" style="color: #ccc; font-size: 16px;"></i>';
         img.parentNode.replaceChild(placeholder, img);
     }
+    // Appelée depuis l'attribut onerror des <img> : doit être globale
+    window.handleImageError = handleImageError;
 
     function loadCommandes() {
         console.log('[COMMANDES] Chargement des commandes depuis /API/distribution/commandes/');
@@ -1105,12 +1107,33 @@
         return cookieValue;
     }
 
+    // Message en haut à droite (les messages peuvent contenir du HTML, ex. numéro de
+    // transfert : une alerte du navigateur affichait les balises telles quelles).
+    function showToast(message, ok) {
+        let zone = document.getElementById('cmd-toasts');
+        if (!zone) {
+            zone = document.createElement('div');
+            zone.id = 'cmd-toasts';
+            zone.style.cssText = 'position:fixed;top:16px;right:16px;z-index:2000;max-width:420px';
+            document.body.appendChild(zone);
+        }
+        const t = document.createElement('div');
+        t.className = 'alert ' + (ok ? 'alert-success' : 'alert-danger') + ' shadow';
+        t.style.cssText = 'margin-bottom:8px;white-space:pre-line';
+        t.innerHTML = '<i class="fa ' + (ok ? 'fa-check-circle' : 'fa-exclamation-triangle') + '"></i> ' + message;
+        zone.appendChild(t);
+        setTimeout(() => t.remove(), ok ? 6000 : 9000);
+    }
+
     function showSuccess(message) {
-        alert(message); // Remplacer par un toast notification si disponible
+        showToast(message, true);
     }
 
     function showError(message) {
-        alert(message); // Remplacer par un toast notification si disponible
+        // Erreurs : texte brut (peuvent reprendre des noms saisis par les utilisateurs)
+        const d = document.createElement('div');
+        d.textContent = String(message == null ? '' : message);
+        showToast(d.innerHTML, false);
     }
 
     // === Affectation Livreur ===
@@ -1231,9 +1254,12 @@
                 $('#modalAffecterLivreur').modal('hide');
 
                 // Afficher un message de succès détaillé
-                let message = data.message;
+                const txt = document.createElement('div');
+                txt.textContent = data.message || '';
+                let message = txt.innerHTML;
                 if (data.transfert_numero) {
-                    message += `<br><small class="text-muted">Transfert: ${data.transfert_numero}</small>`;
+                    txt.textContent = data.transfert_numero;
+                    message += `<br><small class="text-muted">Transfert : ${txt.innerHTML}</small>`;
                 }
                 showSuccess(message);
 

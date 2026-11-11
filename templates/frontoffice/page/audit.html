@@ -1,0 +1,303 @@
+{% load static %}
+{% load i18n %}
+
+<style>
+.ui-close { background: none; border: 0; font-size: 1.6rem; line-height: 1; color: #64748b; padding: 0 4px; margin-left: auto; cursor: pointer; }
+.ui-close:hover { color: #0f172a; }
+.ui-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ui-push { margin-left: auto; }
+.ui-mr { margin-right: 4px; }
+.au-filters select.form-control { height: calc(1.5em + .75rem + 2px); }
+.au-modal-title { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 1.15rem; }
+.au-page { padding: 20px 0; }
+.au-title { font-size: 1.8rem; font-weight: 600; color: #2d3748; margin-bottom: 8px; display: flex; align-items: center; gap: 12px; }
+.au-title i { color: #1e40af; }
+.au-subtitle { color: #718096; margin-bottom: 25px; }
+.au-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 16px; margin-bottom: 20px; }
+.au-stat { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px 18px; display: flex; gap: 14px; align-items: center; }
+.au-stat-icon { width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; color: #fff; flex-shrink: 0; }
+.au-stat-value { font-size: 1.5rem; font-weight: 700; color: #2d3748; line-height: 1.1; }
+.au-stat-label { color: #718096; font-size: .85rem; }
+.au-section { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px; margin-bottom: 20px; }
+.au-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; align-items: end; }
+.au-filters label { font-size: .8rem; font-weight: 600; color: #4a5568; margin-bottom: 4px; }
+.au-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.au-presets .btn.active { background: #1e40af; color: #fff; border-color: #1e40af; }
+.au-table th { font-size: .8rem; text-transform: uppercase; color: #64748b; font-weight: 600; white-space: nowrap; }
+.au-table td { vertical-align: middle; font-size: .9rem; }
+.au-date { white-space: nowrap; }
+.au-date small { display: block; color: #94a3b8; }
+.au-user { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.au-avatar { width: 32px; height: 32px; border-radius: 50%; background: #dbeafe; color: #1e40af; font-weight: 700; font-size: .8rem; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.au-avatar.sys { background: #f1f5f9; color: #64748b; }
+.au-badge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 999px; font-size: .78rem; font-weight: 600; }
+.au-create { background: #dcfce7; color: #166534; }
+.au-update { background: #dbeafe; color: #1e40af; }
+.au-delete { background: #fee2e2; color: #991b1b; }
+.au-export { background: #ede9fe; color: #5b21b6; }
+.au-autre  { background: #f1f5f9; color: #334155; }
+.au-module { color: #64748b; font-size: .8rem; }
+.au-cible { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.au-details { font-size: .8rem; color: #475569; max-width: 280px; }
+.au-details span { display: inline-block; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; padding: 1px 6px; margin: 1px 2px 1px 0; }
+.au-device { font-size: .8rem; color: #64748b; white-space: nowrap; }
+.au-row { cursor: pointer; }
+.au-pager { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin-top: 15px; }
+.au-empty { text-align: center; padding: 50px 20px; color: #718096; }
+.au-empty i { font-size: 3rem; color: #cbd5e0; margin-bottom: 10px; }
+.au-dl dt { font-size: .8rem; color: #64748b; font-weight: 600; }
+.au-dl dd { margin-bottom: 10px; word-break: break-word; }
+</style>
+
+<div class="container-fluid au-page">
+  <div class="au-title"><i class="fas fa-history"></i> Journal d'audit</div>
+  <p class="au-subtitle">Historique de toutes les actions effectuées dans le logiciel : qui a fait quoi, quand, et sur quel élément.</p>
+
+  <div class="au-stats">
+    <div class="au-stat"><div class="au-stat-icon" style="background:#3b82f6"><i class="fas fa-list"></i></div>
+      <div><div class="au-stat-value" id="au-s-total">–</div><div class="au-stat-label">Actions (sélection)</div></div></div>
+    <div class="au-stat"><div class="au-stat-icon" style="background:#16a34a"><i class="fas fa-calendar-day"></i></div>
+      <div><div class="au-stat-value" id="au-s-jour">–</div><div class="au-stat-label">Aujourd'hui</div></div></div>
+    <div class="au-stat"><div class="au-stat-icon" style="background:#dc2626"><i class="fas fa-trash"></i></div>
+      <div><div class="au-stat-value" id="au-s-supp">–</div><div class="au-stat-label">Suppressions</div></div></div>
+    <div class="au-stat"><div class="au-stat-icon" style="background:#7c3aed"><i class="fas fa-users"></i></div>
+      <div><div class="au-stat-value" id="au-s-users">–</div><div class="au-stat-label">Utilisateurs actifs</div></div></div>
+  </div>
+
+  <div class="au-section">
+    <div class="au-filters">
+      <div><label for="au-q">Recherche</label>
+        <input type="search" id="au-q" class="form-control" placeholder="Élément, utilisateur, IP…"></div>
+      <div><label for="au-module">Module</label>
+        <select id="au-module" class="form-control no-select2"><option value="">Tous les modules</option></select></div>
+      <div><label for="au-action">Action</label>
+        <select id="au-action" class="form-control no-select2"><option value="">Toutes les actions</option></select></div>
+      <div><label for="au-acteur">Utilisateur</label>
+        <select id="au-acteur" class="form-control no-select2"><option value="">Tous</option><option value="systeme">Système</option></select></div>
+      <div><label for="au-debut">Du</label><input type="date" id="au-debut" class="form-control"></div>
+      <div><label for="au-fin">Au</label><input type="date" id="au-fin" class="form-control"></div>
+    </div>
+    <div class="au-presets">
+      <button class="btn btn-sm btn-outline-secondary" data-preset="0">Aujourd'hui</button>
+      <button class="btn btn-sm btn-outline-secondary" data-preset="7">7 derniers jours</button>
+      <button class="btn btn-sm btn-outline-secondary" data-preset="30">30 derniers jours</button>
+      <button class="btn btn-sm btn-outline-secondary" data-preset="">Toute la période</button>
+      <div class="ui-row ui-push">
+        <button class="btn btn-sm btn-outline-secondary" id="au-reset"><i class="fas fa-eraser"></i> Réinitialiser</button>
+        <button class="btn btn-sm btn-outline-primary" id="au-refresh"><i class="fas fa-sync-alt"></i> Actualiser</button>
+        <button class="btn btn-sm btn-success" id="au-csv"><i class="fas fa-file-csv"></i> Exporter (CSV)</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="au-section">
+    <div class="table-responsive">
+      <table class="table table-hover au-table mb-0">
+        <thead>
+          <tr><th>Date</th><th>Utilisateur</th><th>Action</th><th>Élément concerné</th><th>Détails</th><th>Appareil / IP</th></tr>
+        </thead>
+        <tbody id="au-tbody">
+          <tr><td colspan="6" class="text-center text-muted py-4"><i class="fas fa-spinner fa-spin"></i> Chargement…</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="au-pager">
+      <div class="text-muted small" id="au-info"></div>
+      <div class="ui-row">
+        <select id="au-size" class="form-control form-control-sm no-select2" style="width:auto">
+          <option value="25">25 / page</option><option value="50" selected>50 / page</option><option value="100">100 / page</option>
+        </select>
+        <button class="btn btn-sm btn-outline-secondary" id="au-prev"><i class="fas fa-chevron-left"></i></button>
+        <span class="small" id="au-page">1 / 1</span>
+        <button class="btn btn-sm btn-outline-secondary" id="au-next"><i class="fas fa-chevron-right"></i></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Détail d'une action -->
+<div class="modal fade" id="au-modal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title au-modal-title"><i class="fas fa-info-circle text-primary"></i> Détail de l'action</h5>
+        <button type="button" class="close ui-close" data-dismiss="modal" data-bs-dismiss="modal" aria-label="Fermer">&times;</button>
+      </div>
+      <div class="modal-body"><dl class="au-dl mb-0" id="au-modal-body"></dl></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const API = '/API/audit-journal/';
+  const ICONES = { create: 'fa-plus', update: 'fa-pen', delete: 'fa-trash', export: 'fa-file-export', autre: 'fa-circle' };
+  const etat = { page: 1, pages: 1, resultats: [], toutesActions: [] };
+  const $ = (id) => document.getElementById(id);
+  // Compatible Bootstrap 4 (jQuery, utilisé par le logiciel) et Bootstrap 5
+  function modalShow(el) {
+    if (window.jQuery && jQuery.fn && jQuery.fn.modal) jQuery(el).modal('show');
+    else if (window.bootstrap && bootstrap.Modal) bootstrap.Modal.getOrCreateInstance(el).show();
+  }
+  function modalHide(el) {
+    if (window.jQuery && jQuery.fn && jQuery.fn.modal) jQuery(el).modal('hide');
+    else if (window.bootstrap && bootstrap.Modal) bootstrap.Modal.getOrCreateInstance(el).hide();
+  }
+  function onModalHidden(el, cb) {
+    if (window.jQuery && jQuery.fn && jQuery.fn.modal) jQuery(el).one('hidden.bs.modal', cb);
+    else el.addEventListener('hidden.bs.modal', cb, { once: true });
+  }
+  const modalDispo = () => !!((window.jQuery && jQuery.fn && jQuery.fn.modal) || (window.bootstrap && bootstrap.Modal));
+
+  const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const iso = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+
+  function params(extra) {
+    const p = new URLSearchParams();
+    const set = (k, v) => { if (v) p.set(k, v); };
+    set('q', $('au-q').value.trim());
+    set('module', $('au-module').value);
+    set('action', $('au-action').value);
+    set('acteur', $('au-acteur').value);
+    set('date_debut', $('au-debut').value);
+    set('date_fin', $('au-fin').value);
+    Object.entries(extra || {}).forEach(([k, v]) => set(k, v));
+    return p.toString();
+  }
+
+  function initiales(nom) {
+    return String(nom || '?').split(/[\s._-]+/).filter(Boolean).slice(0, 2).map((x) => x[0].toUpperCase()).join('') || '?';
+  }
+
+  function date(isoStr) {
+    const d = new Date(isoStr);
+    return '<div class="au-date">' + d.toLocaleDateString('fr-FR') +
+      '<small>' + d.toLocaleTimeString('fr-FR') + '</small></div>';
+  }
+
+  function badge(r) {
+    return '<span class="au-badge au-' + esc(r.categorie) + '"><i class="fas ' + (ICONES[r.categorie] || ICONES.autre) + '"></i>' +
+      esc(r.action_label) + '</span><div class="au-module">' + esc(r.module_label) + '</div>';
+  }
+
+  function rendu() {
+    const tbody = $('au-tbody');
+    if (!etat.resultats.length) {
+      tbody.innerHTML = '<tr><td colspan="6"><div class="au-empty"><i class="fas fa-search d-block"></i>Aucune action ne correspond aux filtres.</div></td></tr>';
+      return;
+    }
+    tbody.innerHTML = etat.resultats.map((r, i) => {
+      const sys = !r.acteur_id;
+      const details = r.details.slice(0, 4).map((d) => '<span>' + esc(d.label) + ' : ' + esc(d.valeur) + '</span>').join('') +
+        (r.details.length > 4 ? '<span>+' + (r.details.length - 4) + '</span>' : '');
+      return '<tr class="au-row" data-i="' + i + '" title="Cliquer pour voir le détail">' +
+        '<td>' + date(r.date) + '</td>' +
+        '<td><div class="au-user"><div class="au-avatar' + (sys ? ' sys' : '') + '">' + (sys ? '<i class="fas fa-cog"></i>' : esc(initiales(r.acteur))) + '</div>' +
+          '<div>' + esc(r.acteur) + (r.acteur_username && r.acteur_username !== r.acteur ? '<div class="au-module">' + esc(r.acteur_username) + '</div>' : '') + '</div></div></td>' +
+        '<td>' + badge(r) + '</td>' +
+        '<td><div class="au-cible" title="' + esc(r.cible) + '">' + (esc(r.cible) || '<span class="text-muted">–</span>') + '</div></td>' +
+        '<td><div class="au-details">' + (details || '<span class="text-muted" style="border:0;background:none">–</span>') + '</div></td>' +
+        '<td><div class="au-device">' + esc(r.appareil || '–') + '<br>' + esc(r.ip || '') + '</div></td>' +
+        '</tr>';
+    }).join('');
+  }
+
+  async function charger(page) {
+    etat.page = page || 1;
+    $('au-tbody').innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4"><i class="fas fa-spinner fa-spin"></i> Chargement…</td></tr>';
+    try {
+      const res = await fetch(API + '?' + params({ page: etat.page, page_size: $('au-size').value }), { credentials: 'same-origin' });
+      if (!res.ok) throw new Error(res.status === 403 ? 'Accès réservé aux administrateurs.' : 'Erreur HTTP ' + res.status);
+      const data = await res.json();
+      etat.page = data.page; etat.pages = data.pages; etat.resultats = data.results;
+      $('au-s-total').textContent = data.stats.total;
+      $('au-s-jour').textContent = data.stats.aujourdhui;
+      $('au-s-supp').textContent = data.stats.suppressions;
+      $('au-s-users').textContent = data.stats.utilisateurs;
+      const debut = data.count ? (data.page - 1) * data.page_size + 1 : 0;
+      $('au-info').textContent = debut + ' – ' + Math.min(data.page * data.page_size, data.count) + ' sur ' + data.count + ' action(s)';
+      $('au-page').textContent = data.page + ' / ' + data.pages;
+      $('au-prev').disabled = data.page <= 1;
+      $('au-next').disabled = data.page >= data.pages;
+      rendu();
+    } catch (e) {
+      $('au-tbody').innerHTML = '<tr><td colspan="6" class="text-center text-danger py-4">' + esc(e.message) + '</td></tr>';
+    }
+  }
+
+  function remplirActions() {
+    const module = $('au-module').value;
+    const courant = $('au-action').value;
+    const actions = etat.toutesActions.filter((a) => !module || a.module === module);
+    $('au-action').innerHTML = '<option value="">Toutes les actions</option>' +
+      actions.map((a) => '<option value="' + esc(a.value) + '">' + esc(a.label) + ' (' + a.count + ')</option>').join('');
+    if (actions.some((a) => a.value === courant)) $('au-action').value = courant;
+  }
+
+  async function chargerFiltres() {
+    try {
+      const res = await fetch(API + 'filtres/', { credentials: 'same-origin' });
+      if (!res.ok) return;
+      const f = await res.json();
+      $('au-module').innerHTML = '<option value="">Tous les modules</option>' +
+        f.modules.map((m) => '<option value="' + esc(m.value) + '">' + esc(m.label) + ' (' + m.count + ')</option>').join('');
+      $('au-acteur').innerHTML = '<option value="">Tous</option><option value="systeme">Système</option>' +
+        f.acteurs.map((a) => '<option value="' + a.value + '">' + esc(a.label) + '</option>').join('');
+      etat.toutesActions = f.actions;
+      remplirActions();
+    } catch (e) { /* les filtres restent par défaut */ }
+  }
+
+  function detail(r) {
+    const ligne = (t, v) => '<dt>' + t + '</dt><dd>' + (v || '<span class="text-muted">–</span>') + '</dd>';
+    $('au-modal-body').innerHTML =
+      ligne('Date', esc(new Date(r.date).toLocaleString('fr-FR'))) +
+      ligne('Utilisateur', esc(r.acteur) + (r.acteur_username ? ' <span class="text-muted">(' + esc(r.acteur_username) + ')</span>' : '')) +
+      ligne('Action', badge(r) + ' <code style="margin-left:8px">' + esc(r.action) + '</code>') +
+      ligne('Élément concerné', esc(r.cible) + (r.cible_id ? ' <span class="text-muted">#' + esc(r.cible_id) + '</span>' : '')) +
+      ligne('Détails', r.details.map((d) => '<div><strong>' + esc(d.label) + ' :</strong> ' + esc(d.valeur) + '</div>').join('')) +
+      ligne('Adresse IP', esc(r.ip)) +
+      ligne('Appareil', esc(r.appareil)) +
+      ligne('Navigateur complet', '<small class="text-muted">' + esc(r.user_agent) + '</small>');
+    modalShow($('au-modal'));
+  }
+
+  function preset(jours) {
+    document.querySelectorAll('.au-presets [data-preset]').forEach((b) => b.classList.toggle('active', b.dataset.preset === jours));
+    if (jours === '') { $('au-debut').value = ''; $('au-fin').value = ''; }
+    else {
+      const fin = new Date(); const debut = new Date();
+      debut.setDate(debut.getDate() - Number(jours));
+      $('au-debut').value = iso(debut); $('au-fin').value = iso(fin);
+    }
+    charger(1);
+  }
+
+  let minuterie = null;
+  $('au-q').addEventListener('input', () => { clearTimeout(minuterie); minuterie = setTimeout(() => charger(1), 350); });
+  $('au-module').addEventListener('change', () => { remplirActions(); charger(1); });
+  ['au-action', 'au-acteur', 'au-size'].forEach((id) => $(id).addEventListener('change', () => charger(1)));
+  ['au-debut', 'au-fin'].forEach((id) => $(id).addEventListener('change', () => {
+    document.querySelectorAll('.au-presets [data-preset]').forEach((b) => b.classList.remove('active'));
+    charger(1);
+  }));
+  document.querySelectorAll('.au-presets [data-preset]').forEach((b) => b.addEventListener('click', () => preset(b.dataset.preset)));
+  $('au-prev').addEventListener('click', () => charger(etat.page - 1));
+  $('au-next').addEventListener('click', () => charger(etat.page + 1));
+  $('au-refresh').addEventListener('click', () => { chargerFiltres(); charger(etat.page); });
+  $('au-reset').addEventListener('click', () => {
+    ['au-q', 'au-module', 'au-acteur', 'au-debut', 'au-fin'].forEach((id) => { $(id).value = ''; });
+    remplirActions(); $('au-action').value = '';
+    document.querySelectorAll('.au-presets [data-preset]').forEach((b) => b.classList.remove('active'));
+    charger(1);
+  });
+  $('au-csv').addEventListener('click', () => { window.location.href = API + '?' + params({ export: 'csv' }); });
+  $('au-tbody').addEventListener('click', (ev) => {
+    const tr = ev.target.closest('.au-row');
+    if (tr) detail(etat.resultats[Number(tr.dataset.i)]);
+  });
+
+  chargerFiltres();
+  charger(1);
+})();
+</script>

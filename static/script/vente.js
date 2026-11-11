@@ -1177,8 +1177,11 @@
 
     // Section Paiement
     const totalTtc = parseFloat(sale.montant_total) || 0;
-    const montantPaye = parseFloat(sale.montant_paye) || 0;
-    const resteAPayer = totalTtc - montantPaye;
+    // Espèces : l'app enregistre l'argent reçu (montant_paye) et la monnaie rendue à part
+    const montantRecu = parseFloat(sale.montant_paye) || 0;
+    const montantRendu = parseFloat(sale.montant_rendu) || 0;
+    const montantPaye = montantRecu - montantRendu;
+    const resteAPayer = Math.max(0, totalTtc - montantPaye);
     const isPaye = resteAPayer <= 0;
 
     let statutPaiement = isPaye ? 'PAYÉ' : 'NON PAYÉ';
@@ -1189,8 +1192,9 @@
     html += '<div class="card-body">';
     html += '<p class="mb-2"><strong>Montant payé:</strong> <span class="float-right text-success">'+(montantPaye.toFixed(2))+' DA</span></p>';
     html += '<p class="mb-2"><strong>Reste à payer:</strong> <span class="float-right '+(isPaye ? 'text-success' : 'text-danger')+'"><strong>'+(resteAPayer.toFixed(2))+' DA</strong></span></p>';
-    if(sale.montant_rendu > 0){
-      html += '<p class="mb-2"><strong>Monnaie rendue:</strong> <span class="float-right">'+(sale.montant_rendu || 0)+' DA</span></p>';
+    if(montantRendu > 0){
+      html += '<p class="mb-2"><strong>Montant reçu:</strong> <span class="float-right">'+(montantRecu.toFixed(2))+' DA</span></p>';
+      html += '<p class="mb-2"><strong>Monnaie rendue:</strong> <span class="float-right">'+(montantRendu.toFixed(2))+' DA</span></p>';
     }
     html += '<hr class="my-2">';
     html += '<p class="mb-0"><strong>Statut:</strong> <span class="badge badge-'+badgeClass+'">'+statutPaiement+'</span></p>';
