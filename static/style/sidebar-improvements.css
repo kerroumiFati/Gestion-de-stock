@@ -185,6 +185,29 @@ body { background-color: #f5f7fb; }
   color: var(--sidebar-accent);
 }
 
+/* Une seule flèche : on masque le triangle ajouté par Bootstrap (.dropdown-toggle::after) */
+.sidebar-dropdown > a.dropdown-toggle::after {
+  display: none !important;
+}
+
+/* Rubrique qui contient la page affichée */
+.sidebar-dropdown.has-active > a.dropdown-toggle {
+  color: #fff;
+}
+.sidebar-dropdown.has-active > a.dropdown-toggle i:not(.arrow) {
+  color: var(--sidebar-accent);
+}
+
+/* Page affichée dans le sous-menu */
+#sidebar .sidebar-submenu li a.active {
+  background: rgba(59,130,246,.28);
+  color: #fff;
+  box-shadow: inset 3px 0 0 var(--sidebar-accent, #3b82f6);
+}
+#sidebar .sidebar-submenu li a.active i {
+  color: var(--sidebar-accent, #3b82f6);
+}
+
 /* Submenu */
 .sidebar-submenu {
   list-style: none;

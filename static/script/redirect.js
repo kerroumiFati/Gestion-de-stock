@@ -22,7 +22,21 @@
     // set active by matching onclick arg OR href mapping
     const candidates = Array.from(document.querySelectorAll('#sidebar .sidebar-submenu a'));
     const el = candidates.find(a => (a.getAttribute('onclick')||'').includes("show('"+name+"')"));
-    if(el){ el.classList.add('active'); }
+    document.querySelectorAll('#sidebar .sidebar-dropdown.has-active').forEach(function(d){
+      d.classList.remove('has-active');
+    });
+    if(el){
+      el.classList.add('active');
+      // Ouvrir la rubrique de la page affichée (et fermer les autres) pour que la sélection reste visible
+      const parent = el.closest('.sidebar-dropdown');
+      if(parent){
+        parent.classList.add('has-active');
+        document.querySelectorAll('#sidebar .sidebar-dropdown.active').forEach(function(d){
+          if(d !== parent) d.classList.remove('active');
+        });
+        parent.classList.add('active');
+      }
+    }
   }
 
   function prettyPathFor(name){
