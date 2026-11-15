@@ -1193,17 +1193,19 @@ class BonLivraisonViewSet(TenantFilterMixin, viewsets.ModelViewSet):
                 entier_fmt = c + entier_fmt
             return f'{entier_fmt},{dec} DA'
 
-        lignes = list(bl.lignes.select_related('produit').all())
+        lignes = list(bl.lignes.select_related('produit').prefetch_related('produit__conditionnements'))
         total_ht = Decimal('0')
         rows_html = ''
         for l in lignes:
             designation = _e(getattr(l.produit, 'designation', '') or '')
             montant = l.prixU_snapshot * l.quantite
             total_ht += montant
+            upc = l.produit.get_unites_par_carton() if l.produit_id else 1
             rows_html += f"""
             <tr>
               <td>{designation}</td>
               <td class="r">{l.quantite:,} Unité(s)</td>
+              <td class="c">{upc if upc > 1 else '-'}</td>
               <td class="r">{l.prixU_snapshot:.4f}</td>
               <td class="r">—</td>
               <td class="r">—</td>
@@ -1230,6 +1232,7 @@ class BonLivraisonViewSet(TenantFilterMixin, viewsets.ModelViewSet):
   <title>Bon de Livraison {_e(bl.numero)}</title>
   <style>
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    .c {{ text-align: center; }}
     body {{ font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #222; background: #fff; padding: 28px 32px; }}
     .header {{ display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; }}
     .logo {{ font-size: 26px; font-style: italic; color: #b07830; font-weight: 300; letter-spacing: 1px; }}
@@ -1312,6 +1315,7 @@ class BonLivraisonViewSet(TenantFilterMixin, viewsets.ModelViewSet):
       <tr>
         <th>Désignation</th>
         <th class="r">Quantité</th>
+        <th class="c">Qté / carton</th>
         <th class="r">Prix unitaire</th>
         <th class="r">Remise</th>
         <th class="r">TVA</th>
@@ -3607,12 +3611,14 @@ class VenteViewSet(TenantFilterMixin, viewsets.ModelViewSet):
         currency_sym = vente.currency.symbol if vente.currency else 'DA'
 
         rows_html = ''
-        for l in vente.lignes.all():
+        for l in vente.lignes.select_related('produit').prefetch_related('produit__conditionnements'):
             montant = l.prixU_snapshot * l.quantite
+            upc = l.produit.get_unites_par_carton() if l.produit_id else 1
             rows_html += f"""
             <tr>
               <td>{_e(l.designation)}</td>
               <td class="r">{l.quantite:,} Unité(s)</td>
+              <td class="c">{upc if upc > 1 else '-'}</td>
               <td class="r">{l.prixU_snapshot:.4f}</td>
               <td class="r">—</td>
               <td class="r">—</td>
@@ -3640,6 +3646,7 @@ class VenteViewSet(TenantFilterMixin, viewsets.ModelViewSet):
   <title>Vente {_e(vente.numero)}</title>
   <style>
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    .c {{ text-align: center; }}
     body {{ font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #222; background: #fff; padding: 28px 32px; }}
     .header {{ display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; }}
     .logo {{ font-size: 26px; font-style: italic; color: #b07830; font-weight: 300; letter-spacing: 1px; }}
@@ -3723,6 +3730,7 @@ class VenteViewSet(TenantFilterMixin, viewsets.ModelViewSet):
       <tr>
         <th>Désignation</th>
         <th class="r">Quantité</th>
+        <th class="c">Qté / carton</th>
         <th class="r">Prix unitaire</th>
         <th class="r">Remise</th>
         <th class="r">TVA</th>

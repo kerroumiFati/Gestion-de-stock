@@ -318,6 +318,13 @@ def livreurs_page(request):
     # Render the master page - JavaScript will load the livreurs content based on URL
     return render(request, 'frontoffice/master_page.html')
 
+
+@login_required
+def commandes_clients_mobile_page(request):
+    # Adresse directe (nouvel onglet, favori, actualisation) : le tableau de bord complet,
+    # sinon la page arrive sans jQuery et les boutons (Affecter a un livreur...) ne font rien.
+    return render(request, 'frontoffice/master_page.html')
+
 @login_required
 def tournees_page(request):
     # Render the master page - JavaScript will load the tournees content based on URL

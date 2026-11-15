@@ -48,12 +48,14 @@
       case 'config_clients_chauffeurs': return '/admindash/config-clients-chauffeurs';
       case 'livreur_mobile': return '/livreur/app';
       case 'promotions': return '/admindash/promotions';
+      case 'commandes_clients_mobile': return '/admindash/commandes-mobile';
       default: return null;
     }
   }
 
   function nameFromPath(path){
     if(path.startsWith('/admindash/livreurs')) return 'livreurs';
+    if(path.startsWith('/admindash/commandes-mobile')) return 'commandes_clients_mobile';
     if(path.startsWith('/admindash/tournees')) return 'tournees';
     if(path.startsWith('/admindash/clients-solde-dashboard')) return 'clients_solde_dashboard';
     if(path.startsWith('/admindash/config-clients-chauffeurs')) return 'config_clients_chauffeurs';

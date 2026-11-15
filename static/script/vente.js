@@ -1112,6 +1112,12 @@
     return $.ajax({ url:'/API/ventes/'+saleId+'/', method:'GET', dataType:'json' });
   }
 
+  // Unités par carton d'une ligne de vente ('-' si le produit n'est pas en carton)
+  function qteParCarton(ligne){
+    const upc = parseInt(ligne && (ligne.produit_unites_par_carton || ligne.unitesParCarton), 10);
+    return upc > 1 ? upc : '-';
+  }
+
   function showSaleDetailsModal(saleId){
     // Ouvrir la modal
     $('#saleDetailsModal').modal('show');
@@ -1225,7 +1231,7 @@
       html += '<div class="table-responsive">';
       html += '<table class="table table-sm table-bordered table-hover mb-0" id="saleDetailsTable">';
       html += '<thead class="thead-dark">';
-      html += '<tr><th>Produit</th><th>Prix unitaire</th><th>Quantité</th><th>Total</th></tr>';
+      html += '<tr><th>Produit</th><th>Prix unitaire</th><th>Quantité</th><th>Qté / carton</th><th>Total</th></tr>';
       html += '</thead>';
       html += '<tbody>';
       lignes.forEach(function(ligne){
@@ -1241,6 +1247,7 @@
         html += '<input type="number" class="form-control form-control-sm price-edit" style="display:none;" step="0.01" min="0" value="'+prix.toFixed(2)+'">';
         html += '</td>';
         html += '<td class="text-center"><span class="badge badge-primary">'+qty+'</span></td>';
+        html += '<td class="text-center">'+qteParCarton(ligne)+'</td>';
         html += '<td class="text-right total-cell"><strong>'+(total.toFixed(2))+' DA</strong></td>';
         html += '</tr>';
       });
@@ -1492,7 +1499,7 @@
       html += '<div class="table-responsive" style="max-height: 400px; overflow-y: auto;">';
       html += '<table class="table table-sm table-bordered table-hover mb-0" id="saleDetailsTable">';
       html += '<thead class="thead-dark" style="position: sticky; top: 0; z-index: 1;">';
-      html += '<tr><th style="width: 15%;">Référence</th><th style="width: 40%;">Désignation</th><th style="width: 15%;">Prix unitaire</th><th style="width: 10%;">Quantité</th><th style="width: 20%;">Total</th></tr>';
+      html += '<tr><th style="width: 15%;">Référence</th><th style="width: 30%;">Désignation</th><th style="width: 15%;">Prix unitaire</th><th style="width: 10%;">Quantité</th><th style="width: 10%;">Qté / carton</th><th style="width: 20%;">Total</th></tr>';
       html += '</thead>';
       html += '<tbody>';
       lignes.forEach(function(ligne){
@@ -1533,6 +1540,7 @@
         html += '<input type="number" class="form-control form-control-sm price-edit" style="display:none;" step="0.01" min="0" value="'+prix.toFixed(2)+'">';
         html += '</td>';
         html += '<td class="text-center"><span class="badge badge-primary">'+qty+'</span></td>';
+        html += '<td class="text-center">'+qteParCarton(ligne)+'</td>';
         html += '<td class="text-right total-cell">'+totalHtml+'</td>';
         html += '</tr>';
       });
@@ -1871,6 +1879,7 @@
     const lignes = (sale.lignes || []).map(l => ({
       designation: l.designation || l.produit_designation || 'Produit',
       quantite: parseInt(l.quantite || 0, 10),
+      unitesParCarton: parseInt(l.produit_unites_par_carton || 1, 10),
       prixUnitaire: parseFloat(l.prixU_snapshot || l.prix_unitaire || 0),
       total: parseFloat(l.montant_total || (l.prixU_snapshot || l.prix_unitaire || 0) * (l.quantite || 0))
     }));
@@ -1908,6 +1917,7 @@
         <td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">${index + 1}</td>
         <td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">${ligne.designation}</td>
         <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; text-align: center;">${ligne.quantite}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; text-align: center;">${qteParCarton(ligne)}</td>
         <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; text-align: right;">${ligne.prixUnitaire.toFixed(2)} DA</td>
         <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; text-align: right;">${ligne.total.toFixed(2)} DA</td>
       </tr>
@@ -2093,6 +2103,7 @@
         <th style="width: 40px;">#</th>
         <th>Désignation</th>
         <th style="width: 60px; text-align: center;">Qté</th>
+        <th style="width: 80px; text-align: center;">Qté / carton</th>
         <th style="width: 100px; text-align: right;">P.U.</th>
         <th style="width: 100px; text-align: right;">Total</th>
       </tr>
@@ -2152,6 +2163,7 @@
         <td style="padding: 6px; border-bottom: 1px solid #e5e7eb;">${index + 1}</td>
         <td style="padding: 6px; border-bottom: 1px solid #e5e7eb;">${ligne.designation}</td>
         <td style="padding: 6px; border-bottom: 1px solid #e5e7eb; text-align: center;">${ligne.quantite}</td>
+        <td style="padding: 6px; border-bottom: 1px solid #e5e7eb; text-align: center;">${qteParCarton(ligne)}</td>
       </tr>
     `).join('');
 
@@ -2247,6 +2259,7 @@
         <th style="width: 40px;">#</th>
         <th>Désignation</th>
         <th style="width: 80px; text-align: center;">Quantité</th>
+        <th style="width: 90px; text-align: center;">Qté / carton</th>
       </tr>
     </thead>
     <tbody>

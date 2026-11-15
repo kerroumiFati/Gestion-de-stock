@@ -714,10 +714,13 @@ class LigneVenteSerializer(serializers.ModelSerializer):
     promotion_nom = serializers.CharField(source='promotion.nom', read_only=True)
     a_promotion = serializers.SerializerMethodField()
     economie_totale = serializers.SerializerMethodField()
+    # Unités par carton du produit (1 = pas de conditionnement carton)
+    produit_unites_par_carton = serializers.SerializerMethodField()
 
     class Meta:
         model = LigneVente
         fields = ['id', 'produit', 'produit_nom', 'produit_reference', 'produit_stock_actuel',
+                 'produit_unites_par_carton',
                  'designation', 'quantite', 'prixU_snapshot', 'currency', 'currency_code',
                  'currency_symbol', 'prix_formatted', 'total_ligne', 'total_ligne_vente_currency',
                  'promotion', 'promotion_code', 'promotion_nom', 'prix_original', 'remise_promo',
@@ -725,6 +728,9 @@ class LigneVenteSerializer(serializers.ModelSerializer):
 
     def get_a_promotion(self, obj):
         return obj.promotion is not None
+
+    def get_produit_unites_par_carton(self, obj):
+        return obj.produit.get_unites_par_carton() if obj.produit_id else 1
 
     def get_economie_totale(self, obj):
         if obj.prix_original and obj.prixU_snapshot:

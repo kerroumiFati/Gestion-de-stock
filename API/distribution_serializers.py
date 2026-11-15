@@ -275,16 +275,22 @@ class LigneVenteTourneeSerializer(serializers.ModelSerializer):
     """Serializer pour LigneVenteTournee"""
     produit_reference = serializers.CharField(source='produit.reference', read_only=True)
     produit_designation = serializers.CharField(source='produit.designation', read_only=True)
+    # Unités par carton du produit (1 = pas de conditionnement carton)
+    produit_unites_par_carton = serializers.SerializerMethodField()
 
     class Meta:
         model = LigneVenteTourneeMobile
         fields = [
             'id', 'vente', 'produit', 'produit_reference', 'produit_designation',
+            'produit_unites_par_carton',
             'quantite', 'prix_unitaire', 'taux_tva',
             'montant_ht', 'montant_tva', 'montant_ttc',
             'created_at'
         ]
         read_only_fields = ['montant_ht', 'montant_tva', 'montant_ttc', 'created_at']
+
+    def get_produit_unites_par_carton(self, obj):
+        return obj.produit.get_unites_par_carton() if obj.produit_id else 1
 
 
 class VenteTourneeSerializer(serializers.ModelSerializer):
@@ -894,16 +900,22 @@ class LigneCommandeClientSerializer(serializers.ModelSerializer):
     produit_reference = serializers.CharField(source='produit.reference', read_only=True)
     produit_designation = serializers.CharField(source='produit.designation', read_only=True)
     produit_image = serializers.ImageField(source='produit.image', read_only=True)
+    # Unités par carton du produit (1 = pas de conditionnement carton)
+    produit_unites_par_carton = serializers.SerializerMethodField()
 
     class Meta:
         model = LigneCommandeClient
         fields = [
             'id', 'produit', 'produit_reference', 'produit_designation', 'produit_image',
+            'produit_unites_par_carton',
             'quantite', 'prix_unitaire_ht', 'taux_tva',
             'montant_ht', 'montant_tva', 'montant_ttc',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['montant_ht', 'montant_tva', 'montant_ttc', 'created_at', 'updated_at']
+
+    def get_produit_unites_par_carton(self, obj):
+        return obj.produit.get_unites_par_carton() if obj.produit_id else 1
 
 
 class LigneCommandeClientCreateSerializer(serializers.Serializer):

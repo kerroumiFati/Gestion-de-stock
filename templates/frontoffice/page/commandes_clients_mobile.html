@@ -661,6 +661,7 @@
                             <th>Produit</th>
                             <th>Référence</th>
                             <th class="text-right">Qté</th>
+                            <th class="text-center">Qté / carton</th>
                             <th class="text-right">Prix Unit. HT</th>
                             <th class="text-right">Total HT</th>
                             <th class="text-right">Total TTC</th>
@@ -677,6 +678,7 @@
                                 <td>${ligne.produit_designation || '-'}</td>
                                 <td><code>${ligne.produit_reference || '-'}</code></td>
                                 <td class="text-right">${ligne.quantite}</td>
+                                <td class="text-center">${qteParCarton(ligne)}</td>
                                 <td class="text-right">${formatCurrency(ligne.prix_unitaire_ht)}</td>
                                 <td class="text-right">${formatCurrency(ligne.montant_ht)}</td>
                                 <td class="text-right"><strong>${formatCurrency(ligne.montant_ttc)}</strong></td>
@@ -685,12 +687,12 @@
                     </tbody>
                     <tfoot class="bg-light">
                         <tr>
-                            <th colspan="4" class="text-right">Total HT:</th>
+                            <th colspan="6" class="text-right">Total HT:</th>
                             <th class="text-right">${formatCurrency(cmd.montant_total_ht)}</th>
                             <th></th>
                         </tr>
                         <tr>
-                            <th colspan="4" class="text-right">Total TTC:</th>
+                            <th colspan="6" class="text-right">Total TTC:</th>
                             <th></th>
                             <th class="text-right"><strong>${formatCurrency(cmd.montant_total_ttc)}</strong></th>
                         </tr>
@@ -884,6 +886,12 @@
         loadCommandes();
     }
 
+    // Unités par carton d'une ligne de commande ('-' si le produit n'est pas en carton)
+    function qteParCarton(ligne) {
+        const upc = parseInt(ligne.produit_unites_par_carton, 10);
+        return upc > 1 ? upc : '-';
+    }
+
     function printCommande() {
         if (!currentCommande) return;
 
@@ -903,13 +911,14 @@
                     '<td>' + (ligne.produit_designation || '-') + '</td>' +
                     '<td><code>' + (ligne.produit_reference || '-') + '</code></td>' +
                     '<td class="text-center"><strong>' + ligne.quantite + '</strong></td>' +
+                    '<td class="text-center">' + qteParCarton(ligne) + '</td>' +
                     '<td class="text-right">' + formatCurrency(ligne.prix_unitaire_ht) + '</td>' +
                     '<td class="text-right">' + formatCurrency(ligne.montant_ht) + '</td>' +
                     '<td class="text-right"><strong>' + formatCurrency(ligne.montant_ttc) + '</strong></td>' +
                     '</tr>';
             });
         } else {
-            produitsHtml = '<tr><td colspan="7" class="text-center">Aucun produit</td></tr>';
+            produitsHtml = '<tr><td colspan="8" class="text-center">Aucun produit</td></tr>';
         }
 
         // Section livraison
@@ -972,6 +981,7 @@
             '<th>Produit</th>' +
             '<th style="width: 120px;">Référence</th>' +
             '<th class="text-center" style="width: 80px;">Quantité</th>' +
+            '<th class="text-center" style="width: 80px;">Qté / carton</th>' +
             '<th class="text-right" style="width: 100px;">Prix Unit. HT</th>' +
             '<th class="text-right" style="width: 100px;">Total HT</th>' +
             '<th class="text-right" style="width: 100px;">Total TTC</th>' +

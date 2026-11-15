@@ -1611,7 +1611,7 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
         if date_fin:
             queryset = queryset.filter(date_commande__lte=date_fin)
 
-        return queryset.select_related('client', 'livreur').prefetch_related('lignes', 'lignes__produit')
+        return queryset.select_related('client', 'livreur').prefetch_related('lignes', 'lignes__produit', 'lignes__produit__conditionnements')
 
     @action(detail=False, methods=['post'])
     def bulk_create(self, request):
@@ -1940,7 +1940,7 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
             return Response(reponse, status=e.code)
 
         resultat = CommandeClientSerializer(
-            CommandeClient.objects.select_related('client', 'livreur').prefetch_related('lignes', 'lignes__produit')
+            CommandeClient.objects.select_related('client', 'livreur').prefetch_related('lignes', 'lignes__produit', 'lignes__produit__conditionnements')
             .get(pk=commande.pk)).data
         resultat['modifications'] = modifications
         return Response(resultat)
