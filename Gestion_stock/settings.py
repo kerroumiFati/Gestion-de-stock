@@ -33,7 +33,9 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SECRET_KEY = config('SECRET_KEY', default='bvie-ns68me1k$nh+p-znm3=fil$y*d*##wkblw79&f2n&&8ye')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = config('DEBUG', default=True, cast=bool)
+# Défaut False : un .env sans DEBUG ne doit jamais mettre la production en mode debug.
+# En local, mettre DEBUG=True dans le .env.
+DEBUG = config('DEBUG', default=False, cast=bool)
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,0.0.0.0,[::1],testserver,*.railway.app,*.onrender.com', cast=Csv())
 # In DEBUG mode, allow all hosts to avoid 400 Bad Request during local/dev testing
@@ -208,25 +210,25 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 
-# In development, look for static files in the 'static' directory
-# In production, all files will be in STATIC_ROOT after collectstatic
-if config('DEBUG', default=True, cast=bool):
-    STATICFILES_DIRS = [
-        os.path.join(BASE_DIR, "static"),
-    ]
-else:
-    # In production, don't use STATICFILES_DIRS (files are collected to STATIC_ROOT)
-    STATICFILES_DIRS = []
+# Sources des fichiers statiques du projet (JS/CSS/images de l'interface).
+# Toujours déclarées : en production, collectstatic les copie dans STATIC_ROOT.
+# (Avant : liste vide quand DEBUG=False -> collectstatic ignorait tout le dossier static/
+# et l'interface aurait perdu ses scripts au premier déploiement en DEBUG=False.)
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, "static"),
+]
 
 # Directory where collectstatic will collect static files for deployment
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 # En développement : pas de hachage → les modifications JS/CSS sont visibles immédiatement
 # En production : hachage pour le cache-busting
-if config('DEBUG', default=True, cast=bool):
+if DEBUG:
     STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
 else:
     STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+    # Un fichier référencé mais absent du manifeste : lien non haché au lieu d'une page 500
+    WHITENOISE_MANIFEST_STRICT = False
 
 # Media files (uploaded images, etc.)
 MEDIA_URL = '/media/'

@@ -92,7 +92,8 @@ jobs:
           VPS_PORT: ${{ secrets.VPS_PORT }}
         run: |
           echo "📤 Synchronisation des fichiers..."
-          rsync -avz --delete \
+          # --no-owner/--no-group : ne pas recopier le propriétaire du runner GitHub (uid 1001)
+          rsync -avz --delete --no-owner --no-group \
             -e "ssh -i ~/.ssh/deploy_key -p ${VPS_PORT}" \
             --exclude='.git' \
             --exclude='*.pyc' \

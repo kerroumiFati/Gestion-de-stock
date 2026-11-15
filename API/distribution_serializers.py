@@ -1043,6 +1043,38 @@ class CommandeClientCreateSerializer(serializers.ModelSerializer):
             'est_paye', 'type_paiement', 'montant_paye', 'date_paiement'
         ]
 
+    @staticmethod
+    def _client_par_nom_complet(client_nom, livreur=None):
+        """Client dont « prénom nom » (ou « nom prénom ») vaut exactement client_nom.
+
+        Plusieurs homonymes : on garde celui assigné au livreur s'il est unique,
+        sinon on refuse (400) plutôt que de deviner.
+        """
+        from django.db.models import Value
+        from django.db.models.functions import Concat, Lower, Trim
+
+        cible = ' '.join(str(client_nom).split()).lower()
+        if not cible:
+            return None
+        candidats = list(
+            Client.objects
+            .annotate(
+                pn=Lower(Trim(Concat('prenom', Value(' '), 'nom'))),
+                np=Lower(Trim(Concat('nom', Value(' '), 'prenom'))),
+            )
+            .filter(models.Q(pn=cible) | models.Q(np=cible) | models.Q(prenom='', nom__iexact=cible))
+        )
+        if len(candidats) <= 1:
+            return candidats[0] if candidats else None
+        if livreur is not None:
+            assignes = [c for c in candidats if livreur.clients_assignes.filter(pk=c.pk).exists()]
+            if len(assignes) == 1:
+                return assignes[0]
+        raise serializers.ValidationError({
+            'client': f'Plusieurs clients s\'appellent « {client_nom} ». '
+                      f'Synchronisez le client depuis le téléphone ou choisissez-le sur le web.'
+        })
+
     def create(self, validated_data):
         import logging
         logger = logging.getLogger(__name__)
@@ -1061,9 +1093,9 @@ class CommandeClientCreateSerializer(serializers.ModelSerializer):
             # Essayer de trouver un client existant avec cet app_client_id
             # ou par nom si fourni
             if client_nom:
-                from .distribution_models import Client
-                # Rechercher par nom (approximatif)
-                client = Client.objects.filter(nom__icontains=client_nom.split()[-1] if client_nom else '').first()
+                # Recherche sur le nom COMPLET (l'app envoie « prénom nom »), jamais approximative :
+                # une commande ne doit pas partir sur un autre client.
+                client = self._client_par_nom_complet(client_nom, validated_data.get('livreur'))
                 if client:
                     print(f'[COMMANDE CREATE] Client trouvé par nom: {client.id} - {client.nom}')
                     validated_data['client'] = client
