@@ -366,6 +366,23 @@
                     </div>
                 </div>
 
+                <!-- Dépôt source des commandes clients mobiles -->
+                <h6 class="mb-3 mt-2" style="font-weight: 600; color: #4a5568;">
+                    <i class="fas fa-truck-loading"></i> Dépôt source des commandes mobiles
+                </h6>
+                <div class="row">
+                    <div class="col-md-12 mb-3">
+                        <select id="cfg_depot_commandes" class="form-control form-control-modern">
+                            <option value="">Aucun (premier dépôt actif)</option>
+                        </select>
+                        <small class="form-text text-muted">
+                            Dépôt pré-sélectionné dans la fenêtre « Affecter à un Livreur » de Commandes Clients Mobile :
+                            le stock de la commande part de ce dépôt vers le van du livreur. Il reste modifiable à chaque affectation.
+                            Les vans ne sont pas proposés.
+                        </small>
+                    </div>
+                </div>
+
                 <div class="mt-4">
                     <button id="general_save" class="btn btn-modern btn-modern-primary">
                         <i class="fas fa-save"></i> Enregistrer tous les paramètres
@@ -863,8 +880,20 @@
     const $warehouseSel = $('#cfg_default_warehouse');
 
     // Charger les entrepôts
+    // Dépôt source des commandes mobiles : dépôts actifs uniquement, sans les vans
+    const $depotCmdSel = $('#cfg_depot_commandes');
+    let depotCmdValue = null;  // valeur enregistrée (la liste et la config arrivent dans n'importe quel ordre)
+    function applyDepotCmd(){ if(depotCmdValue) $depotCmdSel.val(String(depotCmdValue)).trigger('change.select2'); }
+
     loadWarehouses().done(function(list){
       fillSelect($warehouseSel, list);
+      $depotCmdSel.empty().append($('<option>').val('').text('Aucun (premier dépôt actif)'));
+      (Array.isArray(list) ? list : []).filter(function(w){
+        return w.is_active !== false && !String(w.code || '').toLowerCase().includes('van');
+      }).forEach(function(w){
+        $depotCmdSel.append($('<option>').val(w.id).text((w.code||'') + ' - ' + (w.name||'')));
+      });
+      applyDepotCmd();
     }).fail(function(){
       setStatus('#general_status', 'Erreur de chargement des entrepôts', true);
     });
@@ -903,6 +932,9 @@
           $('#current_currency_text').text('Aucune devise par défaut définie');
         }
 
+        depotCmdValue = config.depot_commandes_mobile || null;
+        applyDepotCmd();
+
         // Entrepôt - afficher dans la section Information
         if(config.default_warehouse){
           $warehouseSel.val(String(config.default_warehouse));
@@ -931,6 +963,8 @@
       const payload = { language: lang };
       if(currId) payload.default_currency = currId;
       if(whId) payload.default_warehouse = whId;
+      // Toujours envoyé : vide = aucun dépôt imposé (retour au choix automatique)
+      payload.depot_commandes_mobile = parseInt($depotCmdSel.val()||'0', 10) || null;
 
       saveConfig(payload)
         .done(function(resp){

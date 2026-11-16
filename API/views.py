@@ -4124,6 +4124,7 @@ class SystemConfigView(APIView):
 
             return Response({
                 'default_warehouse': getattr(cfg.default_warehouse, 'id', None),
+                'depot_commandes_mobile': getattr(cfg.depot_commandes_mobile, 'id', None),
                 'default_currency': getattr(cfg.default_currency, 'id', None),
                 'default_currency_details': currency_data,
                 'language': cfg.language or 'fr',
@@ -4161,6 +4162,22 @@ class SystemConfigView(APIView):
                     }, status=400)
             else:
                 cfg.default_warehouse = None
+
+            # Dépôt source par défaut des commandes clients mobiles (seulement si envoyé ; vide = aucun)
+            if 'depot_commandes_mobile' in request.data:
+                did = request.data.get('depot_commandes_mobile')
+                if did:
+                    try:
+                        dw = Warehouse.objects.get(pk=int(did))
+                    except (Warehouse.DoesNotExist, ValueError, TypeError):
+                        return Response({'error': f'Dépôt #{did} introuvable'}, status=404)
+                    if not dw.is_active:
+                        return Response({'error': f"Le dépôt {dw.name} est inactif"}, status=400)
+                    if 'van' in (dw.code or '').lower():
+                        return Response({'error': f"{dw.name} est un van : choisissez un dépôt"}, status=400)
+                    cfg.depot_commandes_mobile = dw
+                else:
+                    cfg.depot_commandes_mobile = None
 
             # Mettre à jour la devise par défaut si fournie
             cid = request.data.get('default_currency')
@@ -4204,6 +4221,7 @@ class SystemConfigView(APIView):
 
             return Response({
                 'default_warehouse': getattr(cfg.default_warehouse, 'id', None),
+                'depot_commandes_mobile': getattr(cfg.depot_commandes_mobile, 'id', None),
                 'message': 'Configuration mise à jour avec succès'
             })
         except Exception as e:

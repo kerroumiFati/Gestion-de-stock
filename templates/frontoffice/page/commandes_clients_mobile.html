@@ -306,6 +306,15 @@
                     </select>
                 </div>
                 <div class="form-group">
+                    <label for="entrepotSource"><i class="fa fa-warehouse"></i> {% trans "Entrepôt source" %}:</label>
+                    <select id="entrepotSource" class="form-control no-select2">
+                        <option value="">{% trans "Chargement..." %}</option>
+                    </select>
+                    <small class="form-text text-muted">
+                        {% trans "Le stock de la commande part de ce dépôt vers le van du livreur. Dépôt par défaut : Paramètres > Général." %}
+                    </small>
+                </div>
+                <div class="form-group">
                     <label><i class="fa fa-calendar"></i> {% trans "Date de livraison souhaitée" %}:</label>
                     <input type="date" id="dateLivraisonSouhaitee" class="form-control">
                 </div>
@@ -317,6 +326,22 @@
                 <button type="button" class="btn btn-success" onclick="confirmAffecterLivreur()">
                     <i class="fa fa-check"></i> {% trans "Affecter" %}
                 </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Rupture de stock à l'affectation -->
+<div class="modal fade" id="modalRuptureAffectation" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title"><i class="fa fa-exclamation-triangle"></i> {% trans "Rupture de stock" %}</h5>
+                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <div class="modal-body" id="ruptureAffectationContent"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">OK</button>
             </div>
         </div>
     </div>
@@ -1201,6 +1226,55 @@
             .catch(err => console.error('Erreur chargement livreurs:', err));
     }
 
+    // Dépôts proposés comme source : actifs et hors vans. Pré-sélection : dépôt par défaut
+    // des paramètres, sinon le dernier choisi pendant la session, sinon le premier.
+    let dernierEntrepotSource = null;
+    function loadEntrepotsSourceForModal() {
+        const select = document.getElementById('entrepotSource');
+        const opts = { credentials: 'same-origin', headers: { 'Accept': 'application/json' } };
+        Promise.all([
+            fetch('/API/entrepots/', opts).then(r => r.ok ? r.json() : []),
+            fetch('/API/system-config/', opts).then(r => r.ok ? r.json() : {}).catch(() => ({}))
+        ]).then(([data, cfg]) => {
+            const list = (Array.isArray(data) ? data : (data.results || []))
+                .filter(w => w.is_active !== false && !String(w.code || '').toLowerCase().includes('van'));
+            select.innerHTML = '';
+            if (!list.length) {
+                select.innerHTML = '<option value="">Aucun dépôt actif</option>';
+                return;
+            }
+            list.forEach(w => {
+                const o = document.createElement('option');
+                o.value = w.id;
+                o.textContent = (w.name || '') + (w.code ? ' (' + w.code + ')' : '');
+                select.appendChild(o);
+            });
+            const ids = list.map(w => String(w.id));
+            const defaut = cfg && cfg.depot_commandes_mobile ? String(cfg.depot_commandes_mobile) : null;
+            const choix = [dernierEntrepotSource, defaut].find(v => v && ids.includes(v));
+            select.value = choix || ids[0];
+        }).catch(err => {
+            console.error('Erreur chargement dépôts:', err);
+            select.innerHTML = '<option value="">Choix automatique</option>';
+        });
+    }
+
+    function escHtml(v) {
+        const d = document.createElement('div');
+        d.textContent = v == null ? '' : String(v);
+        return d.innerHTML;
+    }
+
+    // « 48 » -> « 48 (= 4 cartons) » quand le produit est conditionné en cartons
+    function qteAvecCartons(q, upc) {
+        q = Number(q) || 0; upc = Number(upc) || 1;
+        if (upc <= 1 || q <= 0) return String(q);
+        const c = Math.floor(q / upc), r = q % upc;
+        let txt = c ? c + ' carton' + (c > 1 ? 's' : '') : '';
+        if (r) txt += (txt ? ' + ' : '') + r + ' u';
+        return q + ' (= ' + txt + ')';
+    }
+
     function openAffecterLivreurModal(id) {
         const commande = allCommandes.find(c => c.id === id);
         if (!commande) return;
@@ -1220,8 +1294,9 @@
             document.getElementById('dateLivraisonSouhaitee').value = tomorrow.toISOString().split('T')[0];
         }
 
-        // Charger la liste des livreurs
+        // Charger la liste des livreurs et des dépôts sources
         loadLivreursForModal();
+        loadEntrepotsSourceForModal();
 
         // Pré-sélectionner le livreur actuel après chargement
         setTimeout(() => {
@@ -1239,6 +1314,8 @@
         const id = document.getElementById('commandeIdForLivreur').value;
         const newLivreur = document.getElementById('newLivreur').value;
         const dateLivraison = document.getElementById('dateLivraisonSouhaitee').value;
+        const entrepotSource = document.getElementById('entrepotSource').value;
+        if (entrepotSource) dernierEntrepotSource = entrepotSource;
 
         if (!newLivreur) {
             showError('Veuillez sélectionner un livreur');
@@ -1252,10 +1329,11 @@
                 'Content-Type': 'application/json',
                 'X-CSRFToken': getCookie('csrftoken')
             },
-            body: JSON.stringify({
-                livreur_id: parseInt(newLivreur)
-                // entrepot_source_id est optionnel, prend l'entrepôt principal par défaut
-            })
+            body: JSON.stringify(Object.assign(
+                { livreur_id: parseInt(newLivreur) },
+                // Sans dépôt choisi, le serveur prend le dépôt par défaut des paramètres
+                entrepotSource ? { entrepot_source_id: parseInt(entrepotSource) } : {}
+            ))
         })
         .then(res => res.json())
         .then(data => {
@@ -1293,23 +1371,29 @@
                 $('#modalAffecterLivreur').modal('hide');
 
                 if (data.ruptures && data.ruptures.length > 0) {
-                    // Afficher les produits en rupture de stock
-                    let rupturesHtml = '<div class="alert alert-warning"><strong>⚠️ Rupture de stock détectée !</strong><br><br>';
+                    // Afficher les produits en rupture : dépôt contrôlé + stock dans les autres dépôts
+                    const depot = (data.entrepot_source && data.entrepot_source.nom) || (data.ruptures[0].entrepot_controle) || 'le dépôt source';
+                    let rupturesHtml = '<div class="alert alert-warning text-left"><strong>⚠️ Stock insuffisant dans ' + escHtml(depot) + '</strong><br>';
                     rupturesHtml += '<table class="table table-sm table-bordered mt-2">';
-                    rupturesHtml += '<thead><tr><th>Produit</th><th>Demandé</th><th>Disponible</th><th>Manquant</th></tr></thead>';
+                    rupturesHtml += '<thead><tr><th>Produit</th><th>Demandé</th><th>Dans ' + escHtml(depot) + '</th><th>Manquant</th><th>Autres dépôts</th></tr></thead>';
                     rupturesHtml += '<tbody>';
 
                     data.ruptures.forEach(rupture => {
+                        const upc = rupture.unites_par_carton;
+                        const autres = (rupture.autres_depots || []).length
+                            ? rupture.autres_depots.map(a => '<strong>' + escHtml(qteAvecCartons(a.quantite, upc)) + '</strong> dans ' + escHtml(a.entrepot)).join('<br>')
+                            : '<span class="text-muted">Aucun</span>';
                         rupturesHtml += `<tr>
-                            <td><strong>${rupture.produit}</strong><br><small class="text-muted">${rupture.reference}</small></td>
-                            <td class="text-center">${rupture.quantite_demandee}</td>
-                            <td class="text-center">${rupture.quantite_disponible}</td>
-                            <td class="text-center text-danger"><strong>${rupture.manquant}</strong></td>
+                            <td><strong>${escHtml(rupture.produit)}</strong><br><small class="text-muted">${escHtml(rupture.reference)}</small></td>
+                            <td class="text-center">${escHtml(qteAvecCartons(rupture.quantite_demandee, upc))}</td>
+                            <td class="text-center">${escHtml(qteAvecCartons(rupture.quantite_disponible, upc))}</td>
+                            <td class="text-center text-danger"><strong>${escHtml(qteAvecCartons(rupture.manquant, upc))}</strong></td>
+                            <td>${autres}</td>
                         </tr>`;
                     });
 
                     rupturesHtml += '</tbody></table>';
-                    rupturesHtml += '<p class="mb-0"><em>Veuillez réapprovisionner le stock ou ajuster les quantités de la commande.</em></p>';
+                    rupturesHtml += '<p class="mb-0"><em>Choisissez un autre entrepôt source dans la fenêtre d\'affectation, faites un transfert vers ce dépôt, ou ajustez les quantités de la commande.</em></p>';
                     rupturesHtml += '</div>';
 
                     // Afficher dans un modal SweetAlert si disponible, sinon utiliser un alert Bootstrap
@@ -1319,15 +1403,18 @@
                             html: rupturesHtml,
                             icon: 'warning',
                             confirmButtonText: 'OK',
-                            width: '600px'
+                            width: '820px'
                         });
+                    } else if (document.getElementById('modalRuptureAffectation') && window.jQuery && $.fn.modal) {
+                        document.getElementById('ruptureAffectationContent').innerHTML = rupturesHtml;
+                        $('#modalRuptureAffectation').modal('show');
                     } else {
-                        // Fallback : afficher dans un modal Bootstrap ou un message simple
+                        // Dernier recours : message texte
                         let rupturesText = 'Rupture de stock détectée :\n\n';
                         data.ruptures.forEach(rupture => {
-                            rupturesText += `${rupture.produit} (${rupture.reference}): Demandé=${rupture.quantite_demandee}, Disponible=${rupture.quantite_disponible}, Manquant=${rupture.manquant}\n`;
+                            rupturesText += `${rupture.produit} (${rupture.reference}) : demandé ${rupture.quantite_demandee} — ${rupture.detail || ('disponible ' + rupture.quantite_disponible)}\n`;
                         });
-                        alert(rupturesText + '\nVeuillez réapprovisionner le stock ou ajuster les quantités de la commande.');
+                        alert(rupturesText + '\nChoisissez un autre entrepôt source, faites un transfert, ou ajustez les quantités de la commande.');
                     }
                 } else {
                     // Autre erreur

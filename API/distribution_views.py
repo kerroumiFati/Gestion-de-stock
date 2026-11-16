@@ -2052,18 +2052,36 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # Récupérer l'entrepôt source
+        # Récupérer l'entrepôt source :
+        # 1) celui choisi dans la fenêtre « Affecter à un Livreur » ;
+        # 2) sinon le dépôt par défaut des commandes mobiles (Paramètres > Général) ;
+        # 3) sinon l'ancien choix automatique (premier dépôt actif hors van).
+        from .models import SystemConfig
         if entrepot_source_id:
             try:
-                entrepot_source = Warehouse.objects.get(id=entrepot_source_id)
+                entrepot_source = Warehouse.objects.get(id=int(entrepot_source_id))
                 print(f"[AFFECTER LIVREUR] Entrepôt source spécifié: {entrepot_source.name} (ID: {entrepot_source.id})")
-            except Warehouse.DoesNotExist:
+            except (Warehouse.DoesNotExist, ValueError, TypeError):
                 print(f"[AFFECTER LIVREUR] Erreur: Entrepôt ID {entrepot_source_id} introuvable")
                 return Response(
-                    {'error': f'Entrepôt avec ID {entrepot_source_id} introuvable'},
+                    {'success': False, 'message': f'Entrepôt source #{entrepot_source_id} introuvable', 'ruptures': []},
                     status=status.HTTP_404_NOT_FOUND
                 )
+            if not entrepot_source.is_active:
+                return Response({'success': False, 'message': f"L'entrepôt {entrepot_source.name} est inactif", 'ruptures': []},
+                                status=status.HTTP_400_BAD_REQUEST)
+            if 'van' in (entrepot_source.code or '').lower():
+                return Response({'success': False, 'ruptures': [],
+                                 'message': f"{entrepot_source.name} est un van : choisissez un dépôt comme entrepôt source"},
+                                status=status.HTTP_400_BAD_REQUEST)
         else:
+            entrepot_source = None
+            depot_cfg = SystemConfig.get_solo().depot_commandes_mobile
+            if depot_cfg and depot_cfg.is_active and 'van' not in (depot_cfg.code or '').lower():
+                entrepot_source = depot_cfg
+                print(f"[AFFECTER LIVREUR] Dépôt par défaut (paramètres): {entrepot_source.name}")
+
+        if not entrepot_source:
             # Prendre l'entrepôt principal de la company
             # On cherche un entrepôt actif qui n'est pas un van
             print(f"[AFFECTER LIVREUR] Recherche d'un entrepôt source pour company: {commande.company}")
@@ -2140,7 +2158,8 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
                 'success': True,
                 'message': resultat['message'],
                 'commande': CommandeClientSerializer(commande).data,
-                'transfert_numero': resultat['transfert'].numero if resultat['transfert'] else None
+                'transfert_numero': resultat['transfert'].numero if resultat['transfert'] else None,
+                'entrepot_source': {'id': entrepot_source.id, 'nom': entrepot_source.name},
             }, status=status.HTTP_200_OK)
         else:
             # En cas de rupture de stock ou autre erreur
@@ -2148,7 +2167,8 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
             return Response({
                 'success': False,
                 'message': resultat['message'],
-                'ruptures': resultat['ruptures']
+                'ruptures': resultat['ruptures'],
+                'entrepot_source': {'id': entrepot_source.id, 'nom': entrepot_source.name},
             }, status=status.HTTP_400_BAD_REQUEST)
 
 

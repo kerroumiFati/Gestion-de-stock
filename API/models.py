@@ -1176,6 +1176,11 @@ class SystemConfig(models.Model):
                                           related_name='as_default_for')
     default_currency = models.ForeignKey('Currency', on_delete=models.SET_NULL, null=True, blank=True,
                                          related_name='as_default_currency_for')
+    # Dépôt d'où part le stock quand on affecte une commande client mobile à un livreur
+    # (pré-sélectionné dans la fenêtre « Affecter à un Livreur », modifiable à chaque affectation).
+    depot_commandes_mobile = models.ForeignKey(
+        'Warehouse', on_delete=models.SET_NULL, null=True, blank=True, related_name='as_depot_commandes_for',
+        help_text="Dépôt source par défaut pour l'affectation des commandes clients mobiles")
 
     # Paramètres généraux
     LANGUAGE_CHOICES = [

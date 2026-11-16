@@ -726,38 +726,54 @@ class CommandeClient(models.Model):
 
         # Vérifier les stocks disponibles avant de créer le transfert
         print(f"[AFFECTER METHOD] Vérification des stocks...")
+        # Les quantités des lignes de commande et du stock sont en UNITÉS (l'application
+        # mobile convertit déjà la saisie en cartons) : on compare donc unité à unité,
+        # et l'équivalent en cartons n'est calculé que pour l'affichage.
+        import math
         ruptures = []
         for ligne in self.lignes.all():
-            try:
-                stock = ProductStock.objects.get(
-                    produit=ligne.produit,
-                    warehouse=entrepot_source
-                )
-                stock_disponible = stock.quantity
-            except ProductStock.DoesNotExist:
-                stock_disponible = 0
-                print(f"[AFFECTER METHOD] Produit {ligne.produit.designation}: Aucun stock dans {entrepot_source.name}")
+            stock_disponible = ProductStock.objects.filter(
+                produit=ligne.produit, warehouse=entrepot_source
+            ).values_list('quantity', flat=True).first() or 0
 
-            # Convertir la quantité de commande en entier pour la comparaison
-            quantite_demandee = int(ligne.quantite)
+            # Pas d'arrondi vers le bas : 2,5 unités demandées en exigent 3 en stock (entier).
+            quantite_demandee = int(math.ceil(ligne.quantite))
             print(f"[AFFECTER METHOD] Produit {ligne.produit.designation}: Demandé={quantite_demandee}, Disponible={stock_disponible}")
 
             if stock_disponible < quantite_demandee:
                 print(f"[AFFECTER METHOD] RUPTURE: Produit {ligne.produit.designation} - Manque {quantite_demandee - stock_disponible} unités")
+                # Stock du même produit dans les autres dépôts actifs (hors vans) pour aider à choisir
+                autres = [
+                    {'entrepot_id': wid, 'entrepot': nom, 'quantite': q}
+                    for wid, nom, q in ProductStock.objects.filter(
+                        produit=ligne.produit, warehouse__is_active=True, quantity__gt=0
+                    ).exclude(warehouse=entrepot_source).exclude(
+                        warehouse__code__icontains='van'
+                    ).order_by('-quantity').values_list('warehouse_id', 'warehouse__name', 'quantity')
+                ]
+                detail = ', '.join(
+                    [f"{stock_disponible} dans {entrepot_source.name}"] +
+                    [f"{a['quantite']} dans {a['entrepot']}" for a in autres]
+                )
                 ruptures.append({
                     'produit': ligne.produit.designation,
                     'reference': ligne.produit.reference,
                     'quantite_demandee': quantite_demandee,
                     'quantite_disponible': stock_disponible,
-                    'manquant': quantite_demandee - stock_disponible
+                    'manquant': quantite_demandee - stock_disponible,
+                    'unites_par_carton': ligne.produit.get_unites_par_carton(),
+                    'entrepot_controle': entrepot_source.name,
+                    'autres_depots': autres,
+                    'detail': detail,
                 })
 
         # Si des ruptures de stock sont détectées, retourner l'information
         if ruptures:
             print(f"[AFFECTER METHOD] ERREUR: {len(ruptures)} rupture(s) de stock détectée(s)")
+            details = ' ; '.join(f"{r['produit']} : {r['detail']}" for r in ruptures)
             return {
                 'success': False,
-                'message': 'Rupture de stock détectée pour certains produits',
+                'message': f"Stock insuffisant dans {entrepot_source.name}. {details}",
                 'transfert': None,
                 'ruptures': ruptures
             }
@@ -784,10 +800,10 @@ class CommandeClient(models.Model):
                     LigneTransfertStock.objects.create(
                         transfert=transfert,
                         produit=ligne.produit,
-                        quantite=int(ligne.quantite),
+                        quantite=int(math.ceil(ligne.quantite)),  # même arrondi que le contrôle
                         notes=f'Commande {self.reference} - ligne {ligne.id}'
                     )
-                    print(f"[AFFECTER METHOD] Ligne créée: {ligne.produit.designation} x {int(ligne.quantite)}")
+                    print(f"[AFFECTER METHOD] Ligne créée: {ligne.produit.designation} x {int(math.ceil(ligne.quantite))}")
 
                 # Valider le transfert (cela va effectuer les mouvements de stock)
                 print(f"[AFFECTER METHOD] Validation du transfert...")
