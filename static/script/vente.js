@@ -2156,130 +2156,36 @@
     `;
   }
 
-  // Générer HTML pour bon de livraison
-  function generateDeliveryNoteHTML(data){
-    const lignesHTML = data.lignes.map((ligne, index) => `
-      <tr>
-        <td style="padding: 6px; border-bottom: 1px solid #e5e7eb;">${index + 1}</td>
-        <td style="padding: 6px; border-bottom: 1px solid #e5e7eb;">${ligne.designation}</td>
-        <td style="padding: 6px; border-bottom: 1px solid #e5e7eb; text-align: center;">${ligne.quantite}</td>
-        <td style="padding: 6px; border-bottom: 1px solid #e5e7eb; text-align: center;">${qteParCarton(ligne)}</td>
-      </tr>
-    `).join('');
-
-    return `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>Bon de Livraison ${data.numeroFacture}</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: 'Helvetica', 'Arial', sans-serif;
-      font-size: 12px;
-      color: #111827;
-      padding: 15px;
-    }
-    .header {
-      text-align: center;
-      margin-bottom: 15px;
-      padding-bottom: 10px;
-      border-bottom: 2px solid #10b981;
-    }
-    .company-name {
-      font-size: 20px;
-      font-weight: bold;
-      color: #10b981;
-    }
-    .title {
-      text-align: center;
-      font-size: 18px;
-      font-weight: bold;
-      margin: 15px 0;
-      padding: 8px;
-      background-color: #d1fae5;
-      border-radius: 6px;
-      color: #10b981;
-    }
-    .info-row {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 15px;
-      font-size: 12px;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-bottom: 15px;
-    }
-    th {
-      background-color: #10b981;
-      color: white;
-      padding: 8px;
-      text-align: left;
-      font-size: 11px;
-    }
-    .signature-section {
-      margin-top: 20px;
-      display: flex;
-      justify-content: space-between;
-    }
-    .signature-box {
-      width: 45%;
-      text-align: center;
-    }
-    .signature-line {
-      border-top: 1px solid #111827;
-      margin-top: 50px;
-      padding-top: 5px;
-    }
-    @media print {
-      body { padding: 10px; }
-    }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <div class="company-name">${data.entreprise.nom}</div>
-    <div>${data.entreprise.telephone}</div>
-  </div>
-
-  <div class="title">BON DE LIVRAISON N° ${data.numeroFacture}</div>
-
-  <div class="info-row">
-    <div><strong>Date:</strong> ${data.date} ${data.heure}</div>
-    <div><strong>Client:</strong> ${data.client.nom}</div>
-  </div>
-  ${data.client.adresse ? `<div style="margin-bottom: 15px;"><strong>Adresse:</strong> ${data.client.adresse}</div>` : ''}
-
-  <table>
-    <thead>
-      <tr>
-        <th style="width: 40px;">#</th>
-        <th>Désignation</th>
-        <th style="width: 80px; text-align: center;">Quantité</th>
-        <th style="width: 90px; text-align: center;">Qté / carton</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${lignesHTML}
-    </tbody>
-  </table>
-
-  <div class="signature-section">
-    <div class="signature-box">
-      <p><strong>Réceptionnaire</strong></p>
-      <div class="signature-line"></div>
-    </div>
-    <div class="signature-box">
-      <p><strong>Livreur</strong></p>
-      <div class="signature-line"></div>
-    </div>
-  </div>
-</body>
-</html>
-    `;
+  // Générer HTML pour bon de livraison : modèle unique partagé (static/script/bon_livraison.js),
+  // identique au BL serveur /API/bons/<id>/printable/ et à celui de l'app mobile.
+  function generateDeliveryNoteHTML(data, entreprise, sale){
+    sale = sale || {};
+    const dv = sale.date_vente ? new Date(sale.date_vente) : null;
+    return window.BonLivraison.html({
+      numero: data.numeroFacture,
+      dateLivraison: data.date,
+      dateVente: dv && !isNaN(dv) ? dv.toLocaleDateString('fr-FR') : '',
+      reference: sale.numero || sale.numero_vente || '',
+      entreprise: entreprise || data.entreprise,
+      client: {
+        nom: data.client.nom,
+        adresse: data.client.adresse,
+        telephone: data.client.telephone,
+        email: sale.client_email || ''
+      },
+      lignes: data.lignes.map(l => ({
+        designation: l.designation,
+        quantite: l.quantite,
+        unitesParCarton: l.unitesParCarton,
+        prixUnitaire: l.prixUnitaire,
+        montant: l.total
+      })),
+      totalHT: data.totalHT,
+      tva: data.tva,
+      tauxTVA: data.tauxTVA,
+      totalTTC: data.totalTTC,
+      livreur: sale.livreur_nom || ''
+    });
   }
 
   // Générer HTML pour ticket de caisse
@@ -2403,7 +2309,7 @@
       let html = '';
       switch(format){
         case 'delivery':
-          html = generateDeliveryNoteHTML(invoiceData);
+          html = generateDeliveryNoteHTML(invoiceData, await window.BonLivraison.chargerEntreprise(), CURRENT_SALE_FOR_PRINT);
           break;
         case 'receipt':
           html = generateReceiptHTML(invoiceData);

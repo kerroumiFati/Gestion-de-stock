@@ -1204,9 +1204,9 @@ class BonLivraisonViewSet(TenantFilterMixin, viewsets.ModelViewSet):
             rows_html += f"""
             <tr>
               <td>{designation}</td>
-              <td class="r">{l.quantite:,} Unité(s)</td>
+              <td class="r">{f'{l.quantite:,}'.replace(',', ' ')} Unité(s)</td>
               <td class="c">{upc if upc > 1 else '-'}</td>
-              <td class="r">{l.prixU_snapshot:.4f}</td>
+              <td class="r">{fmt(l.prixU_snapshot)}</td>
               <td class="r">—</td>
               <td class="r">—</td>
               <td class="r">{fmt(montant)}</td>

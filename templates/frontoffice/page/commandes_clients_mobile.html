@@ -1,5 +1,6 @@
 {% load i18n %}
 {% load static %}
+<script src="{% static 'script/bon_livraison.js' %}?v=bl1"></script>
 
 <style>
 /* Select2 - Style pour dropdown avec hauteur limitée */
@@ -935,11 +936,54 @@
         printCommande('bl');
     }
 
+    // BL d'une commande livrée, au même format que tous les autres bons de livraison
+    function imprimerBonLivraisonCommande(cmd) {
+        const fenetre = window.open('', '_blank'); // ouverte tout de suite (anti pop-up)
+        const totalHT = parseFloat(cmd.montant_total_ht) || 0;
+        const totalTTC = parseFloat(cmd.montant_total_ttc) || 0;
+        const tauxTVA = totalHT > 0 ? Math.round((totalTTC / totalHT - 1) * 100) : 0;
+        BonLivraison.chargerEntreprise().then(function (entreprise) {
+            BonLivraison.imprimer({
+                numero: cmd.reference,
+                dateLivraison: cmd.date_livraison_reelle ? formatDate(cmd.date_livraison_reelle) : '',
+                dateVente: cmd.date_commande ? formatDate(cmd.date_commande) : '',
+                reference: cmd.reference,
+                entreprise: entreprise,
+                client: {
+                    nom: [cmd.client_nom, cmd.client_prenom].filter(Boolean).join(' '),
+                    adresse: cmd.client_adresse || '',
+                    telephone: cmd.client_telephone || ''
+                },
+                lignes: (cmd.lignes || []).map(function (l) {
+                    return {
+                        designation: l.produit_designation || '-',
+                        quantite: parseFloat(l.quantite) || 0,
+                        unitesParCarton: l.produit_unites_par_carton,
+                        prixUnitaire: parseFloat(l.prix_unitaire_ht) || 0,
+                        tauxTva: parseFloat(l.taux_tva) || 0,
+                        montant: parseFloat(l.montant_ht) || 0
+                    };
+                }),
+                totalHT: totalHT,
+                tva: totalTTC - totalHT,
+                tauxTVA: tauxTVA,
+                totalTTC: totalTTC,
+                livreur: cmd.livreur_nom || ''
+            }, fenetre);
+        });
+    }
+
     // type : 'commande' (par défaut) ou 'bl' (bon de livraison, commande livrée)
     function printCommande(type) {
         if (!currentCommande) return;
         const estBL = type === 'bl' && currentCommande.statut === 'delivered';
         const titreDoc = estBL ? 'Bon de Livraison' : 'Bon de Commande';
+
+        // Bon de livraison : modèle unique (static/script/bon_livraison.js), identique au BL serveur
+        if (estBL && window.BonLivraison) {
+            imprimerBonLivraisonCommande(currentCommande);
+            return;
+        }
 
         // Créer un bon de commande / de livraison formaté
         const printWindow = window.open('', '_blank', 'width=800,height=600');
