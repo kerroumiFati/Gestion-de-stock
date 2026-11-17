@@ -212,7 +212,7 @@
 
 <!-- Modal: Détails de la Commande -->
 <div class="modal fade" id="modalCommandeDetails" tabindex="-1" role="dialog">
-    <div class="modal-dialog modal-lg" role="document">
+    <div class="modal-dialog modal-xl" role="document">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
                 <h5 class="modal-title">
@@ -229,8 +229,11 @@
                 <button type="button" class="btn btn-secondary" data-dismiss="modal">
                     <i class="fa fa-times"></i> {% trans "Fermer" %}
                 </button>
+                <button type="button" class="btn btn-success" id="btnPrintBL" onclick="printCommande('bl')" style="display: none;">
+                    <i class="fa fa-truck-loading"></i> {% trans "Imprimer le bon de livraison" %}
+                </button>
                 <button type="button" class="btn btn-primary" onclick="printCommande()">
-                    <i class="fa fa-print"></i> {% trans "Imprimer" %}
+                    <i class="fa fa-print"></i> {% trans "Imprimer le bon de commande" %}
                 </button>
             </div>
         </div>
@@ -663,6 +666,10 @@
                                 <i class="fa fa-exchange-alt"></i>
                             </button>
                             ` : `
+                            ${cmd.statut === 'delivered' ? `
+                            <button class="btn btn-success" onclick="printBonLivraison(${cmd.id})" title="Imprimer le bon de livraison">
+                                <i class="fa fa-print"></i>
+                            </button>` : ''}
                             <span class="badge badge-${cmd.statut === 'delivered' ? 'success' : 'danger'} ml-2" style="line-height: 1.8;">
                                 <i class="fa fa-${cmd.statut === 'delivered' ? 'check' : 'times'}"></i> ${cmd.statut === 'delivered' ? 'Livrée' : 'Annulée'}
                             </span>
@@ -675,11 +682,12 @@
         }).join('');
     }
 
-    function renderCommandeDetailsRow(cmd) {
+    function renderCommandeDetailsRow(cmd, dansFenetre) {
         return `
-            <div class="p-3 bg-light">
-                <h6><i class="fa fa-boxes"></i> Produits commandés (${cmd.lignes.length})</h6>
-                <table class="table table-sm table-bordered bg-white">
+            <div class="${dansFenetre ? '' : 'p-3 bg-light'}">
+                ${dansFenetre ? '' : `<h6><i class="fa fa-boxes"></i> Produits commandés (${cmd.lignes.length})</h6>`}
+                <div class="table-responsive">
+                <table class="table table-sm table-bordered bg-white mb-0">
                     <thead>
                         <tr>
                             <th style="width: 60px;">Image</th>
@@ -723,7 +731,8 @@
                         </tr>
                     </tfoot>
                 </table>
-                ${cmd.notes ? '<div class="mt-2"><strong>Notes:</strong> ' + cmd.notes + '</div>' : ''}
+                </div>
+                ${cmd.notes && !dansFenetre ? '<div class="mt-2"><strong>Notes:</strong> ' + cmd.notes + '</div>' : ''}
             </div>
         `;
     }
@@ -813,9 +822,10 @@
             </div>
             <hr>
             <h6><i class="fa fa-boxes"></i> Produits (${commande.lignes ? commande.lignes.length : 0})</h6>
-            ${commande.lignes ? renderCommandeDetailsRow(commande).replace('bg-light', '') : '<p class="text-muted">Aucun produit</p>'}
+            ${commande.lignes ? renderCommandeDetailsRow(commande, true) : '<p class="text-muted">Aucun produit</p>'}
         `;
 
+        document.getElementById('btnPrintBL').style.display = commande.statut === 'delivered' ? '' : 'none';
         $('#modalCommandeDetails').modal('show');
     }
 
@@ -917,10 +927,21 @@
         return upc > 1 ? upc : '-';
     }
 
-    function printCommande() {
-        if (!currentCommande) return;
+    // Imprime le bon de livraison d'une commande livrée directement depuis la liste
+    function printBonLivraison(id) {
+        const commande = allCommandes.find(c => c.id === id);
+        if (!commande) return;
+        currentCommande = commande;
+        printCommande('bl');
+    }
 
-        // Créer un bon de commande formaté
+    // type : 'commande' (par défaut) ou 'bl' (bon de livraison, commande livrée)
+    function printCommande(type) {
+        if (!currentCommande) return;
+        const estBL = type === 'bl' && currentCommande.statut === 'delivered';
+        const titreDoc = estBL ? 'Bon de Livraison' : 'Bon de Commande';
+
+        // Créer un bon de commande / de livraison formaté
         const printWindow = window.open('', '_blank', 'width=800,height=600');
         const cmd = currentCommande;
 
@@ -961,7 +982,7 @@
 
         // Construire le HTML complet
         const htmlContent = '<!DOCTYPE html><html><head><meta charset="UTF-8">' +
-            '<title>Bon de Commande - ' + cmd.reference + '</title>' +
+            '<title>' + titreDoc + ' - ' + cmd.reference + '</title>' +
             '<style>' +
             '@page { margin: 1cm; }' +
             'body { font-family: Arial, sans-serif; font-size: 11pt; margin: 0; padding: 20px; }' +
@@ -983,15 +1004,19 @@
             '.totals-row { display: flex; justify-content: space-between; padding: 5px 0; font-size: 11pt; }' +
             '.totals-row.total { border-top: 2px solid #333; margin-top: 10px; padding-top: 10px; font-weight: bold; font-size: 13pt; }' +
             '.footer { clear: both; margin-top: 50px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 9pt; color: #666; text-align: center; }' +
+            '.signatures { clear: both; display: flex; justify-content: space-between; gap: 40px; padding-top: 40px; }' +
+            '.sign-box { flex: 1; border: 1px solid #999; height: 90px; padding: 8px; font-size: 10pt; font-weight: bold; color: #333; }' +
             '@media print { body { padding: 0; } }' +
             '</style></head><body>' +
-            '<div class="header"><h1>📋 BON DE COMMANDE</h1></div>' +
+            '<div class="header"><h1>' + (estBL ? '🚚 BON DE LIVRAISON' : '📋 BON DE COMMANDE') + '</h1></div>' +
             '<div class="info-grid">' +
             '<div class="info-box">' +
             '<h3>📝 Informations Commande</h3>' +
             '<div class="info-row"><span class="label">Référence:</span><span><strong>' + cmd.reference + '</strong></span></div>' +
             '<div class="info-row"><span class="label">Date:</span><span>' + formatDateTime(cmd.date_commande) + '</span></div>' +
-            '<div class="info-row"><span class="label">Livraison souhaitée:</span><span>' + (cmd.date_livraison_souhaitee ? formatDate(cmd.date_livraison_souhaitee) : '-') + '</span></div>' +
+            (estBL
+                ? '<div class="info-row"><span class="label">Livrée le:</span><span><strong>' + (cmd.date_livraison_reelle ? formatDateTime(cmd.date_livraison_reelle) : '-') + '</strong></span></div>'
+                : '<div class="info-row"><span class="label">Livraison souhaitée:</span><span>' + (cmd.date_livraison_souhaitee ? formatDate(cmd.date_livraison_souhaitee) : '-') + '</span></div>') +
             '<div class="info-row"><span class="label">Statut:</span><span>' + getStatusTextOnly(cmd.statut) + '</span></div>' +
             '</div>' +
             '<div class="info-box">' +
@@ -1005,7 +1030,7 @@
             '<th style="width: 50px;">#</th>' +
             '<th>Produit</th>' +
             '<th style="width: 120px;">Référence</th>' +
-            '<th class="text-center" style="width: 80px;">Quantité</th>' +
+            '<th class="text-center" style="width: 80px;">' + (estBL ? 'Qté livrée' : 'Quantité') + '</th>' +
             '<th class="text-center" style="width: 80px;">Qté / carton</th>' +
             '<th class="text-right" style="width: 100px;">Prix Unit. HT</th>' +
             '<th class="text-right" style="width: 100px;">Total HT</th>' +
@@ -1020,6 +1045,10 @@
             (cmd.montant_paye > 0 ? '<div class="totals-row" style="color: #28a745; margin-top: 10px;"><span>Montant payé:</span><span>' + formatCurrency(cmd.montant_paye) + '</span></div>' : '') +
             (resteAPayer > 0 ? '<div class="totals-row" style="color: #dc3545; font-weight: bold;"><span>Reste à payer:</span><span>' + formatCurrency(resteAPayer) + '</span></div>' : '') +
             '</div>' +
+            (estBL ? '<div class="signatures">' +
+                '<div class="sign-box">Signature du livreur</div>' +
+                '<div class="sign-box">Cachet et signature du client<br><span style="font-weight: normal; font-size: 8pt;">(reçu conforme)</span></div>' +
+                '</div>' : '') +
             '<div class="footer">' +
             '<p><strong>Mode de paiement:</strong> ' + getTypePaiementTextOnly(cmd.type_paiement) + '</p>' +
             (cmd.notes ? '<p><strong>Notes:</strong> ' + cmd.notes + '</p>' : '') +
@@ -1726,6 +1755,7 @@
     window.resetFilters = resetFilters;
     window.refreshCommandes = refreshCommandes;
     window.printCommande = printCommande;
+    window.printBonLivraison = printBonLivraison;
 
 })();
 </script>

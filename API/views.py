@@ -4102,6 +4102,30 @@ class PaiementVenteViewSet(viewsets.ModelViewSet):
 class SystemConfigView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    @staticmethod
+    def _company_utilisateur(request):
+        """Entreprise de l'utilisateur. Avec le JWT de l'appli mobile, le middleware ne remplit pas
+        request.company : on passe par le profil, puis par le van du livreur."""
+        company = getattr(request, 'company', None)
+        if company:
+            return company
+        user = request.user
+        company = getattr(getattr(user, 'profile', None), 'company', None)
+        if company:
+            return company
+        livreur = getattr(user, 'livreur_distribution_profile', None)
+        return getattr(getattr(livreur, 'entrepot', None), 'company', None)
+
+    @staticmethod
+    def _entreprise(cfg, company):
+        return {
+            'nom': cfg.ticket_company_name or (company.name if company else ''),
+            'adresse': cfg.ticket_company_address or (company.adresse if company else ''),
+            'telephone': cfg.ticket_company_phone or (company.telephone if company else ''),
+            'email': company.email if company else '',
+            'nif': company.tax_id if company else '',
+        }
+
     def get(self, request):
         """Get system configuration"""
         try:
@@ -4132,7 +4156,10 @@ class SystemConfigView(APIView):
                 'ticket_footer_message': cfg.ticket_footer_message or '',
                 'ticket_company_name': cfg.ticket_company_name or '',
                 'ticket_company_address': cfg.ticket_company_address or '',
-                'ticket_company_phone': cfg.ticket_company_phone or ''
+                'ticket_company_phone': cfg.ticket_company_phone or '',
+                # Coordonnées imprimées sur les documents (mêmes règles que les BL/factures web) :
+                # paramètres « ticket » d'abord, sinon la fiche de l'entreprise de l'utilisateur.
+                'entreprise': self._entreprise(cfg, self._company_utilisateur(request)),
             })
         except Exception as e:
             logger.exception("Error in SystemConfigView.get")
@@ -4144,7 +4171,11 @@ class SystemConfigView(APIView):
             cfg = SystemConfig.get_solo()
             wid = request.data.get('default_warehouse')
 
-            if wid:
+            # Absent de la requête (ex. bouton « Enregistrer » de l'onglet Caisse) : on n'y touche pas.
+            # Avant, tout enregistrement partiel effaçait l'entrepôt par défaut.
+            if 'default_warehouse' not in request.data:
+                pass
+            elif wid:
                 try:
                     w = Warehouse.objects.get(pk=int(wid))
                     if not w.is_active:
