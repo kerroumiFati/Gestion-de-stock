@@ -1,624 +1,384 @@
 {% load static %}
 {% load i18n %}
 <script>
-// Load script only once and log
-console.log('[CLIENT PAGE] Template client.html loaded');
+// Charge client.js une seule fois ; ensuite on relance simplement l'initialisation
 if (!window.__client_script_loaded__) {
-    console.log('[CLIENT PAGE] Loading client.js for the first time');
     window.__client_script_loaded__ = true;
     var script = document.createElement('script');
     script.src = "{% static 'script/client.js' %}";
     script.type = 'text/javascript';
     document.head.appendChild(script);
-} else {
-    console.log('[CLIENT PAGE] client.js already loaded, skipping');
+} else if (window.ClientPage) {
+    window.ClientPage.init();
 }
 </script>
 
 <style>
-/* Styles modernes pour la page clients */
-.page-container { padding: 20px 0; }
+/* ===== Page Clients — pensée pour être simple et lisible ===== */
+#clientsPage { padding: 20px 0; font-size: 1rem; color: #1f2937; }
 
-.page-title {
-    font-size: 1.8rem;
-    font-weight: 600;
-    color: #2d3748;
-    margin-bottom: 25px;
-    padding-bottom: 15px;
-    border-bottom: 2px solid #e2e8f0;
-    display: flex;
-    align-items: center;
-    gap: 12px;
+#clientsPage .cp-head {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+    gap: 16px; margin-bottom: 20px;
 }
+#clientsPage .cp-title { font-size: 1.8rem; font-weight: 700; margin: 0; display: flex; align-items: center; gap: 12px; }
+#clientsPage .cp-title i { color: #2563eb; }
+#clientsPage .cp-subtitle { color: #6b7280; margin: 4px 0 0; font-size: 1rem; }
 
-.page-title i {
-    color: #3b82f6;
-    font-size: 2rem;
+#clientsPage .cp-btn-big {
+    font-size: 1.1rem; font-weight: 600; padding: 12px 24px; border-radius: 10px;
+    display: inline-flex; align-items: center; gap: 10px; border: none; cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,.12); transition: transform .15s, box-shadow .15s;
 }
+#clientsPage .cp-btn-big:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,.18); }
+#clientsPage .cp-btn-green { background: #16a34a; color: #fff; }
+#clientsPage .cp-btn-green:hover { background: #15803d; color: #fff; }
+#clientsPage .cp-btn-grey { background: #f3f4f6; color: #374151; box-shadow: none; border: 1px solid #d1d5db; }
+#clientsPage .cp-btn-grey:hover { background: #e5e7eb; }
 
-.modern-section {
-    background: white;
-    border: 1px solid #e2e8f0;
-    border-radius: 10px;
-    padding: 30px;
-    margin-bottom: 25px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+/* Cartes résumé */
+#clientsPage .cp-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 20px; }
+#clientsPage .cp-stat {
+    background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px 18px;
+    display: flex; align-items: center; gap: 14px; cursor: pointer; transition: border-color .15s, box-shadow .15s;
 }
+#clientsPage .cp-stat:hover { border-color: #93c5fd; box-shadow: 0 2px 8px rgba(37,99,235,.1); }
+#clientsPage .cp-stat.active { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,.15); }
+#clientsPage .cp-stat-icon { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; flex-shrink: 0; }
+#clientsPage .cp-stat-value { font-size: 1.5rem; font-weight: 700; line-height: 1.1; }
+#clientsPage .cp-stat-label { color: #6b7280; font-size: .9rem; }
 
-.section-header {
-    font-size: 1.1rem;
-    font-weight: 600;
-    color: #2d3748;
-    margin-bottom: 20px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid #e2e8f0;
-    display: flex;
-    align-items: center;
-    gap: 10px;
+/* Carte générique */
+#clientsPage .cp-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+
+/* Formulaire */
+#clientsPage #clientFormCard { border: 2px solid #2563eb; display: none; }
+#clientsPage .cp-form-title { font-size: 1.3rem; font-weight: 700; margin-bottom: 4px; display: flex; align-items: center; gap: 10px; }
+#clientsPage .cp-form-help { color: #6b7280; margin-bottom: 20px; }
+#clientsPage .cp-label { font-weight: 600; margin-bottom: 6px; display: block; font-size: 1rem; }
+#clientsPage .cp-label .req { color: #dc2626; }
+#clientsPage .cp-label .opt { color: #9ca3af; font-weight: 400; font-size: .85rem; }
+#clientsPage .cp-input { font-size: 1.05rem; padding: 10px 14px; height: auto; border-radius: 8px; border: 1px solid #d1d5db; }
+#clientsPage .cp-input:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,.15); }
+#clientsPage .cp-input.is-invalid { border-color: #dc2626; }
+#clientsPage .cp-error { color: #dc2626; font-size: .9rem; margin-top: 4px; display: none; }
+#clientsPage .cp-error.show { display: block; }
+#clientsPage .cp-hint { color: #6b7280; font-size: .88rem; margin-top: 4px; }
+
+#clientsPage .cp-more-toggle {
+    background: #f9fafb; border: 1px dashed #9ca3af; border-radius: 10px; width: 100%;
+    padding: 12px 16px; text-align: left; font-weight: 600; color: #374151; cursor: pointer;
+    display: flex; align-items: center; justify-content: space-between; margin: 8px 0 16px;
 }
+#clientsPage .cp-more-toggle:hover { background: #f3f4f6; }
+#clientsPage .cp-more-toggle .fa-chevron-down { transition: transform .2s; }
+#clientsPage .cp-more-toggle[aria-expanded="true"] .fa-chevron-down { transform: rotate(180deg); }
+#clientsPage .cp-subsection { font-weight: 700; color: #374151; margin: 8px 0 12px; display: flex; align-items: center; gap: 8px; }
+#clientsPage .cp-subsection i { color: #2563eb; }
 
-.section-header i { color: #3b82f6; }
+#clientsPage .cp-form-actions { display: flex; flex-wrap: wrap; gap: 12px; padding-top: 16px; border-top: 1px solid #e5e7eb; margin-top: 8px; }
 
-.modern-label {
-    font-weight: 500;
-    color: #4a5568;
-    margin-bottom: 6px;
-    font-size: 0.9rem;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
+/* Recherche + filtres */
+#clientsPage .cp-search { position: relative; flex: 1 1 320px; }
+#clientsPage .cp-search i { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: #6b7280; font-size: 1.1rem; }
+#clientsPage .cp-search input { padding: 14px 16px 14px 46px; font-size: 1.1rem; border-radius: 10px; border: 2px solid #d1d5db; width: 100%; height: auto; }
+#clientsPage .cp-search input:focus { border-color: #2563eb; outline: none; box-shadow: 0 0 0 3px rgba(37,99,235,.15); }
+#clientsPage .cp-toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 16px; }
+#clientsPage .cp-count { color: #6b7280; font-size: 1rem; white-space: nowrap; }
 
-.modern-label i {
-    color: #3b82f6;
-    font-size: 0.9rem;
-}
+/* Tableau */
+#clientsPage .cp-table { margin: 0; }
+#clientsPage .cp-table thead th { background: #f9fafb; border-top: none; border-bottom: 1px solid #e5e7eb; color: #4b5563; font-weight: 600; font-size: .9rem; padding: 12px; position: sticky; top: 0; z-index: 2; }
+#clientsPage .cp-table tbody td { padding: 14px 12px; vertical-align: middle; border-top: 1px solid #f1f5f9; }
+#clientsPage .cp-table tbody tr:hover { background: #f8fafc; }
+#clientsPage .cp-table tbody tr.cp-flash { animation: cpFlash 2s ease; }
+@keyframes cpFlash { 0%,40% { background: #dcfce7; } 100% { background: transparent; } }
+#clientsPage .cp-avatar { width: 42px; height: 42px; border-radius: 50%; color: #fff; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 1rem; }
+#clientsPage .cp-client { display: flex; align-items: center; gap: 12px; }
+#clientsPage .cp-client-name { font-weight: 600; font-size: 1.05rem; }
+#clientsPage .cp-phone { color: #1d4ed8; font-weight: 500; white-space: nowrap; }
+#clientsPage .cp-phone:hover { text-decoration: underline; }
+#clientsPage .cp-balance { display: inline-block; padding: 5px 12px; border-radius: 20px; font-weight: 600; white-space: nowrap; font-size: .92rem; }
+#clientsPage .cp-balance.debt { background: #fee2e2; color: #b91c1c; }
+#clientsPage .cp-balance.credit { background: #dcfce7; color: #15803d; }
+#clientsPage .cp-balance.ok { background: #f3f4f6; color: #4b5563; }
+#clientsPage .cp-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+#clientsPage .cp-act { border: 1px solid #d1d5db; background: #fff; border-radius: 8px; padding: 7px 12px; font-size: .9rem; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; color: #374151; white-space: nowrap; }
+#clientsPage .cp-act:hover { background: #f3f4f6; }
+#clientsPage .cp-act.edit { border-color: #93c5fd; color: #1d4ed8; }
+#clientsPage .cp-act.edit:hover { background: #eff6ff; }
+#clientsPage .cp-act.del { border-color: #fecaca; color: #b91c1c; }
+#clientsPage .cp-act.del:hover { background: #fef2f2; }
 
-.modern-input {
-    border: 1px solid #cbd5e0;
-    border-radius: 6px;
-    padding: 10px 15px;
-    transition: all 0.2s ease;
-    font-size: 0.95rem;
-    width: 100%;
-}
+#clientsPage .cp-empty { text-align: center; padding: 50px 20px; color: #6b7280; }
+#clientsPage .cp-empty i { font-size: 3rem; color: #d1d5db; margin-bottom: 12px; display: block; }
+#clientsPage .cp-empty h5 { color: #374151; font-weight: 600; }
 
-.modern-input:focus {
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-    outline: none;
-}
+/* Notifications */
+#cpToasts { position: fixed; top: 20px; right: 20px; z-index: 2000; display: flex; flex-direction: column; gap: 10px; max-width: 380px; }
+.cp-toast { background: #fff; border-radius: 10px; padding: 14px 18px; box-shadow: 0 6px 20px rgba(0,0,0,.15); display: flex; align-items: center; gap: 12px; font-size: 1rem; border-left: 5px solid #16a34a; animation: cpIn .25s ease; }
+.cp-toast.error { border-left-color: #dc2626; }
+.cp-toast i { font-size: 1.3rem; }
+.cp-toast.success i { color: #16a34a; }
+.cp-toast.error i { color: #dc2626; }
+@keyframes cpIn { from { opacity: 0; transform: translateX(30px); } to { opacity: 1; transform: none; } }
 
-.modern-btn {
-    border-radius: 6px;
-    padding: 10px 20px;
-    font-weight: 500;
-    transition: all 0.2s ease;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    border: none;
-    cursor: pointer;
-}
-
-.modern-btn-primary {
-    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-    color: white;
-    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
-}
-
-.modern-btn-primary:hover {
-    background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
-    color: white;
-}
-
-.modern-btn-secondary {
-    background: #e2e8f0;
-    color: #2d3748;
-    border: 1px solid #cbd5e0;
-}
-
-.modern-btn-secondary:hover {
-    background: #cbd5e0;
-    color: #2d3748;
-}
-
-.modern-table {
-    margin-bottom: 0;
-    border-collapse: separate;
-    border-spacing: 0;
-}
-
-.modern-table thead th {
-    background: #f7fafc;
-    border: none;
-    padding: 15px 12px;
-    font-weight: 600;
-    color: #4a5568;
-    font-size: 0.85rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    position: sticky;
-    top: 0;
-    z-index: 10;
-    box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.05);
-}
-
-.modern-table tbody td {
-    padding: 12px;
-    border-bottom: 1px solid #e2e8f0;
-    vertical-align: middle;
-}
-
-.modern-table tbody tr:hover {
-    background: #f7fafc;
-}
-
-.action-btn {
-    padding: 6px 12px;
-    border-radius: 6px;
-    font-size: 0.85rem;
-    border: none;
-    transition: all 0.2s ease;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.action-btn-edit {
-    background: #3b82f6;
-    color: white;
-}
-
-.action-btn-edit:hover {
-    background: #2563eb;
-    color: white;
-    transform: scale(1.05);
-}
-
-.action-btn-delete {
-    background: #e2e8f0;
-    color: #4a5568;
-}
-
-.action-btn-delete:hover {
-    background: #cbd5e0;
-    color: #2d3748;
-    transform: scale(1.05);
-}
-
-.modern-modal .modal-content {
-    border-radius: 10px;
-    border: none;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-}
-
-.modern-modal .modal-header {
-    background: #f7fafc;
-    border-bottom: 1px solid #e2e8f0;
-}
-
-.modern-modal .modal-title {
-    color: #2d3748;
-    font-weight: 600;
+@media (max-width: 767px) {
+    #clientsPage .cp-btn-big { width: 100%; justify-content: center; }
+    #clientsPage .cp-card { padding: 16px; }
+    /* Sur téléphone : une carte par client au lieu d'un tableau trop large */
+    #clientsPage .table-responsive { max-height: none !important; overflow: visible !important; }
+    #clientsPage #tclient thead { display: none; }
+    #clientsPage #tclient, #clientsPage #tclient tbody { display: block; width: 100%; }
+    #clientsPage #tclient tbody tr[data-id] {
+        display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+        border: 1px solid #e5e7eb; border-radius: 12px; padding: 14px; margin-bottom: 12px;
+    }
+    #clientsPage #tclient tbody tr[data-id] td { display: block; border: none; padding: 0; }
+    #clientsPage #tclient tbody tr[data-id] td:first-child { flex: 1 1 100%; min-width: 0; }
+    #clientsPage .cp-client-name { overflow-wrap: anywhere; }
+    #clientsPage #tclient tbody tr[data-id] td.cp-hide-mobile { display: none; }
+    #clientsPage #tclient tbody tr[data-id] td:last-child { flex: 1 1 100%; }
+    #clientsPage .cp-actions { justify-content: stretch; }
+    #clientsPage .cp-act { flex: 1 1 auto; justify-content: center; padding: 10px; }
+    #clientsPage tbody tr:not([data-id]) td { display: block; }
 }
 </style>
 
-<div class="container-fluid page-container">
-    <!-- Modal Erreur -->
-    <div class="modal fade modern-modal" id="error" tabindex="-1" role="dialog">
-        <div class="modal-dialog" role="document">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">
-                        <i class="fa fa-exclamation-circle"></i> {% trans "Erreur" %}
-                    </h5>
-                    <button type="button" class="close" data-dismiss="modal">
-                        <span>&times;</span>
-                    </button>
-                </div>
-                <div class="modal-body">
-                    <p>{% trans "Impossible de supprimer ce client" %}</p>
-                </div>
-            </div>
+<div class="container-fluid" id="clientsPage">
+
+    <!-- En-tête -->
+    <div class="cp-head">
+        <div>
+            <h1 class="cp-title"><i class="fa fa-users"></i> {% trans "Gestion des Clients" %}</h1>
+            <p class="cp-subtitle">{% trans "Ajoutez un client, retrouvez-le facilement et suivez ce qu'il vous doit." %}</p>
+        </div>
+        <button type="button" class="cp-btn-big cp-btn-green" id="btnNouveauClient">
+            <i class="fa fa-user-plus"></i> {% trans "Nouveau client" %}
+        </button>
+    </div>
+
+    <!-- Résumé (cliquable = filtre) -->
+    <div class="cp-stats">
+        <div class="cp-stat active" data-filter="all" title="{% trans 'Afficher tous les clients' %}">
+            <div class="cp-stat-icon" style="background:#dbeafe;color:#2563eb;"><i class="fa fa-users"></i></div>
+            <div><div class="cp-stat-value" id="statTotal">0</div><div class="cp-stat-label">{% trans "Clients au total" %}</div></div>
+        </div>
+        <div class="cp-stat" data-filter="debt" title="{% trans 'Afficher seulement les clients qui doivent de l’argent' %}">
+            <div class="cp-stat-icon" style="background:#fee2e2;color:#dc2626;"><i class="fa fa-exclamation-circle"></i></div>
+            <div><div class="cp-stat-value" id="statDebt">0</div><div class="cp-stat-label">{% trans "Clients qui doivent de l'argent" %}</div></div>
+        </div>
+        <div class="cp-stat" data-filter="debt" title="{% trans 'Afficher seulement les clients qui doivent de l’argent' %}">
+            <div class="cp-stat-icon" style="background:#fef3c7;color:#d97706;"><i class="fa fa-coins"></i></div>
+            <div><div class="cp-stat-value" id="statDebtTotal">0 DA</div><div class="cp-stat-label">{% trans "Total à récupérer" %}</div></div>
         </div>
     </div>
 
-    <!-- Titre de page -->
-    <h1 class="page-title">
-        <i class="fa fa-users"></i>
-        {% trans "Gestion des Clients" %}
-    </h1>
+    <!-- Formulaire (caché tant qu'on n'a pas cliqué sur « Nouveau client » ou « Modifier ») -->
+    <div class="cp-card" id="clientFormCard">
+        <div class="cp-form-title"><i class="fa fa-user-plus text-success" id="formIcon"></i> <span id="formTitle">{% trans "Nouveau client" %}</span></div>
+        <div class="cp-form-help">{% trans "Les cases marquées d'une étoile" %} <span class="text-danger">*</span> {% trans "sont obligatoires. Le reste peut être rempli plus tard." %}</div>
 
-    <!-- Section Formulaire -->
-    <div class="modern-section">
-        <div class="section-header">
-            <i class="fa fa-user-plus"></i>
-            {% trans "Ajouter / Modifier un Client" %}
-        </div>
-
-        <form> {% csrf_token %}
-            <input type="text" id="id" hidden>
+        <form id="clientForm" autocomplete="off" novalidate> {% csrf_token %}
+            <input type="hidden" id="id">
 
             <div class="row">
                 <div class="col-md-6 mb-3">
-                    <label class="modern-label" for="nom">
-                        <i class="fa fa-user"></i> {% trans "Nom" %}
-                    </label>
-                    <input class="form-control modern-input" type="text" id="nom" required>
+                    <label class="cp-label" for="nom">{% trans "Nom" %} <span class="req">*</span></label>
+                    <input class="form-control cp-input" type="text" id="nom" maxlength="50" placeholder="{% trans 'Ex : Boualem' %}">
+                    <div class="cp-error" data-for="nom"></div>
                 </div>
-
                 <div class="col-md-6 mb-3">
-                    <label class="modern-label" for="prenom">
-                        <i class="fa fa-user"></i> {% trans "Prénom" %}
-                    </label>
-                    <input class="form-control modern-input" type="text" id="prenom" required>
+                    <label class="cp-label" for="prenom">{% trans "Prénom" %} <span class="req">*</span></label>
+                    <input class="form-control cp-input" type="text" id="prenom" maxlength="50" placeholder="{% trans 'Ex : Karim' %}">
+                    <div class="cp-error" data-for="prenom"></div>
                 </div>
             </div>
 
             <div class="row">
                 <div class="col-md-6 mb-3">
-                    <label class="modern-label" for="email">
-                        <i class="fa fa-envelope"></i> {% trans "Email" %}
-                    </label>
-                    <input class="form-control modern-input" type="email" id="email" required>
+                    <label class="cp-label" for="telephone"><i class="fa fa-phone text-primary"></i> {% trans "Téléphone" %} <span class="req">*</span></label>
+                    <input class="form-control cp-input" type="tel" id="telephone" maxlength="50" inputmode="tel" placeholder="{% trans 'Ex : 0555 12 34 56' %}">
+                    <div class="cp-error" data-for="telephone"></div>
                 </div>
-
                 <div class="col-md-6 mb-3">
-                    <label class="modern-label" for="telephone">
-                        <i class="fa fa-phone"></i> {% trans "Téléphone" %}
-                    </label>
-                    <input class="form-control modern-input" type="text" id="telephone" required>
+                    <label class="cp-label" for="adresse"><i class="fa fa-map-marker-alt text-primary"></i> {% trans "Adresse" %} <span class="req">*</span></label>
+                    <input class="form-control cp-input" type="text" id="adresse" maxlength="50" placeholder="{% trans 'Ex : 12 rue des Frères, Oran' %}">
+                    <div class="cp-error" data-for="adresse"></div>
                 </div>
             </div>
 
             <div class="row">
-                <div class="col-md-8 mb-3">
-                    <label class="modern-label" for="adresse">
-                        <i class="fa fa-map-marker-alt"></i> {% trans "Adresse" %}
-                    </label>
-                    <input class="form-control modern-input" type="text" id="adresse" required>
-                </div>
-
                 <div class="col-md-4 mb-3">
-                    <label class="modern-label" for="secteur">
-                        <i class="fa fa-map-marked-alt"></i> {% trans "Secteur" %}
-                    </label>
-                    <select class="form-control modern-input" id="secteur">
-                        <option value="">-- Sélectionner un secteur --</option>
+                    <label class="cp-label" for="email"><i class="fa fa-envelope text-primary"></i> {% trans "Email" %} <span class="opt">({% trans "facultatif" %})</span></label>
+                    <input class="form-control cp-input" type="email" id="email" maxlength="50" placeholder="{% trans 'Ex : karim@exemple.dz' %}">
+                    <div class="cp-error" data-for="email"></div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="cp-label" for="secteur"><i class="fa fa-map-marked-alt text-primary"></i> {% trans "Secteur / zone" %} <span class="opt">({% trans "facultatif" %})</span></label>
+                    <select class="form-control cp-input" id="secteur">
+                        <option value="">{% trans "-- Choisir un secteur --" %}</option>
                     </select>
+                    <div class="cp-hint">{% trans "La zone de tournée du livreur." %}</div>
                 </div>
-
                 <div class="col-md-4 mb-3">
-                    <label class="modern-label" for="type_prix">
-                        <i class="fa fa-tags"></i> {% trans "Type de Prix" %}
-                    </label>
-                    <select class="form-control modern-input" id="type_prix">
-                        <option value="">-- Sélectionner un type de prix --</option>
+                    <label class="cp-label" for="type_prix"><i class="fa fa-tags text-primary"></i> {% trans "Tarif" %} <span class="opt">({% trans "facultatif" %})</span></label>
+                    <select class="form-control cp-input" id="type_prix">
+                        <option value="">{% trans "-- Tarif normal --" %}</option>
                     </select>
-                    <small class="form-text text-muted">{% trans "Définit les tarifs appliqués pour ce client" %}</small>
+                    <div class="cp-hint">{% trans "Les prix appliqués à ce client." %}</div>
                 </div>
             </div>
 
-            <!-- Coordonnées GPS -->
-            <div class="row mt-3">
-                <div class="col-12 mb-2">
-                    <h6 class="text-muted" style="font-size: 0.95rem; font-weight: 600;">
-                        <i class="fa fa-map-pin"></i> {% trans "Coordonnées GPS (Optionnel)" %}
-                    </h6>
+            <!-- Informations complémentaires -->
+            <button type="button" class="cp-more-toggle" id="btnMoreInfo" data-toggle="collapse" data-target="#moreInfo" aria-expanded="false" aria-controls="moreInfo">
+                <span><i class="fa fa-plus-circle text-primary mr-2"></i>{% trans "Plus d'informations : position GPS, papiers fiscaux, ancien solde" %} <span class="opt" style="font-weight:400;color:#9ca3af;">({% trans "facultatif" %})</span></span>
+                <i class="fa fa-chevron-down"></i>
+            </button>
+
+            <div class="collapse" id="moreInfo">
+                <div class="cp-subsection"><i class="fa fa-map-pin"></i> {% trans "Position GPS du magasin" %}</div>
+                <div class="row align-items-end">
+                    <div class="col-md-4 mb-3">
+                        <label class="cp-label" for="lat">{% trans "Latitude" %}</label>
+                        <input class="form-control cp-input" type="number" step="0.0000001" id="lat" placeholder="Ex : 36.7372502">
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="cp-label" for="lng">{% trans "Longitude" %}</label>
+                        <input class="form-control cp-input" type="number" step="0.0000001" id="lng" placeholder="Ex : 3.0865015">
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <button type="button" class="btn btn-outline-primary btn-block" id="btnMyPosition" style="padding:10px;border-radius:8px;">
+                            <i class="fa fa-crosshairs"></i> {% trans "Je suis chez le client : prendre ma position" %}
+                        </button>
+                    </div>
                 </div>
+                <div class="cp-hint mb-3" style="margin-top:-8px;">
+                    {% trans "Astuce : dans Google Maps, faites un appui long sur le magasin puis copiez les 2 chiffres affichés." %}
+                    <a href="#" id="linkSeeMap" target="_blank" rel="noopener" style="display:none;"><i class="fa fa-external-link-alt"></i> {% trans "Vérifier sur la carte" %}</a>
+                </div>
+
+                <div class="cp-subsection"><i class="fa fa-file-invoice"></i> {% trans "Informations fiscales (pour les factures)" %}</div>
+                <div class="row">
+                    <div class="col-md-3 mb-3">
+                        <label class="cp-label" for="nif">NIF</label>
+                        <input class="form-control cp-input" type="text" id="nif" placeholder="{% trans 'Identifiant fiscal' %}">
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="cp-label" for="nis">NIS</label>
+                        <input class="form-control cp-input" type="text" id="nis" placeholder="{% trans 'Identifiant statistique' %}">
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="cp-label" for="ai">AI</label>
+                        <input class="form-control cp-input" type="text" id="ai" placeholder="{% trans "Article d'imposition" %}">
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="cp-label" for="rc">RC</label>
+                        <input class="form-control cp-input" type="text" id="rc" placeholder="{% trans 'Registre de commerce' %}">
+                    </div>
+                </div>
+
+                <div class="cp-subsection"><i class="fa fa-wallet"></i> {% trans "Ancien solde du client" %}</div>
+                <div class="row">
+                    <div class="col-md-5 mb-3">
+                        <label class="cp-label" for="soldeType">{% trans "Situation" %}</label>
+                        <select class="form-control cp-input" id="soldeType">
+                            <option value="0">{% trans "Le client est à jour (rien à signaler)" %}</option>
+                            <option value="-1">{% trans "Le client me doit de l'argent" %}</option>
+                            <option value="1">{% trans "Le client a payé d'avance" %}</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4 mb-3" id="soldeAmountGroup" style="display:none;">
+                        <label class="cp-label" for="soldeMontant">{% trans "Montant (DA)" %}</label>
+                        <input class="form-control cp-input" type="number" step="0.01" min="0" id="soldeMontant" placeholder="0.00">
+                    </div>
+                </div>
+                <!-- Valeur réelle envoyée au serveur (négatif = dette, positif = avance) -->
+                <input type="hidden" id="solde">
             </div>
 
-            <div class="row">
-                <div class="col-md-6 mb-3">
-                    <label class="modern-label" for="lat">
-                        <i class="fa fa-location-arrow"></i> {% trans "Latitude" %}
-                    </label>
-                    <input class="form-control modern-input" type="number" step="0.0000001" id="lat" placeholder="Ex: 36.7372502">
-                    <small class="form-text text-muted">{% trans "Latitude GPS (décimal)" %}</small>
-                </div>
-
-                <div class="col-md-6 mb-3">
-                    <label class="modern-label" for="lng">
-                        <i class="fa fa-location-arrow"></i> {% trans "Longitude" %}
-                    </label>
-                    <input class="form-control modern-input" type="number" step="0.0000001" id="lng" placeholder="Ex: 3.0865015">
-                    <small class="form-text text-muted">{% trans "Longitude GPS (décimal)" %}</small>
-                </div>
-            </div>
-
-            <!-- Informations fiscales (optionnelles) -->
-            <div class="row mt-3">
-                <div class="col-12 mb-2">
-                    <h6 class="text-muted" style="font-size: 0.95rem; font-weight: 600;">
-                        <i class="fa fa-file-invoice"></i> {% trans "Informations Fiscales (Optionnel)" %}
-                    </h6>
-                </div>
-            </div>
-
-            <div class="row">
-                <div class="col-md-3 mb-3">
-                    <label class="modern-label" for="nif">
-                        <i class="fa fa-id-card"></i> {% trans "NIF" %}
-                    </label>
-                    <input class="form-control modern-input" type="text" id="nif" placeholder="Numéro d'Identification Fiscale">
-                </div>
-
-                <div class="col-md-3 mb-3">
-                    <label class="modern-label" for="nis">
-                        <i class="fa fa-id-card"></i> {% trans "NIS" %}
-                    </label>
-                    <input class="form-control modern-input" type="text" id="nis" placeholder="Numéro d'Identification Statistique">
-                </div>
-
-                <div class="col-md-3 mb-3">
-                    <label class="modern-label" for="ai">
-                        <i class="fa fa-id-card"></i> {% trans "AI" %}
-                    </label>
-                    <input class="form-control modern-input" type="text" id="ai" placeholder="Article d'Imposition">
-                </div>
-
-                <div class="col-md-3 mb-3">
-                    <label class="modern-label" for="rc">
-                        <i class="fa fa-id-card"></i> {% trans "RC" %}
-                    </label>
-                    <input class="form-control modern-input" type="text" id="rc" placeholder="Registre de Commerce">
-                </div>
-            </div>
-
-            <!-- Solde du compte -->
-            <div class="row mt-3">
-                <div class="col-12 mb-2">
-                    <h6 class="text-muted" style="font-size: 0.95rem; font-weight: 600;">
-                        <i class="fa fa-wallet"></i> {% trans "Solde du Compte (Optionnel)" %}
-                    </h6>
-                </div>
-            </div>
-
-            <div class="row">
-                <div class="col-md-4 mb-3">
-                    <label class="modern-label" for="solde">
-                        <i class="fa fa-money-bill-wave"></i> {% trans "Solde Initial" %}
-                    </label>
-                    <input class="form-control modern-input" type="number" step="0.01" id="solde" placeholder="0.00">
-                    <small class="form-text text-muted">
-                        {% trans "Positif = crédit accordé, Négatif = dette existante. Indépendant des paiements partiels sur ventes." %}
-                    </small>
-                </div>
-            </div>
-
-            <div class="row">
-                <div class="col">
-                    <button type="button" class="modern-btn modern-btn-primary" id="btnClient">
-                        <i class="fa fa-plus"></i> {% trans "Ajouter" %}
-                    </button>
-                    <button type="button" class="modern-btn modern-btn-secondary ml-2" onclick="resetForm()">
-                        <i class="fa fa-undo"></i> {% trans "Réinitialiser" %}
-                    </button>
-                </div>
+            <div class="cp-form-actions">
+                <button type="button" class="cp-btn-big cp-btn-green" id="btnClient">
+                    <i class="fa fa-check"></i> <span>{% trans "Enregistrer le client" %}</span>
+                </button>
+                <button type="button" class="cp-btn-big cp-btn-grey" id="btnCancelForm">
+                    <i class="fa fa-times"></i> {% trans "Annuler" %}
+                </button>
             </div>
         </form>
     </div>
 
-    <!-- Section Liste des clients -->
-    <div class="modern-section">
-        <div class="section-header">
-            <i class="fa fa-list"></i>
-            {% trans "Liste des Clients" %}
-        </div>
-
-        <!-- Filtre de recherche -->
-        <div class="mb-3">
-            <div class="row">
-                <div class="col-md-6">
-                    <div class="input-group">
-                        <div class="input-group-prepend">
-                            <span class="input-group-text" style="background: #f7fafc; border: 1px solid #cbd5e0; border-radius: 6px 0 0 6px;">
-                                <i class="fa fa-search" style="color: #3b82f6;"></i>
-                            </span>
-                        </div>
-                        <input type="text" id="searchFilter" class="form-control modern-input"
-                               placeholder="{% trans 'Rechercher par nom, prénom, email, téléphone...' %}"
-                               style="border-radius: 0 6px 6px 0;">
-                    </div>
-                </div>
-                <div class="col-md-6 text-right">
-                    <span id="clientCount" class="text-muted" style="line-height: 38px; font-size: 0.9rem;">
-                        <i class="fa fa-users"></i> <span id="countText">0 client(s)</span>
-                    </span>
-                </div>
+    <!-- Liste des clients -->
+    <div class="cp-card">
+        <div class="cp-toolbar">
+            <div class="cp-search">
+                <i class="fa fa-search"></i>
+                <input type="text" id="searchFilter" autocomplete="off"
+                       placeholder="{% trans 'Rechercher un client : tapez son nom ou son numéro de téléphone…' %}">
             </div>
+            <div class="cp-count"><i class="fa fa-users"></i> <span id="countText">0 client</span></div>
         </div>
 
-        <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
-            <table id="tclient" class="table modern-table" data-no-datatable="true">
+        <div class="table-responsive" style="max-height: 640px; overflow-y: auto;">
+            <table id="tclient" class="table cp-table" data-no-datatable="true">
                 <thead>
                     <tr>
-                        <th>{% trans "ID" %}</th>
-                        <th>{% trans "Nom" %}</th>
-                        <th>{% trans "Prénom" %}</th>
-                        <th>{% trans "Email" %}</th>
+                        <th>{% trans "Client" %}</th>
                         <th>{% trans "Téléphone" %}</th>
-                        <th>{% trans "Adresse" %}</th>
-                        <th>{% trans "Secteur" %}</th>
-                        <th><i class="fa fa-tags"></i> {% trans "Type Prix" %}</th>
-                        <th><i class="fa fa-map-pin"></i> {% trans "Latitude" %}</th>
-                        <th><i class="fa fa-map-pin"></i> {% trans "Longitude" %}</th>
-                        <th>{% trans "NIF" %}</th>
-                        <th>{% trans "NIS" %}</th>
-                        <th>{% trans "AI" %}</th>
-                        <th>{% trans "RC" %}</th>
-                        <th><i class="fa fa-wallet"></i> {% trans "Solde" %}</th>
-                        <th>{% trans "Actions" %}</th>
+                        <th class="cp-hide-mobile">{% trans "Adresse" %}</th>
+                        <th class="cp-hide-mobile">{% trans "Tarif" %}</th>
+                        <th>{% trans "Argent" %}</th>
+                        <th class="text-right">{% trans "Que faire ?" %}</th>
                     </tr>
                 </thead>
                 <tbody id="table-content">
-                    <tr>
-                        <td colspan="16" class="text-center text-muted">{% trans "Chargement..." %}</td>
-                    </tr>
+                    <tr><td colspan="6" class="cp-empty"><i class="fa fa-spinner fa-spin"></i>{% trans "Chargement des clients…" %}</td></tr>
                 </tbody>
             </table>
         </div>
     </div>
 </div>
 
-<!-- Modal Historique des Paiements -->
-<div class="modal fade" id="historiqueModal" tabindex="-1" role="dialog">
-    <div class="modal-dialog modal-lg" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">
-                    <i class="fa fa-history"></i> Historique des Paiements de Solde
-                </h5>
-                <button type="button" class="close" data-dismiss="modal">
-                    <span>&times;</span>
-                </button>
-            </div>
-            <div class="modal-body">
-                <div id="historique-client-info" class="alert alert-info mb-3" style="display:none;">
-                    <strong id="historique-client-nom"></strong><br>
-                    <span class="text-muted">Solde actuel: </span>
-                    <strong id="historique-solde-actuel"></strong>
+<!-- Confirmation de suppression -->
+<div class="modal fade" id="deleteClientModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content" style="border-radius:12px;border:none;">
+            <div class="modal-body text-center p-4">
+                <div style="width:64px;height:64px;border-radius:50%;background:#fee2e2;color:#dc2626;display:flex;align-items:center;justify-content:center;font-size:1.8rem;margin:0 auto 16px;">
+                    <i class="fa fa-trash"></i>
                 </div>
-
-                <div id="historique-content">
-                    <div class="text-center py-4">
-                        <i class="fa fa-spinner fa-spin fa-2x"></i>
-                        <p class="mt-2">Chargement de l'historique...</p>
-                    </div>
+                <h5 style="font-weight:700;">{% trans "Supprimer ce client ?" %}</h5>
+                <p class="mb-1" style="font-size:1.1rem;"><strong id="deleteClientName"></strong></p>
+                <p class="text-muted">{% trans "Attention : cette action est définitive." %}</p>
+                <div class="d-flex justify-content-center mt-3" style="gap:10px;">
+                    <button type="button" class="btn btn-light btn-lg" data-dismiss="modal">{% trans "Non, garder" %}</button>
+                    <button type="button" class="btn btn-danger btn-lg" id="btnConfirmDelete"><i class="fa fa-trash"></i> {% trans "Oui, supprimer" %}</button>
                 </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Fermer</button>
             </div>
         </div>
     </div>
 </div>
 
-<script>
-function resetForm(){
-    document.getElementById('id').value = '';
-    document.getElementById('nom').value = '';
-    document.getElementById('prenom').value = '';
-    document.getElementById('email').value = '';
-    document.getElementById('telephone').value = '';
-    document.getElementById('adresse').value = '';
-    document.getElementById('secteur').selectedIndex = 0;
-    document.getElementById('lat').value = '';
-    document.getElementById('lng').value = '';
-    document.getElementById('nif').value = '';
-    document.getElementById('nis').value = '';
-    document.getElementById('ai').value = '';
-    document.getElementById('rc').value = '';
-    document.getElementById('solde').value = '';
-    document.getElementById('btnClient').innerHTML = '<i class="fa fa-plus"></i> Ajouter';
-}
+<!-- Historique des paiements -->
+<div class="modal fade" id="historiqueModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content" style="border-radius:12px;">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fa fa-history"></i> {% trans "Paiements du client" %}</h5>
+                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <div class="modal-body">
+                <div id="historique-client-info" class="alert alert-info mb-3" style="display:none;font-size:1.05rem;">
+                    <strong id="historique-client-nom"></strong><br>
+                    <span id="historique-solde-actuel"></span>
+                </div>
+                <div id="historique-content"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">{% trans "Fermer" %}</button>
+            </div>
+        </div>
+    </div>
+</div>
 
-// Fonction pour mettre à jour le compteur de clients
-function updateClientCount() {
-    const tbody = document.getElementById('table-content');
-    if (!tbody) return;
-
-    const rows = tbody.getElementsByTagName('tr');
-    let visibleCount = 0;
-
-    for (let i = 0; i < rows.length; i++) {
-        const cells = rows[i].getElementsByTagName('td');
-        // Ne compter que les vraies lignes avec des données (pas les lignes "Chargement..." ou "Aucun client")
-        if (cells.length > 1 && rows[i].style.display !== 'none') {
-            visibleCount++;
-        }
-    }
-
-    const countText = document.getElementById('countText');
-    if (countText) {
-        countText.textContent = visibleCount + ' client(s)';
-    }
-}
-
-// Fonction de filtrage
-window.filterClients = function() {
-    const searchFilter = document.getElementById('searchFilter');
-    if (!searchFilter) return;
-
-    const filterValue = searchFilter.value.toLowerCase().trim();
-    const tbody = document.getElementById('table-content');
-    if (!tbody) return;
-
-    const rows = tbody.getElementsByTagName('tr');
-
-    for (let i = 0; i < rows.length; i++) {
-        const row = rows[i];
-        const cells = row.getElementsByTagName('td');
-
-        // Ignorer les lignes de message (Chargement, Aucun client, etc.)
-        if (cells.length <= 1) {
-            continue;
-        }
-
-        if (!filterValue) {
-            row.style.display = '';
-            continue;
-        }
-
-        // Recherche dans les colonnes : ID, Nom, Prénom, Email, Téléphone, Adresse, Secteur
-        const id = cells[0] ? cells[0].textContent.toLowerCase() : '';
-        const nom = cells[1] ? cells[1].textContent.toLowerCase() : '';
-        const prenom = cells[2] ? cells[2].textContent.toLowerCase() : '';
-        const email = cells[3] ? cells[3].textContent.toLowerCase() : '';
-        const telephone = cells[4] ? cells[4].textContent.toLowerCase() : '';
-        const adresse = cells[5] ? cells[5].textContent.toLowerCase() : '';
-        const secteur = cells[6] ? cells[6].textContent.toLowerCase() : '';
-
-        const searchText = id + ' ' + nom + ' ' + prenom + ' ' + email + ' ' + telephone + ' ' + adresse + ' ' + secteur;
-
-        if (searchText.includes(filterValue)) {
-            row.style.display = '';
-        } else {
-            row.style.display = 'none';
-        }
-    }
-
-    updateClientCount();
-};
-
-// Initialisation du filtre
-(function() {
-    function initFilter() {
-        const searchFilter = document.getElementById('searchFilter');
-        if (searchFilter) {
-            searchFilter.addEventListener('input', window.filterClients);
-            console.log('[CLIENT FILTER] Filter initialized');
-        }
-
-        // Observer pour mettre à jour le compteur quand le contenu du tableau change
-        const tableContent = document.getElementById('table-content');
-        if (tableContent) {
-            const observer = new MutationObserver(function() {
-                updateClientCount();
-                // Réappliquer le filtre après rechargement du tableau
-                if (document.getElementById('searchFilter').value) {
-                    window.filterClients();
-                }
-            });
-
-            observer.observe(tableContent, {
-                childList: true,
-                subtree: false
-            });
-
-            // Mise à jour initiale
-            updateClientCount();
-        }
-    }
-
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initFilter);
-    } else {
-        initFilter();
-    }
-})();
-</script>
+<div id="cpToasts"></div>

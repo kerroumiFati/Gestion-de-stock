@@ -1357,6 +1357,21 @@ class Vente(models.Model):
         """Calculer le montant total payé pour cette vente"""
         return self.paiements.aggregate(total=models.Sum('montant'))['total'] or Decimal('0')
 
+    def enregistrer_paiement_validation(self, user=None):
+        """Vente du PC validée avec un mode de paiement autre que « Crédit » : le client paie
+        tout de suite (la Caisse et la page Ventes n'ont pas de champ « montant reçu »).
+        On enregistre donc le paiement du total, sinon la vente restait « à payer » (et comptée
+        comme une dette dans le compte client). « Crédit » : rien n'est payé, tout reste dû.
+        Sans effet si un paiement existe déjà (paiement partiel saisi à la main)."""
+        if self.statut != 'completed' or self.type_paiement == 'credit' or (self.total_ttc or 0) <= 0:
+            return None
+        if self.paiements.exists():
+            return None
+        return PaiementVente.objects.create(
+            vente=self, montant=self.total_ttc, date_paiement=self.date_vente or timezone.now(),
+            moyen_paiement=self.type_paiement if self.type_paiement in ('cash', 'card', 'check', 'transfer') else 'other',
+            notes='Payé à la validation de la vente', created_by=user)
+
     def get_reste_a_payer(self):
         """Calculer le reste à payer"""
         return self.total_ttc - self.get_montant_paye()

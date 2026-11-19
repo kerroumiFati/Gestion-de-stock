@@ -914,6 +914,9 @@ class VenteCreateSerializer(serializers.ModelSerializer):
 
             vente.recompute_totals()
             vente.save()
+            # Vente créée directement validée (hors crédit) : payée à la validation
+            req = self.context.get('request') if hasattr(self, 'context') else None
+            vente.enregistrer_paiement_validation(getattr(req, 'user', None) if req and req.user.is_authenticated else None)
             return vente
     
     def update(self, instance, validated_data):

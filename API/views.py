@@ -3207,6 +3207,8 @@ class VenteViewSet(TenantFilterMixin, viewsets.ModelViewSet):
 
             vente.statut = 'completed'
             vente.save()
+            # Hors crédit : le client paie à la validation (pas de champ « montant reçu » sur le PC)
+            vente.enregistrer_paiement_validation(request.user if request.user.is_authenticated else None)
 
             for ligne in lignes:
                 produit = produits[ligne.produit_id]
