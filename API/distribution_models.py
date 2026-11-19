@@ -370,6 +370,8 @@ class RapportCaisseMobile(models.Model):
     total_cheques = models.DecimalField('Total chèques', max_digits=12, decimal_places=2, default=0)
     total_credits = models.DecimalField('Total à crédit', max_digits=12, decimal_places=2, default=0)
     total_encaissements = models.DecimalField('Total encaissements', max_digits=12, decimal_places=2, default=0)
+    # Espèces reçues pendant la tournée, recalculées par le serveur (contrôle de la déclaration)
+    especes_serveur = models.DecimalField('Espèces calculées (serveur)', max_digits=12, decimal_places=2, default=0)
 
     # Dépenses
     carburant = models.DecimalField('Carburant', max_digits=10, decimal_places=2, default=0)
@@ -419,6 +421,30 @@ class RapportCaisseMobile(models.Model):
     def __str__(self):
         return f"Caisse {self.tournee.numero_tournee} - {self.statut}"
 
+    def especes_calculees(self):
+        """Argent (espèces) réellement reçu pendant la tournée, calculé par le serveur :
+        ventes (payé - rendu, hors chèque/carte/virement) + acomptes et paiements de commandes
+        + règlements de crédits de ventes + remboursements de dettes, en espèces."""
+        from decimal import Decimal
+        from django.db.models import Sum, F
+        from API.models import PaiementSolde
+        t = self.tournee
+        z = Decimal('0')
+        ventes_qs = VenteTourneeMobile.objects.filter(tournee=t).exclude(type_paiement__in=['cheque', 'carte', 'virement'])
+        # payé - rendu AU MOMENT DE LA VENTE : les règlements de crédit ultérieurs augmentent
+        # montant_paye, mais ils sont comptés à part (dans la tournée où ils ont été reçus)
+        ventes = ((ventes_qs.aggregate(s=Sum(F('montant_paye') - F('montant_rendu')))['s'] or z)
+                  - (EncaissementVente.objects.filter(vente__in=ventes_qs).aggregate(s=Sum('montant'))['s'] or z))
+        enc_cmd = (EncaissementCommande.objects.filter(tournee=t, type_paiement='especes')
+                   .aggregate(s=Sum('montant'))['s'] or z)
+        enc_vte = (EncaissementVente.objects.filter(tournee=t, type_paiement='especes')
+                   .aggregate(s=Sum('montant'))['s'] or z)
+        soldes = (PaiementSolde.objects.filter(tournee=t, mode_paiement__in=['especes', 'espece'])
+                  .aggregate(s=Sum('montant'))['s'] or z)
+        ventes_pc = (PaiementClient.objects.filter(tournee=t, mode_paiement='especes')
+                     .aggregate(s=Sum('montant_ventes_pc'))['s'] or z)
+        return ventes + enc_cmd + enc_vte + soldes + ventes_pc
+
     def calculer_totaux(self):
         """Recalcule tous les totaux"""
         # Total encaissements
@@ -437,17 +463,23 @@ class RapportCaisseMobile(models.Model):
         )
 
         # Solde théorique
+        # Solde théorique calculé par le SERVEUR (avant : à partir des chiffres déclarés par le
+        # téléphone, jamais vérifiés) : fonds de départ de la tournée + espèces réellement
+        # reçues d'après les ventes et paiements enregistrés - dépenses.
+        self.especes_serveur = self.especes_calculees()
+        fonds = self.tournee.argent_depart if (self.tournee.argent_depart or 0) > 0 else self.fonds_depart
         self.solde_final_theorique = (
-            self.fonds_depart +
-            self.total_especes -
+            fonds +
+            self.especes_serveur -
             self.total_depenses
         )
 
         # Écart
         self.ecart = self.solde_final_reel - self.solde_final_theorique
 
-        # Détection anomalies
-        if abs(self.ecart) > 10:  # Seuil de 10DA
+        # Détection anomalies : écart de caisse, ou espèces déclarées par le téléphone
+        # différentes de celles calculées par le serveur
+        if abs(self.ecart) > 10 or abs((self.total_especes or 0) - self.especes_serveur) > 10:  # Seuil de 10DA
             self.a_des_anomalies = True
 
         self.save()
@@ -576,6 +608,18 @@ class CommandeClient(models.Model):
                                help_text='Entreprise - auto-assignée depuis le client si non fournie')
     client = models.ForeignKey('Client', on_delete=models.PROTECT, related_name='commandes')
     livreur = models.ForeignKey(LivreurDistribution, on_delete=models.PROTECT, related_name='commandes_prises')
+    # Vendeur (prévendeur) qui a passé la commande. Contrairement à `livreur`, il ne change
+    # pas quand la commande est affectée à un autre livreur pour la livraison.
+    passee_par = models.ForeignKey(LivreurDistribution, on_delete=models.SET_NULL, null=True, blank=True,
+                                   related_name='commandes_passees',
+                                   help_text='Vendeur qui a passé la commande (ne change pas à l\'affectation)')
+    # Tournée pendant laquelle la commande a été prise (envoyée par l'app mobile)
+    tournee = models.ForeignKey(TourneeMobile, on_delete=models.SET_NULL, null=True, blank=True,
+                                related_name='commandes', help_text='Tournée pendant laquelle la commande a été prise')
+    # Tournée pendant laquelle la commande a été livrée (envoyée par l'app mobile à la livraison)
+    tournee_livraison = models.ForeignKey(TourneeMobile, on_delete=models.SET_NULL, null=True, blank=True,
+                                          related_name='commandes_livrees',
+                                          help_text='Tournée pendant laquelle la commande a été livrée')
 
     # Informations de la commande
     statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='pending')
@@ -1043,6 +1087,9 @@ class EncaissementCommande(models.Model):
                                      choices=CommandeClient.TYPE_PAIEMENT_CHOICES,
                                      default='especes')
     date_paiement = models.DateTimeField('Date du paiement', default=timezone.now)
+    # Tournée pendant laquelle l'argent a été reçu (caisse de la tournée)
+    tournee = models.ForeignKey(TourneeMobile, on_delete=models.SET_NULL, null=True, blank=True,
+                                related_name='encaissements_commandes')
     enregistre_par = models.ForeignKey(User, on_delete=models.SET_NULL, null=True,
                                        blank=True, related_name='encaissements_commandes')
     created_at = models.DateTimeField(auto_now_add=True)
@@ -1054,6 +1101,64 @@ class EncaissementCommande(models.Model):
 
     def __str__(self):
         return f'{self.montant} sur {self.commande.reference}'
+
+
+class PaiementClient(models.Model):
+    """Argent reçu d'un client sur son COMPTE (bouton « Encaisser » du compte client), réparti
+    sur ses dettes de la plus ancienne à la plus récente (voir API/comptes_clients.py).
+
+    Chaque part est enregistrée sur son document (EncaissementVente, EncaissementCommande,
+    PaiementVente du PC, PaiementSolde) : ce sont ces parts qui comptent dans la caisse, sauf
+    les parts sur des ventes du PC (`montant_ventes_pc`), comptées ici car PaiementVente n'a
+    pas de tournée. `app_id` (unique) rend l'envoi du téléphone idempotent.
+    """
+    client = models.ForeignKey('Client', on_delete=models.CASCADE, related_name='paiements_compte')
+    app_id = models.CharField('ID application', max_length=200, unique=True)
+    montant = models.DecimalField('Montant', max_digits=12, decimal_places=2)
+    mode_paiement = models.CharField('Mode de paiement', max_length=20, default='especes')
+    date_paiement = models.DateTimeField('Date du paiement', default=timezone.now)
+    tournee = models.ForeignKey(TourneeMobile, on_delete=models.SET_NULL, null=True, blank=True,
+                                related_name='paiements_clients')
+    repartition = models.JSONField('Répartition sur les dettes', default=list, blank=True)
+    montant_ventes_pc = models.DecimalField('Part sur des ventes du PC', max_digits=12, decimal_places=2, default=0)
+    enregistre_par = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                       related_name='paiements_clients')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Encaissement sur compte client'
+        verbose_name_plural = 'Encaissements sur comptes clients'
+        ordering = ['-date_paiement']
+
+    def __str__(self):
+        return f'{self.montant} - {self.client}'
+
+
+class EncaissementVente(models.Model):
+    """Règlement (total ou partiel) du crédit d'une vente faite sur le téléphone.
+
+    Avant, ces règlements (écran Encaissement de l'app) n'étaient jamais envoyés au serveur :
+    le crédit réapparaissait à la synchro suivante et pouvait être encaissé deux fois.
+    `app_id` (unique) rend l'envoi idempotent.
+    """
+    vente = models.ForeignKey(VenteTourneeMobile, on_delete=models.CASCADE, related_name='encaissements')
+    app_id = models.CharField('ID application', max_length=200, unique=True)
+    montant = models.DecimalField('Montant', max_digits=12, decimal_places=2)
+    type_paiement = models.CharField('Type de paiement', max_length=20, default='especes')
+    date_paiement = models.DateTimeField('Date du paiement', default=timezone.now)
+    tournee = models.ForeignKey(TourneeMobile, on_delete=models.SET_NULL, null=True, blank=True,
+                                related_name='encaissements_ventes')
+    enregistre_par = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                       related_name='encaissements_ventes')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Encaissement de crédit de vente'
+        verbose_name_plural = 'Encaissements de crédits de ventes'
+        ordering = ['-date_paiement']
+
+    def __str__(self):
+        return f'{self.montant} sur {self.vente.numero_vente}'
 
 
 ###########################

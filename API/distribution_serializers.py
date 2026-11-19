@@ -297,6 +297,16 @@ class VenteTourneeSerializer(serializers.ModelSerializer):
     """Serializer pour VenteTournee"""
     lignes = LigneVenteTourneeSerializer(many=True, read_only=True)
     client_nom = serializers.CharField(source='client.nom', read_only=True)
+    # Pour l'app mobile : mode de paiement et reste à payer (sinon, après synchro, une vente
+    # à crédit redevenait « espèces / reste 0 » sur le téléphone)
+    mode_paiement = serializers.CharField(source='type_paiement', read_only=True)
+    reste_a_payer = serializers.SerializerMethodField()
+
+    def get_reste_a_payer(self, obj):
+        from decimal import Decimal
+        # montant_paye inclut la monnaie rendue : l'argent réellement gardé est payé - rendu
+        recu = (obj.montant_paye or Decimal('0')) - (obj.montant_rendu or Decimal('0'))
+        return float(max(Decimal('0'), (obj.montant_total or Decimal('0')) - recu))
 
     class Meta:
         model = VenteTourneeMobile
@@ -306,10 +316,10 @@ class VenteTourneeSerializer(serializers.ModelSerializer):
             'montant_ht', 'montant_tva', 'montant_total',
             'type_paiement', 'montant_paye', 'montant_rendu',
             'est_synchronise', 'date_synchronisation',
-            'notes', 'lignes',
+            'notes', 'lignes', 'app_id', 'mode_paiement', 'reste_a_payer',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['created_at', 'updated_at', 'est_synchronise', 'date_synchronisation']
+        read_only_fields = ['created_at', 'updated_at', 'est_synchronise', 'date_synchronisation', 'app_id']
 
 
 class VenteTourneeCreateSerializer(serializers.ModelSerializer):
@@ -377,11 +387,17 @@ class VenteMobileCreateSerializer(serializers.Serializer):
     client = serializers.CharField(max_length=50)
     # ID du livreur pour décrémenter le stock du van (envoyé par l'app mobile)
     livreur = serializers.IntegerField(required=False, allow_null=True)
-    mode_paiement = serializers.ChoiceField(choices=['especes', 'credit', 'cheque', 'virement'])
+    # Tournée de la vente, envoyée par l'app mobile (prioritaire sur la recherche automatique)
+    tournee = serializers.IntegerField(required=False, allow_null=True)
+    # Modes de paiement acceptés : espèces, chèque ou crédit (carte et virement retirés)
+    mode_paiement = serializers.ChoiceField(choices=['especes', 'credit', 'cheque'])
     montant_total = serializers.DecimalField(max_digits=10, decimal_places=2)
     montant_paye = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, default=0)
     montant_rendu = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, default=0)
     reste_a_payer = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, default=0)
+    # Date/heure réelle de la vente sur le téléphone (sinon : heure de la synchronisation,
+    # qui peut tomber le lendemain et fausser la caisse du jour)
+    date_vente = serializers.DateTimeField(required=False, allow_null=True)
     lignes_vente = LigneVenteMobileSerializer(many=True)
 
     def create(self, validated_data):
@@ -401,6 +417,8 @@ class VenteMobileCreateSerializer(serializers.Serializer):
     def _create(self, validated_data):
         import logging
         import uuid
+        from datetime import timedelta
+        from decimal import Decimal
         from API.models import ProductStock, Client as ClientModel
         from .distribution_models import LivreurDistribution, TourneeMobile, ClientLivreurHebdo
 
@@ -409,12 +427,16 @@ class VenteMobileCreateSerializer(serializers.Serializer):
         lignes_data = validated_data.pop('lignes_vente')
         client_id_str = validated_data.pop('client')
         livreur_id_from_mobile = validated_data.pop('livreur', None)  # ID du livreur envoyé par l'app mobile
+        tournee_id_from_mobile = validated_data.pop('tournee', None)  # tournée choisie sur le téléphone
         mode_paiement = validated_data.pop('mode_paiement')
         montant_total = validated_data.pop('montant_total')
         montant_paye = validated_data.pop('montant_paye', 0)
         montant_rendu = validated_data.pop('montant_rendu', 0)
         reste_a_payer = validated_data.pop('reste_a_payer', 0)
         app_id = validated_data.pop('app_id', None)
+        date_vente = validated_data.pop('date_vente', None) or timezone.now()
+        if date_vente > timezone.now() + timedelta(minutes=10):
+            date_vente = timezone.now()  # horloge du téléphone en avance : on ne date pas dans le futur
 
         # Convertir client_id en int (le mobile peut envoyer une string)
         try:
@@ -499,7 +521,18 @@ class VenteMobileCreateSerializer(serializers.Serializer):
         arret = None
         today = timezone.now().date()
 
-        if livreur:
+        # PRIORITÉ : la tournée envoyée par le téléphone (si elle existe et appartient au livreur)
+        if tournee_id_from_mobile:
+            tournee = TourneeMobile.objects.filter(id=tournee_id_from_mobile).select_related('livreur').first()
+            if tournee and livreur and tournee.livreur_id and tournee.livreur_id != livreur.id:
+                logger.warning(f"Tournée {tournee_id_from_mobile} n'appartient pas au livreur {livreur.id}, ignorée")
+                tournee = None
+            if tournee:
+                if not livreur and tournee.livreur:
+                    livreur = tournee.livreur  # le stock du van sera bien décrémenté
+                arret = ArretTourneeMobile.objects.filter(tournee=tournee, client=client).first()
+
+        if livreur and not tournee:
             # Chercher une tournée active ou en cours pour ce livreur
             tournee = TourneeMobile.objects.filter(
                 livreur=livreur,
@@ -537,7 +570,7 @@ class VenteMobileCreateSerializer(serializers.Serializer):
             montant_paye=montant_paye,
             montant_rendu=montant_rendu,
             type_paiement=type_paiement_map.get(mode_paiement, 'especes'),
-            date_vente=timezone.now(),
+            date_vente=date_vente,
             est_synchronise=True,
             date_synchronisation=timezone.now()
         )
@@ -585,22 +618,23 @@ class VenteMobileCreateSerializer(serializers.Serializer):
                     ).first()
 
                     if prix_produit:
-                        prix_unitaire = float(prix_produit.prix)
+                        prix_unitaire = Decimal(str(prix_produit.prix))
                         logger.info(f"Prix récupéré de PrixProduit: {prix_unitaire} pour {produit.designation}")
 
-            # Créer la ligne de vente
-            try:
-                ligne = LigneVenteTourneeMobile.objects.create(
-                    vente=vente,
-                    produit=produit,
-                    quantite=quantite,
-                    prix_unitaire=prix_unitaire,
-                    montant_ttc=quantite * prix_unitaire
-                )
-                lignes_creees += 1
-                logger.info(f"Ligne créée: {ligne.id} - {produit.designation} x {quantite}")
-            except Exception as e:
-                logger.error(f"Erreur création ligne: {e}")
+            # Créer la ligne de vente. Le prix envoyé par le téléphone est le prix payé (TTC) :
+            # taux_tva=0, sinon le modèle ajoutait 20 % de TVA (lignes à 120 % du total).
+            # Une erreur ici fait échouer TOUTE la vente (transaction annulée, le téléphone
+            # renverra) au lieu de perdre la ligne en silence alors que le stock était déduit.
+            prix_unitaire = Decimal(str(prix_unitaire or 0))
+            ligne = LigneVenteTourneeMobile.objects.create(
+                vente=vente,
+                produit=produit,
+                quantite=quantite,
+                prix_unitaire=prix_unitaire,
+                taux_tva=Decimal('0'),
+            )
+            lignes_creees += 1
+            logger.info(f"Ligne créée: {ligne.id} - {produit.designation} x {quantite}")
 
             # Décrémenter le stock du van du livreur
             if livreur and livreur.entrepot:
@@ -937,6 +971,7 @@ class LigneCommandeClientCreateSerializer(serializers.Serializer):
 
 
 class CommandeClientSerializer(serializers.ModelSerializer):
+    passee_par_nom = serializers.CharField(source='passee_par.nom', read_only=True, allow_null=True, default=None)
     """Serializer pour lire les commandes clients"""
     lignes = LigneCommandeClientSerializer(many=True, read_only=True)
     client_nom = serializers.CharField(source='client.nom', read_only=True)
@@ -959,7 +994,8 @@ class CommandeClientSerializer(serializers.ModelSerializer):
             'client', 'client_nom', 'client_prenom',
             'client_telephone', 'client_adresse',
             'client_lat', 'client_lng',
-            'livreur', 'livreur_nom', 'livreur_matricule',
+            'livreur', 'livreur_nom', 'livreur_matricule', 'tournee', 'tournee_livraison',
+            'passee_par', 'passee_par_nom',
             'vehicule_immatriculation', 'entrepot_nom',
             'statut', 'date_commande', 'date_livraison_souhaitee', 'date_livraison_reelle',
             'montant_total_ht', 'montant_total_ttc',
@@ -1018,14 +1054,25 @@ class CommandeClientCreateSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True
     )
+    # Tournée envoyée par le téléphone (id) : une tournée inconnue est ignorée, pas refusée,
+    # pour ne jamais bloquer l'envoi d'une commande
+    tournee = serializers.IntegerField(source='tournee_id', required=False, allow_null=True)
     # Champs de paiement
     est_paye = serializers.BooleanField(required=False, default=False)
-    type_paiement = serializers.ChoiceField(
-        choices=CommandeClient.TYPE_PAIEMENT_CHOICES,
-        required=False,
-        default='non_paye',
-        allow_blank=True
-    )
+    # Espèces, chèque ou crédit (ou non payé) : carte et virement ne sont plus proposés.
+    # Une ANCIENNE commande en carte/virement garde son type quand on la modifie (sinon le
+    # formulaire du PC, qui renvoie le type, ne pourrait plus la modifier du tout).
+    type_paiement = serializers.CharField(required=False, default='non_paye', allow_blank=True)
+
+    def validate_type_paiement(self, value):
+        value = (value or '').strip() or 'non_paye'
+        if value == 'espece':
+            value = 'especes'
+        if value in ('especes', 'cheque', 'credit', 'non_paye'):
+            return value
+        if self.instance is not None and getattr(self.instance, 'type_paiement', None) == value:
+            return value  # ancien type conservé tel quel
+        raise serializers.ValidationError(f'Type de paiement invalide : {value} (espèces, chèque ou crédit)')
     montant_paye = serializers.DecimalField(
         max_digits=12,
         decimal_places=2,
@@ -1037,7 +1084,7 @@ class CommandeClientCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = CommandeClient
         fields = [
-            'company', 'client', 'app_client_id', 'client_nom', 'livreur',
+            'company', 'client', 'app_client_id', 'client_nom', 'livreur', 'tournee',
             'date_livraison_souhaitee', 'notes', 'app_id', 'lignes',
             # Champs de paiement
             'est_paye', 'type_paiement', 'montant_paye', 'date_paiement'
@@ -1084,6 +1131,7 @@ class CommandeClientCreateSerializer(serializers.ModelSerializer):
 
         lignes_data = validated_data.pop('lignes')
         app_client_id = validated_data.pop('app_client_id', None)
+        passee_par = validated_data.get('livreur')  # vendeur qui passe la commande (téléphone)
         client_nom = validated_data.pop('client_nom', None)
 
         # Gérer le client: si client est null mais app_client_id fourni
@@ -1142,6 +1190,21 @@ class CommandeClientCreateSerializer(serializers.ModelSerializer):
                 # Cela pourrait être corrigé manuellement plus tard via l'interface web
 
         # Créer la commande d'abord pour calculer le montant total
+        # Tournée envoyée par le téléphone : ignorée si inconnue ou si elle appartient à un autre livreur
+        from .distribution_models import TourneeMobile
+        tournee_id = validated_data.pop('tournee_id', None)
+        tournee = TourneeMobile.objects.filter(id=tournee_id).first() if tournee_id else None
+        livreur_cmd = validated_data.get('livreur')
+        if tournee and livreur_cmd and tournee.livreur_id and tournee.livreur_id != livreur_cmd.id:
+            print(f'[COMMANDE CREATE] Tournée {tournee.id} ignorée : elle appartient au livreur {tournee.livreur_id}')
+            tournee = None
+        validated_data['tournee'] = tournee
+
+        # Vendeur qui passe la commande = livreur envoyé par le téléphone (avant toute
+        # affectation automatique ou manuelle à un autre livreur pour la livraison)
+        if passee_par is not None:
+            validated_data['passee_par'] = passee_par
+
         commande = CommandeClient.objects.create(**validated_data)
 
         print(f'[COMMANDE CREATE] Commande créée: id={commande.id}, company={commande.company_id if commande.company else None}, livreur={commande.livreur_id if commande.livreur else None}, client={commande.client_id if commande.client else None}')
@@ -1162,46 +1225,50 @@ class CommandeClientCreateSerializer(serializers.ModelSerializer):
         # Recalculer les totaux à partir des lignes
         commande.calculer_totaux()
 
-        # Logique intelligente pour montant_paye et est_paye
-        type_paiement = commande.type_paiement
-        montant_paye = commande.montant_paye
-        montant_total = commande.montant_total_ttc
+        # RÈGLE DE PAIEMENT À LA PRISE DE COMMANDE (choix du client) :
+        # - Crédit  → la totalité est à crédit : rien de payé.
+        # - Espèces / Chèque → seul le montant indiqué est payé (plafonné au total).
+        # - Rien d'indiqué (montant 0) → « non payée ».
+        # (Avant : avec « espèces » et 0 DA, la commande était marquée ENTIÈREMENT payée sans
+        # aucun argent encaissé.)
+        from decimal import Decimal as _D
+        type_paiement = commande.type_paiement or 'non_paye'
+        montant_paye = commande.montant_paye or _D('0')
+        montant_total = commande.montant_total_ttc or _D('0')
 
         print(f"[COMMANDE] Avant traitement: type_paiement={type_paiement}, montant_paye={montant_paye}, montant_total={montant_total}")
 
-        # Si montant_paye n'est pas fourni ou est 0, déduire du type_paiement
-        if montant_paye == 0:
-            if type_paiement in ['especes', 'carte', 'cheque', 'virement']:
-                # Paiement immédiat complet
-                commande.montant_paye = montant_total
-                commande.est_paye = True
-                if not commande.date_paiement:
-                    commande.date_paiement = timezone.now()
-                print(f"[COMMANDE] Paiement complet déduit: montant_paye={commande.montant_paye}")
-            elif type_paiement in ['credit', 'non_paye']:
-                # Pas de paiement
-                commande.montant_paye = 0
-                commande.est_paye = False
-                commande.date_paiement = None
-                print(f"[COMMANDE] Pas de paiement (crédit)")
+        if type_paiement == 'credit':
+            commande.montant_paye = _D('0')
+            commande.est_paye = False
+            commande.date_paiement = None
+        elif montant_paye <= 0 or type_paiement not in ('especes', 'cheque'):
+            commande.type_paiement = 'non_paye'
+            commande.montant_paye = _D('0')
+            commande.est_paye = False
+            commande.date_paiement = None
         else:
-            # montant_paye est fourni par l'app mobile
-            if montant_paye >= montant_total:
-                # Paiement complet
-                commande.est_paye = True
-                if not commande.date_paiement:
-                    commande.date_paiement = timezone.now()
-                print(f"[COMMANDE] Paiement complet: montant_paye={montant_paye}")
-            else:
-                # Paiement partiel
-                commande.est_paye = False
-                if not commande.date_paiement:
-                    commande.date_paiement = timezone.now()
-                print(f"[COMMANDE] Paiement partiel: montant_paye={montant_paye}, reste={montant_total - montant_paye}")
+            commande.montant_paye = min(montant_paye, montant_total)
+            commande.est_paye = commande.montant_paye >= montant_total - _D('0.01')
+            if not commande.date_paiement:
+                commande.date_paiement = timezone.now()
 
         # Marquer comme synchronisé
         commande.synced_at = timezone.now()
         commande.save()
+
+        # Acompte payé au vendeur à la prise de commande : argent reçu pendant la tournée de la
+        # commande, enregistré comme encaissement (compté dans la caisse de cette tournée).
+        # Idempotent : une commande n'est créée qu'une fois.
+        if (commande.montant_paye or 0) > 0:
+            from .distribution_models import EncaissementCommande
+            EncaissementCommande.objects.get_or_create(
+                app_id=f'acompte-{commande.app_id or commande.pk}',
+                defaults=dict(commande=commande, montant=commande.montant_paye,
+                              type_paiement=commande.type_paiement,
+                              date_paiement=commande.date_paiement or timezone.now(),
+                              tournee=commande.tournee),
+            )
 
         print(f"[COMMANDE] Après traitement: est_paye={commande.est_paye}, montant_paye={commande.montant_paye}, date_paiement={commande.date_paiement}")
 
@@ -1227,6 +1294,16 @@ class CommandeClientCreateSerializer(serializers.ModelSerializer):
 
         # Extraire les lignes si présentes
         lignes_data = validated_data.pop('lignes', None)
+        # La tournée d'une commande est fixée à sa création : une modification ne la change pas
+        validated_data.pop('tournee_id', None)
+        # L'argent payé ne se modifie PAS ici : seul l'enregistrement d'un paiement (acompte à la
+        # commande, « encaisser », livraison réduite) le change, avec contrôle du montant, trace
+        # et passage en caisse. (Avant : « montant_paye = 999 » était accepté sans aucun
+        # encaissement : commande soldée, argent absent de la caisse.)
+        for champ_argent in ('montant_paye', 'est_paye', 'date_paiement'):
+            if champ_argent in validated_data:
+                print(f"[COMMANDE UPDATE] Champ '{champ_argent}' ignoré (modifiable uniquement par un paiement)")
+                validated_data.pop(champ_argent)
 
         # Mettre à jour les champs de base
         for attr, value in validated_data.items():
@@ -1308,6 +1385,10 @@ class CommandeClientCreateSerializer(serializers.ModelSerializer):
             print(f"[COMMANDE UPDATE] Après calculer_totaux - Total HT: {instance.montant_total_ht}, "
                       f"Total TTC: {instance.montant_total_ttc}")
 
+        # « Payée » suit toujours l'argent réellement payé (ex. lignes modifiées → nouveau total)
+        from decimal import Decimal as _D
+        instance.est_paye = (instance.montant_paye or _D('0')) >= (instance.montant_total_ttc or _D('0')) - _D('0.01')             and (instance.montant_total_ttc or _D('0')) > 0
+
         # Sauvegarder l'instance
         instance.synced_at = timezone.now()
         instance.save()
@@ -1329,10 +1410,16 @@ class RapportCaisseCreateSerializer(serializers.ModelSerializer):
             'total_especes', 'total_cartes', 'total_cheques', 'total_credits',
             'carburant', 'reparations', 'autres_depenses',
             'solde_final_reel', 'justification_ecart',
-            'notes_anomalies', 'depenses'
+            'notes_anomalies', 'depenses', 'detail_billets'
         ]
+        # tournee est unique (un rapport par tournée) : la création ci-dessous met à jour
+        # le rapport existant au lieu d'échouer (renvoi du téléphone après coupure réseau)
+        extra_kwargs = {'tournee': {'validators': []}}
 
     def create(self, validated_data):
+        existant = RapportCaisseMobile.objects.filter(tournee=validated_data.get('tournee')).first()
+        if existant:
+            return self.update(existant, validated_data)
         depenses_data = validated_data.pop('depenses', [])
         rapport = RapportCaisseMobile.objects.create(**validated_data)
 

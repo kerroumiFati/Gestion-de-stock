@@ -1249,6 +1249,135 @@ class VenteTourneeViewSet(viewsets.ModelViewSet):
     serializer_class = VenteTourneeSerializer
     permission_classes = [IsAuthenticated]
 
+    @action(detail=False, methods=['get'], url_path='encaissements')
+    def encaissements(self, request):
+        """Argent reçu pendant les tournées d'un livreur (pour la caisse et l'historique du téléphone).
+
+        GET /API/distribution/ventes/encaissements/?livreur=5
+        Renvoie les règlements de crédits de ventes, les acomptes et paiements de commandes et
+        les remboursements de dettes, chacun avec la tournée où l'argent a été reçu.
+        """
+        from .distribution_models import EncaissementVente, EncaissementCommande
+        from API.models import PaiementSolde
+        livreur_id = request.query_params.get('livreur')
+        if not livreur_id:
+            return Response({'error': 'livreur est requis'}, status=status.HTTP_400_BAD_REQUEST)
+
+        def _client_nom(c):
+            return ' '.join(x for x in [getattr(c, 'prenom', ''), getattr(c, 'nom', '')] if x).strip() if c else ''
+
+        from .distribution_models import PaiementClient
+        parents = list(PaiementClient.objects.filter(tournee__livreur_id=livreur_id).values_list('app_id', flat=True))
+
+        def _parent(app_id):
+            return next((p for p in parents if (app_id or '').startswith(p + '-')), None)
+
+        res = []
+        # Parts d'encaissements de compte sur des ventes du PC (PaiementVente n'a pas de tournée)
+        for pc in PaiementClient.objects.filter(tournee__livreur_id=livreur_id).select_related('client'):
+            for r in (pc.repartition or []):
+                if r.get('type') == 'vente_pc':
+                    res.append({'id': f"{pc.app_id}-{r['cle']}", 'parent': pc.app_id, 'type': 'vente_pc',
+                                'ref_id': r['cle'], 'client_id': str(pc.client_id),
+                                'client_nom': _client_nom(pc.client), 'reference': r.get('reference'),
+                                'montant': r['montant'], 'mode': pc.mode_paiement, 'tournee_id': str(pc.tournee_id),
+                                'date': pc.date_paiement.isoformat()})
+        for e in EncaissementVente.objects.filter(tournee__livreur_id=livreur_id).select_related('vente', 'vente__client'):
+            res.append({'id': e.app_id, 'parent': _parent(e.app_id), 'type': 'vente_credit', 'ref_id': e.vente.app_id or str(e.vente_id),
+                        'client_id': str(e.vente.client_id), 'client_nom': _client_nom(e.vente.client),
+                        'montant': float(e.montant), 'mode': e.type_paiement, 'tournee_id': str(e.tournee_id),
+                        'date': e.date_paiement.isoformat()})
+        for e in EncaissementCommande.objects.filter(tournee__livreur_id=livreur_id).select_related('commande', 'commande__client'):
+            res.append({'id': e.app_id, 'parent': _parent(e.app_id), 'type': 'commande_acompte' if e.app_id.startswith('acompte-') else 'commande_livraison',
+                        'ref_id': str(e.commande_id), 'client_id': str(e.commande.client_id),
+                        'client_nom': _client_nom(e.commande.client), 'reference': e.commande.reference,
+                        'montant': float(e.montant), 'mode': e.type_paiement, 'tournee_id': str(e.tournee_id),
+                        'date': e.date_paiement.isoformat()})
+        for p in PaiementSolde.objects.filter(tournee__livreur_id=livreur_id).select_related('client'):
+            res.append({'id': p.app_id or f'paiement-solde-{p.pk}', 'parent': _parent(p.app_id), 'type': 'solde', 'ref_id': None,
+                        'client_id': str(p.client_id), 'client_nom': _client_nom(p.client),
+                        'montant': float(p.montant), 'mode': p.mode_paiement, 'tournee_id': str(p.tournee_id),
+                        'date': p.date_paiement.isoformat()})
+        return Response(res)
+
+    @action(detail=False, methods=['post'], url_path='encaisser')
+    def encaisser(self, request):
+        """Règlement (total ou partiel) du crédit d'une vente faite sur le téléphone.
+
+        POST /API/distribution/ventes/encaisser/
+        { "app_id": "encaissement-...", "vente": "vente-1731...-12" (app_id) ou 32 (id),
+          "montant": 500, "type_paiement": "especes", "date_paiement": "...", "tournee": 14 }
+
+        Idempotent sur app_id. Refuse un montant supérieur au reste à payer.
+        """
+        from decimal import Decimal, InvalidOperation
+        from django.db import IntegrityError, transaction
+        from django.utils.dateparse import parse_datetime
+        from .distribution_models import EncaissementVente, TourneeMobile
+
+        data = request.data
+        app_id = str(data.get('app_id') or '').strip()
+        if not app_id:
+            return Response({'error': 'app_id est requis'}, status=status.HTTP_400_BAD_REQUEST)
+
+        def _reste(v):
+            recu = (v.montant_paye or Decimal('0')) - (v.montant_rendu or Decimal('0'))
+            return max(Decimal('0'), (v.montant_total or Decimal('0')) - recu)
+
+        def _reponse(enc, deja):
+            v = VenteTourneeMobile.objects.get(pk=enc.vente_id)
+            return Response({
+                'deja_enregistre': deja, 'encaissement_id': enc.id, 'vente_id': v.id,
+                'montant': str(enc.montant), 'montant_paye': str(v.montant_paye),
+                'reste_a_payer': str(_reste(v)),
+            }, status=status.HTTP_200_OK if deja else status.HTTP_201_CREATED)
+
+        existant = EncaissementVente.objects.filter(app_id=app_id).first()
+        if existant:
+            return _reponse(existant, True)
+
+        ref = str(data.get('vente') or '').strip()
+        vente = VenteTourneeMobile.objects.filter(app_id=ref).first() if ref else None
+        if vente is None and ref.isdigit():
+            vente = VenteTourneeMobile.objects.filter(pk=int(ref)).first()
+        if vente is None:
+            # La vente n'est peut-être pas encore arrivée : le téléphone renverra plus tard
+            return Response({'error': f'Vente introuvable : {ref}'}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            montant = Decimal(str(data.get('montant')))
+        except (InvalidOperation, TypeError, ValueError):
+            return Response({'error': 'Montant invalide'}, status=status.HTTP_400_BAD_REQUEST)
+        if montant <= 0:
+            return Response({'error': 'Le montant doit être supérieur à zéro'}, status=status.HTTP_400_BAD_REQUEST)
+
+        type_paiement = data.get('type_paiement') or 'especes'
+        if type_paiement not in ('especes', 'cheque'):
+            return Response({'error': f'Type de paiement invalide : {type_paiement}'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        date_paiement = parse_datetime(str(data.get('date_paiement') or '')) or timezone.now()
+        tid = str(data.get('tournee') or '').strip()
+        tournee = TourneeMobile.objects.filter(pk=int(tid)).first() if tid.isdigit() else None
+
+        try:
+            with transaction.atomic():
+                vente = VenteTourneeMobile.objects.select_for_update().get(pk=vente.pk)
+                if montant > _reste(vente) + Decimal('0.01'):
+                    return Response({'error': f'Montant ({montant}) supérieur au reste à payer ({_reste(vente)})'},
+                                    status=status.HTTP_400_BAD_REQUEST)
+                enc = EncaissementVente.objects.create(
+                    vente=vente, app_id=app_id, montant=montant, type_paiement=type_paiement,
+                    date_paiement=date_paiement, tournee=tournee,
+                    enregistre_par=request.user if request.user.is_authenticated else None)
+                vente.montant_paye = (vente.montant_paye or Decimal('0')) + montant
+                vente.save(update_fields=['montant_paye'])
+        except IntegrityError:
+            existant = EncaissementVente.objects.filter(app_id=app_id).first()
+            if existant:
+                return _reponse(existant, True)
+            raise
+        return _reponse(enc, False)
+
     def get_serializer_class(self):
         if self.action == 'create':
             # Détecter le format mobile (lignes_vente) vs format standard (lignes)
@@ -1596,8 +1725,17 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
         date_debut = self.request.query_params.get('date_debut')
         date_fin = self.request.query_params.get('date_fin')
 
+        # Commandes passées par un vendeur (même affectées depuis à un autre livreur).
+        # Anciennes commandes sans « passée par » : repli sur le livreur.
+        passee_par_id = self.request.query_params.get('passee_par')
+
         if livreur_id:
             queryset = queryset.filter(livreur_id=livreur_id)
+
+        if passee_par_id:
+            queryset = queryset.filter(
+                Q(passee_par_id=passee_par_id) | Q(passee_par__isnull=True, livreur_id=passee_par_id)
+            )
 
         if client_id:
             queryset = queryset.filter(client_id=client_id)
@@ -1611,7 +1749,7 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
         if date_fin:
             queryset = queryset.filter(date_commande__lte=date_fin)
 
-        return queryset.select_related('client', 'livreur').prefetch_related('lignes', 'lignes__produit', 'lignes__produit__conditionnements')
+        return queryset.select_related('client', 'livreur', 'passee_par').prefetch_related('lignes', 'lignes__produit', 'lignes__produit__conditionnements')
 
     @action(detail=False, methods=['post'])
     def bulk_create(self, request):
@@ -1667,7 +1805,9 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
             print(f"[PARTIAL_UPDATE] Nombre de lignes reçues: {len(lignes_ajustees)}")
 
         if nouveau_statut == 'delivered':
-            return self._livrer_commande(commande, lignes_ajustees, date_livraison, logger)
+            return self._livrer_commande(commande, lignes_ajustees, date_livraison, logger,
+                                         tournee_livraison_id=request.data.get('tournee_livraison'),
+                                         trop_percu=request.data.get('trop_percu'))
 
         # Vérifier si on essaie d'ajuster les quantités d'une commande entièrement payée
         # Permettre l'ajustement pour paiements partiels (est_paye=False)
@@ -1692,7 +1832,8 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
         print(f"[PARTIAL_UPDATE] ===== FIN (sauvegardé via serializer) =====")
         return Response(serializer.data)
 
-    def _livrer_commande(self, commande, lignes_ajustees, date_livraison, logger):
+    def _livrer_commande(self, commande, lignes_ajustees, date_livraison, logger, tournee_livraison_id=None,
+                         trop_percu=None):
         """Livraison d'une commande (PATCH statut='delivered'), éventuellement avec des
         quantités ajustées.
 
@@ -1745,11 +1886,9 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
                 quantites = None
 
             if quantites is not None:
-                if commande.est_paye:
-                    return Response(
-                        {'error': 'Les quantités ne peuvent pas être ajustées pour une commande entièrement payée'},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
+                # (Avant : refus si la commande était entièrement payée. Désormais une livraison
+                # réduite est possible ; l'argent payé en trop est rendu ou gardé en avance, au
+                # choix du livreur, voir « trop-payé » ci-dessous.)
                 total_ht = Decimal('0')
                 total_ttc = Decimal('0')
                 for pid, ligne in lignes.items():
@@ -1771,8 +1910,50 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
 
             commande.statut = 'delivered'
             commande.date_livraison_reelle = date_livraison or timezone.now()
-            commande.save(update_fields=['statut', 'date_livraison_reelle'])
+            champs = ['statut', 'date_livraison_reelle']
+            # Tournée de livraison envoyée par le téléphone (ignorée si inconnue ou d'un autre livreur)
+            if tournee_livraison_id:
+                from .distribution_models import TourneeMobile
+                _tid = str(tournee_livraison_id).strip()
+                t_liv = TourneeMobile.objects.filter(id=int(_tid)).first() if _tid.isdigit() else None
+                if t_liv and (not t_liv.livreur_id or t_liv.livreur_id == commande.livreur_id):
+                    commande.tournee_livraison = t_liv
+                    champs.append('tournee_livraison')
+            commande.save(update_fields=champs)
             commande.refresh_from_db()
+
+            # TROP-PAYÉ : livraison réduite en dessous de ce que le client a déjà payé (ex. acompte
+            # de 600 pour une livraison qui ne vaut plus que 500). Avant : la commande restait
+            # « non payée » et les 100 DA n'étaient enregistrés nulle part. Le livreur choisit sur
+            # le téléphone : « rendu » (rendu en espèces, retiré de la caisse de sa tournée) ou
+            # « avance » (ajouté au solde du client ; choix par défaut, ex. livraison depuis le PC).
+            trop = (commande.montant_paye or Decimal('0')) - (commande.montant_total_ttc or Decimal('0'))
+            if trop > Decimal('0.01'):
+                from .distribution_models import EncaissementCommande
+                from API.models import Client as ClientModel, PaiementSolde
+                commande.montant_paye = commande.montant_total_ttc
+                commande.est_paye = True
+                commande.save(update_fields=['montant_paye', 'est_paye'])
+                if str(trop_percu or '').lower() == 'rendu':
+                    EncaissementCommande.objects.get_or_create(
+                        app_id=f'rendu-{commande.id}',
+                        defaults=dict(commande=commande, montant=-trop, type_paiement='especes',
+                                      date_paiement=timezone.now(), tournee=commande.tournee_livraison),
+                    )
+                    logger.info(f"[LIVRAISON] Commande {commande.id} : trop-payé {trop} rendu au client")
+                elif not PaiementSolde.objects.filter(app_id=f'avance-{commande.id}').exists():
+                    client = ClientModel.objects.select_for_update().get(pk=commande.client_id)
+                    avant = client.solde or Decimal('0')
+                    client.solde = avant + trop  # solde positif = avance du client
+                    client.save(update_fields=['solde'])
+                    PaiementSolde.objects.create(
+                        client=client, company=getattr(client, 'company', None), montant=trop,
+                        mode_paiement='avoir', solde_avant=avant, solde_apres=client.solde,
+                        notes=f'Trop-payé sur la commande {commande.reference} (livraison réduite)',
+                        enregistre_par=self.request.user if self.request.user.is_authenticated else None,
+                        app_id=f'avance-{commande.id}',
+                    )
+                    logger.info(f"[LIVRAISON] Commande {commande.id} : trop-payé {trop} gardé en avance client")
 
             quantites_livrees = (
                 {pid: int(q) for pid, q in quantites.items()} if quantites is not None else None
@@ -1839,7 +2020,8 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
                             status=status.HTTP_400_BAD_REQUEST)
 
         type_paiement = data.get('type_paiement') or 'especes'
-        types_valides = {c[0] for c in CommandeClient.TYPE_PAIEMENT_CHOICES} - {'non_paye'}
+        # « crédit » n'est pas un encaissement (aucun argent reçu) : refusé
+        types_valides = {'especes', 'cheque'}  # un paiement reçu : espèces ou chèque
         if type_paiement not in types_valides:
             return Response({'error': f'Type de paiement invalide : {type_paiement}'},
                             status=status.HTTP_400_BAD_REQUEST)
@@ -1860,9 +2042,20 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
                     return Response({'error': 'Commande annulée : encaissement impossible'},
                                     status=status.HTTP_409_CONFLICT)
 
+                # Tournée pendant laquelle l'argent a été reçu (caisse de la tournée)
+                _tid = str(data.get('tournee') or '').strip()
+                from .distribution_models import TourneeMobile as _TM
+                tournee_enc = _TM.objects.filter(pk=int(_tid)).first() if _tid.isdigit() else None
+                # Montant plafonné au reste dû (avant : n'importe quel montant était accepté,
+                # ex. 10 000 DA sur une commande de 180 DA)
+                reste_du = max((commande.montant_total_ttc or Decimal('0')) - (commande.montant_paye or Decimal('0')), Decimal('0'))
+                if montant > reste_du + Decimal('0.01'):
+                    return Response({'error': f'Montant ({montant}) supérieur au reste à payer ({reste_du})'},
+                                    status=status.HTTP_400_BAD_REQUEST)
                 enc = EncaissementCommande.objects.create(
                     commande=commande, app_id=app_id, montant=montant,
                     type_paiement=type_paiement, date_paiement=date_paiement,
+                    tournee=tournee_enc,
                     enregistre_par=request.user,
                 )
                 commande.montant_paye = (commande.montant_paye or Decimal('0')) + montant
@@ -3438,6 +3631,45 @@ class ObjectifVendeurViewSet(TenantFilterMixin, viewsets.ModelViewSet):
         })
 
 
+def _argent_recu(ventes_qs, tournees_qs):
+    """Argent réellement reçu sur un ensemble de ventes mobiles / tournées.
+
+    - especes : ventes payées en espèces (payé - monnaie rendue, y compris l'acompte d'une vente
+      à crédit) + paiements de commandes, règlements de crédits et remboursements de dettes
+      en espèces reçus pendant ces tournées
+    - cheques : idem en chèque
+    - credits : reste à payer des ventes (argent non reçu)
+    """
+    from decimal import Decimal
+    from django.db.models import Sum, F
+    from .distribution_models import EncaissementCommande, EncaissementVente
+    from API.models import PaiementSolde
+    z = Decimal('0')
+    recu = F('montant_paye') - F('montant_rendu')
+    # payé - rendu au moment de la vente (les règlements de crédit ultérieurs, qui augmentent
+    # montant_paye, sont comptés à part via EncaissementVente : pas de double comptage)
+    q_esp = ventes_qs.exclude(type_paiement__in=['cheque', 'carte', 'virement'])
+    q_chq = ventes_qs.filter(type_paiement='cheque')
+    v_esp = (q_esp.aggregate(s=Sum(recu))['s'] or z) - (EncaissementVente.objects.filter(vente__in=q_esp).aggregate(s=Sum('montant'))['s'] or z)
+    v_chq = (q_chq.aggregate(s=Sum(recu))['s'] or z) - (EncaissementVente.objects.filter(vente__in=q_chq).aggregate(s=Sum('montant'))['s'] or z)
+    reste = ventes_qs.aggregate(s=Sum(F('montant_total') - (F('montant_paye') - F('montant_rendu'))))['s'] or z
+
+    def _enc(mode_field, modes):
+        t = 0
+        t += EncaissementCommande.objects.filter(tournee__in=tournees_qs, type_paiement__in=modes).aggregate(s=Sum('montant'))['s'] or z
+        t += EncaissementVente.objects.filter(tournee__in=tournees_qs, type_paiement__in=modes).aggregate(s=Sum('montant'))['s'] or z
+        t += PaiementSolde.objects.filter(tournee__in=tournees_qs, mode_paiement__in=modes).aggregate(s=Sum('montant'))['s'] or z
+        from .distribution_models import PaiementClient
+        t += PaiementClient.objects.filter(tournee__in=tournees_qs, mode_paiement__in=modes).aggregate(s=Sum('montant_ventes_pc'))['s'] or z
+        return t
+
+    return {
+        'especes': float(v_esp + _enc('type_paiement', ['especes', 'espece'])),
+        'cheques': float(v_chq + _enc('type_paiement', ['cheque'])),
+        'credits': float(max(reste, z)),
+    }
+
+
 class StatsLivreursAPIView(APIView):
     """
     API pour les statistiques détaillées des livreurs
@@ -3511,15 +3743,15 @@ class StatsLivreursAPIView(APIView):
         # ========================================
         # RÉSUMÉ GLOBAL
         # ========================================
+        # Argent réellement reçu (avant : montant vendu, même non payé, compté en espèces ;
+        # paiements de commandes et remboursements de dettes ignorés)
+        argent = _argent_recu(ventes_qs, tournees_qs)
         summary = {
             'total_clients': arrets_qs.filter(statut='livre').values('client').distinct().count(),
             'total_tournees': tournees_qs.count(),
-            'total_especes': float(ventes_qs.filter(type_paiement='especes').aggregate(
-                total=Sum('montant_total'))['total'] or 0),
-            'total_cheques': float(ventes_qs.filter(type_paiement='cheque').aggregate(
-                total=Sum('montant_total'))['total'] or 0),
-            'total_credits': float(ventes_qs.filter(type_paiement='credit').aggregate(
-                total=Sum('montant_total'))['total'] or 0),
+            'total_especes': argent['especes'],
+            'total_cheques': argent['cheques'],
+            'total_credits': argent['credits'],
             'total_ventes': float(ventes_qs.aggregate(total=Sum('montant_total'))['total'] or 0),
         }
 
@@ -3543,12 +3775,10 @@ class StatsLivreursAPIView(APIView):
             arrets_livreur = arrets_qs.filter(tournee__livreur=livreur)
 
             # Calculer les stats
-            especes = float(ventes_livreur.filter(type_paiement='especes').aggregate(
-                total=Sum('montant_total'))['total'] or 0)
-            cheques = float(ventes_livreur.filter(type_paiement='cheque').aggregate(
-                total=Sum('montant_total'))['total'] or 0)
-            credits = float(ventes_livreur.filter(type_paiement='credit').aggregate(
-                total=Sum('montant_total'))['total'] or 0)
+            argent_l = _argent_recu(ventes_livreur, tournees_livreur)
+            especes = argent_l['especes']
+            cheques = argent_l['cheques']
+            credits = argent_l['credits']
 
             total_arrets = arrets_livreur.count()
             arrets_livres = arrets_livreur.filter(statut='livre').count()
@@ -3849,3 +4079,74 @@ class EtatLivreursAPIView(APIView):
         if not (request.user.is_staff or request.user.is_superuser):
             company = getattr(request, 'company', None)
         return Response(calculer_etat_livreurs(date_debut, date_fin, company=company, livreur_id=livreur_id))
+
+
+
+class ComptesClientsAPIView(APIView):
+    """Comptes des clients d'une ou plusieurs tournées (écran « Comptes clients » du téléphone).
+
+    GET /API/distribution/comptes-clients/?tournees=14,15   → clients des arrêts de ces tournées
+    GET /API/distribution/comptes-clients/?clients=12,13
+    Pour chaque client : dette (détail par document), avance, net, historique.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from API.models import Client
+        from API.comptes_clients import compte
+        ids = set()
+        t = request.query_params.get('tournees') or ''
+        c = request.query_params.get('clients') or ''
+        t_ids = [int(x) for x in t.split(',') if x.strip().isdigit()]
+        if t_ids:
+            ids |= set(ArretTourneeMobile.objects.filter(tournee_id__in=t_ids).values_list('client_id', flat=True))
+        ids |= {int(x) for x in c.split(',') if x.strip().isdigit()}
+        if not ids:
+            return Response({'error': 'tournees ou clients est requis'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response([compte(cl) for cl in Client.objects.filter(pk__in=ids).order_by('nom', 'prenom')])
+
+
+class EncaisserCompteClientAPIView(APIView):
+    """Encaisser sur le compte d'un client : le montant est réparti sur ses dettes, de la plus
+    ancienne à la plus récente ; le surplus devient une avance.
+
+    POST /API/distribution/comptes-clients/encaisser/
+    { "app_id": "compte-...", "client": 12, "montant": 500, "mode_paiement": "especes" | "cheque",
+      "tournee": 14, "date_paiement": "..." }
+    Idempotent sur app_id.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from decimal import Decimal, InvalidOperation
+        from django.utils.dateparse import parse_datetime
+        from API.models import Client
+        from API.comptes_clients import compte, encaisser
+        from .distribution_models import TourneeMobile
+        d = request.data
+        app_id = str(d.get('app_id') or '').strip()
+        if not app_id:
+            return Response({'error': 'app_id est requis'}, status=status.HTTP_400_BAD_REQUEST)
+        client = Client.objects.filter(pk=d.get('client')).first() if str(d.get('client') or '').isdigit() else None
+        if client is None:
+            return Response({'error': f"Client introuvable : {d.get('client')}"}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            montant = Decimal(str(d.get('montant')))
+        except (InvalidOperation, TypeError, ValueError):
+            return Response({'error': 'Montant invalide'}, status=status.HTTP_400_BAD_REQUEST)
+        if montant <= 0:
+            return Response({'error': 'Le montant doit être supérieur à zéro'}, status=status.HTTP_400_BAD_REQUEST)
+        mode = d.get('mode_paiement') or 'especes'
+        mode = 'especes' if mode == 'espece' else mode
+        if mode not in ('especes', 'cheque'):
+            return Response({'error': f'Mode de paiement invalide : {mode} (espèces ou chèque)'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        tid = str(d.get('tournee') or '').strip()
+        tournee = TourneeMobile.objects.filter(pk=int(tid)).first() if tid.isdigit() else None
+        date_paiement = parse_datetime(str(d.get('date_paiement') or '')) or timezone.now()
+        pc, deja = encaisser(client, app_id, montant, mode, tournee=tournee, date_paiement=date_paiement,
+                             user=request.user if request.user.is_authenticated else None)
+        return Response({'deja_enregistre': deja, 'app_id': pc.app_id, 'montant': float(pc.montant),
+                         'repartition': pc.repartition,
+                         'compte': compte(Client.objects.get(pk=client.pk), avec_historique=False)},
+                        status=status.HTTP_200_OK if deja else status.HTTP_201_CREATED)

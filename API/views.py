@@ -26,7 +26,17 @@ from .mixins import TenantFilterMixin, WarehouseRelatedTenantMixin
 logger = logging.getLogger(__name__)
 
 
+def _tournee_id_valide(valeur):
+    """Id de TourneeMobile envoyé par le téléphone, ou None s'il est absent ou inconnu."""
+    from API.distribution_models import TourneeMobile
+    v = str(valeur or '').strip()
+    if not v.isdigit():
+        return None
+    return int(v) if TourneeMobile.objects.filter(pk=int(v)).exists() else None
+
+
 # ── Conversion nombre → lettres (français / dinars algériens) ───────────────
+
 def _nombre_en_lettres(montant):
     """Retourne le montant en toutes lettres (Dinars et Centimes)."""
     UNITES = ['', 'Un', 'Deux', 'Trois', 'Quatre', 'Cinq', 'Six', 'Sept', 'Huit', 'Neuf',
@@ -484,11 +494,13 @@ class ClientViewSet(TenantFilterMixin, viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
     def rapport_soldes(self, request):
         """
-        Rapport consolidé des soldes clients : solde initial + reste à payer sur ventes
+        Rapport consolidé des soldes clients.
         Retourne pour chaque client:
-        - Solde initial (champ solde du modèle)
-        - Reste à payer (somme des restes à payer sur ventes)
-        - Solde total (solde initial + reste à payer)
+        - solde_initial : champ solde du modèle (positif = avance du client, négatif = dette)
+        - reste_a_payer_ventes : restes à payer des ventes (web + mobile)
+        - reste_a_payer_commandes : restes à payer des commandes livrées
+        - dette_nette / solde_total : restes à payer - solde (positif = le client doit,
+          négatif = le client a une avance)
         """
         from django.db.models import Sum, F, DecimalField
         from django.db.models.functions import Coalesce
@@ -509,25 +521,34 @@ class ClientViewSet(TenantFilterMixin, viewsets.ModelViewSet):
             for vente in ventes_web:
                 reste_ventes_web += float(vente.get_reste_a_payer())
 
-            # Calculer le reste à payer sur les ventes mobiles
-            from .distribution_models import VenteTourneeMobile
+            # Calculer le reste à payer sur les ventes mobiles. montant_paye inclut la monnaie
+            # rendue : l'argent gardé est payé - rendu (avant : la monnaie rendue créait un
+            # « reste » négatif qui effaçait d'autres dettes du client).
+            from .distribution_models import VenteTourneeMobile, CommandeClient
             ventes_mobile = VenteTourneeMobile.objects.filter(client=client)
             reste_ventes_mobile = 0.0
             for vente_mobile in ventes_mobile:
                 montant_total = float(vente_mobile.montant_total or 0)
-                montant_paye = float(vente_mobile.montant_paye or 0)
-                reste_ventes_mobile += (montant_total - montant_paye)
+                recu = float(vente_mobile.montant_paye or 0) - float(vente_mobile.montant_rendu or 0)
+                reste_ventes_mobile += max(0.0, montant_total - recu)
 
-            # Total reste à payer (web + mobile)
-            reste_a_payer_total = reste_ventes_web + reste_ventes_mobile
+            # Commandes livrées non (entièrement) payées (avant : ignorées)
+            reste_commandes = 0.0
+            for cmd in CommandeClient.objects.filter(client=client, statut='delivered'):
+                reste_commandes += max(0.0, float(cmd.montant_total_ttc or 0) - float(cmd.montant_paye or 0))
 
-            # Solde total = solde initial + reste à payer
-            # Si reste_a_payer est négatif, on le considère comme 0
-            reste_a_payer_total = max(0, reste_a_payer_total)
-            solde_total = solde_initial + reste_a_payer_total
+            # Total reste à payer (ventes web + mobile)
+            reste_a_payer_total = max(0, reste_ventes_web + reste_ventes_mobile)
+
+            # Convention du modèle Client : solde POSITIF = avance (crédit) du client, NÉGATIF = dette.
+            # Dette nette = restes à payer - solde (avant : solde + restes, une avance était
+            # comptée comme une dette et un paiement faisait monter la « dette »).
+            # solde_total / dette_nette : positif = le client doit, négatif = le client a une avance.
+            dette_nette = reste_a_payer_total + reste_commandes - solde_initial
+            solde_total = dette_nette
 
             # N'inclure que les clients avec un solde non nul ou un reste à payer
-            if solde_initial != 0 or reste_a_payer_total > 0:
+            if solde_initial != 0 or reste_a_payer_total > 0 or reste_commandes > 0:
                 rapport.append({
                     'client_id': client.id,
                     'client_nom': client.nom,
@@ -536,6 +557,15 @@ class ClientViewSet(TenantFilterMixin, viewsets.ModelViewSet):
                     'secteur': client.secteur.nom if client.secteur else None,
                     'solde_initial': round(solde_initial, 2),
                     'reste_a_payer_ventes': round(reste_a_payer_total, 2),
+                    'reste_a_payer_commandes': round(reste_commandes, 2),
+                    'avance': round(max(solde_initial, 0.0), 2),
+                    'dette_nette': round(dette_nette, 2),
+                    # Lecture simple : « Dette » (le client doit), « Avance » (le client a de
+                    # l'argent d'avance) ou « À jour », avec le montant toujours positif
+                    'situation': 'Dette' if dette_nette > 0.005 else ('Avance' if dette_nette < -0.005 else 'À jour'),
+                    'montant_situation': round(abs(dette_nette), 2),
+                    'libelle': (f"Dette : {dette_nette:,.2f} DA" if dette_nette > 0.005
+                                else (f"Avance : {abs(dette_nette):,.2f} DA" if dette_nette < -0.005 else "À jour")).replace(',', ' '),
                     'solde_total': round(solde_total, 2),
                     'nombre_ventes_impayees': ventes_web.count() + ventes_mobile.count(),
                 })
@@ -557,9 +587,18 @@ class ClientViewSet(TenantFilterMixin, viewsets.ModelViewSet):
 
         # Récupérer les données du paiement
         montant = request.data.get('montant')
-        mode_paiement = request.data.get('mode_paiement', 'especes')
+        mode_paiement = request.data.get('mode_paiement') or 'especes'
+        if mode_paiement == 'espece':
+            mode_paiement = 'especes'
         notes = request.data.get('notes', '')
         date_paiement = request.data.get('date_paiement')
+
+        # Un remboursement est de l'argent reçu : espèces ou chèque uniquement
+        if mode_paiement not in ('especes', 'cheque'):
+            return Response(
+                {'error': f'Mode de paiement invalide : {mode_paiement} (espèces ou chèque)'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         # Valider le montant
         if not montant:
@@ -624,6 +663,7 @@ class ClientViewSet(TenantFilterMixin, viewsets.ModelViewSet):
                     notes=notes,
                     enregistre_par=request.user,
                     app_id=app_id,
+                    tournee_id=_tournee_id_valide(request.data.get('tournee')),
                 )
         except IntegrityError:
             existant = PaiementSolde.objects.filter(app_id=app_id).first() if app_id else None

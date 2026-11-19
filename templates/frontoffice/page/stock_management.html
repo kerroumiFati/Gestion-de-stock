@@ -720,6 +720,9 @@
                         <button class="btn btn-outline-secondary ml-2" style="border-radius: 50px;" onclick="exportStock()">
                             <i class="fas fa-download mr-1"></i>{% trans "Exporter" %}
                         </button>
+                        <button class="btn btn-outline-primary ml-2" style="border-radius: 50px;" onclick="printStock()">
+                            <i class="fas fa-print mr-1"></i>{% trans "Imprimer" %}
+                        </button>
                     </div>
                 </div>
             </div>
@@ -732,6 +735,7 @@
                             <th style="width: 50px;"></th>
                             <th>{% trans "Produit" %}</th>
                             <th>{% trans "Catégorie" %}</th>
+                            <th>{% trans "Entrepôt" %}</th>
                             <th class="text-center">{% trans "Stock" %}</th>
                             <th style="width: 150px;">{% trans "Niveau" %}</th>
                             <th class="text-right">{% trans "Prix" %}</th>
@@ -741,7 +745,7 @@
                     </thead>
                     <tbody id="stockTableBody">
                         <tr>
-                            <td colspan="8" class="text-center py-5">
+                            <td colspan="9" class="text-center py-5">
                                 <div class="spinner-border text-primary" role="status">
                                     <span class="sr-only">Loading...</span>
                                 </div>
@@ -968,7 +972,7 @@
             console.error('Erreur chargement:', err);
             document.getElementById('stockTableBody').innerHTML = `
                 <tr>
-                    <td colspan="8" class="text-center py-5 text-danger">
+                    <td colspan="9" class="text-center py-5 text-danger">
                         <i class="fas fa-exclamation-circle fa-3x mb-3"></i>
                         <p>Erreur de chargement des données</p>
                     </td>
@@ -1352,7 +1356,7 @@
         if (filtered.length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="8">
+                    <td colspan="9">
                         <div class="empty-state">
                             <i class="fas fa-inbox"></i>
                             <h5>Aucun produit trouvé</h5>
@@ -1401,6 +1405,7 @@
                             ${category.nom || 'Non classé'}
                         </span>
                     </td>
+                    <td>${renderProductWarehouses(p.id, warehouseId)}</td>
                     <td class="text-center">
                         <span class="font-weight-bold ${status.class}" style="font-size: 1.1rem;">
                             ${p.quantite || 0}
@@ -1431,6 +1436,33 @@
                 </tr>
             `;
         }).join('');
+    }
+
+    // Liste des entrepôts où se trouve le produit (avec quantité si plusieurs)
+    function renderProductWarehouses(productId, warehouseId) {
+        let stocks = allProductStocks.filter(ps => ps.produit == productId);
+        if (warehouseId) {
+            stocks = stocks.filter(ps => ps.warehouse == warehouseId);
+        } else {
+            stocks = stocks.filter(ps => (ps.quantity || 0) > 0);
+        }
+        if (stocks.length === 0) {
+            return '<span class="text-muted">-</span>';
+        }
+        const showQty = stocks.length > 1;
+        return stocks.map(ps => {
+            const wh = allWarehouses.find(w => w.id == ps.warehouse) || {};
+            const whCode = ps.warehouse_code || wh.code || '';
+            const isVan = whCode.startsWith('VAN');
+            const name = escapeWarehouseText(ps.warehouse_name || ps.warehouse_code || wh.name || wh.code || '-');
+            return `<span class="badge badge-light border d-inline-block mb-1 mr-1" style="font-weight: 500;">
+                        <i class="fas fa-${isVan ? 'truck' : 'warehouse'} mr-1 text-muted"></i>${name}${showQty ? ` <strong>(${ps.quantity})</strong>` : ''}
+                    </span>`;
+        }).join('');
+    }
+
+    function escapeWarehouseText(s) {
+        return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     }
 
     function getStockStatus(product) {
@@ -1572,6 +1604,15 @@
             console.error('Erreur:', err);
             alert('Erreur lors de l\'ajustement du stock');
         });
+    };
+
+    // Imprimer l'état du stock : ouvre le PDF de valorisation dans un nouvel onglet
+    // (entrepôt sélectionné, ou tous) pour l'imprimer depuis la visionneuse du navigateur.
+    window.printStock = function() {
+        const params = new URLSearchParams({ format: 'pdf', inline: '1' });
+        const warehouseId = document.getElementById('warehouseFilter')?.value;
+        if (warehouseId) params.set('warehouse', warehouseId);
+        window.open('/reports/stock-valuation/?' + params.toString(), '_blank');
     };
 
     window.exportStock = function() {

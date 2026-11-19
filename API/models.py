@@ -747,6 +747,7 @@ class PaiementSolde(models.Model):
         ('cheque', 'Chèque'),
         ('virement', 'Virement'),
         ('carte', 'Carte bancaire'),
+        ('avoir', 'Avoir (trop-payé gardé en avance)'),
     )
 
     client = models.ForeignKey(
@@ -782,6 +783,10 @@ class PaiementSolde(models.Model):
         auto_now_add=True,
         help_text="Date et heure du paiement"
     )
+
+    # Tournée pendant laquelle l'argent a été reçu (caisse de la tournée), si payé au vendeur
+    tournee = models.ForeignKey('TourneeMobile', on_delete=models.SET_NULL, null=True, blank=True,
+                                related_name='paiements_solde')
 
     # Soldes avant/après pour traçabilité
     solde_avant = models.DecimalField(
@@ -901,6 +906,28 @@ class Achat(models.Model):
     def get_prix_total(self):
         """Retourne le prix total de l'achat (pièces x prix par pièce)."""
         return (self.quantite or 0) * (self.prix_achat or 0)
+
+    def appliquer_colisage_produit(self):
+        """Achat en carton -> reporte les pièces par carton dans le Colisage du produit,
+        pour que la vente (web et mobile) affiche « x ct + y u ».
+        Le Colisage actif est créé s'il n'existe pas, sinon mis à jour avec la valeur
+        du dernier achat en carton. Retourne True si le Colisage a été modifié."""
+        upc = int(self.pieces_par_carton or 0)
+        if self.unite_achat != 'carton' or upc <= 1 or not self.produit_id:
+            return False
+        cond = Conditionnement.objects.filter(produit_id=self.produit_id, is_active=True).first()
+        if cond is None:
+            Conditionnement.objects.create(produit_id=self.produit_id, unites_par_carton=upc, is_active=True)
+            return True
+        if cond.unites_par_carton != upc:
+            cond.unites_par_carton = upc
+            cond.save(update_fields=['unites_par_carton', 'updated_at'])
+            return True
+        return False
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        self.appliquer_colisage_produit()
 
     def __str__(self):
         nb_cartons = self.get_nb_cartons()

@@ -9,7 +9,7 @@ from .distribution_views import (
     PlanningHebdomadaireViewSet, ClientLivreurHebdoViewSet,
     # BonLivraisonVanViewSet,  # TODO: Disabled - models not yet created
     ProduitMobileViewSet,
-    StatsLivreursAPIView,
+    StatsLivreursAPIView, ComptesClientsAPIView, EncaisserCompteClientAPIView,
     ObjectifVendeurViewSet,
     IndicateursPerformanceAPIView,
     CAVendeursAPIView,
@@ -33,6 +33,8 @@ router.register(r'objectifs-vendeurs', ObjectifVendeurViewSet, basename='objecti
 urlpatterns = [
     path('', include(router.urls)),
     path('stats-livreurs/', StatsLivreursAPIView.as_view(), name='stats-livreurs'),
+    path('comptes-clients/', ComptesClientsAPIView.as_view(), name='comptes-clients'),
+    path('comptes-clients/encaisser/', EncaisserCompteClientAPIView.as_view(), name='comptes-clients-encaisser'),
     path('indicateurs-performance/', IndicateursPerformanceAPIView.as_view(), name='indicateurs-performance'),
     path('ca-vendeurs/', CAVendeursAPIView.as_view(), name='ca-vendeurs'),
     path('etat-livreurs/', EtatLivreursAPIView.as_view(), name='etat-livreurs'),

@@ -397,11 +397,10 @@
                                 <div class="form-group">
                                     <label>{% trans "Type de paiement" %}:</label>
                                     <select id="editTypePaiement" class="form-control">
+                                        <option value="non_paye">{% trans "Non payé" %}</option>
                                         <option value="especes">{% trans "Espèces" %}</option>
-                                        <option value="carte">{% trans "Carte bancaire" %}</option>
                                         <option value="cheque">{% trans "Chèque" %}</option>
                                         <option value="credit">{% trans "À crédit" %}</option>
-                                        <option value="virement">{% trans "Virement" %}</option>
                                     </select>
                                 </div>
                             </div>
@@ -1515,7 +1514,19 @@
         document.getElementById('editReference').value = commande.reference;
         document.getElementById('editClient').value = (commande.client_prenom || '') + ' ' + (commande.client_nom || '');
         document.getElementById('editDateLivraison').value = commande.date_livraison_souhaitee || '';
-        document.getElementById('editTypePaiement').value = commande.type_paiement || 'especes';
+        // Types proposés : non payé, espèces, chèque, crédit. Une ancienne commande en carte ou
+        // virement garde son type (option ajoutée pour elle seule, marquée « ancien »).
+        const selTP = document.getElementById('editTypePaiement');
+        selTP.querySelectorAll('option[data-ancien]').forEach(o => o.remove());
+        const tp = commande.type_paiement || 'non_paye';
+        if (!['non_paye', 'especes', 'cheque', 'credit'].includes(tp)) {
+            const opt = document.createElement('option');
+            opt.value = tp;
+            opt.textContent = (tp === 'carte' ? 'Carte bancaire' : tp === 'virement' ? 'Virement' : tp) + ' (ancien)';
+            opt.setAttribute('data-ancien', '1');
+            selTP.appendChild(opt);
+        }
+        selTP.value = tp;
         document.getElementById('editNotes').value = commande.notes || '';
 
         // Charger les lignes de produits avec tous les champs nécessaires

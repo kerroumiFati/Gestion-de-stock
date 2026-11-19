@@ -37,7 +37,9 @@ def export_stock_valuation(request):
             )
             filename = f'valorisation_stock_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
 
-        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        # ?inline=1 : ouvrir le PDF dans le navigateur (impression) au lieu de le telecharger
+        disposition = 'inline' if export_format == 'pdf' and request.GET.get('inline') == '1' else 'attachment'
+        response['Content-Disposition'] = f'{disposition}; filename="{filename}"'
 
         # Enregistrer l'audit log
         log_event(
