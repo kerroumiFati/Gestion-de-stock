@@ -178,209 +178,308 @@
 <form> {% csrf_token %}
             <div class="card-body container-fluid">
   <div id="section-achat">
-                <div class="row">
-                    <div class="col-sm-3 mb-2">
-                        <label for="code">{% trans "Date d'Achat" %} : </label>
-                        <input class="" type="text" id="id" hidden>
-                         <input class="form-control" type="date"  id="datea">
-                    </div>
-                    <div class="col-sm-3 mb-2">
-                        <label for="unite_achat">{% trans "Unité d'achat" %} : </label>
-                        <select class="form-control" id="unite_achat" onchange="toggleAchatParCarton()">
-                            <option value="piece">{% trans "Pièce" %}</option>
-                            <option value="carton">{% trans "Carton" %}</option>
-                        </select>
-                    </div>
-                    <div class="col-sm-3 mb-2" id="qte_carton_container" style="display:none;">
-                        <label for="qte_carton">{% trans "Qté carton" %} : </label>
-                        <input class="form-control" type="number" id="qte_carton" value="0" min="0" onchange="calculateAchatTotal()">
-                    </div>
-                    <div class="col-sm-3 mb-2" id="pieces_par_carton_container" style="display:none;">
-                        <label for="pieces_par_carton">{% trans "Pièces par carton" %} : </label>
-                        <input class="form-control" type="number" id="pieces_par_carton" value="1" min="1" onchange="calculateAchatTotal()">
-                    </div>
-                </div>
-                <div class="row">
-                    <div class="col-sm-3 mb-2" id="qte_piece_container">
-                        <label for="quantite">{% trans "Qté pièce" %} : </label>
-                        <input class="form-control" type="number" id="quantite" required onchange="calculateAchatTotal()">
-                    </div>
-                    <div class="col-sm-3 mb-2" id="quantite_totale_container" style="display:none;">
-                        <label>{% trans "Quantité totale (pièces)" %}</label>
-                        <input class="form-control" type="text" id="quantite_pieces_display" readonly placeholder="0">
-                    </div>
-                    <div class="col-sm-3 mb-2" id="prix_carton_container" style="display:none;">
-                        <label>{% trans "Prix par carton" %}</label>
-                        <input class="form-control" type="number" id="prix_carton" step="0.01" min="0" placeholder="0.00" onchange="calculateAchatTotal()">
-                    </div>
-                    <div class="col-sm-3 mb-2">
-                        <label>{% trans "Prix d'achat unitaire (pièce)" %}</label>
-                        <input class="form-control" type="number" id="prix_achat" step="0.01" min="0" placeholder="0.00" onchange="calculateAchatTotal()">
-                    </div>
-                </div>
-                <div class="row">
-                    <div class="col-sm-4 mb-2">
-                        <label for="dateexp">{% trans "Date d'expiration (optionnelle)" %} : </label>
-                        <input class="form-control" type="date" id="dateexp" placeholder="{% trans 'Facultatif' %}">
-                    </div>
-                    <div class="col-sm-4 mb-2">
-                        <label>{% trans "Total (auto)" %}</label>
-                        <input class="form-control" type="text" id="total_achat" readonly placeholder="0.00">
-                    </div>
-                </div>
-                <div class="row">
-                    <div class="col-sm-4 mb-2">
-                        <label for="nom">{% trans "Fournisseur" %} : </label>
-                        <!-- Custom Select pour Fournisseur -->
-                        <div class="custom-select-container" id="customSelectFournisseur">
-                            <div class="custom-select-trigger" onclick="toggleAchatCustomSelect('customSelectFournisseur')">
-                                <span class="selected-text placeholder">{% trans "Sélectionner un fournisseur" %}</span>
-                                <i class="fas fa-chevron-down arrow"></i>
-                            </div>
-                            <div class="custom-select-dropdown">
-                                <div class="custom-select-search">
-                                    <input type="text" placeholder="{% trans 'Rechercher...' %}" oninput="filterAchatCustomSelect('customSelectFournisseur', this.value)">
+    <style>
+      #section-achat { --pa-bord:#e5e7eb; --pa-gris:#6b7280; --pa-bleu:#2563eb; }
+      #section-achat .pa-grille { display:grid; grid-template-columns: minmax(0,1fr) 320px; gap:18px; align-items:start; margin-top:16px; }
+      @media (max-width: 992px) { #section-achat .pa-grille { grid-template-columns: 1fr; } }
+      #section-achat .pa-bloc { background:#fff; border:1px solid var(--pa-bord); border-radius:14px; padding:16px 18px 6px; margin-bottom:14px; }
+      #section-achat .pa-titre { display:flex; align-items:center; gap:10px; font-weight:700; font-size:15px; color:#111827; margin-bottom:12px; }
+      #section-achat .pa-titre .pa-num { width:26px; height:26px; border-radius:50%; background:#dbeafe; color:var(--pa-bleu); display:grid; place-items:center; font-size:13px; }
+      #section-achat label { font-size:13px; font-weight:600; color:#374151; margin-bottom:4px; }
+      #section-achat .form-control, #section-achat .custom-select-trigger { height:44px; border-radius:10px; font-size:15px; }
+      #section-achat input[readonly] { background:#f8fafc; color:#374151; }
+      #section-achat .pa-unites { display:inline-flex; background:#f1f5f9; border-radius:12px; padding:4px; margin-bottom:14px; }
+      #section-achat .pa-unites button { border:none; background:transparent; padding:8px 20px; border-radius:9px; font-weight:600; color:var(--pa-gris); }
+      #section-achat .pa-unites button.pa-on { background:#fff; color:var(--pa-bleu); box-shadow:0 1px 3px rgba(0,0,0,.12); }
+      #section-achat .pa-recap { position:sticky; top:16px; background:#0f172a; color:#fff; border-radius:16px; padding:20px; }
+      #section-achat .pa-recap .pa-ligne { display:flex; justify-content:space-between; font-size:14px; color:#cbd5e1; padding:4px 0; }
+      #section-achat .pa-recap .pa-ligne b { color:#fff; }
+      #section-achat .pa-recap .pa-total-l { margin-top:12px; font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:#94a3b8; }
+      @media (max-width: 992px) { #section-achat .pa-recap { position:static; } }
+      #section-achat .pa-recap #total_achat { background:transparent !important; border:none; color:#fff !important; font-size:34px; font-weight:800; padding:0; height:auto; box-shadow:none; }
+      #section-achat .pa-recap #btn { width:100%; height:50px; border-radius:12px; font-size:16px; font-weight:700; margin-top:14px; background:#22c55e; border-color:#22c55e; color:#fff; }
+      #section-achat .pa-recap #btn:hover { background:#16a34a; }
+      #section-achat .pa-recap #btn[data-mode="edit"] { background:#f59e0b; border-color:#f59e0b; }
+    </style>
+    <input type="text" id="id" hidden>
+    <div class="pa-grille">
+      <div>
+        <div class="pa-bloc">
+          <div class="pa-titre"><span class="pa-num">1</span>{% trans "Produit" %}</div>
+          <div class="form-row">
+            <div class="form-group col-md-6">
+              <label for="sproduit">{% trans "Produit" %}</label>
+              <div class="custom-select-container" id="customSelectSproduit">
+                                <div class="custom-select-trigger" onclick="toggleAchatCustomSelect('customSelectSproduit')">
+                                    <span class="selected-text placeholder">{% trans "Sélectionner un produit" %}</span>
+                                    <i class="fas fa-chevron-down arrow"></i>
                                 </div>
-                                <div class="custom-select-options"></div>
-                            </div>
-                            <!-- Select caché pour compatibilité -->
-                            <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
-                                <select id="fournisseur">
-                                    <option value="" class="twichiya">{% trans "Sélectionner un fournisseur" %}</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-sm-4 mb-2">
-                        <label for="warehouse">{% trans "Entrepôt" %} : </label>
-                        <!-- Custom Select pour Entrepôt -->
-                        <div class="custom-select-container" id="customSelectWarehouse">
-                            <div class="custom-select-trigger" onclick="toggleAchatCustomSelect('customSelectWarehouse')">
-                                <span class="selected-text placeholder">{% trans "Sélectionner un entrepôt" %}</span>
-                                <i class="fas fa-chevron-down arrow"></i>
-                            </div>
-                            <div class="custom-select-dropdown">
-                                <div class="custom-select-search">
-                                    <input type="text" placeholder="{% trans 'Rechercher...' %}" oninput="filterAchatCustomSelect('customSelectWarehouse', this.value)">
+                                <div class="custom-select-dropdown">
+                                    <div class="custom-select-search">
+                                        <input type="text" placeholder="{% trans 'Rechercher...' %}" oninput="filterAchatCustomSelect('customSelectSproduit', this.value)">
+                                    </div>
+                                    <div class="custom-select-options"></div>
                                 </div>
-                                <div class="custom-select-options"></div>
-                            </div>
-                            <!-- Select caché pour compatibilité -->
-                            <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
-                                <select id="warehouse">
-                                    <option value="" class="twichiya">{% trans "Sélectionner un entrepôt" %}</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-sm-4 mb-2">
-                        <label for="ref">{% trans "Référence" %}: </label>
-                        <input class="form-control" type="text" id="ref" placeholder="{% trans 'Tapez pour filtrer...' %}">
-                    </div>
-                </div>
-                <div class="row">
-                    <div class="col-sm-6 mb-2">
-                        <label for="codebar">{% trans "Code barre" %}: </label>
-                        <input class="form-control" type="text" id="codebar" placeholder="{% trans 'Scannez / tapez...' %}">
-                    </div>
-                    <div class="col-sm-6 mb-2">
-                        <label for="nom">{% trans "Produit" %}: </label>
-                        <!-- Custom Select pour Produit -->
-                        <div class="custom-select-container" id="customSelectSproduit">
-                            <div class="custom-select-trigger" onclick="toggleAchatCustomSelect('customSelectSproduit')">
-                                <span class="selected-text placeholder">{% trans "Sélectionner un produit" %}</span>
-                                <i class="fas fa-chevron-down arrow"></i>
-                            </div>
-                            <div class="custom-select-dropdown">
-                                <div class="custom-select-search">
-                                    <input type="text" placeholder="{% trans 'Rechercher...' %}" oninput="filterAchatCustomSelect('customSelectSproduit', this.value)">
+                                <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
+                                    <select id="sproduit"><option value="" class="opr">{% trans "Sélectionner un produit" %}</option></select>
                                 </div>
-                                <div class="custom-select-options"></div>
                             </div>
-                            <!-- Select caché pour compatibilité -->
-                            <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
-                                <select id="sproduit">
-                                    <option value="" class="opr">{% trans "Sélectionner un produit" %}</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+            </div>
+            <div class="form-group col-md-3">
+              <label for="codebar">{% trans "Code barre" %}</label>
+              <input class="form-control" type="text" id="codebar" placeholder="{% trans 'Scanner' %}">
+            </div>
+            <div class="form-group col-md-3">
+              <label for="ref">{% trans "Référence" %}</label>
+              <input class="form-control" type="text" id="ref" placeholder="{% trans 'Réf.' %}">
+            </div>
+          </div>
+        </div>
 
-                <div class="row">
-                    <div class="col">
-                        <button type="button" class="btn btn-outline-success mt-3 mb-3" id="btn">{% trans "Ajouter" %}</button>
+        <div class="pa-bloc">
+          <div class="pa-titre"><span class="pa-num">2</span>{% trans "Quantité et prix" %}</div>
+          <div class="pa-unites" role="group">
+            <button type="button" data-u="piece" class="pa-on"><i class="fas fa-cube"></i> {% trans "Pièce" %}</button>
+            <button type="button" data-u="carton"><i class="fas fa-box"></i> {% trans "Carton" %}</button>
+          </div>
+          <select class="d-none no-select2" id="unite_achat" onchange="toggleAchatParCarton()">
+            <option value="piece">{% trans "Pièce" %}</option>
+            <option value="carton">{% trans "Carton" %}</option>
+          </select>
+          <div class="form-row">
+            <div class="form-group col-md-4" id="qte_piece_container">
+              <label for="quantite">{% trans "Quantité (pièces)" %}</label>
+              <input class="form-control" type="number" id="quantite" min="0" required onchange="calculateAchatTotal()" oninput="calculateAchatTotal()">
+            </div>
+            <div class="form-group col-md-4" id="qte_carton_container" style="display:none;">
+              <label for="qte_carton">{% trans "Cartons" %}</label>
+              <input class="form-control" type="number" id="qte_carton" value="0" min="0" onchange="calculateAchatTotal()" oninput="calculateAchatTotal()">
+            </div>
+            <div class="form-group col-md-4" id="pieces_par_carton_container" style="display:none;">
+              <label for="pieces_par_carton">{% trans "Pièces par carton" %}</label>
+              <input class="form-control" type="number" id="pieces_par_carton" value="1" min="1" onchange="calculateAchatTotal()" oninput="calculateAchatTotal()">
+            </div>
+            <div class="form-group col-md-4" id="prix_carton_container" style="display:none;">
+              <label for="prix_carton">{% trans "Prix d'un carton" %}</label>
+              <input class="form-control" type="number" id="prix_carton" step="0.01" min="0" placeholder="0.00" onchange="calculateAchatTotal()" oninput="calculateAchatTotal()">
+            </div>
+            <div class="form-group col-md-4">
+              <label for="prix_achat">{% trans "Prix d'une pièce" %}</label>
+              <input class="form-control" type="number" id="prix_achat" step="0.01" min="0" placeholder="0.00" onchange="calculateAchatTotal()" oninput="calculateAchatTotal()">
+            </div>
+            <div class="form-group col-md-4 d-none" id="quantite_totale_container">
+              <input class="form-control" type="text" id="quantite_pieces_display" readonly>
+            </div>
+          </div>
+        </div>
+
+        <div class="pa-bloc">
+          <div class="pa-titre"><span class="pa-num">3</span>{% trans "Réception" %}</div>
+          <div class="form-row">
+            <div class="form-group col-md-6">
+              <label for="fournisseur">{% trans "Fournisseur" %}</label>
+              <div class="custom-select-container" id="customSelectFournisseur">
+                                <div class="custom-select-trigger" onclick="toggleAchatCustomSelect('customSelectFournisseur')">
+                                    <span class="selected-text placeholder">{% trans "Sélectionner un fournisseur" %}</span>
+                                    <i class="fas fa-chevron-down arrow"></i>
+                                </div>
+                                <div class="custom-select-dropdown">
+                                    <div class="custom-select-search">
+                                        <input type="text" placeholder="{% trans 'Rechercher...' %}" oninput="filterAchatCustomSelect('customSelectFournisseur', this.value)">
+                                    </div>
+                                    <div class="custom-select-options"></div>
+                                </div>
+                                <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
+                                    <select id="fournisseur"><option value="" class="twichiya">{% trans "Sélectionner un fournisseur" %}</option></select>
+                                </div>
+                            </div>
+            </div>
+            <div class="form-group col-md-6">
+              <label for="warehouse">{% trans "Entrepôt" %}</label>
+              <div class="custom-select-container" id="customSelectWarehouse">
+                                <div class="custom-select-trigger" onclick="toggleAchatCustomSelect('customSelectWarehouse')">
+                                    <span class="selected-text placeholder">{% trans "Sélectionner un entrepôt" %}</span>
+                                    <i class="fas fa-chevron-down arrow"></i>
+                                </div>
+                                <div class="custom-select-dropdown">
+                                    <div class="custom-select-search">
+                                        <input type="text" placeholder="{% trans 'Rechercher...' %}" oninput="filterAchatCustomSelect('customSelectWarehouse', this.value)">
+                                    </div>
+                                    <div class="custom-select-options"></div>
+                                </div>
+                                <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
+                                    <select id="warehouse"><option value="" class="twichiya">{% trans "Sélectionner un entrepôt" %}</option></select>
+                                </div>
+                            </div>
+            </div>
+            <div class="form-group col-md-6">
+              <label for="datea">{% trans "Date d'achat" %}</label>
+              <input class="form-control" type="date" id="datea">
+            </div>
+            <div class="form-group col-md-6">
+              <label for="dateexp">{% trans "Date d'expiration" %}</label>
+              <input class="form-control" type="date" id="dateexp">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="pa-recap">
+        <div class="pa-ligne"><span>{% trans "Unité" %}</span><b id="pa_r_unite">{% trans "Pièce" %}</b></div>
+        <div class="pa-ligne"><span>{% trans "Pièces reçues" %}</span><b id="pa_r_pieces">0</b></div>
+        <div class="pa-ligne"><span>{% trans "Prix d'une pièce" %}</span><b id="pa_r_prix">0,00</b></div>
+        <div class="pa-total-l">{% trans "Total" %}</div>
+        <input class="form-control" type="text" id="total_achat" readonly value="0.00" aria-label="{% trans 'Total' %}">
+        <button type="button" class="btn" id="btn">{% trans "Ajouter" %}</button>
+      </aside>
+    </div>
+  </div><!-- end section-achat -->
+                <div id="section-stock" class="mt-3" style="display:none">
+                  <style>
+                    #section-stock { --ps-bleu:#2563eb; --ps-gris:#6b7280; --ps-bord:#e5e7eb; --ps-fond:#f8fafc; }
+                    #section-stock .ps-barre { display:flex !important; flex-wrap:wrap; gap:10px; align-items:center; background:#fff; border:1px solid var(--ps-bord); border-radius:12px; padding:10px; margin-bottom:14px; }
+                    #section-stock .ps-barre > * { margin:0 !important; }
+                    #section-stock .ps-recherche { flex:1 1 300px; min-width:220px; position:relative; }
+                    #section-stock .ps-recherche i { position:absolute; left:14px; top:50%; transform:translateY(-50%); color:var(--ps-gris); }
+                    #section-stock .ps-recherche input { padding-left:40px; height:44px; border-radius:10px; font-size:15px; }
+                    #section-stock .ps-barre select#ps_wh { flex:0 1 250px; width:250px !important; max-width:100%; height:44px; border-radius:10px; font-size:15px; }
+                    #section-stock .ps-barre .select2-container { flex:0 1 260px; width:260px !important; max-width:100%; }
+                    #section-stock .ps-barre .select2-container .select2-selection--single { height:44px; border-radius:10px; border-color:#ced4da; display:flex; align-items:center; }
+                    #section-stock .ps-barre .select2-container .select2-selection__rendered { line-height:44px; font-size:15px; padding-left:14px; }
+                    #section-stock .ps-barre .select2-container .select2-selection__arrow { height:42px; }
+                    #section-stock .ps-switch { flex:none; white-space:nowrap; color:#374151; font-size:14px; padding-left:2.6rem; }
+                    #section-stock .ps-switch .custom-control-label { line-height:1.6; cursor:pointer; }
+                    #section-stock #ps_refresh { width:44px; height:44px; border-radius:10px; }
+                    #section-stock #ps_refresh.ps-tourne i { animation: ps-rot .8s linear infinite; }
+                    @keyframes ps-rot { to { transform: rotate(360deg); } }
+                    #section-stock .ps-kpis { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:12px; margin-bottom:14px; }
+                    @media (max-width: 768px) { #section-stock .ps-kpis { grid-template-columns:repeat(2, minmax(0,1fr)); } }
+                    #section-stock .ps-kpi { display:flex; align-items:center; gap:12px; background:#fff; border:1px solid var(--ps-bord); border-radius:12px; padding:14px; }
+                    #section-stock .ps-kpi .ps-ic { width:42px; height:42px; border-radius:10px; display:grid; place-items:center; font-size:18px; flex:none; }
+                    #section-stock .ps-kpi .ps-v { font-size:22px; font-weight:700; line-height:1.1; color:#111827; }
+                    #section-stock .ps-kpi .ps-l { font-size:12px; color:var(--ps-gris); text-transform:uppercase; letter-spacing:.03em; }
+                    #section-stock .ps-kpi.ps-cliquable { cursor:pointer; transition:box-shadow .15s, border-color .15s; }
+                    #section-stock .ps-kpi.ps-cliquable:hover, #section-stock .ps-kpi.ps-actif { border-color:#f59e0b; box-shadow:0 0 0 3px #fef3c7; }
+                    #section-stock .ps-table-wrap { background:#fff; border:1px solid var(--ps-bord); border-radius:12px; overflow:auto; max-height:640px; }
+                    #tstock { margin:0; }
+                    #tstock thead th { position:sticky; top:0; z-index:1; background:var(--ps-fond); border-bottom:1px solid var(--ps-bord); border-top:none; font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--ps-gris); font-weight:600; padding:12px 14px; }
+                    #tstock td { vertical-align:middle; padding:10px 14px; border-top:1px solid #f1f5f9; font-size:15px; }
+                    #tstock tr.ps-suite td { border-top:none; }
+                    #tstock td.ps-num { text-align:right; white-space:nowrap; }
+                    #tstock .ps-av { width:36px; height:36px; border-radius:9px; display:inline-grid; place-items:center; font-weight:700; color:#fff; margin-right:10px; flex:none; }
+                    #tstock .ps-prod { display:flex; align-items:center; }
+                    #tstock .ps-nom { font-weight:600; color:#111827; }
+                    #tstock .ps-ref { color:var(--ps-gris); font-size:12px; }
+                    #tstock .ps-qte { font-size:17px; font-weight:700; }
+                    #tstock .ps-ct { color:var(--ps-gris); font-size:12px; }
+                    #tstock .ps-jauge { width:110px; height:8px; background:#f1f5f9; border-radius:4px; overflow:hidden; }
+                    #tstock .ps-jauge > span { display:block; height:100%; border-radius:4px; }
+                    #tstock .ps-pastille { display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:600; }
+                    #tstock .ps-pastille::before { content:''; width:8px; height:8px; border-radius:50%; background:currentColor; }
+                    #tstock .ps-act { width:38px; height:38px; border-radius:10px; }
+                    #ps_vide { text-align:center; padding:48px 16px; color:var(--ps-gris); }
+                    #ps_vide i { font-size:34px; display:block; margin-bottom:10px; opacity:.6; }
+                    #ps_modal .modal-content { border:none; border-radius:16px; }
+                    #ps_modal .ps-m-tete { display:flex; align-items:center; gap:12px; }
+                    #ps_modal .ps-compteur { display:flex; align-items:stretch; border:2px solid var(--ps-bord); border-radius:14px; overflow:hidden; }
+                    #ps_modal .ps-compteur button { flex:0 0 64px; width:64px !important; border:none; background:var(--ps-fond); font-size:26px; font-weight:700; color:#374151; padding:0; }
+                    #ps_modal .ps-compteur button:active { background:#e2e8f0; }
+                    #ps_modal .ps-compteur input { flex:1 1 auto; width:auto !important; min-width:0; border:none; text-align:center; font-size:32px; font-weight:700; height:72px; outline:none; -moz-appearance:textfield; }
+                    #ps_modal .ps-compteur input::-webkit-outer-spin-button, #ps_modal .ps-compteur input::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+                    #ps_modal .ps-avant-apres { display:flex; justify-content:center; align-items:center; gap:14px; margin:14px 0 4px; font-size:18px; }
+                    #ps_modal .ps-delta { display:inline-block; min-width:64px; text-align:center; border-radius:999px; padding:4px 12px; font-weight:700; font-size:15px; }
+                    #ps_modal .ps-motifs { display:flex; flex-wrap:wrap; gap:8px; }
+                    #ps_modal .ps-motif { border:1px solid #cbd5e1 !important; background:#fff !important; color:#374151 !important; border-radius:999px; padding:6px 14px; font-size:14px; font-weight:500; cursor:pointer; }
+                    #ps_modal .ps-motif:hover { border-color:#94a3b8 !important; }
+                    #ps_modal .ps-motif.ps-on { background:#2563eb !important; border-color:#2563eb !important; color:#fff !important; }
+                    #ps_message { position:fixed; right:20px; bottom:20px; z-index:2000; max-width:380px; border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,.15); display:none; }
+                  </style>
+
+                  <div class="ps-barre">
+                    <div class="ps-recherche">
+                      <i class="fas fa-search"></i>
+                      <input id="ps_recherche" type="search" class="form-control" placeholder="{% trans 'Produit ou référence' %}" autocomplete="off">
                     </div>
-                </div>
-              </div><!-- end section-achat -->
-                <div id="section-stock" class="mt-4" style="display:none">
-                  <h4>{% trans "Stocks par entrepôt" %}</h4>
-                  <div class="form-row align-items-end mb-2">
-                    <div class="form-group col-md-4">
-                      <label>{% trans "Produit" %}</label>
-                      <!-- Custom Select pour Produit -->
-                      <div class="custom-select-container" id="customSelectPsProd">
-                          <div class="custom-select-trigger" onclick="toggleAchatCustomSelect('customSelectPsProd')">
-                              <span class="selected-text placeholder">{% trans "Sélectionner un produit" %}</span>
-                              <i class="fas fa-chevron-down arrow"></i>
-                          </div>
-                          <div class="custom-select-dropdown">
-                              <div class="custom-select-search">
-                                  <input type="text" placeholder="{% trans 'Rechercher...' %}" oninput="filterAchatCustomSelect('customSelectPsProd', this.value)">
-                              </div>
-                              <div class="custom-select-options"></div>
-                          </div>
-                          <!-- Select caché pour compatibilité -->
-                          <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
-                              <select id="ps_prod"><option value="">{% trans "Sélectionner un produit" %}</option></select>
-                          </div>
-                      </div>
+                    <select id="ps_wh" class="form-control"><option value="">{% trans "Tous les entrepôts" %}</option></select>
+                    <div class="ps-switch custom-control custom-switch">
+                      <input type="checkbox" class="custom-control-input" id="ps_zero">
+                      <label class="custom-control-label" for="ps_zero">{% trans "Épuisés" %}</label>
                     </div>
-                    <div class="form-group col-md-4">
-                      <label>{% trans "Entrepôt" %}</label>
-                      <!-- Custom Select pour Entrepôt -->
-                      <div class="custom-select-container" id="customSelectPsWh">
-                          <div class="custom-select-trigger" onclick="toggleAchatCustomSelect('customSelectPsWh')">
-                              <span class="selected-text placeholder">{% trans "Tous les entrepôts" %}</span>
-                              <i class="fas fa-chevron-down arrow"></i>
-                          </div>
-                          <div class="custom-select-dropdown">
-                              <div class="custom-select-search">
-                                  <input type="text" placeholder="{% trans 'Rechercher...' %}" oninput="filterAchatCustomSelect('customSelectPsWh', this.value)">
-                              </div>
-                              <div class="custom-select-options"></div>
-                          </div>
-                          <!-- Select caché pour compatibilité -->
-                          <div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none;">
-                              <select id="ps_wh"><option value="">{% trans "Tous les entrepôts" %}</option></select>
-                          </div>
-                      </div>
-                    </div>
-                    <div class="form-group col-md-4 text-right">
-                      <button id="ps_refresh" type="button" class="btn btn-outline-primary">{% trans "Rafraîchir" %}</button>
-                    </div>
+                    <button id="ps_refresh" type="button" class="btn btn-outline-primary" title="{% trans 'Actualiser' %}" aria-label="{% trans 'Actualiser' %}"><i class="fas fa-sync-alt"></i></button>
                   </div>
-                  <div class="row mb-2">
-                    <div class="col">
-                      <small id="ps_totals" class="text-muted"></small>
-                    </div>
+
+                  <div class="ps-kpis">
+                    <div class="ps-kpi"><div class="ps-ic" style="background:#dbeafe;color:#2563eb"><i class="fas fa-boxes"></i></div><div><div class="ps-v" id="ps_nb">0</div><div class="ps-l">{% trans "Produits" %}</div></div></div>
+                    <div class="ps-kpi"><div class="ps-ic" style="background:#e0e7ff;color:#4f46e5"><i class="fas fa-cubes"></i></div><div><div class="ps-v" id="ps_qte">0</div><div class="ps-l">{% trans "Unités" %}</div></div></div>
+                    <div class="ps-kpi"><div class="ps-ic" style="background:#dcfce7;color:#16a34a"><i class="fas fa-coins"></i></div><div><div class="ps-v" id="ps_valeur">0</div><div class="ps-l">{% trans "Valeur (DA)" %}</div></div></div>
+                    <div class="ps-kpi ps-cliquable" id="ps_kpi_alerte" title="{% trans 'Afficher seulement les produits à surveiller' %}"><div class="ps-ic" style="background:#fef3c7;color:#d97706"><i class="fas fa-exclamation-triangle"></i></div><div><div class="ps-v" id="ps_alerte">0</div><div class="ps-l">{% trans "À surveiller" %}</div></div></div>
                   </div>
-                  <div class="table-responsive">
-                    <table id="tstock" class="table table-sm table-bordered">
+
+                  <div class="ps-table-wrap">
+                    <table id="tstock" class="table table-hover" data-no-datatable="true">
                       <thead>
-                        <tr><th>{% trans "Produit" %}</th><th>{% trans "Entrepôt" %}</th><th>{% trans "Quantité actuelle" %}</th><th>{% trans "Valeur" %}</th><th>{% trans "Nouvelle quantité" %}</th><th></th></tr>
+                        <tr><th>{% trans "Produit" %}</th><th>{% trans "Entrepôt" %}</th><th class="text-right">{% trans "Quantité" %}</th><th>{% trans "Niveau" %}</th><th class="text-right">{% trans "Valeur" %}</th><th></th></tr>
                       </thead>
                       <tbody></tbody>
                     </table>
+                    <div id="ps_vide" style="display:none"><i class="fas fa-search"></i><span>{% trans "Aucun résultat" %}</span></div>
                   </div>
+
+                  <!-- Correction du stock -->
+                  <div class="modal fade" id="ps_modal" tabindex="-1" role="dialog" aria-labelledby="ps_m_produit" aria-hidden="true">
+                    <div class="modal-dialog modal-dialog-centered" role="document">
+                      <div class="modal-content">
+                        <div class="modal-header border-0 pb-0">
+                          <div class="ps-m-tete">
+                            <span class="ps-av" id="ps_m_av" style="width:44px;height:44px;border-radius:11px;display:grid;place-items:center;color:#fff;font-weight:700"></span>
+                            <div><div class="h5 mb-0" id="ps_m_produit"></div><div class="text-muted small" id="ps_m_entrepot"></div></div>
+                          </div>
+                          <button type="button" class="close" data-dismiss="modal" aria-label="{% trans 'Fermer' %}"><span aria-hidden="true">&times;</span></button>
+                        </div>
+                        <div class="modal-body">
+                          <div class="ps-compteur">
+                            <button type="button" id="ps_m_moins" aria-label="−1">−</button>
+                            <input id="ps_m_nouvelle" type="number" min="0" step="1" inputmode="numeric" aria-label="{% trans 'Nouvelle quantité' %}">
+                            <button type="button" id="ps_m_plus" aria-label="+1">+</button>
+                          </div>
+                          <div class="ps-avant-apres">
+                            <span class="text-muted" id="ps_m_avant">0</span>
+                            <i class="fas fa-arrow-right text-muted"></i>
+                            <b id="ps_m_apres">0</b>
+                            <span class="ps-delta" id="ps_m_delta">0</span>
+                          </div>
+                          <div class="ps-motifs mt-3" id="ps_m_motifs"></div>
+                          <input id="ps_m_note" type="text" maxlength="150" class="form-control mt-3" placeholder="{% trans 'Commentaire' %}">
+                          <div id="ps_m_erreur" class="text-danger small mt-2" style="display:none"></div>
+                        </div>
+                        <div class="modal-footer border-0 pt-0">
+                          <button type="button" class="btn btn-light" data-dismiss="modal">{% trans "Annuler" %}</button>
+                          <button type="button" class="btn btn-primary px-4" id="ps_m_valider"><i class="fas fa-check"></i> {% trans "Enregistrer" %}</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div id="ps_message" class="alert alert-success mb-0"></div>
                 </div>
 
+                <style>
+                  #section-achat-table { margin-top:6px !important; }
+                  #achat-search-input { height:44px; border-radius:10px; padding-left:40px; font-size:15px; background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%236b7280' viewBox='0 0 16 16'%3E%3Cpath d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z'/%3E%3C/svg%3E") no-repeat 14px center; }
+                  #tachat { background:#fff; border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; border-collapse:separate; border-spacing:0; }
+                  #tachat thead th { background:#f8fafc; font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:#6b7280; font-weight:600; border-bottom:1px solid #e5e7eb; border-top:none; padding:12px 14px; }
+                  #tachat td { vertical-align:middle; padding:11px 14px; border-top:1px solid #f1f5f9; font-size:14.5px; }
+                  #tachat td.text-right { white-space:nowrap; }
+                  #tachat .pa-nom { font-weight:600; color:#111827; }
+                  #tachat .pa-sous { color:#6b7280; font-size:12px; }
+                  #tachat .pa-act { width:36px; height:36px; border-radius:9px; padding:0; }
+                  #tachat tr.pa-edition td { background:#fffbeb; }
+                </style>
                 <div id="section-achat-table" class="row m-auto rounded">
                     <!-- Search box -->
                     <div class="col-12 mb-3">
                         <div class="row">
                             <div class="col-md-6">
-                                <input type="text" id="achat-search-input" class="form-control" placeholder="Rechercher..." onkeyup="filterAndRenderAchats()">
+                                <input type="search" id="achat-search-input" class="form-control" placeholder="{% trans 'Produit, fournisseur, date' %}" oninput="filterAndRenderAchats()">
                             </div>
                         </div>
                     </div>
@@ -388,19 +487,14 @@
                     <div class="col-12 table-responsive">
                         <table id="tachat" class="table table-hover w-100" data-no-datatable="true">
                             <thead>
-                            <tr class="text-uppercase bg-light w-100">
-                                <th scope="col">{% trans "Id" %}</th>
+                            <tr>
                                 <th scope="col">{% trans "Date" %}</th>
-                                <th scope="col">{% trans "Unité" %}</th>
-                                <th scope="col">{% trans "Qté" %}</th>
-                                <th scope="col">{% trans "Pcs/Carton" %}</th>
-                                <th scope="col">{% trans "Qté totale (pcs)" %}</th>
-                                <th scope="col">{% trans "Fournisseur" %}</th>
                                 <th scope="col">{% trans "Produit" %}</th>
-                                <th scope="col">{% trans "Prix unit." %}</th>
-                                <th scope="col">{% trans "Total" %}</th>
-                                <th scope="col">{% trans "Supprimer" %}</th>
-                                <th scope="col">{% trans "Modifier" %}</th>
+                                <th scope="col">{% trans "Fournisseur" %}</th>
+                                <th scope="col" class="text-right">{% trans "Quantité" %}</th>
+                                <th scope="col" class="text-right">{% trans "Prix pièce" %}</th>
+                                <th scope="col" class="text-right">{% trans "Total" %}</th>
+                                <th scope="col"></th>
                             </tr>
                             </thead>
                             <tbody id="table-content">
@@ -820,6 +914,29 @@ function toggleAchatParCarton() {
     calculateAchatTotal();
 }
 
+// Sélecteur Pièce / Carton (remplace la liste déroulante, qui reste la source de vérité)
+document.addEventListener('click', function (e) {
+    const b = e.target.closest('#section-achat .pa-unites button');
+    if (!b) return;
+    const sel = document.getElementById('unite_achat');
+    if (sel.value !== b.dataset.u) { sel.value = b.dataset.u; toggleAchatParCarton(); }
+});
+function majRecapAchat() {
+    const sel = document.getElementById('unite_achat');
+    if (!sel) return;
+    document.querySelectorAll('#section-achat .pa-unites button').forEach(function (b) {
+        b.classList.toggle('pa-on', b.dataset.u === sel.value);
+    });
+    const carton = sel.value === 'carton';
+    const fmt = function (n) { return (Number(n) || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
+    const r = function (id, v) { const el = document.getElementById(id); if (el) el.textContent = v; };
+    const pieces = carton ? (Number(document.getElementById('quantite_pieces_display').value) || 0)
+                          : (Number(document.getElementById('quantite').value) || 0);
+    r('pa_r_unite', carton ? ('Carton × ' + (document.getElementById('pieces_par_carton').value || 1)) : 'Pièce');
+    r('pa_r_pieces', pieces.toLocaleString('fr-FR'));
+    r('pa_r_prix', fmt(document.getElementById('prix_achat').value));
+}
+
 // Fonction pour calculer le total
 function calculateAchatTotal() {
     const uniteAchat = document.getElementById('unite_achat').value;
@@ -854,5 +971,6 @@ function calculateAchatTotal() {
     // Calculer le total = quantité totale en pièces × prix par pièce
     const total = quantiteTotalePieces * prixPieceCalcule;
     document.getElementById('total_achat').value = total.toFixed(2);
+    majRecapAchat();
 }
 </script>

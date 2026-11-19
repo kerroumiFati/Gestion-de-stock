@@ -106,12 +106,12 @@ class Currency(models.Model):
         super().save(*args, **kwargs)
     
     @classmethod
-    def get_default(cls):
-        """Retourne la devise par défaut configurée dans les paramètres système.
-        Fallback: utilise is_default=True si SystemConfig n'a pas de devise configurée."""
+    def get_default(cls, company=None):
+        """Retourne la devise par défaut configurée dans les paramètres de l'entreprise.
+        Fallback: utilise is_default=True si aucune devise n'est configurée."""
         try:
             from .models import SystemConfig
-            config = SystemConfig.get_solo()
+            config = SystemConfig.get_solo(company)
             if config and config.default_currency:
                 return config.default_currency
         except Exception:
@@ -437,7 +437,7 @@ class Produit(models.Model):
     
     def get_price_in_currency(self, target_currency, date=None):
         """Obtenir le prix du produit dans une devise spécifique"""
-        product_currency = self.currency or Currency.get_default()
+        product_currency = self.currency or Currency.get_default(self.company)
         if not product_currency:
             return self.prixU
         
@@ -665,7 +665,7 @@ class PrixProduit(models.Model):
 
     def get_effective_currency(self):
         """Retourne la devise effective (propre ou héritée du produit)"""
-        return self.currency or self.produit.currency or Currency.get_default()
+        return self.currency or self.produit.currency or Currency.get_default(self.produit.company)
 
 
 class Client(models.Model):
@@ -1198,7 +1198,11 @@ class InventoryLine(models.Model):
 #      Ventes       #
 #####################
 class SystemConfig(models.Model):
-    """Configuration système (singleton) pour paramètres globaux"""
+    """Paramètres généraux : UNE configuration par entreprise (isolée des autres entreprises).
+    La ligne sans entreprise (company=None) sert aux comptes qui n'ont pas d'entreprise."""
+    company = models.OneToOneField(Company, on_delete=models.CASCADE, null=True, blank=True,
+                                   related_name='system_config',
+                                   help_text="Entreprise à laquelle appartiennent ces paramètres")
     default_warehouse = models.ForeignKey('Warehouse', on_delete=models.SET_NULL, null=True, blank=True,
                                           related_name='as_default_for')
     default_currency = models.ForeignKey('Currency', on_delete=models.SET_NULL, null=True, blank=True,
@@ -1230,32 +1234,63 @@ class SystemConfig(models.Model):
     ticket_company_phone = models.CharField(max_length=50, blank=True,
                                            help_text="Téléphone de l'entreprise")
 
-    def save(self, *args, **kwargs):
-        # enforce singleton id=1
-        self.pk = 1
-        super().save(*args, **kwargs)
+    def __str__(self):
+        return f"Paramètres - {self.company.name if self.company_id else 'sans entreprise'}"
 
     @classmethod
-    def get_solo(cls):
-        obj, _ = cls.objects.get_or_create(pk=1)
+    def get_solo(cls, company=None):
+        """Paramètres de l'entreprise donnée (créés au besoin, avec les valeurs par défaut).
+        Sans entreprise : la configuration « sans entreprise »."""
+        if company is not None:
+            obj, _ = cls.objects.get_or_create(company=company)
+            return obj
+        obj = cls.objects.filter(company__isnull=True).order_by('pk').first()
+        if obj is None:
+            obj = cls.objects.create(company=None)
         return obj
 
+    @staticmethod
+    def company_of_user(user):
+        """Entreprise d'un utilisateur : profil, sinon van du livreur (application mobile)."""
+        if user is None or not getattr(user, 'is_authenticated', False):
+            return None
+        company = getattr(getattr(user, 'profile', None), 'company', None)
+        if company:
+            return company
+        livreur = getattr(user, 'livreur_distribution_profile', None)
+        return getattr(getattr(livreur, 'entrepot', None), 'company', None)
+
     @classmethod
-    def ensure_default_warehouse(cls):
-        cfg = cls.get_solo()
-        if cfg.default_warehouse and cfg.default_warehouse.is_active:
-            return cfg.default_warehouse
-        # try to find any active warehouse
-        w = Warehouse.objects.filter(is_active=True).first()
+    def for_request(cls, request):
+        company = getattr(request, 'company', None) or cls.company_of_user(getattr(request, 'user', None))
+        return cls.get_solo(company)
+
+    @staticmethod
+    def warehouses_of(company):
+        """Entrepôts visibles par une entreprise : les siens + ceux sans entreprise (comme la liste des entrepôts)."""
+        qs = Warehouse.objects.all()
+        if company is not None:
+            return qs.filter(models.Q(company=company) | models.Q(company__isnull=True))
+        return qs.filter(company__isnull=True)
+
+    @classmethod
+    def ensure_default_warehouse(cls, company=None):
+        cfg = cls.get_solo(company)
+        visibles = cls.warehouses_of(company)
+        w = cfg.default_warehouse
+        if w and w.is_active and visibles.filter(pk=w.pk).exists():
+            return w
+        # Un entrepôt actif de l'entreprise (de préférence pas un van)
+        actifs = visibles.filter(is_active=True)
+        w = (actifs.filter(company=company).exclude(code__icontains='van').first() if company else None)             or actifs.exclude(code__icontains='van').first() or actifs.first()
         if not w:
-            # create a sensible default
             base_code = 'DEF'
             code = base_code
             i = 1
             while Warehouse.objects.filter(code=code).exists():
                 i += 1
                 code = f"{base_code}{i}"
-            w = Warehouse.objects.create(name='Entrepôt par défaut', code=code, is_active=True)
+            w = Warehouse.objects.create(name='Entrepôt par défaut', code=code, is_active=True, company=company)
         cfg.default_warehouse = w
         cfg.save(update_fields=['default_warehouse'])
         return w
@@ -1312,7 +1347,7 @@ class Vente(models.Model):
 
     def get_sale_currency(self):
         """Obtenir la devise de la vente ou la devise par défaut"""
-        return self.currency or Currency.get_default()
+        return self.currency or Currency.get_default(self.company)
 
     def recompute_totals(self):
         """Recalculer les totaux en tenant compte des conversions de devises"""

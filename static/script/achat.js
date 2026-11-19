@@ -218,6 +218,8 @@
       // Gérer unite_achat et champs liés
       const uniteAchat = achat.unite_achat || 'piece';
       $('#unite_achat').val(uniteAchat);
+      // Afficher les bons champs AVANT de les remplir (le changement d'unité vide les champs)
+      if(typeof toggleAchatParCarton === 'function') toggleAchatParCarton();
 
       if(uniteAchat === 'carton'){
         // Mode carton: calculer qte_carton à partir de la quantité totale
@@ -238,18 +240,21 @@
       if(achat.produit) $('#sproduit').val(achat.produit);
       if(achat.warehouse) $('#warehouse').val(achat.warehouse);
 
-      // Trigger toggle to show/hide appropriate fields
-      if(typeof toggleAchatParCarton === 'function') toggleAchatParCarton();
       // Recalculate totals
       if(typeof calculateAchatTotal === 'function') calculateAchatTotal();
     } catch(e) { dbg('enterEditMode error:', e); }
     $('#id').val(achat.id);
     $('#section-achat #btn').text('Mettre à jour').attr('data-mode','edit');
+    $('#tachat tr').removeClass('pa-edition');
+    $('#tachat [data-action="edit"][data-id="'+achat.id+'"]').closest('tr').addClass('pa-edition');
+    const el = document.getElementById('section-achat');
+    if(el && el.scrollIntoView) el.scrollIntoView({behavior:'smooth', block:'start'});
   }
 
   function resetEditMode(){
     $('#id').val('');
     $('#section-achat #btn').text('Ajouter').attr('data-mode','add');
+    $('#tachat tr').removeClass('pa-edition');
     // Reset carton mode fields
     $('#unite_achat').val('piece');
     $('#qte_carton').val('0');
@@ -261,7 +266,9 @@
 
   function renderAchats(list){
     dbg('renderAchats called with list:', list);
-    allAchats = list || [];
+    allAchats = (list || []).slice().sort(function(x, y){
+      return String(y.date_Achat || '').localeCompare(String(x.date_Achat || '')) || (Number(y.id) || 0) - (Number(x.id) || 0);
+    });
     dbg('Total achats:', allAchats.length);
     filterAndRenderAchats();
   }
@@ -304,51 +311,39 @@
 
     $tbody.empty();
     if(!list || !list.length){
-      $tbody.append('<tr><td colspan="12" class="text-center text-muted">Aucun achat</td></tr>');
+      $tbody.append('<tr><td colspan="7" class="text-center text-muted py-5"><i class="fas fa-inbox fa-2x d-block mb-2" style="opacity:.5"></i>Aucun achat</td></tr>');
       return;
     }
 
     dbg('renderAchatsTable: Rendering', list.length, 'rows');
+    const esc = function(t){ return String(t == null ? '' : t).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+    const fmt = function(n){ n = parseFloat(n); return (isNaN(n) ? 0 : n).toLocaleString('fr-FR', {minimumFractionDigits:2, maximumFractionDigits:2}); };
+    const editId = $('#section-achat #id').val();
     list.forEach(function(a){
       const tr = $('<tr>');
+      if(editId && String(editId) === String(a.id)) tr.addClass('pa-edition');
       const sym = a.currency_symbol || 'DA';
-
-      tr.append('<td>'+(a.id||'')+'</td>');
-      tr.append('<td>'+(a.date_Achat||'')+'</td>');
-
-      const uniteDisplay = a.unite_achat_display || (a.unite_achat === 'carton' ? 'Carton' : 'Pièce');
-      tr.append('<td>'+uniteDisplay+'</td>');
-
-      let qteDisplay = '';
-      if(a.unite_achat === 'carton'){
-        const nbCartons = a.pieces_par_carton > 0 ? Math.floor(a.quantite / a.pieces_par_carton) : 0;
-        qteDisplay = nbCartons + ' carton' + (nbCartons > 1 ? 's' : '');
-      } else {
-        qteDisplay = (a.quantite||0) + ' pcs';
+      const pieces = a.quantite_pieces || a.quantite || 0;
+      let qteSous = '';
+      if(a.unite_achat === 'carton' && a.pieces_par_carton > 0){
+        const nb = Math.floor(pieces / a.pieces_par_carton);
+        qteSous = nb + ' ct × ' + a.pieces_par_carton;
       }
-      tr.append('<td>'+qteDisplay+'</td>');
-
-      const pcsParCarton = a.unite_achat === 'carton' ? (a.pieces_par_carton||1) : '-';
-      tr.append('<td>'+pcsParCarton+'</td>');
-
-      const qteTotalePcs = a.quantite_pieces || a.quantite || 0;
-      tr.append('<td>'+qteTotalePcs+' pcs</td>');
-
+      let dateTxt = a.date_Achat || '';
+      const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateTxt);
+      if(m) dateTxt = m[3] + '/' + m[2] + '/' + m[1];
       var fournisseurTxt = (a.fournisseur_nom||'') + (a.fournisseur_prenom?(' '+a.fournisseur_prenom):'');
       if(!fournisseurTxt && a.fournisseur_libelle) fournisseurTxt = a.fournisseur_libelle;
-      tr.append('<td>'+ (fournisseurTxt || a.fournisseur || '') +'</td>');
 
-      var prodTxt = (a.produit_reference? (a.produit_reference+' - ') : '') + (a.produit_designation||'');
-      tr.append('<td>'+ (prodTxt || a.produit || '') +'</td>');
-
-      var prixUnitaire = parseFloat(a.prix_unitaire_piece || a.prix_achat || 0);
-      tr.append('<td>'+(isNaN(prixUnitaire) ? '0.00' : prixUnitaire.toFixed(2))+' '+sym+'</td>');
-
-      var total = parseFloat(a.total_achat != null ? a.total_achat : 0);
-      tr.append('<td>'+(isNaN(total) ? '0.00' : total.toFixed(2))+' '+sym+'</td>');
-
-      tr.append('<td><button class="btn btn-sm btn-outline-danger" data-action="delete" data-id="'+a.id+'">Supprimer</button></td>');
-      tr.append('<td><button class="btn btn-sm btn-outline-primary" data-action="edit" data-id="'+a.id+'">Modifier</button></td>');
+      tr.append('<td style="white-space:nowrap">'+esc(dateTxt)+'<div class="pa-sous">#'+esc(a.id)+'</div></td>');
+      tr.append('<td><div class="pa-nom">'+esc(a.produit_designation || a.produit || '')+'</div><div class="pa-sous">'+esc(a.produit_reference || '')+'</div></td>');
+      tr.append('<td>'+esc(fournisseurTxt || a.fournisseur || '')+'</td>');
+      tr.append('<td class="text-right"><b>'+Number(pieces).toLocaleString('fr-FR')+'</b>'+(qteSous ? '<div class="pa-sous">'+esc(qteSous)+'</div>' : '')+'</td>');
+      tr.append('<td class="text-right">'+fmt(a.prix_unitaire_piece || a.prix_achat)+' <span class="pa-sous">'+esc(sym)+'</span></td>');
+      tr.append('<td class="text-right"><b>'+fmt(a.total_achat)+'</b> <span class="pa-sous">'+esc(sym)+'</span></td>');
+      tr.append('<td class="text-right" style="white-space:nowrap">'+
+        '<button class="btn btn-outline-primary pa-act mr-1" data-action="edit" data-id="'+esc(a.id)+'" title="Modifier" aria-label="Modifier"><i class="fas fa-pen"></i></button>'+
+        '<button class="btn btn-outline-danger pa-act" data-action="delete" data-id="'+esc(a.id)+'" title="Supprimer" aria-label="Supprimer"><i class="fas fa-trash-alt"></i></button></td>');
       $tbody.append(tr);
     });
   }

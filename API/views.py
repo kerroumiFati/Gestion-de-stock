@@ -1194,7 +1194,7 @@ class BonLivraisonViewSet(TenantFilterMixin, viewsets.ModelViewSet):
         from django.http import HttpResponse
 
         bl  = self.get_object()
-        cfg = SystemConfig.get_solo()
+        cfg = SystemConfig.get_solo(bl.company)
         company = bl.company
         client  = bl.client
 
@@ -1523,7 +1523,7 @@ class FactureViewSet(TenantFilterMixin, viewsets.ModelViewSet):
         from django.http import HttpResponse
 
         f = self.get_object()
-        cfg = SystemConfig.get_solo()
+        cfg = SystemConfig.get_solo(f.company)
         company  = f.company
         client   = f.client
         bl       = f.bon_livraison
@@ -2868,7 +2868,7 @@ class CountViewSet(APIView):
             ).count()
 
             # Récupérer la devise par défaut
-            default_currency = Currency.get_default()
+            default_currency = Currency.get_default(SystemConfig.company_of_user(request.user))
             currency_symbol = default_currency.symbol if default_currency else ''
 
             content = {
@@ -3047,7 +3047,7 @@ class StatisticsChartsViewSet(APIView):
             )
 
             # Récupérer la devise par défaut
-            default_currency = Currency.get_default()
+            default_currency = Currency.get_default(SystemConfig.company_of_user(request.user))
             currency_symbol = default_currency.symbol if default_currency else ''
 
             return Response({
@@ -3613,7 +3613,7 @@ class VenteViewSet(TenantFilterMixin, viewsets.ModelViewSet):
         import html as _html
 
         vente = self.get_object()
-        cfg   = SystemConfig.get_solo()
+        cfg   = SystemConfig.get_solo(vente.company)
         company = vente.company
         client  = vente.client
         bl      = vente.bon_livraison
@@ -3835,12 +3835,13 @@ class VenteViewSet(TenantFilterMixin, viewsets.ModelViewSet):
         from datetime import datetime
 
         vente = self.get_object()
-        cfg = SystemConfig.get_solo()
+        cfg = SystemConfig.get_solo(vente.company)
+        co = vente.company
 
-        # Informations de l'entreprise depuis la config
-        company_name = cfg.ticket_company_name or "Votre Entreprise"
-        company_address = cfg.ticket_company_address or ""
-        company_phone = cfg.ticket_company_phone or ""
+        # Informations de l'entreprise : paramètres « ticket », sinon la fiche de l'entreprise
+        company_name = cfg.ticket_company_name or (co.name if co else '') or "Votre Entreprise"
+        company_address = cfg.ticket_company_address or (getattr(co, 'adresse', '') if co else '') or ""
+        company_phone = cfg.ticket_company_phone or (getattr(co, 'telephone', '') if co else '') or ""
         footer_message = cfg.ticket_footer_message or "Merci de votre visite !"
 
         # Devise
@@ -4032,7 +4033,7 @@ class WarehouseViewSet(TenantFilterMixin, viewsets.ModelViewSet):
 
 class ProductStockViewSet(WarehouseRelatedTenantMixin, viewsets.ModelViewSet):
     # Les produits supprimés (désactivés) n'apparaissent plus dans les stocks
-    queryset = ProductStock.objects.select_related('produit','warehouse').filter(produit__is_active=True)
+    queryset = ProductStock.objects.select_related('produit','warehouse').prefetch_related('produit__conditionnements').filter(produit__is_active=True)
     serializer_class = ProductStockSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend]
@@ -4062,6 +4063,64 @@ class ProductStockViewSet(WarehouseRelatedTenantMixin, viewsets.ModelViewSet):
         produit_id = instance.produit_id
         super().perform_destroy(instance)
         self._recompute_product_total(produit_id)
+
+    MOTIFS_CORRECTION = {
+        'INV': 'Inventaire (comptage)',
+        'CASSE': 'Casse',
+        'PERTE': 'Perte / vol',
+        'CORR': 'Erreur de saisie',
+        'AUTRE': 'Autre',
+    }
+
+    @action(detail=False, methods=['post'], url_path='corriger')
+    def corriger(self, request):
+        """Corriger la quantité d'un produit dans un entrepôt, AVEC un motif et une trace
+        (mouvement de stock + journal d'audit). Avant, la quantité était remplacée sans trace.
+
+        POST /API/stocks/corriger/
+        { "produit": 12, "warehouse": 5, "nouvelle_quantite": 172, "motif": "CASSE", "note": "..." }
+        """
+        d = request.data
+        motif = str(d.get('motif') or '').upper()
+        if motif not in self.MOTIFS_CORRECTION:
+            return Response({'detail': 'Choisissez le motif de la correction.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            nouvelle = int(str(d.get('nouvelle_quantite')).strip())
+        except (TypeError, ValueError):
+            return Response({'detail': 'La nouvelle quantité doit être un nombre entier.'}, status=status.HTTP_400_BAD_REQUEST)
+        if nouvelle < 0:
+            return Response({'detail': 'La quantité ne peut pas être négative.'}, status=status.HTTP_400_BAD_REQUEST)
+        produit = Produit.objects.filter(pk=d.get('produit'), is_active=True).first()
+        warehouse = Warehouse.objects.filter(pk=d.get('warehouse')).first()
+        if not produit or not warehouse:
+            return Response({'detail': 'Produit ou entrepôt introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+        note = str(d.get('note') or '').strip()[:200]
+        with transaction.atomic():
+            ps, _ = ProductStock.objects.select_for_update().get_or_create(
+                produit=produit, warehouse=warehouse, defaults={'quantity': 0})
+            avant = ps.quantity or 0
+            delta = nouvelle - avant
+            if delta == 0:
+                return Response({'detail': 'La quantité est déjà celle-ci : rien à corriger.', 'avant': avant,
+                                 'apres': nouvelle, 'delta': 0})
+            ps.quantity = nouvelle
+            ps.save(update_fields=['quantity'])
+            StockMove.objects.create(
+                produit=produit, warehouse=warehouse, delta=delta,
+                source=motif if motif != 'AUTRE' else 'AUTRE', ref_id=f'CORR-{ps.pk}',
+                note=(f"Correction ({self.MOTIFS_CORRECTION[motif]}) par {request.user.username} : {avant} → {nouvelle}"
+                      + (f" — {note}" if note else ''))[:200])
+            self._recompute_product_total(produit.pk)
+        try:
+            from API.audit import log_event
+            log_event(request, 'stock.correction', target=ps,
+                      metadata={'produit': produit.pk, 'warehouse': warehouse.pk, 'avant': avant,
+                                'apres': nouvelle, 'motif': motif, 'note': note})
+        except Exception:
+            pass
+        return Response({'avant': avant, 'apres': nouvelle, 'delta': delta,
+                         'motif': self.MOTIFS_CORRECTION[motif], 'produit': produit.designation,
+                         'entrepot': f'{warehouse.code} - {warehouse.name}'}, status=status.HTTP_201_CREATED)
 
 class LigneVenteViewSet(viewsets.ModelViewSet):
     queryset = LigneVente.objects.all()
@@ -4148,15 +4207,7 @@ class SystemConfigView(APIView):
     def _company_utilisateur(request):
         """Entreprise de l'utilisateur. Avec le JWT de l'appli mobile, le middleware ne remplit pas
         request.company : on passe par le profil, puis par le van du livreur."""
-        company = getattr(request, 'company', None)
-        if company:
-            return company
-        user = request.user
-        company = getattr(getattr(user, 'profile', None), 'company', None)
-        if company:
-            return company
-        livreur = getattr(user, 'livreur_distribution_profile', None)
-        return getattr(getattr(livreur, 'entrepot', None), 'company', None)
+        return getattr(request, 'company', None) or SystemConfig.company_of_user(request.user)
 
     @staticmethod
     def _entreprise(cfg, company):
@@ -4171,10 +4222,11 @@ class SystemConfigView(APIView):
     def get(self, request):
         """Get system configuration"""
         try:
-            cfg = SystemConfig.get_solo()
+            company = self._company_utilisateur(request)
+            cfg = SystemConfig.get_solo(company)
             if not cfg.default_warehouse:
                 try:
-                    cfg.default_warehouse = SystemConfig.ensure_default_warehouse()
+                    cfg.default_warehouse = SystemConfig.ensure_default_warehouse(company)
                 except Exception as e:
                     logger.warning(f"Could not ensure default warehouse: {e}")
 
@@ -4201,7 +4253,7 @@ class SystemConfigView(APIView):
                 'ticket_company_phone': cfg.ticket_company_phone or '',
                 # Coordonnées imprimées sur les documents (mêmes règles que les BL/factures web) :
                 # paramètres « ticket » d'abord, sinon la fiche de l'entreprise de l'utilisateur.
-                'entreprise': self._entreprise(cfg, self._company_utilisateur(request)),
+                'entreprise': self._entreprise(cfg, company),
             })
         except Exception as e:
             logger.exception("Error in SystemConfigView.get")
@@ -4210,7 +4262,10 @@ class SystemConfigView(APIView):
     def put(self, request):
         """Update system configuration"""
         try:
-            cfg = SystemConfig.get_solo()
+            company = self._company_utilisateur(request)
+            cfg = SystemConfig.get_solo(company)
+            # Seuls les entrepôts de l'entreprise (ou sans entreprise) peuvent être choisis
+            entrepots_visibles = SystemConfig.warehouses_of(company)
             wid = request.data.get('default_warehouse')
 
             # Absent de la requête (ex. bouton « Enregistrer » de l'onglet Caisse) : on n'y touche pas.
@@ -4219,7 +4274,7 @@ class SystemConfigView(APIView):
                 pass
             elif wid:
                 try:
-                    w = Warehouse.objects.get(pk=int(wid))
+                    w = entrepots_visibles.get(pk=int(wid))
                     if not w.is_active:
                         return Response({
                             'error': 'Cet entrepôt est inactif. Veuillez en sélectionner un autre.'
@@ -4241,7 +4296,7 @@ class SystemConfigView(APIView):
                 did = request.data.get('depot_commandes_mobile')
                 if did:
                     try:
-                        dw = Warehouse.objects.get(pk=int(did))
+                        dw = entrepots_visibles.get(pk=int(did))
                     except (Warehouse.DoesNotExist, ValueError, TypeError):
                         return Response({'error': f'Dépôt #{did} introuvable'}, status=404)
                     if not dw.is_active:
@@ -4339,7 +4394,7 @@ class CurrencyViewSet(viewsets.ModelViewSet):
     @action(detail=False)
     def default(self, request):
         """Obtenir la devise par défaut"""
-        default_currency = Currency.get_default()
+        default_currency = SystemConfig.for_request(request).default_currency or Currency.get_default()
         if default_currency:
             serializer = self.get_serializer(default_currency)
             return Response(serializer.data)

@@ -401,6 +401,12 @@
   function bind(){
     const ns = '.clientPage';
     $(document).off(ns);
+    // Anciens gestionnaires d'une version précédente de la page encore en mémoire
+    $(document)
+      .off('click', '#btnClient')
+      .off('click', '#table-content .btn-delete')
+      .off('click', '#table-content .btn-edit')
+      .off('click', '#table-content .btn-historique');
     $(document)
       .on('click' + ns, '#btnNouveauClient, .cp-open-new', () => openForm(null))
       .on('click' + ns, '#btnCancelForm', closeForm)

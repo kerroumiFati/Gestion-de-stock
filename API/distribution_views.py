@@ -2269,7 +2269,9 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
                                 status=status.HTTP_400_BAD_REQUEST)
         else:
             entrepot_source = None
-            depot_cfg = SystemConfig.get_solo().depot_commandes_mobile
+            # Paramètres de l'entreprise de la commande (chaque entreprise a les siens)
+            cfg_company = commande.company or getattr(commande.client, 'company', None)
+            depot_cfg = SystemConfig.get_solo(cfg_company).depot_commandes_mobile if cfg_company else None
             if depot_cfg and depot_cfg.is_active and 'van' not in (depot_cfg.code or '').lower():
                 entrepot_source = depot_cfg
                 print(f"[AFFECTER LIVREUR] Dépôt par défaut (paramètres): {entrepot_source.name}")

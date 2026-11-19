@@ -20,7 +20,8 @@ class UserLanguageMiddleware(MiddlewareMixin):
         if request.user.is_authenticated:
             try:
                 from API.models import SystemConfig
-                config = SystemConfig.get_solo()
+                # Langue choisie par l'entreprise de l'utilisateur
+                config = SystemConfig.for_request(request)
 
                 logger.info(f"UserLanguageMiddleware: User {request.user.username} authenticated")
                 logger.info(f"UserLanguageMiddleware: Config exists: {config is not None}")

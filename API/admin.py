@@ -62,8 +62,9 @@ class UserProfileAdmin(admin.ModelAdmin):
 
 @admin.register(SystemConfig)
 class SystemConfigAdmin(admin.ModelAdmin):
-    list_display = ['default_warehouse']
-    fields = ['default_warehouse']
+    list_display = ['__str__', 'company', 'default_warehouse', 'depot_commandes_mobile', 'language']
+    list_filter = ['company']
+    fields = ['company', 'default_warehouse', 'depot_commandes_mobile', 'language']
     help_texts = {
         'default_warehouse': 'Entrepôt par défaut utilisé pour les ventes si aucun n\'est spécifié'
     }

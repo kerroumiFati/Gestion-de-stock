@@ -592,10 +592,19 @@ class ProductStockSerializer(serializers.ModelSerializer):
     produit_designation = serializers.CharField(source='produit.designation', read_only=True)
     warehouse_code = serializers.CharField(source='warehouse.code', read_only=True)
     warehouse_name = serializers.CharField(source='warehouse.name', read_only=True)
+    # Pour l'onglet « Stock par entrepôt » : valeur, état du stock et Colisage
+    prix_unitaire = serializers.DecimalField(source='produit.prixU', max_digits=12, decimal_places=2, read_only=True)
+    seuil_alerte = serializers.IntegerField(source='produit.seuil_alerte', read_only=True)
+    seuil_critique = serializers.IntegerField(source='produit.seuil_critique', read_only=True)
+    unites_par_carton = serializers.SerializerMethodField()
+
+    def get_unites_par_carton(self, obj):
+        return obj.produit.get_unites_par_carton()
 
     class Meta:
         model = ProductStock
-        fields = ('id', 'produit', 'produit_reference', 'produit_designation', 'warehouse', 'warehouse_code', 'warehouse_name', 'quantity')
+        fields = ('id', 'produit', 'produit_reference', 'produit_designation', 'warehouse', 'warehouse_code',
+                  'warehouse_name', 'quantity', 'prix_unitaire', 'seuil_alerte', 'seuil_critique', 'unites_par_carton')
 
 class StockMoveSerializer(serializers.ModelSerializer):
     produit_reference = serializers.CharField(source='produit.reference', read_only=True)
@@ -832,14 +841,17 @@ class VenteCreateSerializer(serializers.ModelSerializer):
 
         # Exiger un entrepôt: utiliser par défaut si non fourni
         from .models import SystemConfig, Warehouse, ProductStock
+        req = self.context.get('request')
+        cfg_company = validated_data.get('company') or (
+            (getattr(req, 'company', None) or SystemConfig.company_of_user(getattr(req, 'user', None))) if req else None)
         wh = validated_data.get('warehouse')
         if not wh or (hasattr(wh, 'is_active') and not wh.is_active):
-            wh = SystemConfig.ensure_default_warehouse()
+            wh = SystemConfig.ensure_default_warehouse(cfg_company)
             validated_data['warehouse'] = wh
 
         # Définir la devise par défaut si pas spécifiée
         if not validated_data.get('currency'):
-            validated_data['currency'] = Currency.get_default()
+            validated_data['currency'] = Currency.get_default(cfg_company)
 
         # Définir le statut par défaut à 'draft' si pas spécifié
         if 'statut' not in validated_data:

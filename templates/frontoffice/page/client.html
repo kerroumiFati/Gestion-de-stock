@@ -1,16 +1,20 @@
 {% load static %}
 {% load i18n %}
 <script>
-// Charge client.js une seule fois ; ensuite on relance simplement l'initialisation
-if (!window.__client_script_loaded__) {
-    window.__client_script_loaded__ = true;
-    var script = document.createElement('script');
-    script.src = "{% static 'script/client.js' %}";
-    script.type = 'text/javascript';
-    document.head.appendChild(script);
-} else if (window.ClientPage) {
-    window.ClientPage.init();
-}
+// Charge client.js une fois par version : après une mise à jour du serveur, l'onglet déjà ouvert
+// (navigation sans rechargement) récupère la nouvelle version au lieu de garder l'ancienne en mémoire.
+(function () {
+    var src = "{% static 'script/client.js' %}";
+    if (window.__client_script_src__ !== src || !window.ClientPage) {
+        window.__client_script_src__ = src;
+        var script = document.createElement('script');
+        script.src = src + (src.indexOf('?') < 0 ? '?' : '&') + 't=' + Date.now();
+        script.type = 'text/javascript';
+        document.head.appendChild(script);
+    } else {
+        window.ClientPage.init();
+    }
+})();
 </script>
 
 <style>
