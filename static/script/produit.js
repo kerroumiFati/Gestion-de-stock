@@ -931,6 +931,23 @@
       e.preventDefault();
       editPrixProduit($(this).data('id'));
     });
+    $(document).off('click', '#prix_prod_adv_toggle').on('click', '#prix_prod_adv_toggle', function(e){
+      e.preventDefault();
+      togglePrixAvance();
+    });
+    $(document).off('change', '#prix_prod_produit').on('change', '#prix_prod_produit', function(){
+      $('#customSelectProduit').removeClass('pp-invalid');
+      afficherPrixDeBase();
+    });
+    $(document).off('change', '#prix_prod_type').on('change', '#prix_prod_type', function(){
+      $('#customSelectTypePrix').removeClass('pp-invalid');
+    });
+    $(document).off('input', '#prix_prod_prix').on('input', '#prix_prod_prix', function(){
+      $(this).removeClass('pp-invalid');
+    });
+    $(document).off('keydown', '#prix_prod_prix').on('keydown', '#prix_prod_prix', function(e){
+      if(e.key === 'Enter'){ e.preventDefault(); addPrixProduit(); }
+    });
     $(document).off('change', '#prix_prod_filter').on('change', '#prix_prod_filter', function(){
       loadPrixProduits();
     });
@@ -1021,7 +1038,7 @@
       tr.append('<td><span class="badge badge-primary">'+(c.nombre_tournees || 0)+'</span></td>');
       const actions = '<button type="button" class="btn btn-sm btn-edit" data-action="toggle-default-code" data-id="'+c.id+'">Définir par défaut</button> ' +
                      '<button type="button" class="btn btn-sm btn-delete" data-action="delete-code-prix" data-id="'+c.id+'">Supprimer</button>';
-      tr.append('<td>'+actions+'</td>');
+      tr.append('<td class="text-nowrap">'+actions+'</td>');
       $tbody.append(tr);
     });
   }
@@ -1180,7 +1197,7 @@
       tr.append('<td><span class="badge badge-primary">'+(t.nombre_prix || 0)+'</span></td>');
       const actions = '<button type="button" class="btn btn-sm btn-edit" data-action="toggle-default" data-id="'+t.id+'">Définir par défaut</button> ' +
                      '<button type="button" class="btn btn-sm btn-delete" data-action="delete-type-prix" data-id="'+t.id+'">Supprimer</button>';
-      tr.append('<td>'+actions+'</td>');
+      tr.append('<td class="text-nowrap">'+actions+'</td>');
       $tbody.append(tr);
     });
   }
@@ -1320,25 +1337,27 @@
     if(!$tbody.length) return;
     $tbody.empty();
     if(!list || !list.length){
-      $tbody.append('<tr><td colspan="7" class="text-center text-muted">Aucun prix défini</td></tr>');
+      $tbody.append('<tr><td colspan="7" class="text-center text-muted py-4">Aucun prix enregistré pour le moment. Utilisez le formulaire ci-dessus pour en ajouter un.</td></tr>');
       return;
     }
+    if(list[0] && list[0].currency_symbol) $('#prix_prod_devise').text(list[0].currency_symbol);
     list.forEach(function(p){
-      const tr = $('<tr>');
-      tr.append('<td><code>'+p.produit_reference+'</code> - '+p.produit_designation+'</td>');
+      const tr = $('<tr>').attr('data-prix-id', p.id);
+      if(String(p.id) === String(__editingPrixProduitId)) tr.addClass('pp-row-editing');
+      tr.append($('<td>').append($('<code>').text(p.produit_reference || ''), document.createTextNode(' - ' + (p.produit_designation || ''))));
+      // Type de prix (Détail, Supérette, Gros)
+      tr.append($('<td>').append($('<strong>').text(p.type_prix_libelle || '')));
+      // Prix avec symbole de devise
+      tr.append('<td class="text-right text-nowrap"><strong>'+p.prix+'</strong> '+(p.currency_symbol || 'DA')+'</td>');
+      tr.append('<td class="text-center text-nowrap">'+(p.quantite_min > 1 ? p.quantite_min + ' unités' : '1 unité')+'</td>');
       // Code de prix (peut être null = Standard)
       const codePrixLabel = p.code_prix_libelle ? '<span class="badge badge-info">'+p.code_prix_code+'</span>' : '<span class="badge badge-secondary">Standard</span>';
       tr.append('<td>'+codePrixLabel+'</td>');
-      // Type de prix (Détail, Supérette, Gros)
-      tr.append('<td><strong>'+p.type_prix_libelle+'</strong></td>');
-      // Prix avec symbole de devise
-      tr.append('<td class="text-right"><strong>'+p.prix+'</strong> '+(p.currency_symbol || 'DA')+'</td>');
-      tr.append('<td class="text-center">'+p.quantite_min+'</td>');
       const statusBadge = p.is_active ? '<span class="badge badge-success">Actif</span>' : '<span class="badge badge-warning">Inactif</span>';
       tr.append('<td>'+statusBadge+'</td>');
       const actions = '<button type="button" class="btn btn-sm btn-edit mr-1" data-action="edit-prix-prod" data-id="'+p.id+'"><i class="fas fa-edit"></i> Modifier</button>' +
                      '<button type="button" class="btn btn-sm btn-delete" data-action="delete-prix-prod" data-id="'+p.id+'"><i class="fas fa-trash"></i> Supprimer</button>';
-      tr.append('<td>'+actions+'</td>');
+      tr.append('<td class="text-nowrap">'+actions+'</td>');
       $tbody.append(tr);
     });
   }
@@ -1382,9 +1401,10 @@
 
     console.log('[PrixProduit] Valeurs:', { produitVal, produit, code_prix_val, code_prix, typePrixVal, type_prix, prix, quantite_min, date_debut, date_fin });
 
-    if(!produit){ alert('Veuillez sélectionner un produit'); return; }
-    if(!type_prix){ alert('Veuillez sélectionner un type de prix'); return; }
-    if(!prix || prix <= 0){ alert('Prix invalide'); return; }
+    $('#prix-produits .pp-invalid').removeClass('pp-invalid');
+    if(!produit){ $('#customSelectProduit').addClass('pp-invalid'); showAlert('Étape 1 : choisissez le produit', 'warning'); return; }
+    if(!type_prix){ $('#customSelectTypePrix').addClass('pp-invalid'); showAlert('Étape 2 : choisissez le type de client', 'warning'); return; }
+    if(!prix || prix <= 0){ $('#prix_prod_prix').addClass('pp-invalid').focus(); showAlert('Étape 3 : tapez un prix supérieur à 0', 'warning'); return; }
 
     const data = { produit, code_prix, type_prix, prix, quantite_min, date_debut, date_fin };
     console.log('[PrixProduit] Data envoyée:', data);
@@ -1451,10 +1471,35 @@
       triggerType.classList.add('placeholder');
     }
 
-    // Changer le bouton en mode "Ajouter"
-    $('#btn_add_prix_prod').html('<i class="fa fa-plus"></i> Ajouter');
-    // Masquer le bouton Annuler
+    // Revenir en mode "Ajouter"
+    $('#btn_add_prix_prod').html('<i class="fa fa-save"></i> Enregistrer le prix');
     $('#btn_cancel_prix_prod').hide();
+    $('#prix_prod_form_card').removeClass('pp-editing');
+    $('#prix_prod_form_title').html('<i class="fa fa-plus-circle"></i> <span>Ajouter un nouveau prix</span>');
+    $('#prix-produits .pp-invalid').removeClass('pp-invalid');
+    $('#prix_produits_body tr.pp-row-editing').removeClass('pp-row-editing');
+    $('#prix_prod_base_hint').hide().text('');
+    togglePrixAvance(false);
+  }
+
+  function togglePrixAvance(ouvrir){
+    const $zone = $('#prix_prod_advanced');
+    if(!$zone.length) return;
+    const ouvert = (typeof ouvrir === 'boolean') ? ouvrir : !$zone.is(':visible');
+    $zone.toggle(ouvert);
+    $('#prix_prod_adv_toggle').attr('aria-expanded', ouvert ? 'true' : 'false')
+      .find('i').attr('class', ouvert ? 'fa fa-chevron-down' : 'fa fa-chevron-right');
+  }
+
+  function afficherPrixDeBase(){
+    const id = $('#prix_prod_produit').val();
+    const $hint = $('#prix_prod_base_hint');
+    const prod = id ? (__cacheProduits || []).find(function(x){ return String(x.id) === String(id); }) : null;
+    if(prod && prod.prixU != null && prod.prixU !== ''){
+      $hint.text('Prix de vente normal de ce produit : ' + Number(prod.prixU).toFixed(2) + ' ' + $('#prix_prod_devise').text()).show();
+    } else {
+      $hint.hide().text('');
+    }
   }
 
   function editPrixProduit(id){
@@ -1491,17 +1536,24 @@
           selectCustomOption('customSelectTypePrix', p.type_prix, typeLabel, 'prix_prod_type');
         }
 
-        // Changer le bouton en mode "Modifier"
-        $('#btn_add_prix_prod').html('<i class="fa fa-save"></i> Modifier');
-        // Afficher le bouton Annuler
+        // Mode "Modifier" bien visible : cadre orange, titre explicite, ligne surlignée
+        $('#btn_add_prix_prod').html('<i class="fa fa-save"></i> Enregistrer les modifications');
         $('#btn_cancel_prix_prod').show();
+        $('#prix_prod_form_card').addClass('pp-editing');
+        $('#prix_prod_form_title').empty().append('<i class="fa fa-edit"></i> ',
+          $('<span>').text('Modifier le prix : ' + (p.produit_designation || '') + ' – ' + (p.type_prix_libelle || '')));
+        $('#prix-produits .pp-invalid').removeClass('pp-invalid');
+        $('#prix_produits_body tr.pp-row-editing').removeClass('pp-row-editing');
+        $('#prix_produits_body tr[data-prix-id="' + id + '"]').addClass('pp-row-editing');
+        togglePrixAvance(!!(p.code_prix || (p.quantite_min && p.quantite_min > 1) || p.date_debut || p.date_fin));
+        afficherPrixDeBase();
 
-        // Scroll vers le formulaire
+        // Scroll vers le formulaire puis curseur dans le prix
         $('html, body').animate({
-          scrollTop: $('#prix-produits').offset().top - 100
-        }, 500);
+          scrollTop: $('#prix_prod_form_card').offset().top - 100
+        }, 400, function(){ $('#prix_prod_prix').trigger('focus').trigger('select'); });
 
-        showAlert('Mode édition activé. Modifiez les champs et cliquez sur "Modifier"', 'info');
+        showAlert('Modifiez le prix dans le cadre orange, puis cliquez sur « Enregistrer les modifications »', 'info');
       })
       .fail(function(xhr){
         console.error('[PrixProduit] Erreur chargement:', xhr);

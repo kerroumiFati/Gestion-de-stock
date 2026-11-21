@@ -963,118 +963,164 @@ input[type="number"].form-control-product::-webkit-outer-spin-button {
                     </div>
                 </div>
 
-                <!-- Onglet Prix Produits -->
+                <!-- Onglet Prix Produits (simplifié pour les débutants : 3 étapes) -->
                 <div class="tab-pane fade" id="prix-produits" role="tabpanel">
-                    <div class="alert alert-info">
-                        <i class="fa fa-info-circle"></i> <strong>{% trans "Prix multiples" %} :</strong> {% trans "Définissez plusieurs prix pour un même produit selon le type de client ou la quantité" %}
+                    <style>
+                        #prix-produits .pp-steps { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:16px; }
+                        #prix-produits .pp-step-hint { flex:1 1 200px; display:flex; align-items:center; gap:10px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:10px; padding:10px 12px; color:#1e3a8a; font-size:14px; }
+                        #prix-produits .pp-num { flex:0 0 28px; height:28px; border-radius:50%; background:#2563eb; color:#fff; font-weight:700; display:flex; align-items:center; justify-content:center; font-size:14px; }
+                        #prix-produits .pp-card { border:2px solid #e5e7eb; border-radius:12px; padding:18px; margin-bottom:22px; background:#fff; transition:border-color .2s, background .2s; }
+                        #prix-produits .pp-card.pp-editing { border-color:#f59e0b; background:#fffbeb; }
+                        #prix-produits .pp-card-title { font-size:18px; font-weight:700; margin-bottom:14px; color:#111827; display:flex; align-items:center; gap:8px; }
+                        #prix-produits .pp-card.pp-editing .pp-card-title { color:#b45309; }
+                        #prix-produits .pp-label { font-weight:600; font-size:15px; color:#111827; margin-bottom:6px; display:flex; align-items:center; gap:8px; }
+                        #prix-produits .pp-label .pp-num { flex-basis:24px; height:24px; font-size:13px; }
+                        #prix-produits .pp-help { display:block; color:#6b7280; font-size:13px; margin-top:5px; }
+                        #prix-produits .pp-base { display:none; margin-top:6px; font-size:13px; color:#065f46; background:#ecfdf5; border-radius:6px; padding:4px 8px; }
+                        #prix-produits .pp-price-group .form-control { font-size:18px; font-weight:700; height:44px; }
+                        #prix-produits .pp-price-group .input-group-text { font-weight:700; background:#f3f4f6; }
+                        #prix-produits .custom-select-trigger { min-height:44px; }
+                        #prix-produits .custom-select-trigger .selected-text { white-space:normal; overflow:visible; text-overflow:clip; }
+                        #prix-produits .pp-invalid .custom-select-trigger, #prix-produits input.pp-invalid { border-color:#dc2626 !important; box-shadow:0 0 0 3px rgba(220,38,38,.15); }
+                        #prix-produits .pp-advanced-toggle { background:none; border:none; color:#2563eb; font-weight:600; padding:0; margin:6px 0 10px; cursor:pointer; }
+                        #prix-produits .pp-advanced { background:#f9fafb; border:1px dashed #d1d5db; border-radius:10px; padding:14px; margin-bottom:12px; }
+                        #prix-produits .pp-actions { display:flex; justify-content:flex-end; gap:10px; flex-wrap:wrap; border-top:1px solid #e5e7eb; padding-top:14px; }
+                        #prix-produits .pp-actions .btn { min-height:46px; font-size:16px; font-weight:600; padding:0 22px; }
+                        #prix-produits #prix_produits_body tr.pp-row-editing { background:#fef3c7 !important; }
+                        #prix-produits #prix_produits_body td:nth-child(3), #prix-produits #prix_produits_body td:nth-child(4) { white-space:nowrap; }
+                        #prix-produits #prix_produits_body td:last-child { white-space:nowrap; }
+                        #prix-produits #prix_produits_body td:last-child .btn { display:inline-block; }
+                        #prix-produits .pp-list-title { font-size:17px; font-weight:700; margin:4px 0 12px; }
+                    </style>
+
+                    <!-- Mode d'emploi en 3 étapes -->
+                    <div class="pp-steps">
+                        <div class="pp-step-hint"><span class="pp-num">1</span> {% trans "Choisissez le produit" %}</div>
+                        <div class="pp-step-hint"><span class="pp-num">2</span> {% trans "Choisissez le type de client (Détail, Gros…)" %}</div>
+                        <div class="pp-step-hint"><span class="pp-num">3</span> {% trans "Tapez le prix puis cliquez sur « Enregistrer »" %}</div>
                     </div>
 
-                    <!-- Formulaire d'ajout de prix produit -->
-                    <div class="row mb-3">
-                        <div class="col-md-2">
-                            <label class="form-label-product">{% trans "Produit" %} *</label>
-                            <!-- Custom Select pour Produit -->
-                            <div class="custom-select-container" id="customSelectProduit">
-                                <div class="custom-select-trigger" onclick="toggleCustomSelect('customSelectProduit')">
-                                    <span class="selected-text placeholder">{% trans "Sélectionner un produit" %}</span>
-                                    <i class="fas fa-chevron-down arrow"></i>
-                                </div>
-                                <div class="custom-select-dropdown">
-                                    <div class="custom-select-search">
-                                        <input type="text" placeholder="{% trans 'Rechercher...' %}" oninput="filterCustomSelectOptions('customSelectProduit', this.value)">
+                    <!-- Formulaire -->
+                    <div class="pp-card" id="prix_prod_form_card">
+                        <div class="pp-card-title" id="prix_prod_form_title">
+                            <i class="fa fa-plus-circle"></i> <span>{% trans "Ajouter un nouveau prix" %}</span>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-lg-5 col-md-12 mb-3">
+                                <label class="pp-label"><span class="pp-num">1</span> {% trans "Produit" %}</label>
+                                <div class="custom-select-container" id="customSelectProduit">
+                                    <div class="custom-select-trigger" onclick="toggleCustomSelect('customSelectProduit')">
+                                        <span class="selected-text placeholder">{% trans "Sélectionner un produit" %}</span>
+                                        <i class="fas fa-chevron-down arrow"></i>
                                     </div>
-                                    <div class="custom-select-options">
-                                        <!-- Options seront ajoutées via JS -->
+                                    <div class="custom-select-dropdown">
+                                        <div class="custom-select-search">
+                                            <input type="text" placeholder="{% trans 'Tapez le nom ou la référence…' %}" oninput="filterCustomSelectOptions('customSelectProduit', this.value)">
+                                        </div>
+                                        <div class="custom-select-options"></div>
                                     </div>
                                 </div>
+                                <div style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">
+                                    <select id="prix_prod_produit">
+                                        <option value="">{% trans "Sélectionner un produit" %}</option>
+                                    </select>
+                                </div>
+                                <small class="pp-help">{% trans "Cliquez puis tapez quelques lettres pour chercher." %}</small>
+                                <div class="pp-base" id="prix_prod_base_hint"></div>
                             </div>
-                            <!-- Select caché pour compatibilité avec produit.js -->
-                            <div style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">
-                                <select id="prix_prod_produit">
-                                    <option value="">{% trans "Sélectionner un produit" %}</option>
-                                </select>
+
+                            <div class="col-lg-4 col-md-6 mb-3">
+                                <label class="pp-label"><span class="pp-num">2</span> {% trans "Type de client" %}</label>
+                                <div class="custom-select-container" id="customSelectTypePrix">
+                                    <div class="custom-select-trigger" onclick="toggleCustomSelect('customSelectTypePrix')">
+                                        <span class="selected-text placeholder">{% trans "Sélectionner un type" %}</span>
+                                        <i class="fas fa-chevron-down arrow"></i>
+                                    </div>
+                                    <div class="custom-select-dropdown">
+                                        <div class="custom-select-search">
+                                            <input type="text" placeholder="{% trans 'Rechercher...' %}" oninput="filterCustomSelectOptions('customSelectTypePrix', this.value)">
+                                        </div>
+                                        <div class="custom-select-options"></div>
+                                    </div>
+                                </div>
+                                <div style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">
+                                    <select id="prix_prod_type">
+                                        <option value="">{% trans "Sélectionner un type" %}</option>
+                                    </select>
+                                </div>
+                                <small class="pp-help">{% trans "Ce prix sera utilisé pour les clients de ce type." %}</small>
+                            </div>
+
+                            <div class="col-lg-3 col-md-6 mb-3">
+                                <label class="pp-label" for="prix_prod_prix"><span class="pp-num">3</span> {% trans "Prix de vente" %}</label>
+                                <div class="input-group pp-price-group">
+                                    <input type="number" id="prix_prod_prix" class="form-control" min="0" step="0.01" placeholder="0,00" inputmode="decimal">
+                                    <div class="input-group-append"><span class="input-group-text" id="prix_prod_devise">DA</span></div>
+                                </div>
+                                <small class="pp-help">{% trans "Prix d'une unité." %}</small>
                             </div>
                         </div>
-                        <div class="col-md-2">
-                            <label class="form-label-product">{% trans "Code Prix" %}</label>
-                            <!-- Custom Select pour Code Prix -->
-                            <div class="custom-select-container" id="customSelectCodePrix">
-                                <div class="custom-select-trigger" onclick="toggleCustomSelect('customSelectCodePrix')">
-                                    <span class="selected-text placeholder">{% trans "Standard" %}</span>
-                                    <i class="fas fa-chevron-down arrow"></i>
+
+                        <button type="button" class="pp-advanced-toggle" id="prix_prod_adv_toggle" aria-expanded="false" aria-controls="prix_prod_advanced">
+                            <i class="fa fa-chevron-right"></i> {% trans "Options avancées (facultatif)" %}
+                        </button>
+                        <div class="pp-advanced" id="prix_prod_advanced" style="display:none;">
+                            <div class="row">
+                                <div class="col-lg-3 col-md-6 mb-3">
+                                    <label class="form-label-product">{% trans "Code prix" %}</label>
+                                    <div class="custom-select-container" id="customSelectCodePrix">
+                                        <div class="custom-select-trigger" onclick="toggleCustomSelect('customSelectCodePrix')">
+                                            <span class="selected-text placeholder">{% trans "Standard" %}</span>
+                                            <i class="fas fa-chevron-down arrow"></i>
+                                        </div>
+                                        <div class="custom-select-dropdown">
+                                            <div class="custom-select-search">
+                                                <input type="text" placeholder="{% trans 'Rechercher...' %}" oninput="filterCustomSelectOptions('customSelectCodePrix', this.value)">
+                                            </div>
+                                            <div class="custom-select-options"></div>
+                                        </div>
+                                    </div>
+                                    <div style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">
+                                        <select id="prix_prod_code">
+                                            <option value="">{% trans "Standard" %}</option>
+                                        </select>
+                                    </div>
+                                    <small class="pp-help">{% trans "Laissez « Standard » si vous ne savez pas." %}</small>
                                 </div>
-                                <div class="custom-select-dropdown">
-                                    <div class="custom-select-search">
-                                        <input type="text" placeholder="{% trans 'Rechercher...' %}" oninput="filterCustomSelectOptions('customSelectCodePrix', this.value)">
-                                    </div>
-                                    <div class="custom-select-options">
-                                    </div>
+                                <div class="col-lg-3 col-md-6 mb-3">
+                                    <label class="form-label-product" for="prix_prod_qte_min">{% trans "À partir de (quantité)" %}</label>
+                                    <input type="number" id="prix_prod_qte_min" class="form-control form-control-product" min="1" value="1">
+                                    <small class="pp-help">{% trans "Ex. : 10 = ce prix s'applique dès 10 unités." %}</small>
+                                </div>
+                                <div class="col-lg-3 col-md-6 mb-3">
+                                    <label class="form-label-product" for="prix_prod_date_debut">{% trans "Valable du" %}</label>
+                                    <input type="date" id="prix_prod_date_debut" class="form-control form-control-product">
+                                    <small class="pp-help">{% trans "Vide = dès maintenant." %}</small>
+                                </div>
+                                <div class="col-lg-3 col-md-6 mb-3">
+                                    <label class="form-label-product" for="prix_prod_date_fin">{% trans "Jusqu'au" %}</label>
+                                    <input type="date" id="prix_prod_date_fin" class="form-control form-control-product">
+                                    <small class="pp-help">{% trans "Vide = sans fin." %}</small>
                                 </div>
                             </div>
-                            <div style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">
-                                <select id="prix_prod_code">
-                                    <option value="">{% trans "Standard" %}</option>
-                                </select>
-                            </div>
-                            <small class="text-muted">{% trans "(optionnel)" %}</small>
                         </div>
-                        <div class="col-md-2">
-                            <label class="form-label-product">{% trans "Type Prix" %} *</label>
-                            <!-- Custom Select pour Type Prix -->
-                            <div class="custom-select-container" id="customSelectTypePrix">
-                                <div class="custom-select-trigger" onclick="toggleCustomSelect('customSelectTypePrix')">
-                                    <span class="selected-text placeholder">{% trans "Sélectionner un type" %}</span>
-                                    <i class="fas fa-chevron-down arrow"></i>
-                                </div>
-                                <div class="custom-select-dropdown">
-                                    <div class="custom-select-search">
-                                        <input type="text" placeholder="{% trans 'Rechercher...' %}" oninput="filterCustomSelectOptions('customSelectTypePrix', this.value)">
-                                    </div>
-                                    <div class="custom-select-options">
-                                    </div>
-                                </div>
-                            </div>
-                            <div style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">
-                                <select id="prix_prod_type">
-                                    <option value="">{% trans "Sélectionner un type" %}</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label-product">{% trans "Prix" %} *</label>
-                            <input type="number" id="prix_prod_prix" class="form-control form-control-product" min="0" step="0.01" placeholder="0.00">
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label-product">{% trans "Qté Min" %}</label>
-                            <input type="number" id="prix_prod_qte_min" class="form-control form-control-product" min="1" value="1">
-                        </div>
-                        <div class="col-md-2 d-flex align-items-end gap-2">
-                            <button type="button" id="btn_add_prix_prod" class="btn btn-product-primary flex-fill">
-                                <i class="fa fa-plus"></i> {% trans "Ajouter" %}
+
+                        <div class="pp-actions">
+                            <button type="button" id="btn_cancel_prix_prod" class="btn btn-product-secondary" style="display: none;">
+                                <i class="fa fa-times"></i> {% trans "Annuler" %}
                             </button>
-                            <button type="button" id="btn_cancel_prix_prod" class="btn btn-product-secondary" style="display: none;" title="Annuler">
-                                <i class="fa fa-times"></i>
+                            <button type="button" id="btn_add_prix_prod" class="btn btn-product-primary">
+                                <i class="fa fa-save"></i> {% trans "Enregistrer le prix" %}
                             </button>
                         </div>
                     </div>
 
-                    <!-- Dates de validité (pour promotions) -->
+                    <!-- Liste des prix -->
+                    <div class="pp-list-title"><i class="fa fa-list"></i> {% trans "Prix déjà enregistrés" %}</div>
                     <div class="row mb-3">
-                        <div class="col-md-3">
-                            <label class="form-label-product">{% trans "Date début (optionnel)" %}</label>
-                            <input type="date" id="prix_prod_date_debut" class="form-control form-control-product">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label-product">{% trans "Date fin (optionnel)" %}</label>
-                            <input type="date" id="prix_prod_date_fin" class="form-control form-control-product">
-                        </div>
-                    </div>
-
-                    <!-- Filtres -->
-                    <div class="row mb-3">
-                        <div class="col-md-4">
-                            <label class="form-label-product">{% trans "Filtrer par produit" %}</label>
-                            <!-- Custom Select pour Filtre Produit -->
+                        <div class="col-lg-4 col-md-6 mb-2">
+                            <label class="form-label-product">{% trans "Produit" %}</label>
                             <div class="custom-select-container" id="customSelectFilter">
                                 <div class="custom-select-trigger" onclick="toggleCustomSelect('customSelectFilter')">
                                     <span class="selected-text placeholder">{% trans "Tous les produits" %}</span>
@@ -1084,45 +1130,17 @@ input[type="number"].form-control-product::-webkit-outer-spin-button {
                                     <div class="custom-select-search">
                                         <input type="text" placeholder="{% trans 'Rechercher...' %}" oninput="filterCustomSelectOptions('customSelectFilter', this.value)">
                                     </div>
-                                    <div class="custom-select-options">
-                                        <!-- Options seront ajoutées via JS -->
-                                    </div>
+                                    <div class="custom-select-options"></div>
                                 </div>
                             </div>
-                            <!-- Select caché pour compatibilité avec produit.js -->
                             <div style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">
                                 <select id="prix_prod_filter">
                                     <option value="">{% trans "Tous les produits" %}</option>
                                 </select>
                             </div>
                         </div>
-                        <div class="col-md-4">
-                            <label class="form-label-product">{% trans "Filtrer par code prix" %}</label>
-                            <!-- Custom Select pour Filtre Code Prix -->
-                            <div class="custom-select-container" id="customSelectFilterCodePrix">
-                                <div class="custom-select-trigger" onclick="toggleCustomSelect('customSelectFilterCodePrix')">
-                                    <span class="selected-text placeholder">{% trans "Tous les codes prix" %}</span>
-                                    <i class="fas fa-chevron-down arrow"></i>
-                                </div>
-                                <div class="custom-select-dropdown">
-                                    <div class="custom-select-search">
-                                        <input type="text" placeholder="{% trans 'Rechercher...' %}" oninput="filterCustomSelectOptions('customSelectFilterCodePrix', this.value)">
-                                    </div>
-                                    <div class="custom-select-options">
-                                        <!-- Options seront ajoutées via JS -->
-                                    </div>
-                                </div>
-                            </div>
-                            <!-- Select caché pour compatibilité avec produit.js -->
-                            <div style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">
-                                <select id="prix_prod_filter_code">
-                                    <option value="">{% trans "Tous les codes prix" %}</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label-product">{% trans "Filtrer par type prix" %}</label>
-                            <!-- Custom Select pour Filtre Type Prix -->
+                        <div class="col-lg-4 col-md-6 mb-2">
+                            <label class="form-label-product">{% trans "Type de client" %}</label>
                             <div class="custom-select-container" id="customSelectFilterTypePrix">
                                 <div class="custom-select-trigger" onclick="toggleCustomSelect('customSelectFilterTypePrix')">
                                     <span class="selected-text placeholder">{% trans "Tous les types prix" %}</span>
@@ -1132,30 +1150,46 @@ input[type="number"].form-control-product::-webkit-outer-spin-button {
                                     <div class="custom-select-search">
                                         <input type="text" placeholder="{% trans 'Rechercher...' %}" oninput="filterCustomSelectOptions('customSelectFilterTypePrix', this.value)">
                                     </div>
-                                    <div class="custom-select-options">
-                                        <!-- Options seront ajoutées via JS -->
-                                    </div>
+                                    <div class="custom-select-options"></div>
                                 </div>
                             </div>
-                            <!-- Select caché pour compatibilité avec produit.js -->
                             <div style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">
                                 <select id="prix_prod_filter_type">
                                     <option value="">{% trans "Tous les types prix" %}</option>
                                 </select>
                             </div>
                         </div>
+                        <div class="col-lg-4 col-md-6 mb-2">
+                            <label class="form-label-product">{% trans "Code prix" %}</label>
+                            <div class="custom-select-container" id="customSelectFilterCodePrix">
+                                <div class="custom-select-trigger" onclick="toggleCustomSelect('customSelectFilterCodePrix')">
+                                    <span class="selected-text placeholder">{% trans "Tous les codes prix" %}</span>
+                                    <i class="fas fa-chevron-down arrow"></i>
+                                </div>
+                                <div class="custom-select-dropdown">
+                                    <div class="custom-select-search">
+                                        <input type="text" placeholder="{% trans 'Rechercher...' %}" oninput="filterCustomSelectOptions('customSelectFilterCodePrix', this.value)">
+                                    </div>
+                                    <div class="custom-select-options"></div>
+                                </div>
+                            </div>
+                            <div style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">
+                                <select id="prix_prod_filter_code">
+                                    <option value="">{% trans "Tous les codes prix" %}</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
 
-                    <!-- Tableau des prix produits -->
                     <div class="table-responsive">
-                        <table class="table table-product table-hover">
+                        <table class="table table-product table-hover" data-no-datatable="true">
                             <thead>
                                 <tr>
                                     <th>{% trans "Produit" %}</th>
-                                    <th>{% trans "Code Prix" %}</th>
-                                    <th>{% trans "Type Prix" %}</th>
-                                    <th>{% trans "Prix" %}</th>
-                                    <th>{% trans "Qté Min" %}</th>
+                                    <th>{% trans "Type de client" %}</th>
+                                    <th class="text-right">{% trans "Prix" %}</th>
+                                    <th class="text-center">{% trans "À partir de" %}</th>
+                                    <th>{% trans "Code prix" %}</th>
                                     <th>{% trans "Statut" %}</th>
                                     <th>{% trans "Actions" %}</th>
                                 </tr>
