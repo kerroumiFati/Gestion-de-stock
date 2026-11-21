@@ -45,6 +45,97 @@ def _filtrer_entreprise(qs, company, champ='company'):
     return qs.filter(Q(**{champ: company}) | Q(**{f'{champ}__isnull': True}))
 
 
+ORIGINES = {'pc': 'PC', 'telephone': 'Téléphone', 'commande': 'Commande livrée'}
+_PAIEMENTS = {'especes': 'Espèces', 'espece': 'Espèces', 'cheque': 'Chèque', 'credit': 'À crédit',
+              'carte': 'Carte', 'virement': 'Virement'}
+
+
+def _periode(qs, champ, start_date, end_date):
+    """Filtre sur la DATE (jour entier inclus). Avant : `date_vente__lte=fin` excluait toutes les
+    ventes du dernier jour après minuit."""
+    if start_date:
+        qs = qs.filter(**{f'{champ}__date__gte': start_date})
+    if end_date:
+        qs = qs.filter(**{f'{champ}__date__lte': end_date})
+    return qs
+
+
+def _perimetre_ventes(qs, company):
+    """`company` : TOUTES_ENTREPRISES, None (comptes sans entreprise) ou une entreprise."""
+    return _filtrer_entreprise(qs, company)
+
+
+def ventes_toutes_origines(start_date=None, end_date=None, company=TOUTES_ENTREPRISES):
+    """Toutes les ventes de la période, quelle que soit leur origine : ventes du PC (validées),
+    ventes faites sur le téléphone, commandes livrées. Avant : seules les ventes du PC.
+    Chaque élément : origine, numero, date, client, paiement, ht, ttc, remise (du plus récent au plus ancien)."""
+    from .distribution_models import VenteTourneeMobile, CommandeClient
+    z = Decimal('0.00')
+    docs = []
+
+    pc = _periode(_perimetre_ventes(Vente.objects.filter(statut='completed'), company), 'date_vente',
+                  start_date, end_date).select_related('client')
+    for v in pc:
+        docs.append({'origine': 'pc', 'numero': v.numero, 'date': v.date_vente, 'client': v.client,
+                     'paiement': v.get_type_paiement_display(), 'ht': v.total_ht or z,
+                     'ttc': v.total_ttc or z, 'remise': v.remise_percent or z})
+
+    tel = _periode(_perimetre_ventes(VenteTourneeMobile.objects.all(), company), 'date_vente',
+                   start_date, end_date).select_related('client')
+    for v in tel:
+        docs.append({'origine': 'telephone', 'numero': v.numero_vente, 'date': v.date_vente, 'client': v.client,
+                     'paiement': _PAIEMENTS.get(v.type_paiement, v.type_paiement or ''),
+                     'ht': v.montant_ht or v.montant_total or z, 'ttc': v.montant_total or z, 'remise': z})
+
+    cmd = _periode(_perimetre_ventes(CommandeClient.objects.filter(statut='delivered'), company),
+                   'date_livraison_reelle', start_date, end_date).select_related('client')
+    for c in cmd:
+        docs.append({'origine': 'commande', 'numero': c.reference, 'date': c.date_livraison_reelle,
+                     'client': c.client, 'paiement': _PAIEMENTS.get(c.type_paiement, c.type_paiement or ''),
+                     'ht': c.montant_total_ht or z, 'ttc': c.montant_total_ttc or z, 'remise': z})
+
+    docs.sort(key=lambda d: d['date'] or timezone.now(), reverse=True)
+    return docs
+
+
+def quantites_vendues(company=None, start_date=None, end_date=None):
+    """Quantités vendues et chiffre d'affaires HT par produit, toutes origines confondues.
+    `company` : None = toutes les entreprises (même convention que _get_profit_data).
+    Renvoie ({produit_id: {'qte', 'ca'}}, {origine: ca})."""
+    from collections import defaultdict
+    from .distribution_models import LigneVenteTourneeMobile, LigneCommandeClient
+    perim = TOUTES_ENTREPRISES if company is None else company
+    par_produit = defaultdict(lambda: {'qte': Decimal('0'), 'ca': Decimal('0')})
+    par_origine = {'pc': Decimal('0'), 'telephone': Decimal('0'), 'commande': Decimal('0')}
+
+    def ajouter(origine, pid, qte, ca):
+        qte, ca = Decimal(str(qte or 0)), Decimal(str(ca or 0))
+        par_produit[pid]['qte'] += qte
+        par_produit[pid]['ca'] += ca
+        par_origine[origine] += ca
+
+    lignes_pc = LigneVente.objects.filter(
+        vente__in=_periode(_filtrer_entreprise(Vente.objects.filter(statut='completed'), perim, 'company'),
+                           'date_vente', start_date, end_date))
+    for pid, q, prix in lignes_pc.values_list('produit_id', 'quantite', 'prixU_snapshot'):
+        ajouter('pc', pid, q, Decimal(str(q or 0)) * Decimal(str(prix or 0)))
+
+    from .distribution_models import VenteTourneeMobile, CommandeClient
+    lignes_tel = LigneVenteTourneeMobile.objects.filter(
+        vente__in=_periode(_filtrer_entreprise(VenteTourneeMobile.objects.all(), perim), 'date_vente',
+                           start_date, end_date))
+    for pid, q, ht in lignes_tel.values_list('produit_id', 'quantite', 'montant_ht'):
+        ajouter('telephone', pid, q, ht)
+
+    lignes_cmd = LigneCommandeClient.objects.filter(
+        commande__in=_periode(_filtrer_entreprise(CommandeClient.objects.filter(statut='delivered'), perim),
+                              'date_livraison_reelle', start_date, end_date))
+    for pid, q, ht in lignes_cmd.values_list('produit_id', 'quantite', 'montant_ht'):
+        ajouter('commande', pid, q, ht)
+
+    return par_produit, par_origine
+
+
 class ExcelReportGenerator:
     """Générateur de rapports Excel avec styles professionnels"""
 
@@ -447,47 +538,47 @@ def generate_sales_report_excel(start_date=None, end_date=None, company=TOUTES_E
 
     current_row = gen.add_metadata(current_row)
 
-    # Requête
-    ventes = _filtrer_entreprise(Vente.objects.filter(statut='completed'), company).select_related('client', 'warehouse')
-
-    if start_date:
-        ventes = ventes.filter(date_vente__gte=start_date)
-    if end_date:
-        ventes = ventes.filter(date_vente__lte=end_date)
-
-    ventes = ventes.order_by('-date_vente')
+    # Toutes les origines : PC, téléphone, commandes livrées
+    docs = ventes_toutes_origines(start_date, end_date, company)
 
     # En-têtes
-    headers = ['N° Vente', 'Date', 'Client', 'Type Paiement', 'HT', 'TTC', 'Remise %']
-    gen.set_column_widths([15, 12, 25, 15, 15, 15, 12])
+    headers = ['Origine', 'N° Vente', 'Date', 'Client', 'Type Paiement', 'HT', 'TTC', 'Remise %']
+    gen.set_column_widths([16, 18, 12, 25, 15, 15, 15, 12])
     current_row = gen.add_header_row(headers, current_row)
 
     # Données
     data_rows = []
     total_ht = Decimal('0.00')
     total_ttc = Decimal('0.00')
+    par_origine = {k: Decimal('0.00') for k in ORIGINES}
 
-    for vente in ventes:
-        total_ht += vente.total_ht or Decimal('0.00')
-        total_ttc += vente.total_ttc or Decimal('0.00')
-
+    for d in docs:
+        total_ht += d['ht']
+        total_ttc += d['ttc']
+        par_origine[d['origine']] += d['ttc']
         data_rows.append([
-            vente.numero,
-            vente.date_vente.strftime('%d/%m/%Y'),
-            f"{vente.client.nom} {vente.client.prenom}" if vente.client else 'N/A',
-            vente.get_type_paiement_display(),
-            float(vente.total_ht or 0),
-            float(vente.total_ttc or 0),
-            float(vente.remise_percent or 0)
+            ORIGINES[d['origine']],
+            d['numero'],
+            d['date'].strftime('%d/%m/%Y') if d['date'] else '',
+            f"{d['client'].nom} {d['client'].prenom or ''}".strip() if d['client'] else 'N/A',
+            d['paiement'],
+            float(d['ht']),
+            float(d['ttc']),
+            float(d['remise']),
         ])
 
-    current_row = gen.add_data_rows(data_rows, current_row, number_columns=[5, 6, 7])
+    current_row = gen.add_data_rows(data_rows, current_row, number_columns=[6, 7, 8])
 
     # Total
-    gen.add_total_row(current_row, 4, "TOTAL", {
-        5: float(total_ht),
-        6: float(total_ttc)
+    current_row = gen.add_total_row(current_row, 5, "TOTAL", {
+        6: float(total_ht),
+        7: float(total_ttc)
     })
+    # Sous-totaux par origine
+    for cle, libelle in ORIGINES.items():
+        current_row = (current_row or 0) + 1
+        gen.ws.cell(row=current_row, column=5, value=f'dont {libelle}')
+        gen.ws.cell(row=current_row, column=7, value=float(par_origine[cle]))
 
     return gen.save_to_buffer()
 
@@ -510,42 +601,37 @@ def generate_sales_report_pdf(start_date=None, end_date=None, company=TOUTES_ENT
 
     gen.add_metadata()
 
-    # Requête
-    ventes = _filtrer_entreprise(Vente.objects.filter(statut='completed'), company).select_related('client')
-
-    if start_date:
-        ventes = ventes.filter(date_vente__gte=start_date)
-    if end_date:
-        ventes = ventes.filter(date_vente__lte=end_date)
-
-    ventes = ventes.order_by('-date_vente')
+    # Toutes les origines : PC, téléphone, commandes livrées
+    docs = ventes_toutes_origines(start_date, end_date, company)
 
     # Tableau
-    table_data = [['N° Vente', 'Date', 'Client', 'Type Paiement', 'Montant HT', 'Montant TTC', 'Remise %']]
+    table_data = [['Origine', 'N° Vente', 'Date', 'Client', 'Paiement', 'Montant HT', 'Montant TTC', 'Remise %']]
 
     total_ht = Decimal('0.00')
     total_ttc = Decimal('0.00')
     count_ventes = 0
+    par_origine = {k: Decimal('0.00') for k in ORIGINES}
 
-    for vente in ventes:
-        total_ht += vente.total_ht or Decimal('0.00')
-        total_ttc += vente.total_ttc or Decimal('0.00')
+    for d in docs:
+        total_ht += d['ht']
+        total_ttc += d['ttc']
+        par_origine[d['origine']] += d['ttc']
         count_ventes += 1
-
         table_data.append([
-            vente.numero,
-            vente.date_vente.strftime('%d/%m/%Y'),
-            f"{vente.client.nom} {vente.client.prenom}"[:25] if vente.client else 'N/A',
-            vente.get_type_paiement_display(),
-            f"{vente.total_ht or 0:.2f}",
-            f"{vente.total_ttc or 0:.2f}",
-            f"{vente.remise_percent or 0:.1f}%"
+            ORIGINES[d['origine']],
+            d['numero'],
+            d['date'].strftime('%d/%m/%Y') if d['date'] else '',
+            f"{d['client'].nom} {d['client'].prenom or ''}".strip()[:25] if d['client'] else 'N/A',
+            d['paiement'],
+            f"{d['ht']:.2f}",
+            f"{d['ttc']:.2f}",
+            f"{d['remise']:.1f}%"
         ])
 
     # Ligne de total
-    table_data.append(['', '', '', 'TOTAL', f"{total_ht:.2f}", f"{total_ttc:.2f}", ''])
+    table_data.append(['', '', '', '', 'TOTAL', f"{total_ht:.2f}", f"{total_ttc:.2f}", ''])
 
-    gen.add_table(table_data, col_widths=[1.2*inch, 1*inch, 1.8*inch, 1.2*inch, 1.2*inch, 1.2*inch, 0.8*inch])
+    gen.add_table(table_data, col_widths=[1.1*inch, 1.2*inch, 0.9*inch, 1.7*inch, 0.9*inch, 1.1*inch, 1.1*inch, 0.7*inch])
 
     # Résumé
     ticket_moyen = total_ttc / count_ventes if count_ventes > 0 else Decimal('0.00')
@@ -553,6 +639,9 @@ def generate_sales_report_pdf(start_date=None, end_date=None, company=TOUTES_ENT
         ['Nombre de ventes:', str(count_ventes)],
         ['Chiffre d\'affaires HT:', f"{total_ht:.2f}"],
         ['Chiffre d\'affaires TTC:', f"{total_ttc:.2f}"],
+        ['  dont ventes PC:', f"{par_origine['pc']:.2f}"],
+        ['  dont ventes téléphone:', f"{par_origine['telephone']:.2f}"],
+        ['  dont commandes livrées:', f"{par_origine['commande']:.2f}"],
         ['Ticket moyen:', f"{ticket_moyen:.2f}"]
     ]
     gen.add_summary_box(summary_data)
@@ -647,8 +736,12 @@ def generate_inventory_report_pdf(company=TOUTES_ENTREPRISES):
 # RAPPORT DES BÉNÉFICES
 # ======================
 
-def _get_profit_data(company=None):
+def _get_profit_data(company=None, start_date=None, end_date=None):
     """Calcule prix_vente - prix_achat_moyen par produit. Retourne (list_rows, total_benefice).
+
+    Chaque ligne porte aussi le BÉNÉFICE RÉALISÉ sur ce qui a été vendu (ventes du PC, ventes du
+    téléphone, commandes livrées) : CA HT vendu - quantité vendue x prix d'achat moyen.
+    Avant : seul le bénéfice potentiel sur le stock était calculé, sans aucune vente.
 
     `company` : limite aux produits et achats de cette entreprise (produits partages,
     sans entreprise, compris). None = toutes les entreprises (usage interne uniquement)."""
@@ -677,6 +770,8 @@ def _get_profit_data(company=None):
 
     products = products.select_related('categorie').order_by('designation')
 
+    vendus, _ = quantites_vendues(company, start_date, end_date)
+
     rows = []
     total_benefice = Decimal('0.00')
 
@@ -691,6 +786,7 @@ def _get_profit_data(company=None):
         benefice_total = benefice_unit * qty
         total_benefice += benefice_total
 
+        v = vendus.get(product.id, {'qte': Decimal('0'), 'ca': Decimal('0')})
         rows.append({
             'reference': product.reference,
             'designation': product.designation,
@@ -699,6 +795,9 @@ def _get_profit_data(company=None):
             'benefice_unit': benefice_unit,
             'qty': qty,
             'benefice_total': benefice_total,
+            'qte_vendue': v['qte'],
+            'ca_vendu': v['ca'],
+            'benefice_realise': v['ca'] - v['qte'] * avg_achat,
         })
 
     return rows, total_benefice
@@ -718,19 +817,25 @@ def generate_profit_report_excel(company=None):
     current_row = 2
     current_row = gen.add_metadata(current_row)
 
-    headers = ['Référence', 'Désignation', 'Prix Vente', 'Prix Achat Moy.', 'Bénéfice Unit.', 'Qté Stock', 'Bénéfice Total']
-    gen.set_column_widths([15, 30, 15, 18, 18, 12, 18])
+    headers = ['Référence', 'Désignation', 'Prix Vente', 'Prix Achat Moy.', 'Bénéfice Unit.', 'Qté Stock',
+               'Bénéfice estimé (stock)', 'Qté vendue', 'CA HT vendu', 'Bénéfice réalisé']
+    gen.set_column_widths([15, 30, 13, 15, 14, 11, 20, 12, 15, 17])
     current_row = gen.add_header_row(headers, current_row)
 
     rows, total_benefice = _get_profit_data(company)
     data_rows = [
         [r['reference'], r['designation'], float(r['prix_vente']), float(r['avg_achat']),
-         float(r['benefice_unit']), r['qty'], float(r['benefice_total'])]
+         float(r['benefice_unit']), r['qty'], float(r['benefice_total']),
+         float(r['qte_vendue']), float(r['ca_vendu']), float(r['benefice_realise'])]
         for r in rows
     ]
-    current_row = gen.add_data_rows(data_rows, current_row, number_columns=[3, 4, 5, 6, 7])
+    current_row = gen.add_data_rows(data_rows, current_row, number_columns=[3, 4, 5, 6, 7, 8, 9, 10])
 
-    gen.add_total_row(current_row, 5, "BÉNÉFICE TOTAL", {7: float(total_benefice)})
+    gen.add_total_row(current_row, 6, "TOTAL", {
+        7: float(total_benefice),
+        9: float(sum((r['ca_vendu'] for r in rows), Decimal('0'))),
+        10: float(sum((r['benefice_realise'] for r in rows), Decimal('0'))),
+    })
 
     return gen.save_to_buffer()
 
@@ -743,20 +848,27 @@ def generate_profit_report_pdf(company=None):
 
     rows, total_benefice = _get_profit_data(company)
 
-    table_data = [['Référence', 'Désignation', 'Prix Vente', 'Prix Achat Moy.', 'Bénéf. Unit.', 'Qté', 'Bénéf. Total']]
+    table_data = [['Réf.', 'Désignation', 'Prix V.', 'Achat moy.', 'Bénéf. U.', 'Stock', 'Estimé (stock)',
+                   'Vendu', 'CA HT vendu', 'Réalisé']]
     for r in rows:
         table_data.append([
             r['reference'],
-            r['designation'][:28],
+            r['designation'][:24],
             f"{r['prix_vente']:.2f}",
             f"{r['avg_achat']:.2f}",
             f"{r['benefice_unit']:.2f}",
             str(r['qty']),
             f"{r['benefice_total']:.2f}",
+            f"{r['qte_vendue']:.0f}",
+            f"{r['ca_vendu']:.2f}",
+            f"{r['benefice_realise']:.2f}",
         ])
-    table_data.append(['', '', '', '', 'TOTAL', '', f"{total_benefice:.2f}"])
+    total_realise = sum((r['benefice_realise'] for r in rows), Decimal('0'))
+    total_ca = sum((r['ca_vendu'] for r in rows), Decimal('0'))
+    table_data.append(['', '', '', '', 'TOTAL', '', f"{total_benefice:.2f}", '', f"{total_ca:.2f}", f"{total_realise:.2f}"])
 
-    gen.add_table(table_data, col_widths=[1*inch, 2.2*inch, 1.1*inch, 1.2*inch, 1.1*inch, 0.7*inch, 1.2*inch])
+    gen.add_table(table_data, col_widths=[0.8*inch, 1.9*inch, 0.8*inch, 0.9*inch, 0.8*inch, 0.6*inch,
+                                          1*inch, 0.6*inch, 1*inch, 1*inch])
 
     products_positive = sum(1 for r in rows if r['benefice_unit'] > 0)
     products_negative = sum(1 for r in rows if r['benefice_unit'] < 0)
@@ -764,7 +876,9 @@ def generate_profit_report_pdf(company=None):
         ['Total produits analysés:', str(len(rows))],
         ['Produits bénéficiaires:', str(products_positive)],
         ['Produits déficitaires:', str(products_negative)],
-        ['Bénéfice total estimé:', f"{total_benefice:.2f}"],
+        ['Bénéfice total estimé (sur le stock):', f"{total_benefice:.2f}"],
+        ['Chiffre d\'affaires HT vendu (PC + téléphone + commandes):', f"{total_ca:.2f}"],
+        ['Bénéfice réalisé sur les ventes:', f"{total_realise:.2f}"],
     ]
     gen.add_summary_box(summary_data)
 

@@ -204,7 +204,7 @@
       const btn = $(this);
       const icon = btn.find('i');
       icon.addClass('fa-spin');
-      reloadJournal().finally(function(){
+      reloadJournal().always(function(){   // promesse jQuery : .always (pas de .finally)
         icon.removeClass('fa-spin');
       });
     });

@@ -759,7 +759,6 @@ class TourneeViewSet(viewsets.ModelViewSet):
         actives_only = self.request.query_params.get('actives_only', 'false').lower() == 'true'
 
         print(f"[TourneeViewSet] Params: livreur={livreur_id}, assigned_to={assigned_to}, actives_only={actives_only}, date_debut={date_debut}, date_fin={date_fin}")
-        print(f"[TourneeViewSet] Initial queryset count: {queryset.count()}")
 
         # Filtre spécial pour l'app mobile : assigned_to='me'
         if assigned_to == 'me':
@@ -797,7 +796,9 @@ class TourneeViewSet(viewsets.ModelViewSet):
         if statut:
             queryset = queryset.filter(statut=statut)
 
-        return queryset.select_related('livreur').prefetch_related('arrets', 'arrets__client').order_by('-date_tournee', 'numero_tournee')
+        return queryset.select_related(
+            'livreur', 'code_prix', 'entrepot_depart', 'rapport_caisse'
+        ).prefetch_related('arrets', 'arrets__client', 'ventes').order_by('-date_tournee', 'numero_tournee')
 
     @action(detail=True, methods=['post'])
     def cloturer(self, request, pk=None):
@@ -1259,9 +1260,19 @@ class VenteTourneeViewSet(viewsets.ModelViewSet):
         """
         from .distribution_models import EncaissementVente, EncaissementCommande
         from API.models import PaiementSolde
-        livreur_id = request.query_params.get('livreur')
-        if not livreur_id:
-            return Response({'error': 'livreur est requis'}, status=status.HTTP_400_BAD_REQUEST)
+        from .securite_encaissements import livreur_connecte, livreur_autorise
+        # Un livreur ne voit que SES encaissements (le numéro envoyé est ignoré) ;
+        # le bureau ne voit que les livreurs de son entreprise.
+        moi = livreur_connecte(request.user)
+        if moi is not None and not request.user.is_superuser:
+            livreur_id = moi.pk
+        else:
+            livreur_id = request.query_params.get('livreur')
+            if not livreur_id:
+                return Response({'error': 'livreur est requis'}, status=status.HTTP_400_BAD_REQUEST)
+            livreur = LivreurDistribution.objects.filter(pk=livreur_id).select_related('entrepot').first()                 if str(livreur_id).isdigit() else None
+            if not livreur_autorise(request, livreur):
+                return Response({'error': 'Livreur introuvable'}, status=status.HTTP_404_NOT_FOUND)
 
         def _client_nom(c):
             return ' '.join(x for x in [getattr(c, 'prenom', ''), getattr(c, 'nom', '')] if x).strip() if c else ''
@@ -1343,6 +1354,10 @@ class VenteTourneeViewSet(viewsets.ModelViewSet):
         if vente is None:
             # La vente n'est peut-être pas encore arrivée : le téléphone renverra plus tard
             return Response({'error': f'Vente introuvable : {ref}'}, status=status.HTTP_404_NOT_FOUND)
+        from .securite_encaissements import client_autorise, tournee_autorisee
+        if not client_autorise(request, vente.client):
+            # Vente d'une autre entreprise : on ne révèle pas qu'elle existe
+            return Response({'error': f'Vente introuvable : {ref}'}, status=status.HTTP_404_NOT_FOUND)
 
         try:
             montant = Decimal(str(data.get('montant')))
@@ -1357,7 +1372,9 @@ class VenteTourneeViewSet(viewsets.ModelViewSet):
                             status=status.HTTP_400_BAD_REQUEST)
         date_paiement = parse_datetime(str(data.get('date_paiement') or '')) or timezone.now()
         tid = str(data.get('tournee') or '').strip()
-        tournee = TourneeMobile.objects.filter(pk=int(tid)).first() if tid.isdigit() else None
+        tournee = TourneeMobile.objects.filter(pk=int(tid)).select_related('livreur__entrepot').first() if tid.isdigit() else None
+        if not tournee_autorisee(request, tournee):
+            return Response({'error': "Cette tournée n'est pas la vôtre"}, status=status.HTTP_403_FORBIDDEN)
 
         try:
             with transaction.atomic():
@@ -1621,6 +1638,22 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
         print(f"[VIEWSET UPDATE] Data: {request.data}")
 
         instance = self.get_object()
+
+        # Changement de statut : mêmes règles que changer_statut / partial_update
+        import logging
+        logger = logging.getLogger(__name__)
+        nouveau_statut = request.data.get('statut')
+        if nouveau_statut == 'delivered' and instance.statut != 'delivered':
+            return self._livrer_commande(instance, request.data.get('lignes'),
+                                         request.data.get('date_livraison_reelle'), logger,
+                                         tournee_livraison_id=request.data.get('tournee_livraison'),
+                                         trop_percu=request.data.get('trop_percu'))
+        refus = self._transition_interdite(instance, nouveau_statut)
+        if refus is not None:
+            return refus
+        annulation = nouveau_statut == 'cancelled' and instance.statut != 'cancelled'
+        statut_avant = instance.statut
+
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
 
         print(f"[VIEWSET UPDATE] Serializer class: {serializer.__class__.__name__}")
@@ -1631,6 +1664,11 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
 
         print(f"[VIEWSET UPDATE] Validation OK, calling save()")
         self.perform_update(serializer)
+
+        if annulation:
+            CommandeClient.objects.filter(pk=instance.pk).update(statut=statut_avant)
+            commande = self._annuler_commande(instance, logger)
+            return Response(CommandeClientSerializer(commande).data)
 
         print(f"[VIEWSET UPDATE] ===== FIN =====")
         return Response(serializer.data)
@@ -1749,7 +1787,7 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
         if date_fin:
             queryset = queryset.filter(date_commande__lte=date_fin)
 
-        return queryset.select_related('client', 'livreur', 'passee_par').prefetch_related('lignes', 'lignes__produit', 'lignes__produit__conditionnements')
+        return queryset.select_related('client', 'livreur', 'livreur__entrepot', 'passee_par').prefetch_related('lignes', 'lignes__produit', 'lignes__produit__conditionnements')
 
     @action(detail=False, methods=['post'])
     def bulk_create(self, request):
@@ -1809,6 +1847,12 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
                                          tournee_livraison_id=request.data.get('tournee_livraison'),
                                          trop_percu=request.data.get('trop_percu'))
 
+        refus = self._transition_interdite(commande, nouveau_statut)
+        if refus is not None:
+            return refus
+        annulation = nouveau_statut == 'cancelled' and commande.statut != 'cancelled'
+        statut_avant = commande.statut
+
         # Vérifier si on essaie d'ajuster les quantités d'une commande entièrement payée
         # Permettre l'ajustement pour paiements partiels (est_paye=False)
         if lignes_ajustees and commande.est_paye:
@@ -1829,8 +1873,63 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
 
         print(f"[PARTIAL_UPDATE] Validation OK, appel de save()")
         serializer.save()
+        if annulation:
+            # Le serializer a enregistré « annulée » : on repasse par l'annulation complète
+            CommandeClient.objects.filter(pk=commande.pk).update(statut=statut_avant)
+            commande = self._annuler_commande(commande, logger)
+            return Response(CommandeClientSerializer(commande).data)
         print(f"[PARTIAL_UPDATE] ===== FIN (sauvegardé via serializer) =====")
         return Response(serializer.data)
+
+    def _transition_interdite(self, commande, nouveau_statut):
+        """Changements de statut refusés quel que soit le chemin (PC, API). Renvoie une Response ou None."""
+        if nouveau_statut and nouveau_statut != commande.statut and commande.statut == 'delivered':
+            return Response(
+                {'error': "Commande déjà livrée : son statut ne peut plus changer "
+                          "(le stock du van a été déduit et l'argent compté dans la tournée)."},
+                status=status.HTTP_409_CONFLICT)
+        return None
+
+    def _tournee_en_cours_du_livreur(self, commande):
+        from .distribution_models import TourneeMobile
+        if not commande.livreur_id:
+            return None
+        t = (TourneeMobile.objects.filter(livreur_id=commande.livreur_id, statut='en_cours')
+             .order_by('-date_tournee', '-id').first())
+        return t.id if t else None
+
+    def _annuler_commande(self, commande, logger):
+        """Annulation : l'argent déjà payé (acompte, encaissements) n'est pas perdu ; il passe en
+        AVANCE sur le compte du client, utilisable sur ses prochains achats. Avant : la commande
+        annulée gardait son acompte, invisible partout. Idempotent."""
+        from decimal import Decimal
+        from API.models import Client as ClientModel, PaiementSolde
+        with transaction.atomic():
+            commande = CommandeClient.objects.select_for_update().get(pk=commande.pk)
+            if commande.statut == 'cancelled':
+                return commande
+            paye = commande.montant_paye or Decimal('0')
+            commande.statut = 'cancelled'
+            champs = ['statut']
+            if paye > Decimal('0.01'):
+                if not PaiementSolde.objects.filter(app_id=f'annulation-{commande.id}').exists():
+                    client = ClientModel.objects.select_for_update().get(pk=commande.client_id)
+                    avant = client.solde or Decimal('0')
+                    client.solde = avant + paye          # solde positif = avance du client
+                    client.save(update_fields=['solde'])
+                    PaiementSolde.objects.create(
+                        client=client, company=getattr(client, 'company', None), montant=paye,
+                        mode_paiement='avoir', solde_avant=avant, solde_apres=client.solde,
+                        notes=f'Commande {commande.reference} annulée : montant déjà payé gardé en avance',
+                        enregistre_par=self.request.user if self.request.user.is_authenticated else None,
+                        app_id=f'annulation-{commande.id}',
+                    )
+                commande.montant_paye = Decimal('0')
+                commande.est_paye = False
+                champs += ['montant_paye', 'est_paye']
+                logger.info(f"[ANNULATION] Commande {commande.id} : {paye} DA passés en avance client")
+            commande.save(update_fields=champs)
+            return commande
 
     def _livrer_commande(self, commande, lignes_ajustees, date_livraison, logger, tournee_livraison_id=None,
                          trop_percu=None):
@@ -1876,6 +1975,13 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
                     'deja_livree': True,
                 })
 
+            if commande.statut == 'cancelled':
+                # Commande annulée (l'argent déjà payé est passé en avance client) : elle ne peut
+                # plus être livrée, même si le téléphone, hors ligne, l'envoie après l'annulation.
+                logger.warning(f"[LIVRAISON] Commande {commande.id} annulée : livraison refusée")
+                return Response({'error': 'Livraison impossible : cette commande a été annulée.'},
+                                status=status.HTTP_409_CONFLICT)
+
             lignes = {l.produit_id: l for l in commande.lignes.all()}
 
             # Quantités identiques à la commande : rien à ajuster (évite aussi de refuser
@@ -1907,6 +2013,11 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
                 CommandeClient.objects.filter(id=commande.id).update(
                     montant_total_ht=total_ht, montant_total_ttc=total_ttc
                 )
+                # Livraison augmentée sur une commande payée : elle n'est plus entièrement payée,
+                # le reste à payer réapparaît (avant : elle restait « payée »)
+                paye = commande.montant_paye or Decimal('0')
+                if paye < total_ttc - Decimal('0.01'):
+                    CommandeClient.objects.filter(id=commande.id).update(est_paye=False)
 
             commande.statut = 'delivered'
             commande.date_livraison_reelle = date_livraison or timezone.now()
@@ -1961,7 +2072,16 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
             logger.info(f"[LIVRAISON] Déduction stock pour commande {commande.id}")
             resultat_stock = commande.livrer_et_deduire_stock_van(quantites_livrees)
             if not resultat_stock['success']:
-                logger.warning(f"[LIVRAISON] Commande {commande.id} : {resultat_stock['message']}")
+                # Stock du van insuffisant, pas de livreur ou pas de van : la livraison est
+                # REFUSÉE en entier (statut, quantités, trop-payé annulés). Avant : la commande
+                # passait « livrée » sans aucune sortie de stock.
+                transaction.set_rollback(True)
+                logger.warning(f"[LIVRAISON] Commande {commande.id} refusée : {resultat_stock['message']}")
+                message = resultat_stock['message'].replace('Erreur lors de la déduction du stock: ', '')
+                return Response({
+                    'error': f'Livraison impossible : {message}',
+                    'stock_deduction': {'success': False, 'message': message, 'mouvements_count': 0},
+                }, status=status.HTTP_409_CONFLICT)
 
         return _reponse(commande, {
             'success': resultat_stock['success'],
@@ -2036,7 +2156,8 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
                 commande = self.get_queryset().select_for_update(of=('self',)).filter(
                     pk=data.get('commande_id')
                 ).first()
-                if commande is None:
+                from .securite_encaissements import commande_autorisee, tournee_autorisee
+                if commande is None or not commande_autorisee(request, commande):
                     return Response({'error': 'Commande introuvable'}, status=status.HTTP_404_NOT_FOUND)
                 if commande.statut == 'cancelled':
                     return Response({'error': 'Commande annulée : encaissement impossible'},
@@ -2045,7 +2166,9 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
                 # Tournée pendant laquelle l'argent a été reçu (caisse de la tournée)
                 _tid = str(data.get('tournee') or '').strip()
                 from .distribution_models import TourneeMobile as _TM
-                tournee_enc = _TM.objects.filter(pk=int(_tid)).first() if _tid.isdigit() else None
+                tournee_enc = _TM.objects.filter(pk=int(_tid)).select_related('livreur__entrepot').first() if _tid.isdigit() else None
+                if not tournee_autorisee(request, tournee_enc):
+                    return Response({'error': "Cette tournée n'est pas la vôtre"}, status=status.HTTP_403_FORBIDDEN)
                 # Montant plafonné au reste dû (avant : n'importe quel montant était accepté,
                 # ex. 10 000 DA sur une commande de 180 DA)
                 reste_du = max((commande.montant_total_ttc or Decimal('0')) - (commande.montant_paye or Decimal('0')), Decimal('0'))
@@ -2123,9 +2246,14 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
                 return Response({'detail': "Votre compte vendeur n'est pas actif."},
                                 status=status.HTTP_403_FORBIDDEN)
 
+        # Commande déjà payée : modifiable seulement par son livreur (à la livraison) ou un administrateur
+        autoriser_payee = bool(user.is_staff or user.is_superuser) or (
+            commande.livreur_id is not None and commande.livreur_id == getattr(
+                LivreurDistribution.objects.filter(user=user).first(), 'id', None))
         try:
             commande, modifications = modifier_lignes_commande(
-                commande, data.get('lignes'), user, notes=data.get('notes') if 'notes' in data else None)
+                commande, data.get('lignes'), user, notes=data.get('notes') if 'notes' in data else None,
+                autoriser_payee=autoriser_payee)
         except ModificationRefusee as e:
             reponse = {'detail': e.message}
             if e.champ:
@@ -2157,39 +2285,42 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Si on passe au statut livré, déduire automatiquement le stock du van
-        # IMPORTANT: Ne déduire que si le statut CHANGE vers 'delivered' (pas si déjà livré)
+        import logging
+        logger = logging.getLogger(__name__)
+
+        refus = self._transition_interdite(commande, nouveau_statut)
+        if refus is not None:
+            return refus
+
+        # Livrée : même traitement que la livraison depuis le téléphone (stock du van, tournée
+        # en cours du livreur, trop-payé gardé en avance). Avant : statut changé directement,
+        # sans tournée, et « livrée » même si la sortie de stock échouait.
         if nouveau_statut == 'delivered' and ancien_statut != 'delivered':
-            resultat = commande.livrer_et_deduire_stock_van()
-
-            if resultat['success']:
+            reponse = self._livrer_commande(
+                commande, None, timezone.now(), logger,
+                tournee_livraison_id=self._tournee_en_cours_du_livreur(commande))
+            if reponse.status_code == 200:
+                commande.refresh_from_db()
                 return Response({
                     'message': f'Statut changé à {nouveau_statut}',
-                    'stock_message': resultat['message'],
-                    'mouvements_stock': len(resultat['mouvements']),
-                    'commande': CommandeClientSerializer(commande).data
+                    'stock_message': reponse.data.get('stock_deduction', {}).get('message', ''),
+                    'commande': CommandeClientSerializer(commande).data,
                 })
-            else:
-                # Erreur lors de la déduction du stock, mais on continue quand même
-                # On pourrait aussi bloquer si souhaité
-                commande.statut = nouveau_statut
-                commande.date_livraison_reelle = timezone.now()
-                commande.save()
+            return reponse
 
-                return Response({
-                    'message': f'Statut changé à {nouveau_statut}',
-                    'warning': resultat['message'],
-                    'commande': CommandeClientSerializer(commande).data
-                }, status=status.HTTP_200_OK)
-        else:
-            # Autre statut, pas de déduction de stock
-            commande.statut = nouveau_statut
-            commande.save()
-
+        if nouveau_statut == 'cancelled':
+            commande = self._annuler_commande(commande, logger)
             return Response({
                 'message': f'Statut changé à {nouveau_statut}',
-                'commande': CommandeClientSerializer(commande).data
+                'commande': CommandeClientSerializer(commande).data,
             })
+
+        commande.statut = nouveau_statut
+        commande.save(update_fields=['statut'])
+        return Response({
+            'message': f'Statut changé à {nouveau_statut}',
+            'commande': CommandeClientSerializer(commande).data
+        })
 
     @action(detail=False, methods=['get'])
     def en_attente(self, request):
@@ -2271,7 +2402,7 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
             entrepot_source = None
             # Paramètres de l'entreprise de la commande (chaque entreprise a les siens)
             cfg_company = commande.company or getattr(commande.client, 'company', None)
-            depot_cfg = SystemConfig.get_solo(cfg_company).depot_commandes_mobile if cfg_company else None
+            depot_cfg = SystemConfig.get_solo(cfg_company).depot_commandes_mobile
             if depot_cfg and depot_cfg.is_active and 'van' not in (depot_cfg.code or '').lower():
                 entrepot_source = depot_cfg
                 print(f"[AFFECTER LIVREUR] Dépôt par défaut (paramètres): {entrepot_source.name}")
@@ -4129,8 +4260,9 @@ class EncaisserCompteClientAPIView(APIView):
         app_id = str(d.get('app_id') or '').strip()
         if not app_id:
             return Response({'error': 'app_id est requis'}, status=status.HTTP_400_BAD_REQUEST)
+        from API.securite_encaissements import client_autorise, tournee_autorisee
         client = Client.objects.filter(pk=d.get('client')).first() if str(d.get('client') or '').isdigit() else None
-        if client is None:
+        if client is None or not client_autorise(request, client):
             return Response({'error': f"Client introuvable : {d.get('client')}"}, status=status.HTTP_404_NOT_FOUND)
         try:
             montant = Decimal(str(d.get('montant')))
@@ -4144,7 +4276,9 @@ class EncaisserCompteClientAPIView(APIView):
             return Response({'error': f'Mode de paiement invalide : {mode} (espèces ou chèque)'},
                             status=status.HTTP_400_BAD_REQUEST)
         tid = str(d.get('tournee') or '').strip()
-        tournee = TourneeMobile.objects.filter(pk=int(tid)).first() if tid.isdigit() else None
+        tournee = TourneeMobile.objects.filter(pk=int(tid)).select_related('livreur__entrepot').first() if tid.isdigit() else None
+        if not tournee_autorisee(request, tournee):
+            return Response({'error': "Cette tournée n'est pas la vôtre"}, status=status.HTTP_403_FORBIDDEN)
         date_paiement = parse_datetime(str(d.get('date_paiement') or '')) or timezone.now()
         pc, deja = encaisser(client, app_id, montant, mode, tournee=tournee, date_paiement=date_paiement,
                              user=request.user if request.user.is_authenticated else None)

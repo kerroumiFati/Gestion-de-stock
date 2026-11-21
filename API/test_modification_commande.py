@@ -100,9 +100,22 @@ class ModificationCommandeTests(TestCase):
             CommandeClient.objects.filter(pk=self.commande.pk).update(statut=statut)
             self._assert_refus(self._post([{'produit': self.eau.id, 'quantite': 1}]), 409)
 
-    def test_commande_payee_refusee(self):
+    def test_commande_payee_refusee_pour_un_autre_vendeur(self):
         CommandeClient.objects.filter(pk=self.commande.pk).update(est_paye=True, montant_paye=Decimal('116'))
+        autre = User.objects.create_user('autre', password='x')
+        LivreurDistribution.objects.create(matricule='V2', nom='Karim', telephone='0', user=autre)
+        self.api.force_authenticate(autre)
         self._assert_refus(self._post([{'produit': self.eau.id, 'quantite': 1}]), 409)
+
+    def test_commande_payee_augmentee_par_son_livreur_redevient_a_payer(self):
+        # Payée 116 ; le client prend 3 eaux de plus à la livraison : 140, il reste 24 à payer
+        CommandeClient.objects.filter(pk=self.commande.pk).update(est_paye=True, montant_paye=Decimal('116'))
+        r = self._post([{'produit': self.eau.id, 'quantite': 15}, {'produit': self.chips.id, 'quantite': 4}])
+        self.assertEqual(r.status_code, 200, r.content)
+        self.commande.refresh_from_db()
+        self.assertEqual(self.commande.montant_total_ttc, Decimal('140'))
+        self.assertFalse(self.commande.est_paye)
+        self.assertEqual(self.commande.montant_total_ttc - self.commande.montant_paye, Decimal('24'))
 
     def test_total_inferieur_au_montant_encaisse_refuse_et_annule(self):
         CommandeClient.objects.filter(pk=self.commande.pk).update(montant_paye=Decimal('100'))

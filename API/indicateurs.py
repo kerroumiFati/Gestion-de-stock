@@ -17,13 +17,66 @@ compte pour une visite.
     fructueuse : visite avec vente ou commande, arret livre, vente ou commande du jour.
 - Taux de realisation = CA realise / objectifs mensuels (ObjectifVendeur) des mois couverts
 - Taux de livraison   = montant des commandes livrees / montant des commandes prises
+
+Attribution :
+- Chiffre d'affaires : une commande compte pour le vendeur qui l'a PASSEE (passee_par),
+  meme apres son affectation a un livreur ; anciennes commandes sans passee_par : le livreur.
+- Argent recupere : ce que chacun a reellement encaisse pendant SES tournees (acompte pris
+  par le vendeur a la commande, reste encaisse par le livreur a la livraison, ventes de
+  tournee, reglements de credits et de dettes). Especes et cheques ; les avoirs (trop-paye
+  garde en avance, annulation) ne sont pas de l'argent recu.
 """
 from collections import defaultdict
 from datetime import date, timedelta
 from decimal import Decimal
 
-from django.db.models import Sum
+from django.db.models import F, Q, Sum
 from django.utils import timezone
+
+
+def q_commandes_du_vendeur(livreur_id, prefixe=''):
+    """Commandes PASSEES par ce vendeur (repli sur le livreur pour les anciennes commandes)."""
+    return (Q(**{f'{prefixe}passee_par_id': livreur_id})
+            | Q(**{f'{prefixe}passee_par__isnull': True, f'{prefixe}livreur_id': livreur_id}))
+
+
+def argent_recupere(filtre_tournee, par_mois=False):
+    """Argent reellement recu pendant les tournees filtrees (`filtre_tournee` : filtres sur
+    TourneeMobile, ex. {'livreur_id': 5, 'date_tournee__range': (d1, d2)}).
+
+    Retourne un Decimal, ou si par_mois un dict {(livreur_id, mois): Decimal} (mois de la tournee).
+    Meme definition que la caisse de tournee (especes_calculees), cheques compris.
+    """
+    from django.db.models.functions import ExtractMonth
+    from API.models import PaiementSolde
+    from .distribution_models import (EncaissementCommande, EncaissementVente, PaiementClient,
+                                      VenteTourneeMobile)
+
+    def filtre(prefixe):
+        return {f'{prefixe}{k}': v for k, v in filtre_tournee.items()}
+
+    resultat = defaultdict(Decimal)
+
+    def ajouter(qs, prefixe, expression, signe=1):
+        if par_mois:
+            lignes = qs.annotate(_m=ExtractMonth(f'{prefixe}date_tournee')).values(
+                f'{prefixe}livreur_id', '_m').annotate(_t=Sum(expression))
+            for r in lignes:
+                resultat[(r[f'{prefixe}livreur_id'], r['_m'])] += signe * (r['_t'] or Decimal('0'))
+        else:
+            resultat[None] += signe * (qs.aggregate(_t=Sum(expression))['_t'] or Decimal('0'))
+
+    ventes = VenteTourneeMobile.objects.filter(**filtre('tournee__'))
+    # Paye - rendu AU MOMENT DE LA VENTE (les reglements de credit ulterieurs sont comptes
+    # dans la tournee ou ils ont ete recus, via EncaissementVente)
+    ajouter(ventes, 'tournee__', F('montant_paye') - F('montant_rendu'))
+    ajouter(EncaissementVente.objects.filter(**filtre('vente__tournee__')), 'vente__tournee__', F('montant'), -1)
+    ajouter(EncaissementVente.objects.filter(**filtre('tournee__')), 'tournee__', F('montant'))
+    ajouter(EncaissementCommande.objects.filter(**filtre('tournee__')), 'tournee__', F('montant'))
+    ajouter(PaiementSolde.objects.filter(**filtre('tournee__')).exclude(mode_paiement='avoir'),
+            'tournee__', F('montant'))
+    ajouter(PaiementClient.objects.filter(**filtre('tournee__')), 'tournee__', F('montant_ventes_pc'))
+    return dict(resultat) if par_mois else resultat[None]
 
 
 def _taux(numerateur, denominateur):
@@ -95,7 +148,7 @@ def calculer_indicateurs_vendeur(livreur, date_debut, date_fin, aujourd_hui=None
 
     # --- Commandes prises (hors annulees) ---
     commandes = CommandeClient.objects.filter(
-        livreur=livreur, date_commande__date__range=(date_debut, date_fin)
+        q_commandes_du_vendeur(livreur.id), date_commande__date__range=(date_debut, date_fin)
     ).exclude(statut='cancelled')
     for jour, cid in commandes.values_list('date_commande__date', 'client_id'):
         visites.add((jour, cid))
@@ -126,6 +179,8 @@ def calculer_indicateurs_vendeur(livreur, date_debut, date_fin, aujourd_hui=None
         tournee__livreur=livreur, date_vente__date__range=(date_debut, date_fin)
     ).aggregate(t=Sum('montant_total'))['t'] or Decimal('0')
 
+    argent = argent_recupere({'livreur_id': livreur.id, 'date_tournee__range': (date_debut, date_fin)})
+
     return {
         'id': livreur.id,
         'nom': livreur.nom,
@@ -155,11 +210,14 @@ def calculer_indicateurs_vendeur(livreur, date_debut, date_fin, aujourd_hui=None
         'ca_ventes': float(ca_ventes),
         'ca_commandes': float(montant_pris),
         'ca_periode': float(ca_ventes + montant_pris),
+        # Argent reellement recupere par cette personne pendant ses tournees
+        'argent_recupere': float(argent),
     }
 
 
 def _a_de_l_activite(ind):
-    return any(ind[k] for k in ('clients_planifies', 'visites', 'nb_objectifs', 'commandes_prises'))
+    return any(ind[k] for k in ('clients_planifies', 'visites', 'nb_objectifs', 'commandes_prises',
+                                'argent_recupere'))
 
 
 def calculer_indicateurs(date_debut, date_fin, livreur_id=None, aujourd_hui=None):
@@ -190,6 +248,8 @@ def calculer_indicateurs(date_debut, date_fin, livreur_id=None, aujourd_hui=None
         'montant_commandes_prises': round(somme('montant_commandes_prises'), 2),
         'montant_commandes_livrees': round(somme('montant_commandes_livrees'), 2),
         'taux_livraison': _taux(somme('montant_commandes_livrees'), somme('montant_commandes_prises')),
+        'ca_periode': round(somme('ca_periode'), 2),
+        'argent_recupere': round(somme('argent_recupere'), 2),
     }
     return {
         'periode': {'date_debut': date_debut.isoformat(), 'date_fin': date_fin.isoformat()},
@@ -198,6 +258,8 @@ def calculer_indicateurs(date_debut, date_fin, livreur_id=None, aujourd_hui=None
             'taux_reussite': "Visites ayant donné une vente ou une commande / visites effectuées",
             'taux_realisation': "CA réalisé / objectifs mensuels des mois couverts par la période",
             'taux_livraison': "Montant des commandes livrées / montant des commandes prises",
+            'ca_periode': "Ventes de tournée + commandes passées par le vendeur (même livrées par un autre)",
+            'argent_recupere': "Argent réellement encaissé par la personne pendant ses tournées (espèces et chèques)",
         },
         'vendeurs': vendeurs,
         'global': global_,
@@ -228,7 +290,7 @@ def calculer_ca_mensuel(annee, livreur_id=None, aujourd_hui=None):
     commandes = CommandeClient.objects.filter(date_commande__year=annee).exclude(statut='cancelled')
     if livreur_id:
         ventes = ventes.filter(tournee__livreur_id=livreur_id)
-        commandes = commandes.filter(livreur_id=livreur_id)
+        commandes = commandes.filter(q_commandes_du_vendeur(livreur_id))
 
     # (vendeur, mois) -> montants
     ca_ventes, ca_commandes = defaultdict(Decimal), defaultdict(Decimal)
@@ -238,12 +300,22 @@ def calculer_ca_mensuel(annee, livreur_id=None, aujourd_hui=None):
             total=Sum('montant_total'), n=Count('id')):
         ca_ventes[(r['tournee__livreur_id'], r['m'])] = r['total'] or Decimal('0')
         nb_ventes[(r['tournee__livreur_id'], r['m'])] = r['n']
-    for r in commandes.annotate(m=ExtractMonth('date_commande')).values('livreur_id', 'm').annotate(
+    # Commande comptee pour le vendeur qui l'a passee (repli : livreur, anciennes commandes)
+    from django.db.models.functions import Coalesce
+    for r in commandes.annotate(m=ExtractMonth('date_commande'),
+                                vendeur=Coalesce('passee_par_id', 'livreur_id')).values('vendeur', 'm').annotate(
             total=Sum('montant_total_ttc'), n=Count('id')):
-        ca_commandes[(r['livreur_id'], r['m'])] = r['total'] or Decimal('0')
-        nb_commandes[(r['livreur_id'], r['m'])] = r['n']
+        ca_commandes[(r['vendeur'], r['m'])] = r['total'] or Decimal('0')
+        nb_commandes[(r['vendeur'], r['m'])] = r['n']
 
-    ids_actifs = {k[0] for k in ca_ventes} | {k[0] for k in ca_commandes}
+    # Argent reellement recupere par chacun pendant ses tournees, mois par mois
+    filtre_argent = {'date_tournee__year': annee}
+    if livreur_id:
+        filtre_argent['livreur_id'] = livreur_id
+    argent = defaultdict(Decimal, argent_recupere(filtre_argent, par_mois=True))
+
+    ids_actifs = ({k[0] for k in ca_ventes} | {k[0] for k in ca_commandes}
+                  | {k[0] for k, v in argent.items() if v})
     livreurs = LivreurDistribution.objects.all().order_by('nom')
     if livreur_id:
         livreurs = livreurs.filter(id=livreur_id)
@@ -253,6 +325,7 @@ def calculer_ca_mensuel(annee, livreur_id=None, aujourd_hui=None):
     def cellule(lid, m):
         v, c = ca_ventes[(lid, m)], ca_commandes[(lid, m)]
         return {'mois': m, 'ventes': float(v), 'commandes': float(c), 'total': float(v + c),
+                'argent': float(argent[(lid, m)]),
                 'nb_ventes': nb_ventes[(lid, m)], 'nb_commandes': nb_commandes[(lid, m)]}
 
     vendeurs = []
@@ -267,6 +340,7 @@ def calculer_ca_mensuel(annee, livreur_id=None, aujourd_hui=None):
             'total_ventes': round(sum(c['ventes'] for c in mois), 2),
             'total_commandes': round(sum(c['commandes'] for c in mois), 2),
             'total_annee': round(sum(c['total'] for c in mois), 2),
+            'total_argent': round(sum(c['argent'] for c in mois), 2),
             'ca_mois_courant': courant['total'] if courant else None,
             'ca_mois_courant_ventes': courant['ventes'] if courant else None,
             'ca_mois_courant_commandes': courant['commandes'] if courant else None,
@@ -280,6 +354,7 @@ def calculer_ca_mensuel(annee, livreur_id=None, aujourd_hui=None):
             'ventes': round(sum(v['mois'][m - 1]['ventes'] for v in vendeurs), 2),
             'commandes': round(sum(v['mois'][m - 1]['commandes'] for v in vendeurs), 2),
             'total': round(sum(v['mois'][m - 1]['total'] for v in vendeurs), 2),
+            'argent': round(sum(v['mois'][m - 1]['argent'] for v in vendeurs), 2),
         })
     courant = totaux_mois[mois_courant - 1] if mois_courant else None
 
@@ -297,5 +372,6 @@ def calculer_ca_mensuel(annee, livreur_id=None, aujourd_hui=None):
             'total': courant['total'] if courant else None,
             'ventes': courant['ventes'] if courant else None,
             'commandes': courant['commandes'] if courant else None,
+            'argent': courant['argent'] if courant else None,
         },
     }

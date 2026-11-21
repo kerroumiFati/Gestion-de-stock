@@ -60,8 +60,16 @@ jobs:
           ssh-keyscan -p ${{ secrets.VPS_PORT }} ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
 
       - name: Create .env file
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
         run: |
-          echo "${{ secrets.ENV_FILE }}" > .env
+          # printf + variable d'environnement : les caractères $ ` " \ de la clé restent intacts
+          printf '%s\n' "$ENV_FILE" | tr -d '\r' > .env
+          # Garde-fou : sans ces variables le site démarrerait sur une mauvaise base / clé par défaut
+          for v in SECRET_KEY DATABASE_URL ALLOWED_HOSTS DEBUG; do
+            grep -q "^$v=." .env || { echo "::error::Le secret ENV_FILE ne contient pas $v : déploiement annulé"; exit 1; }
+          done
+          grep -qi '^DEBUG=False' .env || echo "::warning::DEBUG n'est pas False dans ENV_FILE"
 
       - name: Create backup
         if: ${{ github.event.inputs.create_backup == 'true' }}

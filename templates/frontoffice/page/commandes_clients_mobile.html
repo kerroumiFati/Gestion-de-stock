@@ -853,10 +853,20 @@
             },
             body: JSON.stringify({ statut: newStatut })
         })
-        .then(res => res.json())
-        .then(data => {
+        .then(res => res.json().catch(() => ({})).then(data => ({ ok: res.ok, data })))
+        .then(({ ok, data }) => {
+            if (!ok) {
+                // Refus du serveur (ex. stock du van insuffisant, commande déjà livrée) : on l'affiche
+                showError(data.error || data.detail || 'Changement de statut refusé');
+                loadCommandes();
+                return;
+            }
             $('#modalChangeStatus').modal('hide');
-            showSuccess('Statut modifié avec succès');
+            const avant = (typeof allCommandes !== 'undefined' ? allCommandes : []).find(c => String(c.id) === String(id));
+            const dejaPaye = avant ? Number(avant.montant_paye) || 0 : 0;
+            showSuccess(newStatut === 'cancelled' && avant && avant.statut !== 'cancelled' && dejaPaye > 0
+                ? `Commande annulée. ${dejaPaye.toFixed(2)} DA déjà payés ont été ajoutés à l’avance du client.`
+                : 'Statut modifié avec succès');
             loadCommandes();
         })
         .catch(err => {

@@ -37,7 +37,7 @@ def creer_parametres_par_entreprise(apps, schema_editor):
         est_proprietaire = company.pk == proprietaire_id
 
         def entrepot_si_a_elle(w):
-            return w if (w is not None and w.company_id == company.pk) else None
+            return w if (w is not None and w.company_id in (company.pk, None)) else None
 
         SystemConfig.objects.create(
             company=company,

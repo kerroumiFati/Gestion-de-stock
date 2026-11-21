@@ -39,10 +39,58 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
 # Serializers pour les Catégories
 class CategorieSerializer(serializers.ModelSerializer):
-    parent_nom = serializers.CharField(source='parent.nom', read_only=True)
-    full_path = serializers.CharField(source='get_full_path', read_only=True)
-    products_count = serializers.IntegerField(source='get_products_count', read_only=True)
+    parent_nom = serializers.SerializerMethodField()
+    full_path = serializers.SerializerMethodField()
+    products_count = serializers.SerializerMethodField()
     sous_categories_count = serializers.SerializerMethodField()
+
+    # Index de TOUTES les catégories + nombre de produits actifs par catégorie, calculé une
+    # seule fois (2 requêtes) au lieu de relire parents / enfants / produits ligne par ligne.
+    def _index(self):
+        idx = self.context.get('_categories_index')
+        if idx is None:
+            from django.db.models import Count
+            cats = {c['id']: c for c in Categorie.objects.values('id', 'nom', 'parent_id', 'is_active')}
+            enfants = {}
+            for c in cats.values():
+                if c['parent_id'] is not None and c['is_active']:
+                    enfants.setdefault(c['parent_id'], []).append(c['id'])
+            nb = dict(Produit.objects.filter(is_active=True, categorie__isnull=False)
+                      .values_list('categorie').annotate(n=Count('id')))
+            idx = {'cats': cats, 'enfants': enfants, 'nb': nb}
+            self.context['_categories_index'] = idx
+        return idx
+
+    def get_parent_nom(self, obj):
+        p = self._index()['cats'].get(obj.parent_id)
+        return p['nom'] if p else None
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if instance.parent_id is None:
+            data.pop('parent_nom', None)   # comme avant : clé absente pour une catégorie racine
+        return data
+
+    def get_full_path(self, obj):
+        cats = self._index()['cats']
+        chemin, vus, pid = [obj.nom], {obj.id}, obj.parent_id
+        while pid is not None and pid in cats and pid not in vus:
+            vus.add(pid)
+            chemin.insert(0, cats[pid]['nom'])
+            pid = cats[pid]['parent_id']
+        return " > ".join(chemin)
+
+    def get_products_count(self, obj):
+        idx = self._index()
+        total, pile, vus = 0, [obj.id], set()
+        while pile:
+            cid = pile.pop()
+            if cid in vus:
+                continue
+            vus.add(cid)
+            total += idx['nb'].get(cid, 0)
+            pile.extend(idx['enfants'].get(cid, []))
+        return total
     
     class Meta:
         model = Categorie
@@ -50,7 +98,7 @@ class CategorieSerializer(serializers.ModelSerializer):
                  'couleur', 'icone', 'is_active', 'products_count', 'sous_categories_count', 'created_at']
     
     def get_sous_categories_count(self, obj):
-        return obj.sous_categories.filter(is_active=True).count()
+        return len(self._index()['enfants'].get(obj.id, []))
 
 class CategorieTreeSerializer(serializers.ModelSerializer):
     """Serializer pour affichage hiérarchique des catégories"""
@@ -375,12 +423,42 @@ class ClientSerializer(serializers.ModelSerializer):
     secteur_couleur = serializers.CharField(source='secteur.couleur', read_only=True, allow_null=True)
     type_prix_code = serializers.CharField(source='type_prix.code', read_only=True, allow_null=True)
     type_prix_libelle = serializers.CharField(source='type_prix.libelle', read_only=True, allow_null=True)
+    # Situation RÉELLE du compte (dette antérieure + ventes téléphone/PC + commandes livrées
+    # non payées, moins l'avance). « solde » reste le champ saisi (dette antérieure / avance).
+    dette_totale = serializers.SerializerMethodField()
+    avance = serializers.SerializerMethodField()
+    situation_nette = serializers.SerializerMethodField()
 
     class Meta:
         model = Client
         fields = ('id', 'uuid', 'nom', 'prenom', 'email', 'telephone', 'adresse', 'lat', 'lng',
                   'secteur', 'secteur_nom', 'secteur_code', 'secteur_couleur', 'produits',
-                  'nif', 'nis', 'ai', 'rc', 'solde', 'type_prix', 'type_prix_code', 'type_prix_libelle')
+                  'nif', 'nis', 'ai', 'rc', 'solde', 'type_prix', 'type_prix_code', 'type_prix_libelle',
+                  'dette_totale', 'avance', 'situation_nette')
+
+    def _situation(self, obj):
+        """Calculée une seule fois pour toute la liste affichée (4 requêtes au total)."""
+        from .comptes_clients import situations_clients
+        cache = self.context.setdefault('_situations_clients', {})
+        if obj.pk not in cache:
+            racine = self.root.instance if self.root is not None else None
+            if racine is not None and not isinstance(racine, Client) and hasattr(racine, '__iter__'):
+                # Liste de clients : toute la liste d'un coup (ignoré si ce n'est pas une liste de clients)
+                ids = [c.pk for c in racine if isinstance(c, Client) and c.pk not in cache] or [obj.pk]
+            else:
+                ids = [obj.pk]
+            cache.update(situations_clients(Client.objects.filter(pk__in=ids)))
+        return cache.get(obj.pk) or {}
+
+    def get_dette_totale(self, obj):
+        return float(self._situation(obj).get('dette', 0))
+
+    def get_avance(self, obj):
+        return float(self._situation(obj).get('avance', 0))
+
+    def get_situation_nette(self, obj):
+        """Positif = le client doit de l'argent ; négatif = il a de l'avance."""
+        return float(self._situation(obj).get('net', 0))
 
 class AchatSerializer(serializers.ModelSerializer):
     fournisseur_nom = serializers.CharField(source='fournisseur.libelle', read_only=True)

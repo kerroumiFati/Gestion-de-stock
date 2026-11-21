@@ -771,28 +771,40 @@ class ClientViewSet(TenantFilterMixin, viewsets.ModelViewSet):
             clients = Client.objects.filter(company__isnull=True)
             print(f"[DASHBOARD STATS] User has no company, filtering by company__isnull=True")
 
-        # Statistiques globales
-        total_clients = clients.count()
-        clients_avec_credit = clients.filter(solde__gt=0).count()
-        clients_avec_dette = clients.filter(solde__lt=0).count()
+        # Situation RÉELLE de chaque client (même calcul que le « Compte client ») : dette antérieure
+        # + ventes téléphone et PC à crédit + commandes livrées non payées, moins l'avance.
+        # Avant : seul le champ « solde » était lu, les crédits des ventes n'apparaissaient nulle part.
+        from .comptes_clients import situations_clients
+        sit = situations_clients(clients)
+        infos = {c['id']: c for c in clients.values('id', 'nom', 'prenom', 'telephone', 'solde')}
+        CENT = Decimal('0.01')
 
-        # DEBUG: Log statistics
-        print(f"[DASHBOARD STATS] Total clients: {total_clients}, With credit: {clients_avec_credit}, With debt: {clients_avec_dette}")
+        total_clients = len(sit)
+        debiteurs = [(cid, r) for cid, r in sit.items() if r['net'] > CENT]
+        en_avance = [(cid, r) for cid, r in sit.items() if r['net'] < -CENT]
+        clients_avec_dette = len(debiteurs)
+        clients_avec_credit = len(en_avance)
 
-        # Soldes totaux
-        total_credits = clients.filter(solde__gt=0).aggregate(total=Sum('solde'))['total'] or Decimal('0')
-        total_dettes = clients.filter(solde__lt=0).aggregate(total=Sum('solde'))['total'] or Decimal('0')
-        solde_global = clients.aggregate(total=Sum('solde'))['total'] or Decimal('0')
+        # Mêmes signes qu'avant pour l'écran : dettes en négatif, avances en positif
+        total_dettes = -sum((r['net'] for _, r in debiteurs), Decimal('0'))
+        total_credits = sum((-r['net'] for _, r in en_avance), Decimal('0'))
+        solde_global = -sum((r['net'] for r in sit.values()), Decimal('0'))
 
-        # Top 10 clients avec le plus de dettes
-        top_dettes = list(clients.filter(solde__lt=0).order_by('solde')[:10].values(
-            'id', 'nom', 'prenom', 'solde', 'telephone'
-        ))
+        def _ligne(cid, r):
+            c = infos.get(cid, {})
+            return {'id': cid, 'nom': c.get('nom', ''), 'prenom': c.get('prenom', ''),
+                    'telephone': c.get('telephone', ''), 'solde': -r['net'],
+                    'dette': r['dette'], 'avance': r['avance']}
 
-        # Top 10 clients avec le plus de crédits
-        top_credits = list(clients.filter(solde__gt=0).order_by('-solde')[:10].values(
-            'id', 'nom', 'prenom', 'solde', 'telephone'
-        ))
+        # Top 10 clients avec le plus de dettes / le plus d'avance
+        top_dettes = [_ligne(cid, r) for cid, r in sorted(debiteurs, key=lambda x: -x[1]['net'])[:10]]
+        top_credits = [_ligne(cid, r) for cid, r in sorted(en_avance, key=lambda x: x[1]['net'])[:10]]
+
+        # Documents encore dus (ventes téléphone + ventes PC + commandes livrées, hors dette antérieure)
+        avec_dette_anterieure = [cid for cid, c in infos.items() if (c.get('solde') or 0) < 0]
+        ventes_credit = sum(r['nb_documents'] for r in sit.values()) - len(avec_dette_anterieure)
+        total_reste_a_payer = sum((r['dette'] for r in sit.values()), Decimal('0')) + sum(
+            (Decimal(str(infos[cid]['solde'])) for cid in avec_dette_anterieure), Decimal('0'))
 
         # Paiements récents (30 derniers jours)
         date_limite = timezone.now() - timedelta(days=30)
@@ -851,34 +863,6 @@ class ClientViewSet(TenantFilterMixin, viewsets.ModelViewSet):
             'count': p['count'],
             'total': float(p['total'] or 0)
         } for p in modes_paiement]
-
-        # Ventes avec reste à payer
-        # Le champ reste_a_payer n'existe pas en DB, il faut le calculer avec des annotations
-        from django.db.models import ExpressionWrapper, DecimalField, Value
-        from django.db.models.functions import Coalesce
-        from API.models import Vente
-
-        # Annoter les ventes avec le montant payé
-        ventes_annotees = Vente.objects.filter(ventes_filter).annotate(
-            montant_paye=Coalesce(Sum('paiements__montant'), Value(0, output_field=DecimalField()))
-        )
-
-        # Puis annoter avec le reste à payer (référence à l'annotation précédente)
-        ventes_annotees = ventes_annotees.annotate(
-            reste_a_payer_calc=ExpressionWrapper(
-                F('total_ttc') - F('montant_paye'),
-                output_field=DecimalField()
-            )
-        )
-
-        # Filtrer celles avec reste à payer > 0
-        ventes_avec_reste = ventes_annotees.filter(reste_a_payer_calc__gt=0)
-        ventes_credit = ventes_avec_reste.count()
-
-        # Calculer le total du reste à payer
-        total_reste_a_payer = ventes_avec_reste.aggregate(
-            total=Sum('reste_a_payer_calc')
-        )['total'] or Decimal('0')
 
         return Response({
             'stats_globales': {
@@ -1067,7 +1051,9 @@ class ProduitViewSet(TenantFilterMixin, viewsets.ModelViewSet):
             )
 
 class AchatViewSet(TenantFilterMixin, viewsets.ModelViewSet):
-    queryset = Achat.objects.all().order_by('date_Achat')
+    queryset = Achat.objects.select_related(
+        'produit', 'produit__currency', 'fournisseur', 'warehouse'
+    ).order_by('date_Achat')
     serializer_class = AchatSerializer
     permission_classes = [IsAuthenticated]
 
@@ -2823,7 +2809,7 @@ from .models import AuditLog
 from .serializers import AuditLogSerializer
 
 class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = AuditLog.objects.all()
+    queryset = AuditLog.objects.select_related('actor')
     serializer_class = AuditLogSerializer
     permission_classes = [IsAuthenticated, IsAdminUser]
 
@@ -3128,7 +3114,13 @@ class LoginViewSet(APIView):
 # API pour les Ventes
 class VenteViewSet(TenantFilterMixin, viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
-    queryset = Vente.objects.all().order_by('-date_vente')
+    queryset = Vente.objects.select_related(
+        'client', 'currency', 'warehouse', 'company'
+    ).prefetch_related(
+        Prefetch('lignes', queryset=LigneVente.objects.select_related(
+            'produit', 'currency', 'promotion').prefetch_related('produit__conditionnements')),
+        Prefetch('paiements', queryset=PaiementVente.objects.select_related('created_by')),
+    ).order_by('-date_vente')
     
     def perform_create(self, serializer):
         # Assigner la company de l'utilisateur connecté
@@ -4695,7 +4687,16 @@ def profit_data(request):
         company = verifier_acces(request)
     except AccesRefuse as e:
         return _refus_benefices(e)
-    rows, total_benefice = _get_profit_data(company)
+    from .reports import quantites_vendues
+    def _date(nom):
+        v = request.query_params.get(nom)
+        try:
+            return datetime.strptime(v, '%Y-%m-%d').date() if v else None
+        except ValueError:
+            return None
+    debut, fin = _date('start_date'), _date('end_date')
+    rows, total_benefice = _get_profit_data(company, debut, fin)
+    _, ca_par_origine = quantites_vendues(company, debut, fin)
     results = []
     for r in rows:
         results.append({
@@ -4706,11 +4707,19 @@ def profit_data(request):
             'benefice_unit': float(r['benefice_unit']),
             'quantite_stock': r['qty'],
             'benefice_total': float(r['benefice_total']),
+            # Réalisé : ventes PC + ventes du téléphone + commandes livrées
+            'quantite_vendue': float(r['qte_vendue']),
+            'ca_vendu': float(r['ca_vendu']),
+            'benefice_realise': float(r['benefice_realise']),
         })
     return Response({
         'products': results,
         'total_benefice': float(total_benefice),
         'count': len(results),
+        'ca_vendu': float(sum(ca_par_origine.values())),
+        'ca_par_origine': {k: float(v) for k, v in ca_par_origine.items()},
+        'total_benefice_realise': float(sum((r['benefice_realise'] for r in rows), Decimal('0'))),
+        'periode': {'debut': debut.isoformat() if debut else None, 'fin': fin.isoformat() if fin else None},
     })
 
 
@@ -4843,7 +4852,9 @@ class TypePrixViewSet(viewsets.ModelViewSet):
 # Prix Produits API #
 #####################
 class PrixProduitViewSet(viewsets.ModelViewSet):
-    queryset = PrixProduit.objects.all().order_by('produit', 'code_prix__ordre', 'type_prix__ordre')
+    queryset = PrixProduit.objects.select_related(
+        'produit', 'produit__currency', 'produit__company', 'code_prix', 'type_prix', 'currency'
+    ).order_by('produit', 'code_prix__ordre', 'type_prix__ordre')
     serializer_class = PrixProduitSerializer
     permission_classes = [IsAuthenticated]
     filterset_fields = ['produit', 'code_prix', 'type_prix', 'is_active']

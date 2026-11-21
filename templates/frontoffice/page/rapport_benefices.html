@@ -87,7 +87,30 @@
         <div class="col-md-3"><div class="kpi-card green"><div class="kpi-title"><i class="fas fa-boxes"></i> Total produits</div><div class="kpi-value" id="kpi-total">—</div></div></div>
         <div class="col-md-3"><div class="kpi-card blue"><div class="kpi-title"><i class="fas fa-arrow-up"></i> Produits bénéficiaires</div><div class="kpi-value" id="kpi-positif">—</div></div></div>
         <div class="col-md-3"><div class="kpi-card orange"><div class="kpi-title"><i class="fas fa-arrow-down"></i> Produits déficitaires</div><div class="kpi-value" id="kpi-negatif">—</div></div></div>
-        <div class="col-md-3"><div class="kpi-card purple"><div class="kpi-title"><i class="fas fa-coins"></i> Bénéfice total estimé</div><div class="kpi-value" id="kpi-benefice">—</div></div></div>
+        <div class="col-md-3"><div class="kpi-card purple"><div class="kpi-title"><i class="fas fa-coins"></i> Bénéfice estimé sur le stock</div><div class="kpi-value" id="kpi-benefice">—</div></div></div>
+    </div>
+
+    <!-- Réalisé : ventes PC + téléphone + commandes livrées -->
+    <div class="card benefice-card mt-1 mb-3">
+        <div class="card-body">
+            <div class="d-flex flex-wrap align-items-end justify-content-between" style="gap:12px;">
+                <h5 class="mb-0"><i class="fas fa-cash-register" style="color:#11998e;"></i> Ventes réalisées</h5>
+                <div class="d-flex flex-wrap align-items-end" style="gap:8px;">
+                    <div><label class="small text-muted mb-0" for="realise-debut">Du</label>
+                        <input type="date" id="realise-debut" class="form-control form-control-sm"></div>
+                    <div><label class="small text-muted mb-0" for="realise-fin">Au</label>
+                        <input type="date" id="realise-fin" class="form-control form-control-sm"></div>
+                    <button type="button" class="btn btn-sm btn-success" id="realise-appliquer"><i class="fas fa-filter"></i> Appliquer</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="realise-tout">Tout</button>
+                </div>
+            </div>
+            <div class="row mt-3 text-center">
+                <div class="col-6 col-md-3 mb-2"><div class="small text-muted">CA HT vendu</div><div class="h5 mb-0" id="kpi-ca-vendu">—</div></div>
+                <div class="col-6 col-md-3 mb-2"><div class="small text-muted">Bénéfice réalisé</div><div class="h5 mb-0" id="kpi-realise" style="color:#11998e;">—</div></div>
+                <div class="col-12 col-md-6 mb-2"><div class="small text-muted">Dont</div>
+                    <div class="small" id="kpi-origines">—</div></div>
+            </div>
+        </div>
     </div>
 
     <!-- Export & Tableau -->
@@ -122,7 +145,11 @@
 
 async function loadProfitData() {
     try {
-        const res = await fetch('/API/reports/profit-data/', { credentials: 'include' });
+        const qs = new URLSearchParams();
+        const d = document.getElementById('realise-debut'), f = document.getElementById('realise-fin');
+        if (d && d.value) qs.set('start_date', d.value);
+        if (f && f.value) qs.set('end_date', f.value);
+        const res = await fetch('/API/reports/profit-data/' + (qs.toString() ? '?' + qs : ''), { credentials: 'include' });
         if (res.status === 403) { const j = await res.json().catch(() => ({})); return verrouillerEcran(j.detail); }
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const data = await res.json();
@@ -134,6 +161,13 @@ async function loadProfitData() {
         document.getElementById('kpi-positif').textContent = positif;
         document.getElementById('kpi-negatif').textContent = negatif;
         document.getElementById('kpi-benefice').textContent = formatNum(data.total_benefice) + ' DA';
+        document.getElementById('kpi-ca-vendu').textContent = formatNum(data.ca_vendu) + ' DA';
+        document.getElementById('kpi-realise').textContent = formatNum(data.total_benefice_realise) + ' DA';
+        const o = data.ca_par_origine || {};
+        document.getElementById('kpi-origines').innerHTML =
+            `<i class="fas fa-desktop"></i> PC : <b>${formatNum(o.pc)}</b> DA &nbsp;·&nbsp; ` +
+            `<i class="fas fa-mobile-alt"></i> Téléphone : <b>${formatNum(o.telephone)}</b> DA &nbsp;·&nbsp; ` +
+            `<i class="fas fa-truck"></i> Commandes livrées : <b>${formatNum(o.commande)}</b> DA`;
 
         // Tableau
         const rows = data.products.map(p => {
@@ -149,6 +183,9 @@ async function loadProfitData() {
                 </td>
                 <td style="padding:10px 14px;text-align:right;">${p.quantite_stock}</td>
                 <td style="padding:10px 14px;text-align:right;font-weight:600;">${formatNum(p.benefice_total)}</td>
+                <td style="padding:10px 14px;text-align:right;">${formatQte(p.quantite_vendue)}</td>
+                <td style="padding:10px 14px;text-align:right;">${formatNum(p.ca_vendu)}</td>
+                <td style="padding:10px 14px;text-align:right;font-weight:600;color:${p.benefice_realise < 0 ? '#b91c1c' : '#11998e'};">${formatNum(p.benefice_realise)}</td>
             </tr>`;
         }).join('');
 
@@ -162,14 +199,20 @@ async function loadProfitData() {
                         <th style="padding:12px 14px;text-align:right;">Prix Achat Moy.</th>
                         <th style="padding:12px 14px;text-align:right;">Bénéfice Unit.</th>
                         <th style="padding:12px 14px;text-align:right;">Qté Stock</th>
-                        <th style="padding:12px 14px;text-align:right;">Bénéfice Total</th>
+                        <th style="padding:12px 14px;text-align:right;">Bénéfice estimé (stock)</th>
+                        <th style="padding:12px 14px;text-align:right;">Qté vendue</th>
+                        <th style="padding:12px 14px;text-align:right;">CA HT vendu</th>
+                        <th style="padding:12px 14px;text-align:right;">Bénéfice réalisé</th>
                     </tr>
                 </thead>
                 <tbody>${rows}</tbody>
                 <tfoot>
                     <tr style="background:#f0fdf4;font-weight:700;">
-                        <td colspan="6" style="padding:12px 14px;text-align:right;">BÉNÉFICE TOTAL ESTIMÉ</td>
+                        <td colspan="6" style="padding:12px 14px;text-align:right;">TOTAL</td>
                         <td style="padding:12px 14px;text-align:right;color:#11998e;">${formatNum(data.total_benefice)} DA</td>
+                        <td></td>
+                        <td style="padding:12px 14px;text-align:right;">${formatNum(data.ca_vendu)} DA</td>
+                        <td style="padding:12px 14px;text-align:right;color:#11998e;">${formatNum(data.total_benefice_realise)} DA</td>
                     </tr>
                 </tfoot>
             </table>`;
@@ -185,6 +228,21 @@ async function loadProfitData() {
             </div>`;
     }
 }
+
+function formatQte(val) {
+    return (Number(val) || 0).toLocaleString('fr-FR', { maximumFractionDigits: 2 });
+}
+
+(function () {
+    const appliquer = document.getElementById('realise-appliquer');
+    const tout = document.getElementById('realise-tout');
+    if (appliquer) appliquer.addEventListener('click', () => loadProfitData());
+    if (tout) tout.addEventListener('click', () => {
+        document.getElementById('realise-debut').value = '';
+        document.getElementById('realise-fin').value = '';
+        loadProfitData();
+    });
+})();
 
 function formatNum(val) {
     if (val === null || val === undefined) return '0.00';

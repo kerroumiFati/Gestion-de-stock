@@ -45,12 +45,14 @@ def _fmt(q):
     return str(q.quantize(Decimal('1'))) if q == q.to_integral_value() else str(q.normalize())
 
 
-def verifier_commande_modifiable(commande):
+def verifier_commande_modifiable(commande, autoriser_payee=False):
+    """autoriser_payee : le livreur qui livre (ou un administrateur) peut modifier une commande
+    déjà payée ; le reste à payer réapparaît si le total augmente."""
     if commande.statut not in STATUTS_MODIFIABLES:
         raise ModificationRefusee(
             f"La commande {commande.reference} est {commande.get_statut_display().lower()} : "
             "elle ne peut plus être modifiée.", code=409)
-    if commande.est_paye:
+    if commande.est_paye and not autoriser_payee:
         raise ModificationRefusee(
             f"La commande {commande.reference} est entièrement payée : elle ne peut plus être modifiée.", code=409)
 
@@ -110,7 +112,7 @@ def _normaliser_lignes(commande, lignes):
     return resultat
 
 
-def modifier_lignes_commande(commande, lignes, user, notes=None):
+def modifier_lignes_commande(commande, lignes, user, notes=None, autoriser_payee=False):
     """
     Remplace le contenu de la commande par `lignes` (ajouts, retraits, quantites).
     Retourne (commande, modifications) ou leve ModificationRefusee.
@@ -119,7 +121,7 @@ def modifier_lignes_commande(commande, lignes, user, notes=None):
 
     with transaction.atomic():
         commande = CommandeClient.objects.select_for_update().get(pk=commande.pk)
-        verifier_commande_modifiable(commande)
+        verifier_commande_modifiable(commande, autoriser_payee=autoriser_payee)
         nouvelles = _normaliser_lignes(commande, lignes)
 
         existantes = {l.produit_id: l for l in commande.lignes.select_related('produit')}
@@ -156,6 +158,13 @@ def modifier_lignes_commande(commande, lignes, user, notes=None):
                 f"encaissé ({commande.montant_paye} DA).")   # la transaction annule tout
 
         champs = ['synced_at', 'updated_at']
+        # « Payée » recalculé avec le nouveau total (avant : une commande payée puis augmentée
+        # restait « payée » et le reste à payer était invisible)
+        paye = commande.montant_paye or Decimal('0')
+        est_paye = paye > 0 and paye >= (commande.montant_total_ttc or Decimal('0')) - Decimal('0.01')
+        if est_paye != bool(commande.est_paye):
+            commande.est_paye = est_paye
+            champs.append('est_paye')
         if notes is not None and (notes or '') != (commande.notes or ''):
             commande.notes = notes
             champs.append('notes')

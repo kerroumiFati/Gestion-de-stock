@@ -1123,6 +1123,18 @@ class CommandeClientCreateSerializer(serializers.ModelSerializer):
         })
 
     def create(self, validated_data):
+        """Création d'une commande avec ses lignes et son acompte, EN UN SEUL BLOC.
+
+        Avant : la commande était enregistrée, puis ses lignes une à une, hors transaction. Une
+        erreur entre les deux laissait une commande vide ou incomplète ; au renvoi suivant, le
+        serveur répondait « déjà reçue » (même app_id) et le téléphone la croyait envoyée.
+        Désormais, en cas d'erreur, rien n'est enregistré et le téléphone la renvoie en entier.
+        """
+        from django.db import transaction
+        with transaction.atomic():
+            return self._create(validated_data)
+
+    def _create(self, validated_data):
         import logging
         logger = logging.getLogger(__name__)
 

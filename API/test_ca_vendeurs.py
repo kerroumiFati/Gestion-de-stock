@@ -47,6 +47,35 @@ class CAVendeursTests(TestCase):
         self._vente(self.ahmed, 2025, 9, 5, 7777)                            # autre annee
         self._commande(self.yacine, 2026, 9, 7, 1000)                        # prevendeur : commandes seulement
 
+    def test_commande_prise_par_un_vendeur_et_livree_par_un_autre(self):
+        """Karim prend une commande de 50 000 avec 10 000 d'acompte ; Said la livre et encaisse
+        les 40 000 restants. CA : tout pour Karim. Argent récupéré : 10 000 Karim, 40 000 Said."""
+        from .distribution_models import EncaissementCommande
+        from .indicateurs import calculer_indicateurs_vendeur
+        karim, said = self.yacine, self.ahmed
+        t_karim = TourneeMobile.objects.create(livreur=karim, date_tournee=date(2026, 9, 7), numero_tournee='T-K')
+        t_said = TourneeMobile.objects.create(livreur=said, date_tournee=date(2026, 9, 9), numero_tournee='T-S')
+        c = self._commande(karim, 2026, 9, 7, 50000, statut='delivered')
+        CommandeClient.objects.filter(pk=c.pk).update(passee_par=karim, livreur=said)   # affectée à Said
+        EncaissementCommande.objects.create(commande=c, app_id='acompte-x', montant=10000,
+                                            type_paiement='especes', tournee=t_karim)
+        EncaissementCommande.objects.create(commande=c, app_id='livraison-x', montant=40000,
+                                            type_paiement='especes', tournee=t_said)
+
+        data = calculer_ca_mensuel(2026, aujourd_hui=date(2026, 9, 29))
+        par_nom = {v['nom']: v for v in data['vendeurs']}
+        self.assertEqual(par_nom['Yacine']['mois'][8]['commandes'], 50000.0)   # Karim : la vente
+        self.assertEqual(par_nom['Ahmed']['mois'][8]['commandes'], 0.0)        # Said : pas la vente
+        self.assertEqual(par_nom['Yacine']['mois'][8]['argent'], 10000.0)      # Karim : l'acompte
+        self.assertEqual(par_nom['Ahmed']['mois'][8]['argent'], 40000.0)       # Said : le reste
+        self.assertEqual(par_nom['Ahmed']['total_argent'], 40000.0)
+
+        debut, fin = date(2026, 9, 1), date(2026, 9, 30)
+        ik = calculer_indicateurs_vendeur(karim, debut, fin, aujourd_hui=date(2026, 9, 29))
+        i_s = calculer_indicateurs_vendeur(said, debut, fin, aujourd_hui=date(2026, 9, 29))
+        self.assertEqual((ik['ca_commandes'], ik['argent_recupere']), (50000.0, 10000.0))
+        self.assertEqual((i_s['ca_commandes'], i_s['argent_recupere']), (0.0, 40000.0))
+
     def test_ca_mois_par_mois(self):
         self._donnees()
         data = calculer_ca_mensuel(2026, aujourd_hui=date(2026, 9, 29))
@@ -65,7 +94,7 @@ class CAVendeursTests(TestCase):
         data = calculer_ca_mensuel(2026, aujourd_hui=date(2026, 9, 29))
         self.assertEqual(data['mois_courant'], 9)
         self.assertEqual(data['mois_en_cours'], {'mois': 9, 'libelle': 'Septembre 2026', 'total': 1600.0,
-                                                 'ventes': 400.0, 'commandes': 1200.0})
+                                                 'ventes': 400.0, 'commandes': 1200.0, 'argent': 0.0})
         ahmed = next(v for v in data['vendeurs'] if v['nom'] == 'Ahmed')
         self.assertEqual((ahmed['ca_mois_courant'], ahmed['ca_mois_courant_ventes'], ahmed['ca_mois_courant_commandes']),
                          (600.0, 400.0, 200.0))
@@ -76,7 +105,8 @@ class CAVendeursTests(TestCase):
         self._donnees()
         data = calculer_ca_mensuel(2026, aujourd_hui=date(2026, 9, 29))
         self.assertEqual(data['totaux_mois'][0]['total'], 180.0)
-        self.assertEqual(data['totaux_mois'][8], {'mois': 9, 'ventes': 400.0, 'commandes': 1200.0, 'total': 1600.0})
+        self.assertEqual(data['totaux_mois'][8], {'mois': 9, 'ventes': 400.0, 'commandes': 1200.0, 'total': 1600.0,
+                                                  'argent': 0.0})
         self.assertEqual(data['total_annee'], 1780.0)
         passe = calculer_ca_mensuel(2025, aujourd_hui=date(2026, 9, 29))
         self.assertIsNone(passe['mois_courant'])

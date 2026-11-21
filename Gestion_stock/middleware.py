@@ -70,3 +70,17 @@ class TenantMiddleware(MiddlewareMixin):
                 logger.error(f"TenantMiddleware error: {e}", exc_info=True)
 
         return None
+
+
+from django.middleware.gzip import GZipMiddleware
+
+
+class GZipJSONMiddleware(GZipMiddleware):
+    """Compresse uniquement les réponses JSON (listes de l'API : 5 à 10 fois plus légères
+    sur une connexion lente). Les pages HTML, qui contiennent le jeton CSRF, ne sont pas
+    compressées ici (précaution contre l'attaque BREACH)."""
+
+    def process_response(self, request, response):
+        if not response.get('Content-Type', '').startswith('application/json'):
+            return response
+        return super().process_response(request, response)

@@ -104,11 +104,28 @@ class Currency(models.Model):
         if self.is_default:
             Currency.objects.filter(is_default=True).update(is_default=False)
         super().save(*args, **kwargs)
-    
+        Currency._cache_defaut.clear()
+
+    # Devise par défaut gardée quelques secondes en mémoire : elle était relue en base
+    # (paramètres + devise = 2 requêtes) pour CHAQUE produit / prix / vente d'une liste.
+    _cache_defaut = {}
+    _CACHE_DEFAUT_SECONDES = 10
+
     @classmethod
     def get_default(cls, company=None):
         """Retourne la devise par défaut configurée dans les paramètres de l'entreprise.
         Fallback: utilise is_default=True si aucune devise n'est configurée."""
+        import time
+        cle = getattr(company, 'pk', company)
+        trouve = cls._cache_defaut.get(cle)
+        if trouve is not None and time.monotonic() - trouve[0] < cls._CACHE_DEFAUT_SECONDES:
+            return trouve[1]
+        devise = cls._get_default_sans_cache(company)
+        cls._cache_defaut[cle] = (time.monotonic(), devise)
+        return devise
+
+    @classmethod
+    def _get_default_sans_cache(cls, company=None):
         try:
             from .models import SystemConfig
             config = SystemConfig.get_solo(company)
@@ -1237,10 +1254,20 @@ class SystemConfig(models.Model):
     def __str__(self):
         return f"Paramètres - {self.company.name if self.company_id else 'sans entreprise'}"
 
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        Currency._cache_defaut.clear()   # la devise par défaut a pu changer
+
     @classmethod
     def get_solo(cls, company=None):
         """Paramètres de l'entreprise donnée (créés au besoin, avec les valeurs par défaut).
-        Sans entreprise : la configuration « sans entreprise »."""
+        Sans entreprise : s'il n'existe qu'UNE entreprise, ce sont ses paramètres (les comptes du
+        bureau et les données sans entreprise lisent et modifient alors les mêmes réglages que les
+        téléphones, comme avant la séparation par entreprise) ; sinon la configuration « sans entreprise »."""
+        if company is None:
+            entreprises = list(Company.objects.values_list('pk', flat=True)[:2])
+            if len(entreprises) == 1:
+                company = Company.objects.get(pk=entreprises[0])
         if company is not None:
             obj, _ = cls.objects.get_or_create(company=company)
             return obj
@@ -1390,6 +1417,9 @@ class Vente(models.Model):
 
     def get_montant_paye(self):
         """Calculer le montant total payé pour cette vente"""
+        # Liste préchargée (prefetch_related('paiements')) : pas de requête par vente.
+        if 'paiements' in (getattr(self, '_prefetched_objects_cache', None) or {}):
+            return sum((p.montant for p in self.paiements.all() if p.montant is not None), Decimal('0'))
         return self.paiements.aggregate(total=models.Sum('montant'))['total'] or Decimal('0')
 
     def enregistrer_paiement_validation(self, user=None):

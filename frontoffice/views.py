@@ -427,13 +427,31 @@ def entrepots_list(request):
 
 
 @login_required
+def _filtre_entreprise(request, queryset, champ='company'):
+    """Mêmes règles que l'API (TenantFilterMixin) : administrateur (superuser/staff) = tout ;
+    utilisateur d'une entreprise = son entreprise + les données sans entreprise ;
+    utilisateur sans entreprise = seulement les données sans entreprise."""
+    user = request.user
+    if user.is_superuser or user.is_staff:
+        return queryset
+    company = getattr(request, 'company', None)
+    if company is not None:
+        return queryset.filter(Q(**{champ: company}) | Q(**{champ + '__isnull': True}))
+    return queryset.filter(**{champ + '__isnull': True})
+
+
 def stocks_list(request):
     """Liste des stocks par entrepôt"""
     entrepot_id = request.GET.get('entrepot')
     client_id = request.GET.get('client')
 
+    # Seulement les entrepôts / clients de l'entreprise de l'utilisateur
+    entrepots = _filtre_entreprise(request, Warehouse.objects.all()).order_by('code')
+    clients = _filtre_entreprise(request, Client.objects.all()).order_by('nom', 'prenom')
+
     # Produits supprimés (désactivés) exclus de la liste des stocks
     stocks = ProductStock.objects.select_related('produit', 'warehouse').prefetch_related('produit__conditionnements').filter(produit__is_active=True)
+    stocks = _filtre_entreprise(request, stocks, 'warehouse__company')
 
     if entrepot_id:
         stocks = stocks.filter(warehouse_id=entrepot_id)
@@ -458,29 +476,31 @@ def stocks_list(request):
     type_prix_client = None
     if client_id:
         try:
-            client_selectionne = Client.objects.select_related('type_prix').get(id=client_id)
+            client_selectionne = clients.select_related('type_prix').get(id=client_id)
             type_prix_client = client_selectionne.type_prix
-        except Client.DoesNotExist:
+        except (Client.DoesNotExist, ValueError):
             pass
 
     # Fallback vers TypePrix par défaut si pas de client ou client sans type_prix
     if not type_prix_client:
         type_prix_client = TypePrix.get_default()
 
+    # c. Prix PrixProduit(produit, code_prix, type_prix) de TOUTE la page en une seule requête
+    #    (avant : une requête par ligne affichée).
+    prix_par_produit = {}
+    if code_prix_defaut and type_prix_client:
+        for pp in PrixProduit.objects.filter(
+            produit_id__in={st.produit_id for st in stocks_page},
+            code_prix=code_prix_defaut,
+            type_prix=type_prix_client,
+            is_active=True
+        ).order_by('produit', 'code_prix__ordre', 'type_prix__ordre', 'pk'):
+            prix_par_produit.setdefault(pp.produit_id, pp.prix)
+
     # Ajouter le prix et la valeur calculée pour chaque stock de la page
     for stock in stocks_page:
-        # c. Chercher PrixProduit(produit, code_prix, type_prix)
-        prix_effectif = None
-        if code_prix_defaut and type_prix_client:
-            prix_produit = PrixProduit.objects.filter(
-                produit=stock.produit,
-                code_prix=code_prix_defaut,
-                type_prix=type_prix_client,
-                is_active=True
-            ).first()
-            # d. Si trouvé → utiliser ce prix
-            if prix_produit:
-                prix_effectif = prix_produit.prix
+        # d. Si trouvé → utiliser ce prix
+        prix_effectif = prix_par_produit.get(stock.produit_id)
 
         # e. Sinon → fallback vers produit.prixU
         if prix_effectif is None:
@@ -491,9 +511,6 @@ def stocks_list(request):
         # Equivalent en cartons (vide si le produit n'a pas de conditionnement)
         stock.unites_par_carton = stock.produit.get_unites_par_carton()
         stock.cartons_display = Produit.format_cartons(stock.quantity, stock.unites_par_carton)
-
-    entrepots = Warehouse.objects.all().order_by('code')
-    clients = Client.objects.all().order_by('nom', 'prenom')
 
     context = {
         'stocks': stocks_page,

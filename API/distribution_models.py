@@ -160,11 +160,13 @@ class TourneeMobile(models.Model):
 
     def stats(self):
         """Statistiques de la tournée"""
-        arrets = self.arrets.all()
-        total_arrets = arrets.count()
-        arrets_livres = arrets.filter(statut='livre').count()
-        arrets_echec = arrets.filter(statut='echec').count()
-        arrets_en_attente = arrets.filter(statut='en_attente').count()
+        # Comptage en mémoire : profite du prefetch_related('arrets') des listes
+        # (avant : 4 requêtes COUNT par tournée affichée).
+        statuts = [a.statut for a in self.arrets.all()]
+        total_arrets = len(statuts)
+        arrets_livres = statuts.count('livre')
+        arrets_echec = statuts.count('echec')
+        arrets_en_attente = statuts.count('en_attente')
 
         try:
             ca_total = float(sum(
@@ -1674,8 +1676,10 @@ class ObjectifVendeur(models.Model):
 
     def lignes_commandes(self):
         """Lignes des commandes prises par le vendeur sur le mois (hors annulees)."""
+        from API.indicateurs import q_commandes_du_vendeur
+        # Commandes PASSEES par le vendeur (meme affectees depuis a un livreur)
         return self._filtrer_perimetre(LigneCommandeClient.objects.filter(
-            commande__livreur=self.livreur,
+            q_commandes_du_vendeur(self.livreur_id, prefixe='commande__'),
             commande__date_commande__year=self.annee,
             commande__date_commande__month=self.mois,
         ).exclude(commande__statut='cancelled'))

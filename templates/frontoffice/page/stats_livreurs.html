@@ -501,10 +501,12 @@
                         <th title="{% trans 'Visites avec vente ou commande / visites effectuées' %}">{% trans "Taux de réussite" %}</th>
                         <th title="{% trans 'CA réalisé / objectifs mensuels' %}">{% trans "Taux de réalisation" %}</th>
                         <th title="{% trans 'Commandes livrées / commandes prises, en montant' %}">{% trans "Livraison commandes" %}</th>
+                        <th class="text-right" title="{% trans 'Ventes de tournée + commandes passées par ce vendeur (même livrées par un autre)' %}">{% trans "Chiffre d'affaires" %}</th>
+                        <th class="text-right" title="{% trans 'Argent réellement encaissé par cette personne pendant ses tournées' %}">{% trans "Argent récupéré" %}</th>
                     </tr>
                 </thead>
                 <tbody id="indicateursBody">
-                    <tr><td colspan="5" class="text-center py-4 text-muted">{% trans "Chargement..." %}</td></tr>
+                    <tr><td colspan="7" class="text-center py-4 text-muted">{% trans "Chargement..." %}</td></tr>
                 </tbody>
             </table>
         </div>
@@ -513,6 +515,8 @@
             <span><strong>{% trans "Taux de réussite" %}</strong> : {% trans "visites ayant donné une vente ou une commande / visites effectuées" %}</span>
             <span><strong>{% trans "Taux de réalisation" %}</strong> : {% trans "CA réalisé (ventes de tournée + commandes prises) / objectifs mensuels des mois couverts" %}</span>
             <span><strong>{% trans "Livraison commandes" %}</strong> : {% trans "montant des commandes livrées / montant des commandes prises" %}</span>
+            <span><strong>{% trans "Chiffre d'affaires" %}</strong> : {% trans "une commande compte pour le vendeur qui l'a prise, même si un autre la livre" %}</span>
+            <span><strong>{% trans "Argent récupéré" %}</strong> : {% trans "ce que chacun a réellement encaissé (ex. l'acompte pour le vendeur, le reste pour le livreur)" %}</span>
         </div>
     </div>
 
@@ -527,6 +531,7 @@
                     <option value="total">{% trans "Total" %}</option>
                     <option value="ventes">{% trans "Ventes de tournée" %}</option>
                     <option value="commandes">{% trans "Commandes" %}</option>
+                    <option value="argent">{% trans "Argent récupéré" %}</option>
                 </select>
                 <button class="btn btn-export btn-sm" onclick="exportCaMensuel()">
                     <i class="fas fa-download mr-1"></i>{% trans "Exporter" %}
@@ -842,7 +847,7 @@
     async function loadIndicateurs(dateDebut, dateFin, livreurId) {
         const tbody = document.getElementById('indicateursBody');
         if (!tbody) return;
-        tbody.innerHTML = `<tr><td colspan="5" class="text-center py-4 text-muted"><i class="fas fa-spinner fa-spin mr-2"></i>{% trans "Chargement des indicateurs..." %}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-muted"><i class="fas fa-spinner fa-spin mr-2"></i>{% trans "Chargement des indicateurs..." %}</td></tr>`;
         try {
             let url = `/API/distribution/indicateurs-performance/?date_debut=${dateDebut}&date_fin=${dateFin}`;
             if (livreurId) url += `&livreur_id=${livreurId}`;
@@ -851,7 +856,7 @@
             renderIndicateurs(await response.json());
         } catch (error) {
             console.error('Erreur chargement indicateurs:', error);
-            tbody.innerHTML = `<tr><td colspan="5" class="text-center py-4 text-danger"><i class="fas fa-exclamation-triangle mr-2"></i>{% trans "Erreur lors du chargement des indicateurs" %}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-danger"><i class="fas fa-exclamation-triangle mr-2"></i>{% trans "Erreur lors du chargement des indicateurs" %}</td></tr>`;
         }
     }
 
@@ -870,7 +875,7 @@
         const tbody = document.getElementById('indicateursBody');
         const vendeurs = data.vendeurs || [];
         if (!vendeurs.length) {
-            tbody.innerHTML = `<tr><td colspan="5" class="text-center py-4 text-muted"><i class="fas fa-inbox mr-2"></i>{% trans "Aucun vendeur pour cette période" %}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-muted"><i class="fas fa-inbox mr-2"></i>{% trans "Aucun vendeur pour cette période" %}</td></tr>`;
             return;
         }
         tbody.innerHTML = vendeurs.map(v => {
@@ -887,6 +892,8 @@
                 ${kpiCell(v.taux_reussite, `${v.visites_fructueuses} / ${v.visites} {% trans "visites" %}`, '{% trans "Aucune visite" %}')}
                 ${kpiCell(v.taux_realisation, `${formatMoney(v.ca_realise_objectifs)} / ${formatMoney(v.objectif_ca)}`, '{% trans "Aucun objectif défini" %}')}
                 ${kpiCell(v.taux_livraison, `${v.commandes_livrees} / ${v.commandes_prises} {% trans "commandes" %} · ${formatMoney(v.montant_commandes_livrees)}`, '{% trans "Aucune commande" %}')}
+                <td class="text-right"><strong>${formatMoney(v.ca_periode || 0)}</strong></td>
+                <td class="text-right"><strong class="text-success">${formatMoney(v.argent_recupere || 0)}</strong></td>
             </tr>`;
         }).join('');
     }
@@ -955,7 +962,8 @@
         const courant = caData.mois_courant;
         const cls = m => 'ca-mois' + (m === courant ? ' ca-courant' : '');
         const montant = v => v ? formatNumber(Math.round(v)) : '–';
-        const cleTotal = vue === 'ventes' ? 'total_ventes' : vue === 'commandes' ? 'total_commandes' : 'total_annee';
+        const cleTotal = vue === 'ventes' ? 'total_ventes' : vue === 'commandes' ? 'total_commandes'
+            : vue === 'argent' ? 'total_argent' : 'total_annee';
 
         document.getElementById('caHead').innerHTML = '<tr><th class="ca-vendeur">{% trans "Vendeur" %}</th>' +
             CA_MOIS_COURTS.map((m, i) => `<th class="${cls(i + 1)}">${m}</th>`).join('') +
@@ -979,7 +987,7 @@
                 </td>` +
                 v.mois.map(c => {
                     const valeur = c[vue] || 0;
-                    const titre = `${caData.mois_libelles[c.mois - 1]} : ${formatMoney(c.total)} (ventes ${formatMoney(c.ventes)}, ${c.nb_ventes} vente(s) ; commandes ${formatMoney(c.commandes)}, ${c.nb_commandes} commande(s))`;
+                    const titre = `${caData.mois_libelles[c.mois - 1]} : ${formatMoney(c.total)} (ventes ${formatMoney(c.ventes)}, ${c.nb_ventes} vente(s) ; commandes ${formatMoney(c.commandes)}, ${c.nb_commandes} commande(s)) · argent récupéré ${formatMoney(c.argent || 0)}`;
                     return `<td class="${cls(c.mois)}${valeur ? '' : ' ca-zero'}" title="${kpiEsc(titre)}">${montant(valeur)}</td>`;
                 }).join('') +
                 `<td class="ca-total">${formatMoney(v[cleTotal] || 0)}</td></tr>`;

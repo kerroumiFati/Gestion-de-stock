@@ -72,6 +72,59 @@ def documents_dus(client):
     return docs
 
 
+def situations_clients(clients):
+    """Situation de PLUSIEURS clients d'un coup (listes, tableau de bord), mêmes règles que
+    documents_dus / compte, en 4 requêtes quel que soit le nombre de clients.
+    Renvoie {client_id: {'dette', 'avance', 'net', 'nb_documents'}} (Decimal ; net > 0 = le client doit)."""
+    from django.db.models import DecimalField, ExpressionWrapper, F, Sum, Value
+    from django.db.models.functions import Coalesce
+    from API.models import Vente
+    from API.distribution_models import VenteTourneeMobile, CommandeClient
+
+    dec = DecimalField(max_digits=14, decimal_places=2)
+    zero = Value(Decimal('0'), output_field=dec)
+    res = {}
+    soldes = {}
+    for cid, solde in clients.values_list('pk', 'solde'):
+        soldes[cid] = _d(solde)
+        res[cid] = {'dette': Z, 'avance': max(soldes[cid], Z), 'net': Z, 'nb_documents': 0}
+
+    def ajouter(cid, reste):
+        r = res.get(cid)
+        if r is not None and reste > CENT:
+            r['dette'] += reste
+            r['nb_documents'] += 1
+
+    for cid, solde in soldes.items():
+        if solde < 0:
+            ajouter(cid, -solde)
+
+    ids = list(res)
+    # Ventes du téléphone : reste = total - (payé - rendu)
+    for cid, reste in (VenteTourneeMobile.objects.filter(client_id__in=ids)
+                       .annotate(r=ExpressionWrapper(
+                           Coalesce('montant_total', zero) - Coalesce('montant_paye', zero)
+                           + Coalesce('montant_rendu', zero), output_field=dec))
+                       .filter(r__gt=CENT).values_list('client_id', 'r')):
+        ajouter(cid, _d(reste))
+    # Ventes du PC validées : reste = total TTC - paiements
+    for cid, reste in (Vente.objects.filter(client_id__in=ids, statut='completed')
+                       .annotate(p=Coalesce(Sum('paiements__montant'), zero))
+                       .annotate(r=ExpressionWrapper(Coalesce('total_ttc', zero) - F('p'), output_field=dec))
+                       .filter(r__gt=CENT).values_list('client_id', 'r')):
+        ajouter(cid, _d(reste))
+    # Commandes livrées pas entièrement payées
+    for cid, reste in (CommandeClient.objects.filter(client_id__in=ids, statut='delivered')
+                       .annotate(r=ExpressionWrapper(
+                           Coalesce('montant_total_ttc', zero) - Coalesce('montant_paye', zero), output_field=dec))
+                       .filter(r__gt=CENT).values_list('client_id', 'r')):
+        ajouter(cid, _d(reste))
+
+    for r in res.values():
+        r['net'] = r['dette'] - r['avance']
+    return res
+
+
 def historique(client, limite=60):
     """Mouvements du compte, du plus récent au plus ancien : ce qui a été dû (débit) et payé (crédit)."""
     from API.models import Vente, PaiementVente, PaiementSolde

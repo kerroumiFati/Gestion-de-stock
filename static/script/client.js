@@ -59,6 +59,13 @@
     return `<span class="cp-balance ok"><i class="fa fa-check"></i> À jour</span>`;
   }
 
+  // Situation réelle du compte (ventes à crédit, commandes livrées non payées, dette antérieure,
+  // moins l'avance), même convention que balanceHtml : négatif = le client doit.
+  function situation(c){
+    if(c && c.situation_nette != null) return -parseFloat(c.situation_nette || 0);
+    return parseFloat((c && c.solde) || 0);
+  }
+
   // ---------- Listes déroulantes ----------
   function loadSecteurs(){
     return $.getJSON(API_SECTEURS + '?is_active=true').done(function(data){
@@ -91,8 +98,8 @@
   }
 
   function renderStats(){
-    const debtors = allClients.filter(c => parseFloat(c.solde || 0) < 0);
-    const totalDebt = debtors.reduce((s, c) => s - parseFloat(c.solde || 0), 0);
+    const debtors = allClients.filter(c => situation(c) < -0.005);
+    const totalDebt = debtors.reduce((s, c) => s - situation(c), 0);
     $('#statTotal').text(allClients.length);
     $('#statDebt').text(debtors.length);
     $('#statDebtTotal').text(money(totalDebt));
@@ -104,7 +111,7 @@
     const qDigits = q.replace(/\D/g, '');
 
     let list = allClients.filter(c => {
-      if(currentFilter === 'debt' && !(parseFloat(c.solde || 0) < 0)) return false;
+      if(currentFilter === 'debt' && !(situation(c) < -0.005)) return false;
       if(!q) return true;
       const text = normalize([c.nom, c.prenom, c.prenom + ' ' + c.nom, c.email, c.adresse, c.secteur_nom, c.telephone].join(' '));
       if(text.includes(q)) return true;
@@ -146,7 +153,7 @@
         <td>${tel}</td>
         <td class="cp-hide-mobile">${esc(c.adresse) || '<span class="text-muted">—</span>'}</td>
         <td class="cp-hide-mobile">${c.type_prix_libelle || c.type_prix_code ? esc(c.type_prix_libelle || c.type_prix_code) : '<span class="text-muted">Normal</span>'}</td>
-        <td>${balanceHtml(c.solde)}</td>
+        <td>${balanceHtml(situation(c))}</td>
         <td><div class="cp-actions">
           <button type="button" class="cp-act edit btn-edit" data-id="${c.id}"><i class="fa fa-pen"></i> Modifier</button>
           <button type="button" class="cp-act btn-historique" data-id="${c.id}"><i class="fa fa-history"></i> Paiements</button>
@@ -355,7 +362,8 @@
     $.getJSON(API_BASE + clientId + '/historique_paiements/')
       .done(function(data){
         $('#historique-client-nom').text(data.client_nom || '');
-        $('#historique-solde-actuel').html('Situation actuelle : ' + balanceHtml(data.solde_actuel));
+        const cl = allClients.find(x => String(x.id) === String(clientId));
+        $('#historique-solde-actuel').html('Situation actuelle : ' + balanceHtml(cl ? situation(cl) : data.solde_actuel));
         $('#historique-client-info').show();
 
         const list = data.paiements || [];

@@ -54,6 +54,10 @@
   }
 
   function nameFromPath(path){
+    // L'ancre (#client) désigne la page affichée : elle passe avant le chemin
+    // (anciens liens/favoris du type /admindash/promotions/#client).
+    const ancre = (location.hash||'').replace('#','');
+    if(ancre) return ancre;
     if(path.startsWith('/admindash/livreurs')) return 'livreurs';
     if(path.startsWith('/admindash/commandes-mobile')) return 'commandes_clients_mobile';
     if(path.startsWith('/admindash/tournees')) return 'tournees';
@@ -77,7 +81,10 @@
     const targetPath = prettyPathFor(name);
     if(!opts || opts.push !== false){
       if(targetPath){ history.pushState({page:name}, '', targetPath); }
-      else { history.pushState({page:name}, '', '#'+name); }
+      // Toujours repartir de /admindash/ : sinon, après un passage par une page à « jolie » adresse
+      // (ex. /admindash/promotions/), l'adresse devenait /admindash/promotions/#client et un
+      // rechargement (F5, formulaire envoyé, reconnexion) rouvrait Promotions au lieu de Clients.
+      else { history.pushState({page:name}, '', '/admindash/#'+name); }
     }
     // Support for query parameters via opts.params
     let fetchUrl = '/page/' + encodeURIComponent(name) + '/';
