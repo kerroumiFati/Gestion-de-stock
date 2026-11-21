@@ -30,17 +30,42 @@ class ProduitMobileSerializer(serializers.ModelSerializer):
     cartons_par_colis = serializers.SerializerMethodField()
     # Photo du produit : chemin relatif (/media/...), comme l'endpoint stock_van
     image = serializers.SerializerMethodField()
+    # Stock dépôt en cartons, texte court (« 3 ct + 2 u », vide sans colisage carton)
+    stock_cartons = serializers.SerializerMethodField()
+    # Prix par type de client : {"DETAIL": 120.0, "GROS": 100.0} (types ayant un prix
+    # configuré ; dictionnaire vide → l'application utilise prixU)
+    prix_par_type = serializers.SerializerMethodField()
+    # Promotions en cours : {"DETAIL": {"prix": 99.0, "quantite_min": 1, "promo_code": "P1"}}
+    promotions = serializers.SerializerMethodField()
 
     class Meta:
         model = Produit
         fields = (
             'id', 'reference', 'code_barre', 'designation', 'description', 'image',
             'categorie', 'categorie_nom',
-            'prixU', 'unite_mesure', 'unite_mesure_display',
-            'stock', 'quantite',
+            'prixU', 'prix_par_type', 'promotions', 'unite_mesure', 'unite_mesure_display',
+            'stock', 'stock_cartons', 'quantite',
             'unites_par_carton', 'cartons_par_colis',
             'is_active', 'updated_at'
         )
+
+    # Données calculées UNE fois pour toute la liste (contexte fourni par ProduitMobileViewSet) ;
+    # sans contexte (produit seul), calcul pour ce produit uniquement.
+    def _tarifs(self, obj):
+        tarifs = self.context.get('tarifs')
+        if tarifs is None:
+            from .distribution_prix_stock import TarifsMobile
+            tarifs = TarifsMobile(company=obj.company, produits=[obj.id])
+        return tarifs
+
+    def get_prix_par_type(self, obj):
+        return self._tarifs(obj).prix_par_type(obj)
+
+    def get_promotions(self, obj):
+        return self._tarifs(obj).promotions_par_type(obj)
+
+    def get_stock_cartons(self, obj):
+        return Produit.format_cartons(self.get_stock(obj), obj.get_unites_par_carton())
 
     def get_image(self, obj):
         try:
@@ -56,23 +81,16 @@ class ProduitMobileSerializer(serializers.ModelSerializer):
 
     def get_stock(self, obj):
         """
-        Calcule le stock total depuis ProductStock (somme de tous les entrepôts non-van).
-        Exclut les vans pour avoir le stock disponible en entrepôt principal.
-        Si ProductStock est vide, utilise le champ quantite du modèle Produit.
+        Stock disponible au dépôt pour le prévendeur : somme des entrepôts ACTIFS de son
+        entreprise, hors vans (code « van » ou entrepôt rattaché à un livreur) ; seulement le
+        dépôt des commandes mobiles s'il est configuré. Plus de repli sur Produit.quantite
+        (stock global, vans compris : un produit en rupture au dépôt paraissait disponible).
         """
-        from .models import ProductStock
-        # Calculer le stock total depuis ProductStock (entrepôts principaux uniquement, pas les vans)
-        total_stock = ProductStock.objects.filter(
-            produit=obj,
-            warehouse__is_active=True
-        ).exclude(
-            warehouse__code__icontains='van'
-        ).aggregate(total=models.Sum('quantity'))['total']
-
-        # Si pas de stock dans ProductStock, utiliser le champ quantite du produit
-        if total_stock is None or total_stock == 0:
-            return obj.quantite or 0
-        return total_stock
+        stock_map = self.context.get('stock_map')
+        if stock_map is None:
+            from .distribution_prix_stock import stock_depot_par_produit
+            stock_map = stock_depot_par_produit(obj.company, produit_ids=[obj.id])
+        return stock_map.get(obj.id, 0)
 
 
 class ClientMobileSerializer(serializers.ModelSerializer):
@@ -182,13 +200,18 @@ class LivreurSerializer(serializers.ModelSerializer):
         if obj.statut != 'actif':
             return False
         # Vérifier s'il a des tournées actives (planifiée ou en_cours)
-        return obj.tournees_actives().count() == 0
+        return self.get_tournees_actives_count(obj) == 0
 
     def get_is_active(self, obj):
         return obj.statut == 'actif'
 
     def get_tournees_actives_count(self, obj):
-        return obj.tournees_actives().count()
+        # Annoté par LivreurViewSet (une seule requête pour la liste) ; sinon une requête
+        nb = getattr(obj, 'nb_tournees_actives', None)
+        if nb is None:
+            nb = obj.tournees_actives().count()
+            obj.nb_tournees_actives = nb
+        return nb
 
 
 class LivreurDetailSerializer(LivreurSerializer):
@@ -602,24 +625,10 @@ class VenteMobileCreateSerializer(serializers.Serializer):
 
             # Si prix_unitaire n'est pas fourni ou est 0, utiliser le prix de PrixProduit
             if not prix_unitaire or prix_unitaire == 0:
-                prix_unitaire = produit.prixU or 0  # Fallback par défaut
-
-                # Essayer de récupérer le prix du CodePrix par défaut
-                type_prix_client = client.type_prix if client else None
-                code_prix_defaut = CodePrix.get_default()
-
-                if code_prix_defaut and type_prix_client:
-                    # Chercher le prix configuré pour ce produit/code_prix/type_prix
-                    prix_produit = PrixProduit.objects.filter(
-                        produit=produit,
-                        code_prix=code_prix_defaut,
-                        type_prix=type_prix_client,
-                        is_active=True
-                    ).first()
-
-                    if prix_produit:
-                        prix_unitaire = Decimal(str(prix_produit.prix))
-                        logger.info(f"Prix récupéré de PrixProduit: {prix_unitaire} pour {produit.designation}")
+                # Prix du type de client (même calcul que le catalogue : prix_par_type)
+                from .distribution_prix_stock import prix_unitaire_client
+                prix_unitaire = prix_unitaire_client(produit, client)
+                logger.info(f"Prix du type de client: {prix_unitaire} pour {produit.designation}")
 
             # Créer la ligne de vente. Le prix envoyé par le téléphone est le prix payé (TTC) :
             # taux_tva=0, sinon le modèle ajoutait 20 % de TVA (lignes à 120 % du total).
@@ -956,7 +965,8 @@ class LigneCommandeClientCreateSerializer(serializers.Serializer):
     """Serializer pour créer des lignes de commande depuis l'application mobile"""
     produit = serializers.PrimaryKeyRelatedField(queryset=Produit.objects.all())
     quantite = serializers.DecimalField(max_digits=10, decimal_places=2)
-    prix_unitaire_ht = serializers.DecimalField(max_digits=10, decimal_places=2)
+    # Facultatif : absent ou 0 à la création → prix du type de client (CommandeClientCreateSerializer)
+    prix_unitaire_ht = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
     taux_tva = serializers.DecimalField(max_digits=5, decimal_places=2, required=False, default=0)
 
     def to_internal_value(self, data):
@@ -1221,13 +1231,19 @@ class CommandeClientCreateSerializer(serializers.ModelSerializer):
 
         print(f'[COMMANDE CREATE] Commande créée: id={commande.id}, company={commande.company_id if commande.company else None}, livreur={commande.livreur_id if commande.livreur else None}, client={commande.client_id if commande.client else None}')
 
-        # Créer les lignes de commande
+        # Créer les lignes de commande. Ligne sans prix (ou à 0) : prix du type de client
+        # (Détail, Gros...), le même que « prix_par_type » du catalogue mobile.
+        from .distribution_prix_stock import TarifsMobile, prix_unitaire_client
+        sans_prix = [l['produit'].id for l in lignes_data if not l.get('prix_unitaire_ht')]
+        tarifs = TarifsMobile(produits=sans_prix, avec_promotions=False) if sans_prix else None
         for ligne_data in lignes_data:
             # Retirer les champs calculés s'ils sont présents
             ligne_data.pop('produit_reference', None)
             ligne_data.pop('produit_designation', None)
             # Pour les objets Produit du PrimaryKeyRelatedField
             produit = ligne_data.pop('produit')
+            if not ligne_data.get('prix_unitaire_ht'):
+                ligne_data['prix_unitaire_ht'] = prix_unitaire_client(produit, client, tarifs)
             LigneCommandeClient.objects.create(
                 commande=commande,
                 produit=produit,

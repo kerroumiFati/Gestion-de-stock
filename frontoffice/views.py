@@ -529,13 +529,24 @@ def stocks_list(request):
 
 @login_required
 def transferts_list(request):
-    """Liste des transferts de stock"""
+    """Liste des transferts de stock : bons de transfert (chargement van...) ET transferts
+    dépôt -> dépôt faits depuis Mouvements (StockMove 'TRANS' regroupés par référence).
+    Limitée aux dépôts de l'entreprise de l'utilisateur (tous pour un superutilisateur)."""
+    from API.models import SystemConfig
+    from API.securite_encaissements import company_connectee
+
+    if request.user.is_superuser:
+        visibles = Warehouse.objects.all()
+    else:
+        visibles = SystemConfig.warehouses_of(company_connectee(request))
+    visibles_ids = set(visibles.values_list('id', flat=True))
+
     transferts = TransfertStock.objects.select_related(
         'entrepot_source',
         'entrepot_destination',
         'demandeur',
         'valideur'
-    ).prefetch_related('lignes__produit').all()
+    ).prefetch_related('lignes__produit').filter(entrepot_source_id__in=visibles_ids)
 
     # Filtres
     statut = request.GET.get('statut')
@@ -550,14 +561,67 @@ def transferts_list(request):
     if dest_id:
         transferts = transferts.filter(entrepot_destination_id=dest_id)
 
-    transferts = transferts.order_by('-date_creation')
+    elements = []
+    for t in transferts:
+        lignes = list(t.lignes.all())
+        elements.append({
+            'id': f't{t.id}', 'numero': t.numero, 'date': t.date_creation, 'origine': 'Bon de transfert',
+            'source_code': t.entrepot_source.code, 'dest_code': t.entrepot_destination.code,
+            'nb_lignes': len(lignes), 'nb_produits': sum(l.quantite for l in lignes),
+            'demandeur': t.demandeur.username if t.demandeur else '', 'statut': t.statut,
+            'notes': t.notes,
+            'lignes': [{'reference': l.produit.reference, 'designation': l.produit.designation,
+                        'quantite': l.quantite, 'unite': l.produit.get_unite_mesure_display(),
+                        'quantite_recue': l.quantite_recue, 'notes': l.notes} for l in lignes],
+        })
+
+    # Transferts faits depuis Mouvements (déjà validés : le stock a bougé)
+    if not statut or statut == 'valide':
+        numeros_bons = set(TransfertStock.objects.values_list('numero', flat=True))
+        moves = (StockMove.objects.filter(source='TRANS', warehouse_id__in=visibles_ids)
+                 .exclude(ref_id__in=numeros_bons).select_related('produit', 'warehouse').order_by('id'))
+        groupes = {}
+        attente = {}   # anciens transferts sans référence : sortie suivie de son entrée (même produit)
+        for m in moves:
+            if m.ref_id:
+                cle = m.ref_id
+            elif m.delta < 0:
+                cle = f'#{m.id}'
+                attente[m.produit_id] = cle
+            else:
+                cle = attente.pop(m.produit_id, f'#{m.id}')
+            groupes.setdefault(cle, []).append(m)
+        for cle, mvts in groupes.items():
+            sorties = [m for m in mvts if m.delta < 0]
+            entrees = [m for m in mvts if m.delta > 0]
+            src = sorted({m.warehouse.code for m in sorties if m.warehouse})
+            dst = sorted({m.warehouse.code for m in entrees if m.warehouse})
+            src_ids = {m.warehouse_id for m in sorties}
+            dst_ids = {m.warehouse_id for m in entrees}
+            if source_id and str(source_id) not in {str(i) for i in src_ids}:
+                continue
+            if dest_id and str(dest_id) not in {str(i) for i in dst_ids}:
+                continue
+            base = sorties or entrees
+            elements.append({
+                'id': f'm{mvts[0].id}', 'numero': cle if not cle.startswith('#') else f'Mouvement {cle}',
+                'date': min(m.date for m in mvts), 'origine': 'Mouvements',
+                'source_code': ', '.join(src) or '-', 'dest_code': ', '.join(dst) or '-',
+                'nb_lignes': len(base), 'nb_produits': sum(abs(m.delta) for m in base),
+                'demandeur': '', 'statut': 'valide', 'notes': '',
+                'lignes': [{'reference': m.produit.reference, 'designation': m.produit.designation,
+                            'quantite': abs(m.delta), 'unite': m.produit.get_unite_mesure_display(),
+                            'quantite_recue': None, 'notes': m.note} for m in base],
+            })
+
+    elements.sort(key=lambda e: e['date'], reverse=True)
 
     # Pagination
-    paginator = Paginator(transferts, 20)
+    paginator = Paginator(elements, 20)
     page = request.GET.get('page', 1)
     transferts_page = paginator.get_page(page)
 
-    entrepots = Warehouse.objects.all().order_by('code')
+    entrepots = visibles.order_by('code')
 
     context = {
         'transferts': transferts_page,

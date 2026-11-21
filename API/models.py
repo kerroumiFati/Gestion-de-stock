@@ -1122,10 +1122,15 @@ class InventorySession(models.Model):
                                null=True, blank=True,
                                help_text="Entreprise propriétaire de cette session d'inventaire")
     numero = models.CharField(max_length=50)
-    date = models.DateField(default=timezone.now)
+    date = models.DateField(default=timezone.localdate)
     statut = models.CharField(max_length=15, choices=STATUTS, default='draft')
     note = models.TextField(blank=True)
-    created_by = models.ForeignKey(User, on_delete=models.PROTECT, null=True, blank=True, 
+    # Dépôt inventorié : la validation met le stock DE CE DÉPÔT à la quantité comptée
+    # (vide = dépôt par défaut de l'entreprise au moment de la validation).
+    warehouse = models.ForeignKey('Warehouse', on_delete=models.PROTECT, null=True, blank=True,
+                                  related_name='inventory_sessions',
+                                  help_text="Dépôt inventorié")
+    created_by = models.ForeignKey(User, on_delete=models.PROTECT, null=True, blank=True,
                                  related_name='inventory_sessions_created',
                                  help_text="Utilisateur qui a créé la session d'inventaire")
     validated_by = models.ForeignKey(User, on_delete=models.PROTECT, null=True, blank=True,
@@ -1919,7 +1924,13 @@ class TransfertStock(models.Model):
         if not self.lignes.exists():
             raise ValidationError("Le transfert doit contenir au moins une ligne")
 
+        if self.entrepot_source_id == self.entrepot_destination_id:
+            raise ValidationError("Le dépôt de départ et le dépôt d'arrivée doivent être différents")
+        if not self.entrepot_destination.is_active:
+            raise ValidationError(f"Le dépôt d'arrivée {self.entrepot_destination.name} est inactif")
+
         from django.db import transaction
+        from .stock_utils import appliquer_mouvement
 
         with transaction.atomic():
             # Mettre à jour le statut
@@ -1928,71 +1939,16 @@ class TransfertStock(models.Model):
             self.valideur = user
             self.save()
 
-            # Créer les mouvements de stock pour chaque ligne
-            for ligne in self.lignes.all():
-                # Sortie de l'entrepôt source
-                # Si le ProductStock n'existe pas, l'initialiser avec la quantité du produit
-                stock_source, created = ProductStock.objects.get_or_create(
-                    produit=ligne.produit,
-                    warehouse=self.entrepot_source,
-                    defaults={'quantity': ligne.produit.quantite or 0}
-                )
-
-                # Si le stock est à 0, utiliser la quantité du produit (Produit.quantite)
-                if stock_source.quantity == 0 and ligne.produit.quantite > 0:
-                    stock_source.quantity = ligne.produit.quantite
-                    stock_source.save()
-
-                # Vérifier le stock disponible
-                if stock_source.quantity < ligne.quantite:
-                    raise ValidationError(
-                        f"Stock insuffisant pour {ligne.produit.designation}: "
-                        f"disponible={stock_source.quantity}, demandé={ligne.quantite}"
-                    )
-
-                # Décrémenter le stock source
-                stock_source.quantity -= ligne.quantite
-                stock_source.save()
-
-                # Mouvement de sortie
-                StockMove.objects.create(
-                    produit=ligne.produit,
-                    warehouse=self.entrepot_source,
-                    delta=-ligne.quantite,
-                    source='TRANS',
-                    ref_id=self.numero,
-                    note=f'Transfert vers {self.entrepot_destination.code}'
-                )
-
-                # Entrée dans l'entrepôt destination
-                stock_dest, _ = ProductStock.objects.get_or_create(
-                    produit=ligne.produit,
-                    warehouse=self.entrepot_destination,
-                    defaults={'quantity': 0}
-                )
-                stock_dest.quantity += ligne.quantite
-                stock_dest.save()
-
-                # Mouvement d'entrée
-                StockMove.objects.create(
-                    produit=ligne.produit,
-                    warehouse=self.entrepot_destination,
-                    delta=+ligne.quantite,
-                    source='TRANS',
-                    ref_id=self.numero,
-                    note=f'Transfert depuis {self.entrepot_source.code}'
-                )
-
-                # Mettre à jour Produit.quantite (somme de tous les stocks sauf vans)
-                from django.db.models import Sum
-                total_stock = ProductStock.objects.filter(
-                    produit=ligne.produit,
-                    warehouse__is_active=True
-                ).exclude(
-                    warehouse__code__icontains='van'
-                ).aggregate(total=Sum('quantity'))['total'] or 0
-                ligne.produit.quantite = total_stock
-                ligne.produit.save(update_fields=['quantite'])
+            # Sortie du dépôt source puis entrée au dépôt destination, ligne par ligne.
+            # Seul le stock réel du dépôt source compte (plus de recopie de Produit.quantite :
+            # elle créait du stock fantôme). Stock insuffisant -> ValidationError, tout est annulé.
+            for ligne in self.lignes.select_related('produit'):
+                appliquer_mouvement(ligne.produit, self.entrepot_source, -ligne.quantite, 'TRANS',
+                                    ref_id=self.numero, user=user,
+                                    note=f'Transfert vers {self.entrepot_destination.code}')
+                appliquer_mouvement(ligne.produit, self.entrepot_destination, ligne.quantite, 'TRANS',
+                                    ref_id=self.numero, user=user,
+                                    note=f'Transfert depuis {self.entrepot_source.code}')
 
     def annuler(self, user, motif):
         """Annule le transfert"""

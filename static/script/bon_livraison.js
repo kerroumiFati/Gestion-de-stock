@@ -11,8 +11,11 @@
  *     BonLivraison.imprimer({ numero, dateLivraison, dateVente, reference, entreprise,
  *       client: { nom, adresse, telephone, email, rc, nif, nis, ai },
  *       lignes: [{ designation, quantite, unitesParCarton, prixUnitaire, montant }],
- *       totalHT, tva, tauxTVA, totalTTC, livreur });
+ *       totalHT, tva, tauxTVA, totalTTC, livreur, previsionnel });
  *   });
+ *
+ * previsionnel: true → « BL prévisionnel » d'une commande pas encore livrée (quantités
+ * commandées, date de livraison prévue), clairement marqué sur le document.
  */
 (function (window) {
   'use strict';
@@ -92,6 +95,8 @@
     var c = data.client || {};
     var adresseSociete = esc(e.adresse).replace(/\n/g, '<br>');
     var avecTVA = Math.abs(Number(data.tva) || 0) >= 0.01;
+    var prev = !!data.previsionnel;
+    var titre = prev ? 'Bon de Livraison prévisionnel' : 'Bon de Livraison';
 
     var lignes = (data.lignes || []).map(function (l) {
       var upc = parseInt(l.unitesParCarton, 10);
@@ -118,7 +123,7 @@
       .filter(Boolean).join('<br>');
 
     return '<!DOCTYPE html>\n<html lang="fr">\n<head>\n<meta charset="utf-8">\n' +
-      '<title>Bon de Livraison ' + esc(data.numero) + '</title>\n<style>\n' + CSS + '\n</style>\n</head>\n<body>\n' +
+      '<title>' + titre + ' ' + esc(data.numero) + '</title>\n<style>\n' + CSS + '\n</style>\n</head>\n<body>\n' +
       (data.sansBoutonImprimer ? '' : '<button class="print-btn" onclick="window.print()">🖨 Imprimer</button>\n') +
       '<div class="header">' +
         '<div class="logo">' + esc(e.nom) + '</div>' +
@@ -131,9 +136,11 @@
         '<div class="client-name">' + esc(c.nom) + '</div>' +
         '<div>' + esc(c.adresse) + '</div>' + fiscal +
       '</div>' +
-      '<div class="facture-title">Bon de Livraison ' + esc(data.numero) + '</div>' +
+      '<div class="facture-title">' + titre + ' ' + esc(data.numero) + '</div>' +
+      (prev ? '<div class="prev-banner">BL PRÉVISIONNEL — commande non encore livrée. ' +
+        'Quantités commandées ; les quantités réellement livrées figureront sur le BL définitif.</div>' : '') +
       '<table class="dates-row"><thead><tr>' +
-        '<th>Date de livraison</th><th>Date de vente</th><th>N° BL</th><th>N° Vente / Référence</th>' +
+        '<th>' + (prev ? 'Date de livraison prévue' : 'Date de livraison') + '</th><th>Date de vente</th><th>N° BL</th><th>N° Vente / Référence</th>' +
       '</tr></thead><tbody><tr>' +
         '<td>' + esc(data.dateLivraison || '—') + '</td>' +
         '<td>' + esc(data.dateVente || '—') + '</td>' +
@@ -202,6 +209,7 @@
     '.footer { border-top: 1.5px solid #b07830; padding-top: 10px; display: flex; justify-content: space-between; font-size: 9.5px; color: #444; line-height: 1.6; }',
     '.footer-col { width: 32%; }',
     '.footer-col strong { color: #222; font-size: 10px; }',
+    '.prev-banner { border: 2px dashed #c0392b; color: #c0392b; font-weight: bold; padding: 8px 12px; margin: -4px 0 14px; font-size: 11.5px; text-transform: none; }',
     '.print-btn { position: fixed; top: 16px; right: 16px; padding: 8px 18px; background: #b07830; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-family: Arial, sans-serif; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }',
     '.print-btn:hover { background: #8a5e22; }',
     '@media print { .print-btn { display: none; } body { padding: 10px 14px; } }'

@@ -41,6 +41,55 @@ from .distribution_serializers import (
 User = get_user_model()
 
 
+def _parse_date_param(valeur, nom):
+    """Date YYYY-MM-DD d'un paramètre d'URL ; 400 si invalide."""
+    from rest_framework.exceptions import ValidationError
+    try:
+        return datetime.strptime(str(valeur).strip()[:10], '%Y-%m-%d').date()
+    except (TypeError, ValueError):
+        raise ValidationError({nom: 'Date invalide (format attendu : AAAA-MM-JJ)'})
+
+
+# Commande affectée à un livreur (stock transféré dans son van), pas encore livrée
+STATUTS_COMMANDE_AFFECTEE = ('confirmed', 'preparing', 'ready')
+
+
+def _avertissement_stock_van(commande, quantites_avant):
+    """Texte d'avertissement si une quantité augmentée dépasse le stock du van du livreur
+    (besoin = toutes ses commandes affectées non livrées), sinon None."""
+    from .models import ProductStock
+    if commande.statut not in STATUTS_COMMANDE_AFFECTEE or not commande.livreur_id:
+        return None
+    livreur = LivreurDistribution.objects.filter(pk=commande.livreur_id).select_related('entrepot').first()
+    van = livreur.entrepot if livreur else None
+    if van is None:
+        return None
+    hausses = {l.produit_id: l for l in commande.lignes.select_related('produit')
+               if l.quantite > quantites_avant.get(l.produit_id, 0)}
+    if not hausses:
+        return None
+    besoin = dict(LigneCommandeClient.objects.filter(
+        commande__livreur_id=commande.livreur_id, commande__statut__in=STATUTS_COMMANDE_AFFECTEE,
+        produit_id__in=list(hausses),
+    ).values('produit_id').annotate(total=models.Sum('quantite')).values_list('produit_id', 'total'))
+    stock = dict(ProductStock.objects.filter(warehouse=van, produit_id__in=list(hausses))
+                 .values_list('produit_id', 'quantity'))
+
+    def _q(v):
+        return int(v) if v == int(v) else float(v)
+
+    manques = []
+    for pid, ligne in hausses.items():
+        requis = besoin.get(pid) or ligne.quantite
+        dispo = stock.get(pid, 0)
+        if dispo < requis:
+            manques.append(f"{ligne.produit.designation} : {_q(requis)} à livrer, {dispo} dans le van")
+    if not manques:
+        return None
+    return (f"Stock du van {van.name} insuffisant pour livrer cette commande : " + ' ; '.join(manques)
+            + '. Rechargez le van avant la livraison.')
+
+
 class LivreurViewSet(viewsets.ModelViewSet):
     """ViewSet pour la gestion des livreurs de distribution"""
     queryset = LivreurDistribution.objects.all()
@@ -51,6 +100,24 @@ class LivreurViewSet(viewsets.ModelViewSet):
         if self.action == 'retrieve':
             return LivreurDetailSerializer
         return LivreurSerializer
+
+    def get_queryset(self):
+        # Nombre de tournées actives annoté : une requête pour toute la liste (avant : 2 par livreur)
+        return super().get_queryset().select_related('user', 'entrepot').annotate(
+            nb_tournees_actives=models.Count(
+                'tournees', filter=models.Q(tournees__statut__in=['planifiee', 'en_cours']), distinct=True))
+
+    @action(detail=False, methods=['get'], url_path='me')
+    def me(self, request):
+        """Livreur / prévendeur du compte connecté (mêmes champs qu'un élément de la liste).
+
+        GET /API/distribution/livreurs/me/ → 200 {id, matricule, nom, ...} ; 404 si le compte
+        n'est pas celui d'un livreur."""
+        livreur = self.get_queryset().filter(user=request.user).first()
+        if livreur is None:
+            return Response({'error': 'Aucun livreur associé à cet utilisateur'},
+                            status=status.HTTP_404_NOT_FOUND)
+        return Response(LivreurSerializer(livreur, context=self.get_serializer_context()).data)
 
     def get_permissions(self):
         """
@@ -211,16 +278,35 @@ class LivreurViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'])
     def clients_assignes(self, request, pk=None):
-        """Récupérer les clients assignés à un livreur"""
-        livreur = self.get_object()
-        clients = livreur.clients_assignes.all()
-
+        """TOUS les clients assignés à un livreur, sans tournée démarrée :
+        clients assignés directement + clients de son planning hebdomadaire (tous jours, lignes
+        actives et en cours de validité). Chaque client porte `jours_semaine` (1=lundi..7,
+        vide si assigné sans planning)."""
+        from API.models import Client
         from .distribution_serializers import ClientMobileSerializer
-        serializer = ClientMobileSerializer(clients, many=True)
+        livreur = self.get_object()
+        today = timezone.localdate()
+
+        jours = {}
+        for client_id, jour in ClientLivreurHebdo.objects.filter(
+                livreur=livreur, is_active=True).filter(
+                models.Q(date_debut__isnull=True) | models.Q(date_debut__lte=today)).filter(
+                models.Q(date_fin__isnull=True) | models.Q(date_fin__gte=today)
+        ).values_list('client_id', 'jour_semaine'):
+            jours.setdefault(client_id, set()).add(jour)
+
+        clients = Client.objects.filter(
+            models.Q(pk__in=livreur.clients_assignes.values('pk')) | models.Q(pk__in=list(jours))
+        ).select_related('type_prix').order_by('nom', 'prenom')
+
+        data = ClientMobileSerializer(clients, many=True).data
+        for item in data:
+            item['jours_semaine'] = sorted(jours.get(item['id'], ()))
         return Response({
             'livreur_id': livreur.id,
             'livreur_nom': livreur.nom,
-            'clients': serializer.data
+            'clients': data,
+            'nb_clients': len(data),
         })
 
     @action(detail=True, methods=['get'])
@@ -257,7 +343,7 @@ class LivreurViewSet(viewsets.ModelViewSet):
             livreur=livreur,
             jour_semaine=jour_semaine,
             is_active=True
-        ).select_related('client').order_by('ordre_passage')
+        ).select_related('client', 'client__type_prix').order_by('ordre_passage')
 
         # Filtrer par période de validité si définie
         configs = configs.filter(
@@ -525,10 +611,8 @@ class LivreurViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'])
     def stock_van(self, request, pk=None):
         """Récupérer le stock du van assigné au livreur"""
-        from API.models import ProductStock, Currency, CodePrix, PrixProduit, TypePrix, Promotion
-        from datetime import date
-        from django.utils import timezone
-        from decimal import Decimal
+        from API.models import ProductStock, Currency
+        from .distribution_prix_stock import TarifsMobile
 
         livreur = self.get_object()
 
@@ -545,32 +629,13 @@ class LivreurViewSet(viewsets.ModelViewSet):
             currency = Currency.objects.filter(is_active=True).first()
         currency_symbol = currency.symbol if currency else 'DA'
 
-        # Récupérer le CodePrix actif (ancien système - pour compatibilité)
-        today = date.today()
-        now = timezone.now()
-        code_prix_actif = CodePrix.objects.filter(
-            is_active=True,
-            date_debut__lte=today,
-            date_fin__gte=today
-        ).first()
-
-        # Si aucune promotion en cours, utiliser le code par défaut
-        if not code_prix_actif:
-            code_prix_actif = CodePrix.get_default()
-
-        # Récupérer les promotions actives (nouveau système)
-        promotions_actives = Promotion.objects.filter(
-            statut='active',
-            date_fin__gte=now
-        ).order_by('-priorite')
-
         # Récupérer tous les stocks du van
         # Les produits supprimés dans le logiciel (suppression logique : is_active=False)
         # ne doivent plus apparaître dans l'app mobile.
         stocks = ProductStock.objects.filter(
             warehouse=livreur.entrepot,
             produit__is_active=True,
-        ).select_related('produit', 'produit__categorie').prefetch_related('produit__prix_multiples', 'produit__conditionnements').order_by('produit__reference')
+        ).select_related('produit', 'produit__categorie').prefetch_related('produit__conditionnements').order_by('produit__reference')
 
         # Filtrer les stocks vides si demandé
         hide_empty = request.query_params.get('hide_empty', 'false').lower() == 'true'
@@ -583,91 +648,18 @@ class LivreurViewSet(viewsets.ModelViewSet):
         total_quantity = 0
         total_value = 0
 
-        # Récupérer le CodePrix par défaut (STANDARD)
-        code_prix_default = CodePrix.get_default()
+        # Prix par type de client et promotions : chargés EN UNE FOIS pour tous les produits
+        # du van (avant : 2 à 3 requêtes par produit et par type de prix)
+        tarifs = TarifsMobile(company=livreur.entrepot.company_id, produits=stocks.values('produit_id'))
+        code_prix_actif = tarifs.code_actif
 
         for stock in stocks:
             if stock.quantity > 0 or not hide_empty:
                 # Prix de base du produit (fallback)
                 prix_produit_base = float(stock.produit.prixU) if stock.produit.prixU else 0
 
-                # Construire les prix par type (DETAIL, SUPERETTE, GROS)
-                prix_par_type = {}
-
-                # Récupérer tous les types de prix disponibles
-                types_prix = TypePrix.objects.filter(is_active=True)
-
-                # Chercher la meilleure promotion applicable à ce produit
-                meilleure_promo = None
-                for promo in promotions_actives:
-                    if promo.is_applicable_to_product(stock.produit):
-                        meilleure_promo = promo
-                        break  # Prendre la première (plus haute priorité)
-
-                for type_prix in types_prix:
-                    # 1. D'abord chercher le prix de base dans PrixProduit avec CodePrix par défaut
-                    prix_standard = None
-                    if code_prix_default:
-                        prix_standard = PrixProduit.objects.filter(
-                            produit=stock.produit,
-                            code_prix=code_prix_default,
-                            type_prix=type_prix,
-                            is_active=True
-                        ).first()
-
-                    # Le prix de référence est le prix standard (ou prixU si pas configuré)
-                    prix_base = float(prix_standard.prix) if prix_standard else prix_produit_base
-
-                    # 2. Chercher un prix promotionnel via CodePrix actif (si différent du défaut)
-                    prix_promo_codeprix = None
-                    if code_prix_actif and code_prix_actif != code_prix_default:
-                        prix_promo_codeprix = PrixProduit.objects.filter(
-                            produit=stock.produit,
-                            code_prix=code_prix_actif,
-                            type_prix=type_prix,
-                            is_active=True
-                        ).first()
-
-                    # 3. Calculer le prix avec le nouveau système de promotions
-                    prix_avec_nouvelle_promo = prix_base
-                    has_nouvelle_promo = False
-                    quantite_min_promo = 1
-                    promo_code = None
-
-                    if meilleure_promo:
-                        # Calculer le prix avec la promotion
-                        prix_decimal = Decimal(str(prix_base))
-                        prix_promo_calc = meilleure_promo.calculer_prix_promotion(prix_decimal, 1)
-                        if float(prix_promo_calc) < prix_base:
-                            prix_avec_nouvelle_promo = float(prix_promo_calc)
-                            has_nouvelle_promo = True
-                            quantite_min_promo = meilleure_promo.quantite_minimum
-                            promo_code = meilleure_promo.code
-
-                    # 4. Choisir le meilleur prix entre les différentes sources
-                    prix_final = prix_base
-                    has_promotion = False
-                    quantite_min = 1
-
-                    # Si un prix promo via CodePrix existe et est moins cher
-                    if prix_promo_codeprix and float(prix_promo_codeprix.prix) < prix_base:
-                        prix_final = float(prix_promo_codeprix.prix)
-                        has_promotion = True
-                        quantite_min = prix_promo_codeprix.quantite_min if prix_promo_codeprix else 1
-
-                    # Si la nouvelle promo offre un meilleur prix, l'utiliser
-                    if has_nouvelle_promo and prix_avec_nouvelle_promo < prix_final:
-                        prix_final = prix_avec_nouvelle_promo
-                        has_promotion = True
-                        quantite_min = quantite_min_promo
-
-                    prix_par_type[type_prix.code] = {
-                        'prix': prix_final,
-                        'prix_original': prix_base,  # Prix standard (pas prixU)
-                        'has_promotion': has_promotion,
-                        'quantite_min': quantite_min,
-                        'promo_code': promo_code if has_nouvelle_promo else None
-                    }
+                # Prix par type (DETAIL, SUPERETTE, GROS) avec promotions
+                prix_par_type = tarifs.detail_par_type(stock.produit)
 
                 # Utiliser le prix DETAIL comme prix de référence pour l'affichage
                 prix_affichage = prix_par_type.get('DETAIL', {}).get('prix_original', prix_produit_base)
@@ -796,6 +788,15 @@ class TourneeViewSet(viewsets.ModelViewSet):
         if statut:
             queryset = queryset.filter(statut=statut)
 
+        # ?depuis=YYYY-MM-DD : historique limité (tournées depuis cette date + celles encore
+        # planifiées / en cours, quelle que soit leur date). Sans le paramètre : inchangé
+        # (anciennes versions de l'application).
+        depuis = self.request.query_params.get('depuis')
+        if depuis:
+            queryset = queryset.filter(
+                models.Q(date_tournee__gte=_parse_date_param(depuis, 'depuis'))
+                | models.Q(statut__in=['planifiee', 'en_cours']))
+
         return queryset.select_related(
             'livreur', 'code_prix', 'entrepot_depart', 'rapport_caisse'
         ).prefetch_related('arrets', 'arrets__client', 'ventes').order_by('-date_tournee', 'numero_tournee')
@@ -834,8 +835,19 @@ class TourneeViewSet(viewsets.ModelViewSet):
         tournee.position_depart_lng = request.data.get('longitude')
         tournee.save()
 
+        # Au démarrage, la tournée charge les clients assignés au livreur pour ce jour (planning
+        # hebdomadaire) qui n'y sont pas encore. Ajouts seulement : aucun arrêt n'est retiré.
+        clients_ajoutes = 0
+        try:
+            from .distribution_prix_stock import synchroniser_arrets_tournee
+            clients_ajoutes = synchroniser_arrets_tournee(tournee, clients_concernes=set())['ajoutes']
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception("Chargement des clients assignés au démarrage de la tournée %s", tournee.pk)
+
         return Response({
             'message': 'Tournée démarrée',
+            'clients_ajoutes': clients_ajoutes,
             'tournee': TourneeSerializer(tournee).data
         })
 
@@ -875,74 +887,12 @@ class TourneeViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            # Obtenir le jour de la semaine de la tournée
-            date_tournee = tournee.date_tournee
-            jour_semaine = date_tournee.weekday() + 1  # Python: 0=Lundi, donc +1 pour avoir 1=Lundi
-
-            # Récupérer les clients assignés au livreur pour ce jour
-            from .distribution_models import ClientLivreurHebdo
-            configs = ClientLivreurHebdo.objects.filter(
-                livreur=tournee.livreur,
-                jour_semaine=jour_semaine,
-                is_active=True
-            ).select_related('client').order_by('ordre_passage')
-
-            # Récupérer les arrêts existants
-            arrets_existants = {arret.client_id: arret for arret in tournee.arrets.all()}
-            clients_config = {config.client_id: config for config in configs}
-
-            arrets_ajoutes = 0
-            arrets_supprimes = 0
-            arrets_mis_a_jour = 0
-
-            # Mettre à jour les arrêts existants avec les nouvelles coordonnées du client
-            for config in configs:
-                if config.client_id in arrets_existants:
-                    arret = arrets_existants[config.client_id]
-                    # Mettre à jour les coordonnées GPS si le client en a
-                    new_lat = getattr(config.client, 'lat', None)
-                    new_lng = getattr(config.client, 'lng', None)
-
-                    # Comparer les valeurs (convertir en float pour éviter les problèmes Decimal)
-                    current_lat = float(arret.latitude) if arret.latitude else None
-                    current_lng = float(arret.longitude) if arret.longitude else None
-                    new_lat_float = float(new_lat) if new_lat else None
-                    new_lng_float = float(new_lng) if new_lng else None
-
-                    # Mettre à jour si les coordonnées du client existent et sont différentes
-                    if new_lat_float is not None and new_lng_float is not None:
-                        if current_lat != new_lat_float or current_lng != new_lng_float:
-                            arret.latitude = new_lat
-                            arret.longitude = new_lng
-                            arret.save(update_fields=['latitude', 'longitude'])
-                            arrets_mis_a_jour += 1
-                            logger.info(f"Arrêt {arret.id} mis à jour avec GPS: {new_lat}, {new_lng}")
-
-            # Supprimer les arrêts qui ne sont plus dans la config (sauf s'ils sont déjà livrés)
-            for client_id, arret in arrets_existants.items():
-                if client_id not in clients_config and arret.statut == 'en_attente':
-                    arret.delete()
-                    arrets_supprimes += 1
-
-            # Ajouter les nouveaux clients
-            ordre_counter = 1
-            for config in configs:
-                if config.client_id not in arrets_existants:
-                    # Trouver le prochain ordre_passage disponible
-                    while ArretTourneeMobile.objects.filter(tournee=tournee, ordre_passage=ordre_counter).exists():
-                        ordre_counter += 1
-
-                    ArretTourneeMobile.objects.create(
-                        tournee=tournee,
-                        client=config.client,
-                        ordre_passage=ordre_counter,
-                        latitude=getattr(config.client, 'lat', None),
-                        longitude=getattr(config.client, 'lng', None),
-                        statut='en_attente',
-                        notes=config.notes or ''
-                    )
-                    arrets_ajoutes += 1
-                    ordre_counter += 1
+            # Même logique que la synchronisation automatique (distribution_prix_stock) :
+            # planning hebdomadaire du jour de la tournée, période de validité respectée.
+            from .distribution_prix_stock import synchroniser_arrets_tournee
+            with transaction.atomic():
+                r = synchroniser_arrets_tournee(tournee)
+            arrets_ajoutes, arrets_supprimes, arrets_mis_a_jour = r['ajoutes'], r['supprimes'], r['mis_a_jour']
 
             return Response({
                 'message': 'Synchronisation terminée',
@@ -969,39 +919,10 @@ class TourneeViewSet(viewsets.ModelViewSet):
 
         for tournee in tournees_en_cours:
             try:
-                # Obtenir le jour de la semaine de la tournée
-                date_tournee = tournee.date_tournee
-                jour_semaine = date_tournee.weekday() + 1
-
-                # Récupérer les clients assignés au livreur pour ce jour
-                from .distribution_models import ClientLivreurHebdo
-                configs = ClientLivreurHebdo.objects.filter(
-                    livreur=tournee.livreur,
-                    jour_semaine=jour_semaine,
-                    is_active=True
-                ).select_related('client').order_by('ordre_passage')
-
-                # Récupérer les arrêts existants
-                arrets_existants = {arret.client_id: arret for arret in tournee.arrets.all()}
-                clients_config = {config.client_id for config in configs}
-
-                # Supprimer les arrêts qui ne sont plus dans la config (sauf livrés)
-                for client_id, arret in arrets_existants.items():
-                    if client_id not in clients_config and arret.statut == 'en_attente':
-                        arret.delete()
-
-                # Ajouter les nouveaux clients
-                for config in configs:
-                    if config.client_id not in arrets_existants:
-                        ArretTourneeMobile.objects.create(
-                            tournee=tournee,
-                            client=config.client,
-                            ordre_passage=config.ordre_passage or 1,
-                            latitude=getattr(config.client, 'lat', None),
-                            longitude=getattr(config.client, 'lng', None),
-                            statut='en_attente',
-                            notes=config.notes or ''
-                        )
+                # Même logique que sync_arrets (ordre de passage sans collision)
+                from .distribution_prix_stock import synchroniser_arrets_tournee
+                with transaction.atomic():
+                    synchroniser_arrets_tournee(tournee)
 
                 tournees_synced += 1
             except Exception as e:
@@ -1442,7 +1363,28 @@ class VenteTourneeViewSet(viewsets.ModelViewSet):
         if tournee_id:
             queryset = queryset.filter(tournee_id=tournee_id)
 
-        return queryset.prefetch_related('lignes', 'lignes__produit')
+        # ?livreur=<id>[&depuis=YYYY-MM-DD] : toutes les ventes des tournées du livreur en UNE
+        # requête HTTP (le téléphone en faisait une par tournée de tout l'historique).
+        # Sans « depuis » : 30 derniers jours. Un livreur ne reçoit que SES ventes.
+        livreur_id = self.request.query_params.get('livreur')
+        depuis = self.request.query_params.get('depuis')
+        if livreur_id:
+            from .securite_encaissements import livreur_connecte, livreur_autorise
+            user = self.request.user
+            moi = livreur_connecte(user)
+            if moi is not None and not user.is_superuser:
+                livreur_id = moi.pk
+            elif not str(livreur_id).isdigit() or not livreur_autorise(
+                    self.request, LivreurDistribution.objects.filter(pk=livreur_id).select_related('entrepot').first()):
+                return queryset.none()
+            queryset = queryset.filter(tournee__livreur_id=livreur_id)
+            if not depuis:
+                queryset = queryset.filter(date_vente__date__gte=timezone.localdate() - timedelta(days=30))
+        if depuis:
+            queryset = queryset.filter(date_vente__date__gte=_parse_date_param(depuis, 'depuis'))
+
+        return queryset.select_related('client').prefetch_related(
+            'lignes', 'lignes__produit', 'lignes__produit__conditionnements').order_by('-date_vente', '-id')
 
     @action(detail=False, methods=['post'])
     def bulk_create(self, request):
@@ -2250,6 +2192,7 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
         autoriser_payee = bool(user.is_staff or user.is_superuser) or (
             commande.livreur_id is not None and commande.livreur_id == getattr(
                 LivreurDistribution.objects.filter(user=user).first(), 'id', None))
+        quantites_avant = {pid: q for pid, q in commande.lignes.values_list('produit_id', 'quantite')}
         try:
             commande, modifications = modifier_lignes_commande(
                 commande, data.get('lignes'), user, notes=data.get('notes') if 'notes' in data else None,
@@ -2264,6 +2207,9 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
             CommandeClient.objects.select_related('client', 'livreur').prefetch_related('lignes', 'lignes__produit', 'lignes__produit__conditionnements')
             .get(pk=commande.pk)).data
         resultat['modifications'] = modifications
+        # Commande déjà affectée (stock transféré dans le van) dont une quantité augmente : le
+        # van peut manquer de stock à la livraison. Simple avertissement, aucun mouvement de stock.
+        resultat['avertissement_stock_van'] = _avertissement_stock_van(commande, quantites_avant)
         return Response(resultat)
 
     @action(detail=True, methods=['patch'])
@@ -2817,7 +2763,13 @@ class ClientLivreurHebdoViewSet(viewsets.ModelViewSet):
         count = assignations.count()
 
         # Désactiver au lieu de supprimer
-        assignations.update(is_active=False, updated_by=request.user)
+        concernes = list(assignations.values_list('livreur_id', 'client_id'))
+        # (le modèle n'a pas de champ updated_by : update(updated_by=...) plantait en 500)
+        assignations.update(is_active=False, updated_at=timezone.now())
+        # update() ne déclenche pas les signaux : retirer ici les arrêts « en attente » de ces
+        # clients des tournées à venir
+        from .distribution_prix_stock import planifier_sync_arrets
+        planifier_sync_arrets({l for l, _ in concernes}, {c for _, c in concernes})
 
         return Response({
             'message': f'{count} assignation(s) désactivée(s)',
@@ -3693,22 +3645,36 @@ class ProduitMobileViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated]
     pagination_class = None  # Pas de pagination pour l'app mobile
 
+    def _company(self):
+        # Le TenantMiddleware passe AVANT l'authentification JWT : request.company vaut None
+        # pour le téléphone. Avant, la liste contenait alors les produits de TOUTES les
+        # entreprises. L'entreprise est donc déduite du compte (profil, sinon van du livreur).
+        if not hasattr(self, '_company_cache'):
+            from .distribution_prix_stock import company_pour_mobile
+            self._company_cache = company_pour_mobile(self.request)
+        return self._company_cache
+
     def get_queryset(self):
-        """Filtre par company de l'utilisateur (inclut aussi les produits sans company)"""
+        """Produits de l'entreprise de l'utilisateur + produits sans entreprise ;
+        superutilisateur sans entreprise : tous."""
         from django.db.models import Q
-        queryset = super().get_queryset()
-
-        # Filtrer par company de l'utilisateur OU produits sans company (null)
-        if hasattr(self.request, 'company') and self.request.company:
-            queryset = queryset.filter(Q(company=self.request.company) | Q(company__isnull=True))
-        elif hasattr(self.request, 'user') and self.request.user.is_superuser:
-            # Superuser sans company: afficher tous les produits
-            pass
-        else:
-            # Utilisateur sans company: afficher tous les produits pour éviter liste vide
-            pass
-
+        queryset = super().get_queryset().select_related('categorie')
+        company, tout_voir = self._company()
+        if company is not None:
+            queryset = queryset.filter(Q(company=company) | Q(company__isnull=True))
+        elif not tout_voir:
+            queryset = queryset.filter(company__isnull=True)
         return queryset
+
+    def get_serializer_context(self):
+        """Stock dépôt et prix par type calculés UNE fois pour toute la liste
+        (avant : 1 à 2 requêtes SQL par produit)."""
+        from .distribution_prix_stock import TarifsMobile, stock_depot_par_produit
+        context = super().get_serializer_context()
+        company, tout_voir = self._company()
+        context['stock_map'] = stock_depot_par_produit(company, tout_voir)
+        context['tarifs'] = TarifsMobile(company=company, produits=self.get_queryset().values('id'))
+        return context
 
 
 ############################

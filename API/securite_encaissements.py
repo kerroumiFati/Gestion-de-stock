@@ -5,6 +5,11 @@ Règles :
 - Un utilisateur du bureau ne voit que les livreurs, clients et tournées de SON entreprise.
 - Les superutilisateurs voient tout (administration du logiciel).
 Les données sans entreprise restent accessibles, comme dans le reste de l'application.
+- Un livreur peut toujours agir sur SES commandes (livreur ou « passée par ») et sur les
+  clients qui lui sont rattachés (clients assignés, planning hebdo, ses commandes, ses ventes),
+  même si son entrepôt n'a pas d'entreprise ou si l'entreprise diffère : sinon l'encaissement
+  répondait 404 et le paiement restait bloqué sur le téléphone. Un utilisateur du bureau
+  d'une entreprise A n'accède toujours pas aux données d'une entreprise B.
 """
 
 
@@ -60,12 +65,35 @@ def tournee_autorisee(request, tournee):
     return livreur_autorise(request, tournee.livreur)
 
 
+def _client_du_livreur(livreur, client):
+    """Vrai si le client est rattaché au livreur (assigné, planning, commandes ou ventes)."""
+    from API.distribution_models import (ClientLivreurHebdo, CommandeClient,
+                                         VenteTourneeMobile)
+    from django.db.models import Q
+    if livreur.clients_assignes.filter(pk=client.pk).exists():
+        return True
+    if ClientLivreurHebdo.objects.filter(client=client, livreur=livreur).exists():
+        return True
+    if CommandeClient.objects.filter(client=client).filter(
+            Q(livreur=livreur) | Q(passee_par=livreur)).exists():
+        return True
+    return VenteTourneeMobile.objects.filter(client=client, tournee__livreur=livreur).exists()
+
+
 def client_autorise(request, client):
-    return client is not None and _meme_entreprise(request, getattr(client, 'company_id', None))
+    if client is None:
+        return False
+    if _meme_entreprise(request, getattr(client, 'company_id', None)):
+        return True
+    moi = livreur_connecte(request.user)
+    return moi is not None and _client_du_livreur(moi, client)
 
 
 def commande_autorisee(request, commande):
     if commande is None:
         return False
+    moi = livreur_connecte(request.user)
+    if moi is not None and moi.pk in (commande.livreur_id, commande.passee_par_id):
+        return True
     company_id = commande.company_id or getattr(commande.client, 'company_id', None)
     return _meme_entreprise(request, company_id)

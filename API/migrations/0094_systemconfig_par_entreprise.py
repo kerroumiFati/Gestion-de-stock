@@ -22,6 +22,12 @@ def creer_parametres_par_entreprise(apps, schema_editor):
     if ancienne is None:
         return
 
+    # PostgreSQL : la ligne d'origine a pu être insérée avec un id explicite (id=1) sans faire avancer
+    # la séquence ; le premier INSERT reprendrait alors l'id 1 (IntegrityError vue en production).
+    from django.core.management.color import no_style
+    for sql in schema_editor.connection.ops.sequence_reset_sql(no_style(), [SystemConfig]):
+        schema_editor.execute(sql)
+
     entreprises = list(Company.objects.all())
     proprietaire_id = None
     for w in (ancienne.default_warehouse, ancienne.depot_commandes_mobile):

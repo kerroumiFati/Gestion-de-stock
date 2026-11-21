@@ -264,28 +264,31 @@
                     </thead>
                     <tbody>
                         {% for transfert in transferts %}
-                        <tr class="transfert-row" style="cursor: pointer;" onclick="toggleDetails({{ transfert.id }})">
+                        <tr class="transfert-row" style="cursor: pointer;" onclick="toggleDetails('{{ transfert.id }}')">
                             <td class="text-center">
                                 <i class="fa fa-chevron-right" id="icon-{{ transfert.id }}"></i>
                             </td>
-                            <td><strong>{{ transfert.numero }}</strong></td>
-                            <td>{{ transfert.date_creation|date:"d/m/Y H:i" }}</td>
                             <td>
-                                <i class="fa fa-warehouse"></i> {{ transfert.entrepot_source.code }}
+                                <strong>{{ transfert.numero }}</strong>
+                                <br><small class="text-muted">{{ transfert.origine }}</small>
+                            </td>
+                            <td>{{ transfert.date|date:"d/m/Y H:i" }}</td>
+                            <td>
+                                <i class="fa fa-warehouse"></i> {{ transfert.source_code }}
                             </td>
                             <td>
-                                {% if transfert.entrepot_destination.code|slice:":3" == "VAN" %}
+                                {% if transfert.dest_code|slice:":3" == "VAN" %}
                                 <i class="fa fa-truck"></i>
                                 {% else %}
                                 <i class="fa fa-warehouse"></i>
                                 {% endif %}
-                                {{ transfert.entrepot_destination.code }}
+                                {{ transfert.dest_code }}
                             </td>
-                            <td class="text-center">{{ transfert.get_nombre_lignes }}</td>
-                            <td class="text-center">{{ transfert.get_nombre_produits }}</td>
+                            <td class="text-center">{{ transfert.nb_lignes }}</td>
+                            <td class="text-center">{{ transfert.nb_produits }}</td>
                             <td>
                                 {% if transfert.demandeur %}
-                                <i class="fa fa-user"></i> {{ transfert.demandeur.username }}
+                                <i class="fa fa-user"></i> {{ transfert.demandeur }}
                                 {% else %}
                                 -
                                 {% endif %}
@@ -321,18 +324,18 @@
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {% for ligne in transfert.lignes.all %}
+                                            {% for ligne in transfert.lignes %}
                                             <tr>
-                                                <td><strong>{{ ligne.produit.reference }}</strong></td>
-                                                <td>{{ ligne.produit.designation }}</td>
+                                                <td><strong>{{ ligne.reference }}</strong></td>
+                                                <td>{{ ligne.designation }}</td>
                                                 <td class="text-center">
-                                                    <span class="badge badge-info">{{ ligne.quantite }} {{ ligne.produit.get_unite_mesure_display }}</span>
+                                                    <span class="badge badge-info">{{ ligne.quantite }} {{ ligne.unite }}</span>
                                                 </td>
                                                 {% if transfert.statut == "receptionne" %}
                                                 <td class="text-center">
                                                     {% if ligne.quantite_recue %}
                                                     <span class="badge {% if ligne.quantite_recue == ligne.quantite %}badge-success{% else %}badge-warning{% endif %}">
-                                                        {{ ligne.quantite_recue }} {{ ligne.produit.get_unite_mesure_display }}
+                                                        {{ ligne.quantite_recue }} {{ ligne.unite }}
                                                     </span>
                                                     {% else %}
                                                     -

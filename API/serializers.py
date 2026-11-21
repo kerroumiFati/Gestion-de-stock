@@ -735,13 +735,16 @@ class InventorySessionSerializer(serializers.ModelSerializer):
     statut_display = serializers.CharField(source='get_statut_display', read_only=True, required=False)
     can_be_validated = serializers.SerializerMethodField()
     missing_products_count = serializers.SerializerMethodField()
+    warehouse_name = serializers.CharField(source='warehouse.name', read_only=True, default=None)
 
     class Meta:
         model = InventorySession
-        fields = ('id', 'numero', 'date', 'statut', 'statut_display', 'note',
+        fields = ('id', 'numero', 'date', 'statut', 'statut_display', 'note', 'warehouse', 'warehouse_name',
                  'created_by', 'created_by_username', 'validated_by', 'validated_by_username',
                  'total_products', 'completed_products', 'completion_percentage',
                  'can_be_validated', 'missing_products_count', 'lignes')
+        # numéro généré automatiquement (INV-<année>-NNNN) s'il est absent
+        extra_kwargs = {'numero': {'required': False, 'allow_blank': True}}
 
     def get_created_by_username(self, obj):
         try:

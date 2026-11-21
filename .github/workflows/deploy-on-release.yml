@@ -60,6 +60,7 @@ jobs:
         run: |
           echo "📦 Sauvegarde avant déploiement de $VERSION..."
           ssh -i ~/.ssh/deploy_key -p ${VPS_PORT} ${VPS_USERNAME}@${VPS_HOST} << EOF
+            set -e   # une commande en échec (ex. migrate) fait échouer l'étape
             BACKUP_DIR="/home/gestionstock/backups"
             mkdir -p \${BACKUP_DIR}
             DATE=\$(date +%Y%m%d_%H%M%S)
@@ -99,6 +100,7 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           ssh -i ~/.ssh/deploy_key -p ${VPS_PORT} ${VPS_USERNAME}@${VPS_HOST} << 'EOF'
+            set -e   # une commande en échec (ex. migrate) fait échouer l'étape
             cd /home/gestionstock/app
             source venv/bin/activate
 
@@ -123,6 +125,7 @@ jobs:
           VPS_PORT: ${{ secrets.VPS_PORT }}
         run: |
           ssh -i ~/.ssh/deploy_key -p ${VPS_PORT} ${VPS_USERNAME}@${VPS_HOST} << 'EOF'
+            set -e   # une commande en échec (ex. migrate) fait échouer l'étape
             # Le déploiement tourne en root : tout ce qu'il a écrit (rsync, .env, pip,
             # collectstatic) doit revenir au compte du service, et le .env (secrets)
             # ne doit être lisible que par lui.

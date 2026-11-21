@@ -13,7 +13,8 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, letter, landscape
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak,
+                                KeepTogether)
 from reportlab.pdfgen import canvas
 
 from django.db.models import Sum, Count, F, Q
@@ -346,176 +347,615 @@ class PDFReportGenerator:
 
 
 # ======================
+# ÉTAT DU STOCK (valorisation + inventaire) : outils communs PDF / Excel
+# ======================
+#
+# Règles communes aux deux rapports :
+# - la quantité affichée vient TOUJOURS de ProductStock (somme des dépôts retenus) et le statut
+#   est calculé à partir de CETTE quantité (avant : quantité ProductStock mais statut calculé
+#   sur Produit.quantite -> « 258 … out_of_stock ») ;
+# - « Tous les entrepôts » = dépôts ACTIFS uniquement ; les vans sont identifiés comme tels et
+#   une répartition par dépôt est toujours jointe ; `par_depot=True` détaille produit par dépôt ;
+# - valorisation au prix de vente (fiche produit) par défaut ; `prix='achat'` = prix d'achat
+#   moyen pondéré des achats enregistrés (réservé : contrôlé par la vue).
+
+PRIX_VENTE = 'vente'
+PRIX_ACHAT = 'achat'
+
+# code -> (libellé, couleur du texte, fond Excel)
+STATUTS_STOCK = {
+    'rupture': ('Rupture', '#C0392B', 'FADBD8'),
+    'critique': ('Critique', '#D35400', 'FDEBD0'),
+    'alerte': ('Alerte', '#9A7D0A', 'FCF3CF'),
+    'normal': ('Normal', '#1E8449', 'D5F5E3'),
+}
+_NBSP = ' '
+
+
+def statut_stock(qty, seuil_alerte, seuil_critique):
+    """Statut (rupture / critique / alerte / normal) d'une quantité, mêmes règles que Produit."""
+    qty = qty or 0
+    if qty <= 0:
+        return 'rupture'
+    if qty <= (seuil_critique or 0):
+        return 'critique'
+    if qty <= (seuil_alerte or 0):
+        return 'alerte'
+    return 'normal'
+
+
+def fmt_nombre(valeur, decimales=0):
+    """1234567.5 -> '1 234 567,50' (format français, espaces insécables)."""
+    texte = f"{float(valeur or 0):,.{decimales}f}"
+    return texte.replace(',', _NBSP).replace('.', ',')
+
+
+def fmt_da(valeur):
+    return f"{fmt_nombre(valeur, 2)}{_NBSP}DA"
+
+
+def nom_societe(company):
+    """Nom à imprimer sur les rapports : nom du ticket (Paramètres) sinon nom de l'entreprise.
+    Sans entreprise précise : l'entreprise unique s'il n'y en a qu'une."""
+    from .models import Company, SystemConfig
+    if company is TOUTES_ENTREPRISES or company is None:
+        ids = list(Company.objects.values_list('pk', flat=True)[:2])
+        company = Company.objects.filter(pk=ids[0]).first() if len(ids) == 1 else None
+    cfg = SystemConfig.objects.filter(company=company).first()
+    nom = (getattr(cfg, 'ticket_company_name', '') or '').strip()
+    if nom:
+        return nom
+    return company.name if company is not None else ''
+
+
+def nom_societe_rapport(request):
+    """Nom de la société de l'utilisateur qui demande le rapport."""
+    from .models import SystemConfig
+    company = getattr(request, 'company', None) or SystemConfig.company_of_user(getattr(request, 'user', None))
+    return nom_societe(company)
+
+
+def parametres_etat_stock(request):
+    """Paramètres GET des états du stock : (warehouse_id, par_depot, prix).
+    `prix=achat` est réservé aux administrateurs qui ont déverrouillé le tableau des bénéfices
+    (le coût d'achat révèle les marges) : lève AccesRefuse sinon. Warehouse.DoesNotExist si
+    l'identifiant de dépôt est invalide."""
+    wid = (request.GET.get('warehouse') or '').strip() or None
+    if wid is not None and not wid.isdigit():
+        raise Warehouse.DoesNotExist(wid)
+    par_depot = (request.GET.get('par_depot') or '').lower() in ('1', 'true', 'oui', 'on')
+    prix = PRIX_ACHAT if request.GET.get('prix') == PRIX_ACHAT else PRIX_VENTE
+    if prix == PRIX_ACHAT:
+        from .benefices_acces import verifier_acces
+        verifier_acces(request)
+    return wid, par_depot, prix
+
+
+def _ids_vans(depots):
+    """Dépôts qui sont des vans : code contenant « van », même convention que le reste de
+    l'application (stock van des livreurs, chargement, ensure_default_warehouse)."""
+    return {d.pk for d in depots if 'van' in (d.code or '').lower()}
+
+
+def _depots_rapport(company, warehouse_id):
+    """(dépôts retenus, ids des vans, libellé du filtre). Un dépôt précis s'il est demandé
+    (Warehouse.DoesNotExist s'il n'est pas visible), sinon tous les dépôts ACTIFS."""
+    qs = _filtrer_entreprise(Warehouse.objects.all(), company)
+    if warehouse_id:
+        depots = [qs.get(pk=warehouse_id)]
+    else:
+        depots = list(qs.filter(is_active=True).order_by('name'))
+    vans = _ids_vans(depots)
+    if warehouse_id:
+        d = depots[0]
+        libelle = f"{'Van' if d.pk in vans else 'Dépôt'} : {d.name}" + ('' if d.is_active else ' (inactif)')
+    else:
+        nb_vans = sum(1 for d in depots if d.pk in vans)
+        libelle = f"Tous les dépôts actifs ({len(depots) - nb_vans} dépôt(s), {nb_vans} van(s))"
+    return depots, vans, libelle
+
+
+def _prix_achat_moyens(produit_ids, company):
+    """Prix d'achat moyen pondéré par les quantités, par pièce, à partir des achats enregistrés."""
+    from collections import defaultdict
+    cumul = defaultdict(lambda: [Decimal('0'), Decimal('0')])
+    achats = _filtrer_entreprise(Achat.objects.filter(produit_id__in=produit_ids), company)
+    for a in achats:
+        prix = Decimal(str(a.get_prix_unitaire_piece() or 0))
+        qte = Decimal(str(a.quantite or 0))
+        if prix > 0 and qte > 0:
+            cumul[a.produit_id][0] += prix * qte
+            cumul[a.produit_id][1] += qte
+    return {pid: (t / q).quantize(Decimal('0.01')) for pid, (t, q) in cumul.items() if q}
+
+
+def _prix_unitaires(produits, prix, company):
+    if prix == PRIX_ACHAT:
+        return _prix_achat_moyens([p.pk for p in produits], company)
+    return {p.pk: (p.prixU or Decimal('0.00')) for p in produits}
+
+
+def _libelle_prix(prix):
+    if prix == PRIX_ACHAT:
+        return "Prix d'achat moyen pondéré (achats enregistrés)"
+    return "Prix de vente (prix unitaire de la fiche produit)"
+
+
+def _ligne_produit(p, qty, pu):
+    pu = Decimal(pu or 0)
+    return {
+        'reference': p.reference or '',
+        'code_barre': p.code_barre or '',
+        'designation': p.designation or '',
+        'categorie': p.categorie.nom if p.categorie_id else '',
+        'fournisseur': p.fournisseur.libelle if p.fournisseur_id else '',
+        'qty': int(qty or 0),
+        'seuil': p.seuil_alerte or 0,
+        'pu': pu,
+        'valeur': (pu * int(qty or 0)).quantize(Decimal('0.01')),
+        'statut': statut_stock(qty, p.seuil_alerte, p.seuil_critique),
+    }
+
+
+def donnees_etat_stock(company=TOUTES_ENTREPRISES, warehouse_id=None, par_depot=False,
+                       prix=PRIX_VENTE, inclure_zero=False):
+    """Données d'un état du stock.
+
+    inclure_zero=False (valorisation) : produits en stock seulement ;
+    inclure_zero=True (inventaire) : tous les produits actifs, même à 0.
+    Retourne un dict : groupes [(dépôt|None, lignes)], lignes (à plat, avec 'depot'/'type_depot'),
+    repartition (par dépôt), totaux, libellé du filtre, libellé du prix, nb produits sans prix."""
+    from collections import defaultdict
+    depots, vans, libelle_filtre = _depots_rapport(company, warehouse_id)
+
+    stocks = ProductStock.objects.filter(warehouse__in=depots, produit__is_active=True)
+    qty_pd = defaultdict(int)          # (produit, dépôt) -> qté
+    for pid, wid, q in stocks.values_list('produit_id', 'warehouse_id', 'quantity'):
+        qty_pd[(pid, wid)] += q or 0
+
+    if inclure_zero:
+        produits_qs = _filtrer_entreprise(Produit.objects.filter(is_active=True), company)
+    else:
+        produits_qs = Produit.objects.filter(pk__in={pid for (pid, _), q in qty_pd.items() if q > 0})
+    produits = list(produits_qs.select_related('categorie', 'fournisseur').order_by('reference', 'designation'))
+    pu = _prix_unitaires(produits, prix, company)
+    sans_prix = sum(1 for p in produits if not pu.get(p.pk))
+
+    def infos_depot(d):
+        return {'nom': d.name, 'code': d.code, 'van': d.pk in vans, 'actif': d.is_active,
+                'type': 'Van' if d.pk in vans else 'Dépôt'}
+
+    groupes, lignes, repartition = [], [], []
+    for d in depots:
+        info = infos_depot(d)
+        lignes_d = []
+        for p in produits:
+            q = qty_pd.get((p.pk, d.pk), 0)
+            if q > 0:
+                lignes_d.append(_ligne_produit(p, q, pu.get(p.pk)))
+        repartition.append(dict(info, nb_produits=len(lignes_d), qty=sum(l['qty'] for l in lignes_d),
+                                valeur=sum((l['valeur'] for l in lignes_d), Decimal('0.00'))))
+        if par_depot and lignes_d:
+            groupes.append((info, lignes_d))
+            lignes.extend(dict(l, depot=info['nom'], type_depot=info['type']) for l in lignes_d)
+
+    if not par_depot:
+        ids = [d.pk for d in depots]
+        lignes_g = []
+        for p in produits:
+            q = sum(qty_pd.get((p.pk, wid), 0) for wid in ids)
+            if q > 0 or inclure_zero:
+                lignes_g.append(_ligne_produit(p, q, pu.get(p.pk)))
+        groupes = [(None, lignes_g)]
+        lignes = lignes_g
+
+    total_qty = sum(l['qty'] for l in lignes)
+    total_valeur = sum((l['valeur'] for l in lignes), Decimal('0.00'))
+    nb_statuts = {k: 0 for k in STATUTS_STOCK}
+    for l in lignes:
+        nb_statuts[l['statut']] += 1
+    return {
+        'groupes': groupes, 'lignes': lignes, 'repartition': repartition,
+        'total_qty': total_qty, 'total_valeur': total_valeur,
+        'nb_produits': len({l['reference'] for l in lignes}) if par_depot else len(lignes),
+        'nb_statuts': nb_statuts, 'filtre': libelle_filtre, 'prix': _libelle_prix(prix),
+        'sans_prix': sans_prix, 'par_depot': par_depot, 'multi_depots': len(depots) > 1,
+    }
+
+
+# ---------- PDF ----------
+
+class _CanvasNumerote(canvas.Canvas):
+    """Canvas qui imprime « Page X / Y » et la date de génération en pied de chaque page."""
+
+    pied_gauche = ''
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._pages = []
+
+    def showPage(self):
+        self._pages.append(dict(self.__dict__))
+        self._startPage()
+
+    def save(self):
+        total = len(self._pages)
+        for etat in self._pages:
+            self.__dict__.update(etat)
+            self._pied(total)
+            super().showPage()
+        super().save()
+
+    def _pied(self, total):
+        largeur, _ = self._pagesize
+        self.saveState()
+        self.setStrokeColor(colors.HexColor('#B0B7C3'))
+        self.setLineWidth(0.5)
+        self.line(28, 22, largeur - 28, 22)
+        self.setFont('Helvetica', 7.5)
+        self.setFillColor(colors.HexColor('#5D6D7E'))
+        self.drawString(28, 12, self.pied_gauche)
+        self.drawRightString(largeur - 28, 12, f"Page {self._pageNumber} / {total}")
+        self.restoreState()
+
+
+def _canvas_avec_pied(texte):
+    return type('CanvasPied', (_CanvasNumerote,), {'pied_gauche': texte})
+
+
+_BLEU = colors.HexColor('#1F4E79')
+_BLEU_CLAIR = colors.HexColor('#DCE6F1')
+_GRIS_LIGNE = colors.HexColor('#F4F6F8')
+
+
+def _styles_pdf():
+    base = getSampleStyleSheet()['Normal']
+    mk = lambda nom, **kw: ParagraphStyle(nom, parent=base, **kw)
+    return {
+        'titre': mk('t', fontName='Helvetica-Bold', fontSize=15, leading=18, textColor=_BLEU),
+        'societe': mk('s', fontName='Helvetica-Bold', fontSize=11, leading=13, textColor=colors.HexColor('#2C3E50')),
+        'meta': mk('m', fontSize=8.5, leading=11, textColor=colors.HexColor('#34495E')),
+        'meta_d': mk('md', fontSize=8.5, leading=11, textColor=colors.HexColor('#34495E'), alignment=2),
+        'th': mk('th', fontName='Helvetica-Bold', fontSize=8, leading=9.5, textColor=colors.white),
+        'th_c': mk('thc', fontName='Helvetica-Bold', fontSize=8, leading=9.5, textColor=colors.white, alignment=1),
+        'th_d': mk('thd', fontName='Helvetica-Bold', fontSize=8, leading=9.5, textColor=colors.white, alignment=2),
+        'td': mk('td', fontSize=7.8, leading=9.2),
+        'td_d': mk('tdd', fontSize=7.8, leading=9.2, alignment=2),
+        'td_c': mk('tdc', fontName='Helvetica-Bold', fontSize=7.5, leading=9.2, alignment=1),
+        'grp': mk('g', fontName='Helvetica-Bold', fontSize=8.5, leading=10.5, textColor=_BLEU),
+        'tot': mk('tt', fontName='Helvetica-Bold', fontSize=8.2, leading=10),
+        'tot_d': mk('ttd', fontName='Helvetica-Bold', fontSize=8.2, leading=10, alignment=2),
+        'h2': mk('h2', fontName='Helvetica-Bold', fontSize=10.5, leading=13, textColor=_BLEU, spaceBefore=4),
+        'note': mk('n', fontSize=7.5, leading=9.5, textColor=colors.HexColor('#5D6D7E')),
+    }
+
+
+def _esc(texte):
+    return (str(texte).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;'))
+
+
+def _cellule_pdf(col, ligne, st):
+    cle, typ = col[1], col[3]
+    v = ligne.get(cle)
+    if typ == 'int':
+        return Paragraph(fmt_nombre(v), st['td_d'])
+    if typ == 'da':
+        return Paragraph(fmt_da(v), st['td_d'])
+    if typ == 'statut':
+        lib, coul, _ = STATUTS_STOCK[v]
+        return Paragraph(f'<font color="{coul}">{lib}</font>', st['td_c'])
+    return Paragraph(_esc(v or ''), st['td'])
+
+
+def _ligne_total_pdf(colonnes, libelle, valeurs, st):
+    """Ligne de total : libellé dans la 1re colonne (fusionnée jusqu'à la 1re colonne chiffrée)."""
+    cellules = []
+    for i, col in enumerate(colonnes):
+        if i == 0:
+            cellules.append(Paragraph(_esc(libelle), st['tot']))
+        elif col[1] in valeurs:
+            v = valeurs[col[1]]
+            cellules.append(Paragraph(fmt_da(v) if col[3] == 'da' else fmt_nombre(v), st['tot_d']))
+        else:
+            cellules.append('')
+    premiere = next(i for i, c in enumerate(colonnes) if c[1] in valeurs)
+    return cellules, max(premiere - 1, 0)
+
+
+def _pdf_etat_stock(titre, societe, donnees, colonnes, sommes, resume):
+    """colonnes : [(entête, clé, poids de largeur, type text|int|da|statut)] ;
+    sommes : clés totalisées ; resume : [(libellé, valeur texte)] encadré final."""
+    buffer = BytesIO()
+    page = landscape(A4)
+    marge = 28
+    doc = SimpleDocTemplate(buffer, pagesize=page, leftMargin=marge, rightMargin=marge,
+                            topMargin=24, bottomMargin=34, title=titre, author=societe or 'GestionStock')
+    st = _styles_pdf()
+    largeur = page[0] - 2 * marge
+    poids = sum(c[2] for c in colonnes)
+    largeurs = [largeur * c[2] / poids for c in colonnes]
+    maintenant = timezone.localtime(timezone.now())
+
+    el = []
+    # En-tête : titre + société à gauche, date / filtre à droite
+    gauche = [Paragraph(_esc(titre), st['titre'])]
+    if societe:
+        gauche.append(Paragraph(_esc(societe), st['societe']))
+    droite = [Paragraph(f"<b>Date du rapport :</b> {maintenant:%d/%m/%Y à %H:%M}", st['meta_d']),
+              Paragraph(f"<b>Périmètre :</b> {_esc(donnees['filtre'])}", st['meta_d']),
+              Paragraph(f"<b>Valorisation :</b> {_esc(donnees['prix'])}", st['meta_d'])]
+    entete = Table([[gauche, droite]], colWidths=[largeur * 0.5, largeur * 0.5])
+    entete.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'BOTTOM'),
+                                ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                                ('LINEBELOW', (0, 0), (-1, 0), 1.2, _BLEU),
+                                ('BOTTOMPADDING', (0, 0), (-1, -1), 5)]))
+    el += [entete, Spacer(1, 8)]
+
+    # Tableau principal
+    data = [[Paragraph(_esc(c[0]), st['th_d'] if c[3] in ('int', 'da') else
+                       st['th_c'] if c[3] == 'statut' else st['th']) for c in colonnes]]
+    style = [
+        ('BACKGROUND', (0, 0), (-1, 0), _BLEU),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 2.5), ('BOTTOMPADDING', (0, 0), (-1, -1), 2.5),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4), ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+        ('LINEBELOW', (0, 0), (-1, -1), 0.25, colors.HexColor('#D5D8DC')),
+        ('BOX', (0, 0), (-1, -1), 0.6, colors.HexColor('#85929E')),
+    ]
+    n_ligne = 0
+    for info, lignes in donnees['groupes']:
+        if info is not None:
+            r = len(data)
+            lib = (f"Van : {info['nom']}  (stock embarqué du véhicule)" if info['van']
+                   else f"Dépôt : {info['nom']}") + ('' if info['actif'] else ' (inactif)')
+            data.append([Paragraph(_esc(lib), st['grp'])] + [''] * (len(colonnes) - 1))
+            style += [('SPAN', (0, r), (-1, r)), ('BACKGROUND', (0, r), (-1, r), _BLEU_CLAIR),
+                      ('LINEABOVE', (0, r), (-1, r), 0.8, _BLEU)]
+            n_ligne = 0
+        for ligne in lignes:
+            r = len(data)
+            data.append([_cellule_pdf(c, ligne, st) for c in colonnes])
+            if n_ligne % 2:
+                style.append(('BACKGROUND', (0, r), (-1, r), _GRIS_LIGNE))
+            n_ligne += 1
+        if info is not None:
+            r = len(data)
+            cellules, fin = _ligne_total_pdf(colonnes, f"Sous-total {info['nom']}",
+                                             {k: sum((l[k] for l in lignes), 0) for k in sommes}, st)
+            data.append(cellules)
+            style += [('SPAN', (0, r), (fin, r)), ('BACKGROUND', (0, r), (-1, r), colors.HexColor('#EEF3F9'))]
+    if len(data) == 1:
+        r = len(data)
+        data.append([Paragraph('Aucun produit en stock pour ce périmètre.', st['td'])] + [''] * (len(colonnes) - 1))
+        style.append(('SPAN', (0, r), (-1, r)))
+    r = len(data)
+    cellules, fin = _ligne_total_pdf(colonnes, 'TOTAL GÉNÉRAL',
+                                     {k: donnees['total_qty'] if k == 'qty' else donnees['total_valeur']
+                                      for k in sommes}, st)
+    data.append(cellules)
+    style += [('SPAN', (0, r), (fin, r)), ('BACKGROUND', (0, r), (-1, r), _BLEU_CLAIR),
+              ('LINEABOVE', (0, r), (-1, r), 1.2, _BLEU),
+              ('TOPPADDING', (0, r), (-1, r), 4), ('BOTTOMPADDING', (0, r), (-1, r), 4)]
+    table = Table(data, colWidths=largeurs, repeatRows=1)
+    table.setStyle(TableStyle(style))
+    el += [table, Spacer(1, 10)]
+
+    # Répartition par dépôt (dépôts et vans distingués)
+    if donnees['multi_depots'] and not donnees['par_depot']:
+        rep = [r for r in donnees['repartition'] if r['nb_produits']]
+        if rep:
+            titre_rep = Paragraph('Répartition par dépôt (dépôts actifs, vans signalés)', st['h2'])
+            lignes_r = [[Paragraph(h, st['th_d'] if i >= 2 else st['th'])
+                         for i, h in enumerate(['Dépôt', 'Type', 'Produits', 'Quantité', 'Valeur'])]]
+            for r in rep:
+                lignes_r.append([Paragraph(_esc(r['nom']), st['td']), Paragraph(r['type'], st['td']),
+                                 Paragraph(fmt_nombre(r['nb_produits']), st['td_d']),
+                                 Paragraph(fmt_nombre(r['qty']), st['td_d']),
+                                 Paragraph(fmt_da(r['valeur']), st['td_d'])])
+            lignes_r.append([Paragraph('TOTAL', st['tot']), '', '',
+                             Paragraph(fmt_nombre(sum(r['qty'] for r in rep)), st['tot_d']),
+                             Paragraph(fmt_da(sum((r['valeur'] for r in rep), Decimal('0'))), st['tot_d'])])
+            t = Table(lignes_r, colWidths=[200, 60, 60, 80, 120], repeatRows=1, hAlign='LEFT')
+            t.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), _BLEU), ('BACKGROUND', (0, -1), (-1, -1), _BLEU_CLAIR),
+                ('LINEABOVE', (0, -1), (-1, -1), 1, _BLEU), ('SPAN', (0, -1), (2, -1)),
+                ('LINEBELOW', (0, 0), (-1, -1), 0.25, colors.HexColor('#D5D8DC')),
+                ('BOX', (0, 0), (-1, -1), 0.6, colors.HexColor('#85929E')),
+                ('TOPPADDING', (0, 0), (-1, -1), 2.5), ('BOTTOMPADDING', (0, 0), (-1, -1), 2.5),
+            ]))
+            el += [KeepTogether([titre_rep, Spacer(1, 3), t]), Spacer(1, 10)]
+
+    # Synthèse
+    if resume:
+        t = Table([[Paragraph(_esc(k), st['tot']), Paragraph(v, st['tot_d'])] for k, v in resume],
+                  colWidths=[200, 130], hAlign='LEFT')
+        t.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#F2F7FC')),
+                               ('BOX', (0, 0), (-1, -1), 0.8, _BLEU),
+                               ('LINEBELOW', (0, 0), (-1, -2), 0.25, colors.HexColor('#C9D6E3')),
+                               ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3)]))
+        el.append(t)
+    if donnees['sans_prix']:
+        el += [Spacer(1, 6), Paragraph(f"{donnees['sans_prix']} produit(s) sans prix connu sont valorisés à 0 DA.",
+                                       st['note'])]
+
+    pied = f"Généré le {maintenant:%d/%m/%Y à %H:%M}" + (f" — {societe}" if societe else '') + f" — {titre.capitalize()}"
+    doc.build(el, canvasmaker=_canvas_avec_pied(pied))
+    buffer.seek(0)
+    return buffer
+
+
+# ---------- Excel ----------
+
+_XL_FMT = {'int': '#,##0', 'da': '#,##0.00 "DA"'}
+
+
+def _xlsx_etat_stock(titre, societe, donnees, colonnes, sommes, nom_feuille):
+    """colonnes : [(entête, clé, largeur Excel, type text|int|da|statut)]."""
+    from openpyxl.worksheet.properties import PageSetupProperties
+    wb = Workbook()
+    ws = wb.active
+    ws.title = nom_feuille
+    n = len(colonnes)
+    der = get_column_letter(n)
+    fin = Side(style='thin', color='BFC9D4')
+    bord = Border(left=fin, right=fin, top=fin, bottom=fin)
+    entete_fill = PatternFill('solid', start_color='1F4E79', end_color='1F4E79')
+    total_fill = PatternFill('solid', start_color='DCE6F1', end_color='DCE6F1')
+    maintenant = timezone.localtime(timezone.now()).replace(tzinfo=None, microsecond=0)
+
+    ws.merge_cells(f'A1:{der}1')
+    ws['A1'] = titre
+    ws['A1'].font = Font(bold=True, size=15, color='1F4E79')
+    ws['A1'].alignment = Alignment(horizontal='center', vertical='center')
+    ws.row_dimensions[1].height = 24
+    meta = [('Société', societe or '—'), ('Date du rapport', maintenant),
+            ('Périmètre', donnees['filtre']), ('Valorisation', donnees['prix'])]
+    for i, (k, v) in enumerate(meta, start=2):
+        ws.cell(row=i, column=1, value=f'{k} :').font = Font(bold=True, color='34495E')
+        c = ws.cell(row=i, column=2, value=v)
+        if isinstance(v, datetime):
+            c.number_format = 'dd/mm/yyyy hh:mm'
+            c.alignment = Alignment(horizontal='left')
+        ws.merge_cells(start_row=i, start_column=2, end_row=i, end_column=n)
+    h = len(meta) + 3          # ligne d'en-tête (une ligne vide avant)
+
+    for j, col in enumerate(colonnes, start=1):
+        c = ws.cell(row=h, column=j, value=col[0])
+        c.font = Font(bold=True, color='FFFFFF')
+        c.fill = entete_fill
+        c.border = bord
+        c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        ws.column_dimensions[get_column_letter(j)].width = col[2]
+    ws.row_dimensions[h].height = 30
+
+    r = h
+    for ligne in donnees['lignes']:
+        r += 1
+        for j, col in enumerate(colonnes, start=1):
+            cle, typ = col[1], col[3]
+            v = ligne.get(cle)
+            c = ws.cell(row=r, column=j)
+            c.border = bord
+            if typ == 'statut':
+                lib, coul, fond = STATUTS_STOCK[v]
+                c.value = lib
+                c.font = Font(bold=True, color=coul.lstrip('#'))
+                c.fill = PatternFill('solid', start_color=fond, end_color=fond)
+                c.alignment = Alignment(horizontal='center')
+            elif typ in _XL_FMT:
+                c.value = float(v) if typ == 'da' else int(v or 0)
+                c.number_format = _XL_FMT[typ]
+            else:
+                c.value = v or ''
+                c.alignment = Alignment(vertical='top', wrap_text=False)
+    premiere, derniere = h + 1, max(r, h + 1)
+
+    # Total : SOUS.TOTAL(9, …) = somme qui suit les filtres automatiques
+    r = derniere + 1
+    ws.cell(row=r, column=1, value='TOTAL')
+    for j, col in enumerate(colonnes, start=1):
+        c = ws.cell(row=r, column=j)
+        c.font = Font(bold=True)
+        c.fill = total_fill
+        c.border = Border(left=fin, right=fin, top=Side(style='medium', color='1F4E79'), bottom=fin)
+        if col[1] in sommes:
+            L = get_column_letter(j)
+            c.value = f'=SUBTOTAL(9,{L}{premiere}:{L}{derniere})'
+            c.number_format = _XL_FMT[col[3]]
+    ws.cell(row=r + 1, column=1,
+            value='Le total suit les filtres (SOUS.TOTAL) : filtrez une colonne pour obtenir un sous-total.'
+            ).font = Font(italic=True, size=8, color='7F8C8D')
+
+    ws.freeze_panes = ws.cell(row=h + 1, column=1)
+    ws.auto_filter.ref = f'A{h}:{der}{derniere}'
+    ws.print_title_rows = f'{h}:{h}'
+    ws.page_setup.orientation = 'landscape'
+    ws.page_setup.paperSize = ws.PAPERSIZE_A4
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+    ws.sheet_properties.pageSetUpPr = PageSetupProperties(fitToPage=True)
+    ws.print_options.horizontalCentered = True
+    ws.page_margins.left = ws.page_margins.right = 0.4
+    ws.oddFooter.left.text = f'{societe} — {titre}' if societe else titre
+    ws.oddFooter.right.text = 'Page &P / &N'
+
+    # Feuille « Par dépôt »
+    rep = [x for x in donnees['repartition'] if x['nb_produits']]
+    if rep:
+        wd = wb.create_sheet('Par dépôt')
+        ent = ['Dépôt', 'Code', 'Type', 'Produits', 'Quantité', 'Valeur']
+        for j, (t, w) in enumerate(zip(ent, [32, 12, 10, 12, 14, 20]), start=1):
+            c = wd.cell(row=1, column=j, value=t)
+            c.font, c.fill, c.border = Font(bold=True, color='FFFFFF'), entete_fill, bord
+            c.alignment = Alignment(horizontal='center')
+            wd.column_dimensions[get_column_letter(j)].width = w
+        for i, x in enumerate(rep, start=2):
+            for j, (v, f) in enumerate([(x['nom'], None), (x['code'], None), (x['type'], None),
+                                        (x['nb_produits'], '#,##0'), (x['qty'], '#,##0'),
+                                        (float(x['valeur']), _XL_FMT['da'])], start=1):
+                c = wd.cell(row=i, column=j, value=v)
+                c.border = bord
+                if f:
+                    c.number_format = f
+        t = len(rep) + 2
+        wd.cell(row=t, column=1, value='TOTAL')
+        for j in range(1, 7):
+            c = wd.cell(row=t, column=j)
+            c.font, c.fill, c.border = Font(bold=True), total_fill, bord
+        for j, f in ((5, '#,##0'), (6, _XL_FMT['da'])):
+            L = get_column_letter(j)
+            c = wd.cell(row=t, column=j, value=f'=SUM({L}2:{L}{t - 1})')
+            c.number_format = f
+        wd.freeze_panes = 'A2'
+        wd.page_setup.orientation = 'landscape'
+
+    buffer = BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    return buffer
+
+
+# ======================
 # RAPPORTS SPÉCIFIQUES
 # ======================
 
-def generate_stock_valuation_excel(warehouse_id=None, company=TOUTES_ENTREPRISES):
-    """
-    Rapport de valorisation du stock (Excel)
-    Montre la valeur totale du stock par produit
-    """
-    gen = ExcelReportGenerator()
-    gen.ws.title = "Valorisation Stock"
-
-    # Titre
-    current_row = gen.add_title("RAPPORT DE VALORISATION DU STOCK")
-    current_row = gen.add_metadata(current_row)
-
-    if warehouse_id:
-        # Stock par entrepôt spécifique
-        warehouse = _filtrer_entreprise(Warehouse.objects.all(), company).get(pk=warehouse_id)
-        gen.ws[f'A{current_row}'] = f"Entrepôt: {warehouse.name}"
-        current_row += 2
-
-        product_stocks = ProductStock.objects.filter(
-            warehouse=warehouse,
-            quantity__gt=0,
-            produit__is_active=True,
-        ).select_related('produit', 'produit__categorie')
-    else:
-        # Tous les entrepôts - calculer la somme des stocks
-        gen.ws[f'A{current_row}'] = "Tous les entrepôts"
-        current_row += 2
-
-        # Obtenir tous les stocks groupés par produit
-        product_stocks = _filtrer_entreprise(ProductStock.objects.filter(
-            quantity__gt=0,
-            produit__is_active=True,
-        ), company, 'warehouse__company').select_related('produit', 'produit__categorie')
-
-    # En-têtes
-    headers = ['Référence', 'Désignation', 'Catégorie', 'Qté Stock', 'Prix Unit.', 'Valeur Stock', 'Statut']
-    gen.set_column_widths([15, 30, 20, 12, 15, 18, 15])
-    current_row = gen.add_header_row(headers, current_row)
-
-    # Regrouper les stocks par produit et calculer les totaux
-    from collections import defaultdict
-    product_totals = defaultdict(int)
-
-    for ps in product_stocks:
-        product_totals[ps.produit.id] += ps.quantity
-
-    # Données
-    data_rows = []
-    total_value = Decimal('0.00')
-    total_qty = 0
-
-    # Récupérer les produits avec stock
-    products = Produit.objects.filter(
-        id__in=product_totals.keys(),
-        is_active=True
-    ).select_related('categorie')
-
-    for product in products:
-        qty = product_totals[product.id]
-        if qty <= 0:
-            continue
-
-        unit_price = product.prixU or Decimal('0.00')
-        value = qty * unit_price
-        total_value += value
-        total_qty += qty
-
-        data_rows.append([
-            product.reference,
-            product.designation,
-            product.categorie.nom if product.categorie else 'N/A',
-            qty,
-            float(unit_price),
-            float(value),
-            product.get_stock_status()
-        ])
-
-    current_row = gen.add_data_rows(data_rows, current_row, number_columns=[4, 5, 6])
-
-    # Total
-    gen.add_total_row(current_row, 3, "TOTAL", {
-        4: total_qty,
-        6: float(total_value)
-    })
-
-    return gen.save_to_buffer()
+_TITRE_VALORISATION = "État de valorisation du stock"
 
 
-def generate_stock_valuation_pdf(warehouse_id=None, company=TOUTES_ENTREPRISES):
-    """
-    Rapport de valorisation du stock (PDF)
-    """
-    gen = PDFReportGenerator("RAPPORT DE VALORISATION DU STOCK", orientation='landscape')
-    gen.add_title()
-    gen.add_metadata()
+def _colonnes_valorisation(donnees, prix, excel=False):
+    lib_pu = "Prix d'achat moyen" if prix == PRIX_ACHAT else 'Prix de vente unit.'
+    cols = []
+    if excel and donnees['par_depot']:
+        cols += [('Dépôt', 'depot', 22, 'text'), ('Type', 'type_depot', 9, 'text')]
+    cols += [('Référence', 'reference', 16 if excel else 11, 'text'),
+             ('Désignation', 'designation', 42 if excel else 30, 'text'),
+             ('Catégorie', 'categorie', 20 if excel else 14, 'text'),
+             ('Qté', 'qty', 10 if excel else 7, 'int'),
+             (lib_pu, 'pu', 18 if excel else 12, 'da'),
+             ('Valeur du stock', 'valeur', 20 if excel else 14, 'da'),
+             ('Statut', 'statut', 12 if excel else 8, 'statut')]
+    return cols
 
-    if warehouse_id:
-        # Stock par entrepôt spécifique
-        warehouse = _filtrer_entreprise(Warehouse.objects.all(), company).get(pk=warehouse_id)
-        gen.elements.append(Paragraph(f"<b>Entrepôt:</b> {warehouse.name}", gen.styles['Normal']))
-        gen.elements.append(Spacer(1, 12))
 
-        product_stocks = ProductStock.objects.filter(
-            warehouse=warehouse,
-            quantity__gt=0,
-            produit__is_active=True,
-        ).select_related('produit', 'produit__categorie')
-    else:
-        # Tous les entrepôts
-        gen.elements.append(Paragraph("<b>Tous les entrepôts</b>", gen.styles['Normal']))
-        gen.elements.append(Spacer(1, 12))
+def generate_stock_valuation_excel(warehouse_id=None, company=TOUTES_ENTREPRISES, par_depot=False,
+                                   prix=PRIX_VENTE, societe=None):
+    """Valorisation du stock (Excel) : une ligne par produit (ou par produit et dépôt)."""
+    d = donnees_etat_stock(company, warehouse_id, par_depot, prix)
+    societe = nom_societe(company) if societe is None else societe
+    return _xlsx_etat_stock(_TITRE_VALORISATION.upper(), societe, d,
+                            _colonnes_valorisation(d, prix, excel=True), ('qty', 'valeur'), 'Valorisation stock')
 
-        product_stocks = _filtrer_entreprise(ProductStock.objects.filter(
-            quantity__gt=0,
-            produit__is_active=True,
-        ), company, 'warehouse__company').select_related('produit', 'produit__categorie')
 
-    # Regrouper les stocks par produit
-    from collections import defaultdict
-    product_totals = defaultdict(int)
-
-    for ps in product_stocks:
-        product_totals[ps.produit.id] += ps.quantity
-
-    # Récupérer les produits avec stock
-    products = Produit.objects.filter(
-        id__in=product_totals.keys(),
-        is_active=True
-    ).select_related('categorie')
-
-    # Tableau
-    table_data = [['Référence', 'Désignation', 'Catégorie', 'Qté', 'Prix Unit.', 'Valeur Stock', 'Statut']]
-
-    total_value = Decimal('0.00')
-    total_qty = 0
-
-    for product in products:
-        qty = product_totals[product.id]
-        unit_price = product.prixU or Decimal('0.00')
-        value = qty * unit_price
-        total_value += value
-        total_qty += qty
-
-        table_data.append([
-            product.reference,
-            product.designation[:30],
-            product.categorie.nom if product.categorie else 'N/A',
-            str(qty),
-            f"{unit_price:.2f}",
-            f"{value:.2f}",
-            product.get_stock_status()
-        ])
-
-    # Ligne de total
-    table_data.append(['', '', 'TOTAL', str(total_qty), '', f"{total_value:.2f}", ''])
-
-    gen.add_table(table_data, col_widths=[1.2*inch, 2.5*inch, 1.3*inch, 0.8*inch, 1*inch, 1.2*inch, 1*inch])
-
-    # Résumé
-    summary_data = [
-        ['Nombre de produits en stock:', str(len(products))],
-        ['Quantité totale:', str(total_qty)],
-        ['Valeur totale du stock:', f"{total_value:.2f}"]
-    ]
-    gen.add_summary_box(summary_data)
-
-    return gen.build()
+def generate_stock_valuation_pdf(warehouse_id=None, company=TOUTES_ENTREPRISES, par_depot=False,
+                                 prix=PRIX_VENTE, societe=None):
+    """Valorisation du stock (PDF A4 paysage)."""
+    d = donnees_etat_stock(company, warehouse_id, par_depot, prix)
+    societe = nom_societe(company) if societe is None else societe
+    resume = [('Produits en stock', fmt_nombre(d['nb_produits'])),
+              ('Quantité totale', fmt_nombre(d['total_qty'])),
+              ('Valeur totale du stock', fmt_da(d['total_valeur']))]
+    return _pdf_etat_stock(_TITRE_VALORISATION.upper(), societe, d,
+                           _colonnes_valorisation(d, prix), ('qty', 'valeur'), resume)
 
 
 def generate_sales_report_excel(start_date=None, end_date=None, company=TOUTES_ENTREPRISES):
@@ -649,87 +1089,41 @@ def generate_sales_report_pdf(start_date=None, end_date=None, company=TOUTES_ENT
     return gen.build()
 
 
-def generate_inventory_report_excel(company=TOUTES_ENTREPRISES):
-    """
-    Rapport d'inventaire complet (Excel)
-    """
-    gen = ExcelReportGenerator()
-    gen.ws.title = "Inventaire"
-
-    # Titre
-    current_row = gen.add_title("RAPPORT D'INVENTAIRE COMPLET")
-    current_row = gen.add_metadata(current_row)
-
-    # En-têtes
-    headers = ['Référence', 'Code Barre', 'Désignation', 'Catégorie', 'Fournisseur', 'Qté', 'Seuil Alerte', 'Prix Unit.', 'Statut']
-    gen.set_column_widths([15, 15, 30, 20, 20, 10, 12, 15, 15])
-    current_row = gen.add_header_row(headers, current_row)
-
-    # Données
-    products = _filtrer_entreprise(Produit.objects.filter(is_active=True), company).select_related('categorie', 'fournisseur').order_by('reference')
-
-    data_rows = []
-    for product in products:
-        data_rows.append([
-            product.reference,
-            product.code_barre or '',
-            product.designation,
-            product.categorie.nom if product.categorie else '',
-            product.fournisseur.libelle if product.fournisseur else '',
-            product.quantite,
-            product.seuil_alerte or 0,
-            float(product.prixU or 0),
-            product.get_stock_status()
-        ])
-
-    gen.add_data_rows(data_rows, current_row, number_columns=[6, 7, 8])
-
-    return gen.save_to_buffer()
+_TITRE_INVENTAIRE = "État du stock — inventaire complet"
 
 
-def generate_inventory_report_pdf(company=TOUTES_ENTREPRISES):
-    """
-    Rapport d'inventaire complet (PDF)
-    """
-    gen = PDFReportGenerator("RAPPORT D'INVENTAIRE COMPLET", orientation='landscape')
-    gen.add_title()
-    gen.add_metadata()
+def _colonnes_inventaire(excel=False):
+    return [('Référence', 'reference', 16 if excel else 10, 'text'),
+            ('Code-barres', 'code_barre', 16 if excel else 11, 'text'),
+            ('Désignation', 'designation', 40 if excel else 25, 'text'),
+            ('Catégorie', 'categorie', 18 if excel else 11, 'text'),
+            ('Fournisseur', 'fournisseur', 18 if excel else 11, 'text'),
+            ('Qté', 'qty', 9 if excel else 6, 'int'),
+            ('Seuil alerte', 'seuil', 10 if excel else 6, 'int'),
+            ('Prix de vente unit.', 'pu', 16 if excel else 10, 'da'),
+            ('Valeur du stock', 'valeur', 18 if excel else 11.5, 'da'),
+            ('Statut', 'statut', 11 if excel else 7, 'statut')]
 
-    products = _filtrer_entreprise(Produit.objects.filter(is_active=True), company).select_related('categorie', 'fournisseur').order_by('reference')
 
-    # Tableau
-    table_data = [['Réf.', 'Désignation', 'Catégorie', 'Fournisseur', 'Qté', 'Seuil', 'Prix', 'Statut']]
+def generate_inventory_report_excel(company=TOUTES_ENTREPRISES, warehouse_id=None, societe=None):
+    """Inventaire complet (Excel) : tous les produits actifs, même à 0, quantités ProductStock."""
+    d = donnees_etat_stock(company, warehouse_id, inclure_zero=True)
+    societe = nom_societe(company) if societe is None else societe
+    return _xlsx_etat_stock(_TITRE_INVENTAIRE.upper(), societe, d, _colonnes_inventaire(excel=True),
+                            ('qty', 'valeur'), 'Inventaire')
 
-    for product in products:
-        table_data.append([
-            product.reference,
-            product.designation[:25],
-            product.categorie.nom[:15] if product.categorie else '',
-            product.fournisseur.libelle[:15] if product.fournisseur else '',
-            str(product.quantite),
-            str(product.seuil_alerte or 0),
-            f"{product.prixU or 0:.2f}",
-            product.get_stock_status()
-        ])
 
-    gen.add_table(table_data, col_widths=[0.9*inch, 2*inch, 1.2*inch, 1.2*inch, 0.7*inch, 0.7*inch, 0.9*inch, 1*inch])
-
-    # Statistiques
-    rupture = products.filter(quantite=0).count()
-    critique = products.filter(quantite__gt=0, quantite__lte=F('seuil_critique')).count()
-    alerte = products.filter(quantite__gt=F('seuil_critique'), quantite__lte=F('seuil_alerte')).count()
-    normal = products.filter(quantite__gt=F('seuil_alerte')).count()
-
-    summary_data = [
-        ['Produits en rupture:', str(rupture)],
-        ['Produits en critique:', str(critique)],
-        ['Produits en alerte:', str(alerte)],
-        ['Produits normaux:', str(normal)],
-        ['Total produits:', str(products.count())]
-    ]
-    gen.add_summary_box(summary_data)
-
-    return gen.build()
+def generate_inventory_report_pdf(company=TOUTES_ENTREPRISES, warehouse_id=None, societe=None):
+    """Inventaire complet (PDF A4 paysage) avec synthèse des statuts."""
+    d = donnees_etat_stock(company, warehouse_id, inclure_zero=True)
+    societe = nom_societe(company) if societe is None else societe
+    resume = [(f'Produits en {STATUTS_STOCK[k][0].lower()}' if k != 'normal' else 'Produits au niveau normal',
+               f'<font color="{STATUTS_STOCK[k][1]}">{fmt_nombre(d["nb_statuts"][k])}</font>')
+              for k in ('rupture', 'critique', 'alerte', 'normal')]
+    resume += [('Total produits', fmt_nombre(len(d['lignes']))),
+               ('Quantité totale', fmt_nombre(d['total_qty'])),
+               ('Valeur totale (prix de vente)', fmt_da(d['total_valeur']))]
+    return _pdf_etat_stock(_TITRE_INVENTAIRE.upper(), societe, d, _colonnes_inventaire(), ('qty', 'valeur'), resume)
 
 
 # ======================

@@ -458,9 +458,12 @@ class ClientViewSet(TenantFilterMixin, viewsets.ModelViewSet):
         if self.request.user.is_superuser or self.request.user.is_staff:
             return queryset
 
-        # Si l'utilisateur a une company, filtrer par company
+        # Si l'utilisateur a une company : ses clients + les clients sans entreprise
+        # (créés sur les téléphones par des livreurs sans entreprise), comme TenantFilterMixin
+        # et les listes de commandes. Avant, ces clients et leurs dettes étaient invisibles au bureau.
         if hasattr(self.request, 'company') and self.request.company is not None:
-            queryset = queryset.filter(company=self.request.company)
+            from django.db.models import Q as _Q
+            queryset = queryset.filter(_Q(company=self.request.company) | _Q(company__isnull=True))
         else:
             # Utilisateur mobile (livreur) - retourner les clients assignés + clients des tournées
             from .distribution_models import LivreurDistribution, TourneeMobile
@@ -760,7 +763,9 @@ class ClientViewSet(TenantFilterMixin, viewsets.ModelViewSet):
 
         # Filtrer les clients par company si disponible
         if company:
-            clients = Client.objects.filter(company=company)
+            # Clients de l'entreprise + clients sans entreprise (créés sur les téléphones),
+            # comme le reste de l'application.
+            clients = Client.objects.filter(Q(company=company) | Q(company__isnull=True))
             print(f"[DASHBOARD STATS] Filtering by company: {company}")
         elif request.user.is_superuser or request.user.is_staff:
             # Les superusers voient tous les clients
@@ -811,8 +816,8 @@ class ClientViewSet(TenantFilterMixin, viewsets.ModelViewSet):
 
         # Construire le filtre pour les paiements selon le contexte
         if company:
-            paiements_filter = Q(client__company=company)
-            ventes_filter = Q(client__company=company)
+            paiements_filter = Q(client__company=company) | Q(client__company__isnull=True)
+            ventes_filter = Q(client__company=company) | Q(client__company__isnull=True)
         elif request.user.is_superuser or request.user.is_staff:
             paiements_filter = Q()
             ventes_filter = Q()
@@ -1057,53 +1062,94 @@ class AchatViewSet(TenantFilterMixin, viewsets.ModelViewSet):
     serializer_class = AchatSerializer
     permission_classes = [IsAuthenticated]
 
+    def _depot_achat(self, serializer, actuel=None):
+        """Dépôt de l'achat : celui choisi (de l'entreprise), sinon l'actuel, sinon le dépôt par défaut."""
+        from rest_framework.exceptions import ValidationError as DRFValidationError
+        from .securite_encaissements import company_connectee
+        from .stock_utils import depot_par_defaut
+        company = company_connectee(self.request)
+        w = serializer.validated_data.get('warehouse') if 'warehouse' in serializer.validated_data else actuel
+        if w is None and 'warehouse' not in serializer.validated_data:
+            wid = self.request.data.get('warehouse_id')
+            if wid:
+                w = Warehouse.objects.filter(pk=wid).first() if str(wid).isdigit() else None
+        w = w or depot_par_defaut(company)
+        if w is None:
+            raise DRFValidationError({'detail': 'Choisissez un dépôt pour cet achat'})
+        if not self.request.user.is_superuser and not SystemConfig.warehouses_of(company).filter(pk=w.pk).exists():
+            raise DRFValidationError({'detail': 'Dépôt introuvable'})
+        return w
+
     def perform_create(self, serializer):
-        # Attacher la company de l'utilisateur
-        if hasattr(self.request, 'company') and self.request.company is not None:
-            obj = serializer.save(company=self.request.company)
-        else:
-            obj = serializer.save()
+        """Achat + entrée en stock dans le dépôt, tout ou rien (plus d'erreur de stock masquée)."""
+        from rest_framework.exceptions import ValidationError as DRFValidationError
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from .stock_utils import appliquer_mouvement, message_erreur
+        from django.utils import timezone as _tz
+        w = self._depot_achat(serializer)
+        extra = {'warehouse': w}
+        if not serializer.validated_data.get('date_Achat'):
+            extra['date_Achat'] = _tz.localdate()   # date-heure dans un champ date -> erreur 500
+        if getattr(self.request, 'company', None) is not None:
+            extra['company'] = self.request.company
         try:
-            # Optionnel: entrepôt spécifié dans la requête
-            warehouse_id = self.request.data.get('warehouse') or self.request.data.get('warehouse_id')
-            p = obj.produit
-            qty = int(obj.quantite or 0)
-            w = None
-            if warehouse_id:
-                try:
-                    w = Warehouse.objects.get(pk=int(warehouse_id))
-                except Exception:
-                    w = None
-            # Mettre à jour le stock par entrepôt si fourni
-            if w is not None:
-                ps, _ = ProductStock.objects.get_or_create(produit=p, warehouse=w, defaults={'quantity': 0})
-                ps.quantity = ps.quantity + qty
-                ps.save(update_fields=['quantity'])
-                # Aggréger le stock total sur le produit
-                from django.db.models import Sum
-                total = p.stocks.aggregate(total=Sum('quantity')).get('total') or 0
-                p.quantite = total
-                p.save(update_fields=['quantite'])
-            else:
-                # Fallback: incrémenter directement le stock produit
-                p.quantite = (p.quantite or 0) + qty
-                p.save(update_fields=['quantite'])
-            # Créer un mouvement de stock (entrée)
-            StockMove.objects.create(produit=p, warehouse=w, delta=qty, source='ACHAT', ref_id=str(obj.id), note=f"Achat #{obj.id}")
+            with transaction.atomic():
+                obj = serializer.save(**extra)
+                appliquer_mouvement(obj.produit, w, int(obj.quantite or 0), 'ACHAT', ref_id=str(obj.id),
+                                    note=f"Achat #{obj.id}", user=self.request.user)
+        except DjangoValidationError as e:
+            raise DRFValidationError({'detail': message_erreur(e)})
+        try:
             log_event(self.request, 'achat.create', target=obj, metadata={'id': obj.id})
         except Exception:
             pass
 
     def perform_update(self, serializer):
-        obj = serializer.save()
+        """Modification : on retire l'ancienne entrée (ancien produit/dépôt/quantité) et on applique la nouvelle.
+        Achat ancien sans dépôt : seule la différence de quantité est appliquée au dépôt."""
+        from rest_framework.exceptions import ValidationError as DRFValidationError
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from .stock_utils import appliquer_mouvement, message_erreur
+        ancien = Achat.objects.select_related('produit', 'warehouse').get(pk=serializer.instance.pk)
+        w = self._depot_achat(serializer, actuel=ancien.warehouse)
+        old_qty = int(ancien.quantite or 0)
+        try:
+            with transaction.atomic():
+                obj = serializer.save(warehouse=w)
+                new_qty = int(obj.quantite or 0)
+                ref = str(obj.id)
+                if ancien.warehouse_id and (ancien.warehouse_id != w.id or ancien.produit_id != obj.produit_id):
+                    appliquer_mouvement(ancien.produit, ancien.warehouse, -old_qty, 'ACHAT', ref_id=ref,
+                                        note=f"Modification achat #{obj.id} (retrait)", user=self.request.user)
+                    appliquer_mouvement(obj.produit, w, new_qty, 'ACHAT', ref_id=ref,
+                                        note=f"Modification achat #{obj.id}", user=self.request.user)
+                elif ancien.produit_id != obj.produit_id:
+                    appliquer_mouvement(obj.produit, w, new_qty, 'ACHAT', ref_id=ref,
+                                        note=f"Modification achat #{obj.id}", user=self.request.user)
+                else:
+                    appliquer_mouvement(obj.produit, w, new_qty - old_qty, 'ACHAT', ref_id=ref,
+                                        note=f"Modification achat #{obj.id}", user=self.request.user)
+        except DjangoValidationError as e:
+            raise DRFValidationError({'detail': message_erreur(e)})
         try:
             log_event(self.request, 'achat.update', target=obj, metadata={'id': obj.id})
         except Exception:
             pass
 
     def perform_destroy(self, instance):
+        """Suppression : l'entrée en stock de l'achat est retirée de son dépôt (refusé si déjà vendue)."""
+        from rest_framework.exceptions import ValidationError as DRFValidationError
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from .stock_utils import appliquer_mouvement, message_erreur
         mid = instance.id
-        super().perform_destroy(instance)
+        try:
+            with transaction.atomic():
+                if instance.warehouse_id:
+                    appliquer_mouvement(instance.produit, instance.warehouse, -int(instance.quantite or 0), 'ACHAT',
+                                        ref_id=str(mid), note=f"Suppression achat #{mid}", user=self.request.user)
+                super().perform_destroy(instance)
+        except DjangoValidationError as e:
+            raise DRFValidationError({'detail': "Impossible de supprimer l'achat : " + message_erreur(e)})
         try:
             log_event(self.request, 'achat.delete', target=None, metadata={'id': mid})
         except Exception:
@@ -1152,21 +1198,29 @@ class BonLivraisonViewSet(TenantFilterMixin, viewsets.ModelViewSet):
             bon = BonLivraison.objects.select_for_update().get(pk=bon.pk)
             if bon.statut != 'draft':
                 return Response({'detail': 'Seuls les bons en brouillon peuvent être validés.'}, status=400)
+            # Le BL n'a pas de dépôt : la sortie se fait du dépôt par défaut de l'entreprise,
+            # en contrôlant le stock DE CE DÉPÔT (et non le total produit).
+            from .stock_utils import appliquer_mouvement, stock_depot
+            w = SystemConfig.ensure_default_warehouse(bon.company)
             lignes = list(bon.lignes.select_related('produit'))
-            produit_ids = [l.produit_id for l in lignes]
-            produits = {p.id: p for p in Produit.objects.select_for_update().filter(id__in=produit_ids).order_by('id')}
+            besoins = {}
+            for l in lignes:
+                besoins[l.produit_id] = besoins.get(l.produit_id, 0) + int(l.quantite or 0)
             insuffisants = []
             for l in lignes:
-                p = produits[l.produit_id]
-                if p.quantite < l.quantite:
-                    insuffisants.append({'produit': p.id, 'stock': p.quantite, 'demande': l.quantite})
+                if l.produit_id not in besoins:
+                    continue
+                dispo = stock_depot(l.produit, w)
+                if dispo < besoins[l.produit_id]:
+                    insuffisants.append({'produit': l.produit_id, 'designation': l.produit.designation,
+                                         'stock': dispo, 'demande': besoins[l.produit_id]})
+                besoins.pop(l.produit_id)
             if insuffisants:
-                return Response({'detail': 'Stock insuffisant', 'lignes': insuffisants}, status=400)
+                txt = ', '.join(f"{x['designation']} ({x['stock']} disponible(s), {x['demande']} demandé(s))" for x in insuffisants)
+                return Response({'detail': f"Stock insuffisant dans {w.name} : {txt}", 'lignes': insuffisants}, status=400)
             for l in lignes:
-                p = produits[l.produit_id]
-                p.quantite = p.quantite - l.quantite
-                p.save(update_fields=['quantite'])
-                StockMove.objects.create(produit=p, delta=-(l.quantite), source='BL', ref_id=str(bon.id), note=f'BL {bon.numero}')
+                appliquer_mouvement(l.produit, w, -int(l.quantite or 0), 'BL', ref_id=str(bon.id),
+                                    note=f'BL {bon.numero}', user=request.user)
             bon.statut = 'validated'
             bon.save(update_fields=['statut'])
         try:
@@ -1947,45 +2001,43 @@ class StockMoveViewSet(WarehouseRelatedTenantMixin, viewsets.ModelViewSet):
     filterset_class = StockMoveFilter
     pagination_class = None
 
+    def _entrepots(self, request):
+        """Dépôts autorisés : ceux de l'entreprise connectée (+ sans entreprise) ; tous pour un superutilisateur."""
+        from .securite_encaissements import company_connectee
+        if request.user.is_superuser:
+            return Warehouse.objects.all()
+        return SystemConfig.warehouses_of(company_connectee(request))
+
     def perform_create(self, serializer):
-        obj = serializer.save()
-        # Update stock per warehouse and aggregate product stock
-        if obj.warehouse is None:
-            # If warehouse not specified, try to allocate negative deltas across existing per-warehouse stocks
-            if obj.delta < 0:
-                remaining = -int(obj.delta)
-                # Consume from warehouses with highest quantity first
-                stocks = list(ProductStock.objects.filter(produit=obj.produit).select_related('warehouse').order_by('-quantity'))
-                for ps in stocks:
-                    if remaining <= 0:
-                        break
-                    take = min(ps.quantity, remaining)
-                    if take > 0:
-                        ps.quantity = ps.quantity - take
-                        ps.save(update_fields=['quantity'])
-                        remaining -= take
-                # Note: if remaining > 0 here, total product stock would go negative; keep per-warehouse at zero
-            else:
-                # Positive delta without warehouse: cannot attribute to a location; keep only product total in sync
-                pass
-        else:
-            ps, _ = ProductStock.objects.get_or_create(produit=obj.produit, warehouse=obj.warehouse, defaults={'quantity': 0})
-            ps.quantity = ps.quantity + obj.delta
-            ps.save(update_fields=['quantity'])
-        # keep Produit.quantite as sum across warehouses for backward compatibility
-        total = obj.produit.stocks.aggregate(total=Sum('quantity')).get('total') or 0
-        obj.produit.quantite = total
-        obj.produit.save(update_fields=['quantite'])
+        """Mouvement manuel : stock du dépôt + journal + total, tout ou rien (jamais de mouvement orphelin)."""
+        from rest_framework.exceptions import ValidationError as DRFValidationError
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from .securite_encaissements import company_connectee
+        from .stock_utils import appliquer_mouvement, depot_par_defaut, message_erreur
+        data = serializer.validated_data
+        w = data.get('warehouse') or depot_par_defaut(company_connectee(self.request))
+        if w is None:
+            raise DRFValidationError({'detail': 'Choisissez un dépôt'})
+        if not self._entrepots(self.request).filter(pk=w.pk).exists():
+            raise DRFValidationError({'detail': 'Dépôt introuvable'})
+        if not data.get('delta'):
+            raise DRFValidationError({'detail': 'La quantité doit être différente de 0'})
+        try:
+            obj = appliquer_mouvement(data['produit'], w, data['delta'], source=data.get('source') or 'AUTRE',
+                                      note=data.get('note') or '', ref_id=data.get('ref_id') or '',
+                                      user=self.request.user, date=data.get('date'))
+        except DjangoValidationError as e:
+            raise DRFValidationError({'detail': message_erreur(e)})
+        serializer.instance = obj
         try:
             log_event(self.request, 'stockmove.create', target=obj, metadata={'id': obj.id, 'produit': obj.produit_id, 'warehouse': getattr(obj.warehouse, 'id', None), 'delta': obj.delta, 'source': obj.source, 'ref_id': obj.ref_id})
         except Exception:
             pass
 
     def perform_update(self, serializer):
+        from .stock_utils import recalculer_quantite_produit
         obj = serializer.save()
-        total = obj.produit.stocks.aggregate(total=Sum('quantity')).get('total') or 0
-        obj.produit.quantite = total
-        obj.produit.save(update_fields=['quantite'])
+        recalculer_quantite_produit(obj.produit)
         try:
             log_event(self.request, 'stockmove.update', target=obj, metadata={'id': obj.id})
         except Exception:
@@ -2001,51 +2053,102 @@ class StockMoveViewSet(WarehouseRelatedTenantMixin, viewsets.ModelViewSet):
         except Exception:
             pass
 
-    @action(detail=False, methods=['post'])
-    def transfer(self, request):
-        """Transfert de stock entre entrepôts.
-        Body: { produit: id, quantite: >0, from_warehouse: id, to_warehouse: id, note: str (opt) }
-        """
+    def _sortie_depot(self, request, types_autorises, type_defaut, source_fixe=None):
+        """Lecture commune des sorties (perte, échantillon, retour) : produit, quantité entière,
+        type, dépôt de l'entreprise. Retourne (produit, qty, type, dépôt, None) ou (..., Response d'erreur)."""
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from .stock_utils import quantite_entiere, message_erreur
         try:
             produit_id = int(request.data.get('produit') or request.data.get('produit_id'))
-            qty = float(request.data.get('quantite') or request.data.get('qty') or 0)
         except (TypeError, ValueError):
-            return Response({'detail': 'Paramètres invalides'}, status=400)
-        if qty <= 0:
-            return Response({'detail': 'La quantité doit être > 0'}, status=400)
-        from_wh = request.data.get('from_warehouse') or request.data.get('from_wh')
-        to_wh = request.data.get('to_warehouse') or request.data.get('to_wh')
-        note = request.data.get('note') or ''
-        if not from_wh or not to_wh:
-            return Response({'detail': 'from_warehouse et to_warehouse requis'}, status=400)
+            return None, None, None, None, Response({'detail': 'Choisissez un produit'}, status=400)
+        try:
+            qty = quantite_entiere(request.data.get('quantite') or request.data.get('qty') or 0)
+        except DjangoValidationError as e:
+            return None, None, None, None, Response({'detail': message_erreur(e)}, status=400)
+        move_type = source_fixe or ((request.data.get('type') or '').upper() or type_defaut)
+        if types_autorises and move_type not in types_autorises:
+            return None, None, None, None, Response({'detail': f"Type invalide ({'|'.join(types_autorises)})"}, status=400)
+        warehouse_id = request.data.get('warehouse') or request.data.get('warehouse_id')
+        if not warehouse_id:
+            return None, None, None, None, Response({'detail': 'Choisissez un dépôt'}, status=400)
         try:
             p = Produit.objects.get(pk=produit_id)
-            w_from = Warehouse.objects.get(pk=int(from_wh))
-            w_to = Warehouse.objects.get(pk=int(to_wh))
-        except (Produit.DoesNotExist, Warehouse.DoesNotExist):
-            return Response({'detail': 'Produit ou Entrepôt introuvable'}, status=404)
-        with transaction.atomic():
-            p = Produit.objects.select_for_update().get(pk=p.pk)
-            src_stock, _ = ProductStock.objects.select_for_update().get_or_create(produit=p, warehouse=w_from, defaults={'quantity': 0})
-            if src_stock.quantity < qty:
-                return Response({'detail': 'Stock insuffisant dans l\'entrepôt source', 'stock': src_stock.quantity, 'demande': qty}, status=400)
-            src_stock.quantity -= qty
-            src_stock.save(update_fields=['quantity'])
-            dst_stock, _ = ProductStock.objects.select_for_update().get_or_create(produit=p, warehouse=w_to, defaults={'quantity': 0})
-            dst_stock.quantity += qty
-            dst_stock.save(update_fields=['quantity'])
-            out_note = f"Transfert sortie {w_from.code} -> {w_to.code}"
-            in_note = f"Transfert entrée {w_from.code} -> {w_to.code}"
-            out_move = StockMove.objects.create(produit=p, warehouse=w_from, delta=-qty, source='TRANS', ref_id='', note=out_note + (f" | {note}" if note else ''))
-            in_move = StockMove.objects.create(produit=p, warehouse=w_to, delta=qty, source='TRANS', ref_id='', note=in_note + (f" | {note}" if note else ''))
-            total = p.stocks.aggregate(total=Sum('quantity')).get('total') or 0
-            p.quantite = total
-            p.save(update_fields=['quantite'])
+            w = self._entrepots(request).get(pk=int(warehouse_id))
+        except (Produit.DoesNotExist, Warehouse.DoesNotExist, TypeError, ValueError):
+            return None, None, None, None, Response({'detail': 'Produit ou dépôt introuvable'}, status=404)
+        return p, qty, move_type, w, None
+
+    @action(detail=False, methods=['post'])
+    def transfer(self, request):
+        """Transfert de stock entre dépôts.
+        Body: { produit: id, quantite: entier > 0, from_warehouse: id, to_warehouse: id, note: str (opt) }
+          ou  { lignes: [{produit, quantite}, ...], from_warehouse, to_warehouse, note } (plusieurs produits,
+              même référence TRANS-<horodatage>, tout ou rien).
+        Dépôts limités à l'entreprise de l'utilisateur (tous pour un superutilisateur).
+        """
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from django.utils import timezone
+        from .stock_utils import appliquer_mouvement, quantite_entiere, message_erreur
+        brutes = request.data.get('lignes')
+        if not brutes:
+            brutes = [{'produit': request.data.get('produit') or request.data.get('produit_id'),
+                       'quantite': request.data.get('quantite') or request.data.get('qty') or 0}]
+        if not isinstance(brutes, (list, tuple)):
+            return Response({'detail': 'Paramètres invalides'}, status=400)
+        lignes = []
+        for b in brutes:
+            try:
+                produit_id = int((b or {}).get('produit') or (b or {}).get('produit_id'))
+            except (TypeError, ValueError, AttributeError):
+                return Response({'detail': 'Choisissez un produit'}, status=400)
+            try:
+                qty = quantite_entiere(b.get('quantite') or b.get('qty') or 0)
+            except DjangoValidationError as e:
+                return Response({'detail': message_erreur(e)}, status=400)
+            lignes.append((produit_id, qty))
+        from_wh = request.data.get('from_warehouse') or request.data.get('from_wh')
+        to_wh = request.data.get('to_warehouse') or request.data.get('to_wh')
+        note = (request.data.get('note') or '').strip()
+        if not from_wh or not to_wh:
+            return Response({'detail': "Choisissez le dépôt de départ et le dépôt d'arrivée"}, status=400)
+        if str(from_wh) == str(to_wh):
+            return Response({'detail': "Le dépôt de départ et le dépôt d'arrivée doivent être différents"}, status=400)
+        entrepots = self._entrepots(request)
         try:
-            log_event(self.request, 'stockmove.transfer', target=None, metadata={'produit': p.id, 'qty': qty, 'from': w_from.id, 'to': w_to.id, 'note': note})
+            w_from = entrepots.get(pk=int(from_wh))
+            w_to = entrepots.get(pk=int(to_wh))
+        except (Warehouse.DoesNotExist, TypeError, ValueError):
+            return Response({'detail': 'Dépôt introuvable'}, status=404)
+        if not w_to.is_active:
+            return Response({'detail': f"Le dépôt d'arrivée {w_to.name} est inactif"}, status=400)
+        produits = {p.id: p for p in Produit.objects.filter(pk__in=[l[0] for l in lignes])}
+        if len(produits) != len({l[0] for l in lignes}):
+            return Response({'detail': 'Produit introuvable'}, status=404)
+        ref = f"TRANS-{timezone.now().strftime('%Y%m%d%H%M%S%f')[:18]}"
+        suffixe = f" | {note}" if note else ''
+        out_move = in_move = None
+        try:
+            with transaction.atomic():
+                for produit_id, qty in lignes:
+                    p = produits[produit_id]
+                    o = appliquer_mouvement(p, w_from, -qty, 'TRANS', ref_id=ref, user=request.user,
+                                            note=f"Transfert sortie {w_from.code} -> {w_to.code}{suffixe}")
+                    i = appliquer_mouvement(p, w_to, qty, 'TRANS', ref_id=ref, user=request.user,
+                                            note=f"Transfert entrée {w_from.code} -> {w_to.code}{suffixe}")
+                    out_move = out_move or o
+                    in_move = in_move or i
+        except DjangoValidationError as e:
+            return Response({'detail': message_erreur(e)}, status=400)
+        try:
+            log_event(self.request, 'stockmove.transfer', target=None, metadata={
+                'reference': ref, 'lignes': [{'produit': pid, 'qty': q} for pid, q in lignes],
+                'from': w_from.id, 'to': w_to.id, 'note': note})
         except Exception:
             pass
-        return Response({'detail': 'Transfert enregistré', 'out': StockMoveSerializer(out_move).data, 'in': StockMoveSerializer(in_move).data}, status=201)
+        detail = 'Transfert enregistré' if len(lignes) == 1 else f"Transfert enregistré ({len(lignes)} produits)"
+        return Response({'detail': detail, 'reference': ref, 'nb_produits': len(lignes),
+                         'out': StockMoveSerializer(out_move).data, 'in': StockMoveSerializer(in_move).data}, status=201)
 
     @action(detail=False, methods=['post'], url_path='transfer-all')
     def transfer_all(self, request):
@@ -2111,7 +2214,9 @@ class StockMoveViewSet(WarehouseRelatedTenantMixin, viewsets.ModelViewSet):
                                          note='Sortie : ' + texte)
                 StockMove.objects.create(produit=p, warehouse=w_to, delta=qty, source='TRANS', ref_id=ref,
                                          note='Entrée : ' + texte)
-                # Le total du produit (tous entrepôts) ne change pas : rien à recalculer
+                # Total du produit = somme de ses entrepôts (comme le transfert d'un produit)
+                from .stock_utils import recalculer_quantite_produit
+                recalculer_quantite_produit(p)
                 lignes.append({'produit': p.id, 'reference': p.reference, 'designation': p.designation, 'quantite': qty})
         try:
             log_event(self.request, 'stockmove.transfer_all', target=None,
@@ -2127,73 +2232,31 @@ class StockMoveViewSet(WarehouseRelatedTenantMixin, viewsets.ModelViewSet):
         """Perte / Casse / Expiration: sortie du stock.
         Body: { produit: id, quantite: >0, type: 'PERTE'|'CASSE'|'EXP', warehouse: id, note: str (opt) }
         """
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from .stock_utils import appliquer_mouvement, message_erreur
+        p, qty, move_type, w, erreur = self._sortie_depot(request, ('PERTE', 'CASSE', 'EXP'), 'PERTE')
+        if erreur is not None:
+            return erreur
         try:
-            produit_id = int(request.data.get('produit') or request.data.get('produit_id'))
-            qty = float(request.data.get('quantite') or request.data.get('qty') or 0)
-        except (TypeError, ValueError):
-            return Response({'detail': 'Paramètres invalides'}, status=400)
-        move_type = (request.data.get('type') or '').upper() or 'PERTE'
-        if move_type not in ('PERTE', 'CASSE', 'EXP'):
-            return Response({'detail': "Type invalide (PERTE|CASSE|EXP)"}, status=400)
-        if qty <= 0:
-            return Response({'detail': 'La quantité doit être > 0'}, status=400)
-        note = request.data.get('note') or ''
-        warehouse_id = request.data.get('warehouse') or request.data.get('warehouse_id')
-        if not warehouse_id:
-            return Response({'detail': 'warehouse requis'}, status=400)
-        try:
-            p = Produit.objects.get(pk=produit_id)
-            w = Warehouse.objects.get(pk=int(warehouse_id))
-        except (Produit.DoesNotExist, Warehouse.DoesNotExist):
-            return Response({'detail': 'Produit ou Entrepôt introuvable'}, status=404)
-        with transaction.atomic():
-            p = Produit.objects.select_for_update().get(pk=p.pk)
-            ps, _ = ProductStock.objects.select_for_update().get_or_create(produit=p, warehouse=w, defaults={'quantity': 0})
-            if ps.quantity < qty:
-                return Response({'detail': 'Stock insuffisant dans cet entrepôt', 'stock': ps.quantity, 'demande': qty}, status=400)
-            ps.quantity -= qty
-            ps.save(update_fields=['quantity'])
-            move = StockMove.objects.create(produit=p, warehouse=w, delta=-qty, source=move_type, ref_id='', note=note)
-            total = p.stocks.aggregate(total=Sum('quantity')).get('total') or 0
-            p.quantite = total
-            p.save(update_fields=['quantite'])
+            move = appliquer_mouvement(p, w, -qty, move_type, note=request.data.get('note') or '', user=request.user)
+        except DjangoValidationError as e:
+            return Response({'detail': message_erreur(e)}, status=400)
         return Response({'detail': 'Sortie enregistrée', 'move': StockMoveSerializer(move).data}, status=201)
 
     @action(detail=False, methods=['post'])
     def outflow(self, request):
         """Échantillon / Don / Consommation interne: sortie sans vente.
-        Body: { produit: id, quantite: >0, type: 'SAMPLE'|'DON'|'CONS', note: str (opt) }
+        Body: { produit: id, quantite: entier > 0, type: 'SAMPLE'|'DON'|'CONS', warehouse: id, note: str (opt) }
         """
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from .stock_utils import appliquer_mouvement, message_erreur
+        p, qty, move_type, w, erreur = self._sortie_depot(request, ('SAMPLE', 'DON', 'CONS'), 'SAMPLE')
+        if erreur is not None:
+            return erreur
         try:
-            produit_id = int(request.data.get('produit') or request.data.get('produit_id'))
-            qty = float(request.data.get('quantite') or request.data.get('qty') or 0)
-        except (TypeError, ValueError):
-            return Response({'detail': 'Paramètres invalides'}, status=400)
-        move_type = (request.data.get('type') or '').upper() or 'SAMPLE'
-        if move_type not in ('SAMPLE', 'DON', 'CONS'):
-            return Response({'detail': "Type invalide (SAMPLE|DON|CONS)"}, status=400)
-        if qty <= 0:
-            return Response({'detail': 'La quantité doit être > 0'}, status=400)
-        note = request.data.get('note') or ''
-        warehouse_id = request.data.get('warehouse') or request.data.get('warehouse_id')
-        if not warehouse_id:
-            return Response({'detail': 'warehouse requis'}, status=400)
-        try:
-            p = Produit.objects.get(pk=produit_id)
-            w = Warehouse.objects.get(pk=int(warehouse_id))
-        except (Produit.DoesNotExist, Warehouse.DoesNotExist):
-            return Response({'detail': 'Produit ou Entrepôt introuvable'}, status=404)
-        with transaction.atomic():
-            p = Produit.objects.select_for_update().get(pk=p.pk)
-            ps, _ = ProductStock.objects.select_for_update().get_or_create(produit=p, warehouse=w, defaults={'quantity': 0})
-            if ps.quantity < qty:
-                return Response({'detail': 'Stock insuffisant dans cet entrepôt', 'stock': ps.quantity, 'demande': qty}, status=400)
-            ps.quantity -= qty
-            ps.save(update_fields=['quantity'])
-            move = StockMove.objects.create(produit=p, warehouse=w, delta=-qty, source=move_type, ref_id='', note=note)
-            total = p.stocks.aggregate(total=Sum('quantity')).get('total') or 0
-            p.quantite = total
-            p.save(update_fields=['quantite'])
+            move = appliquer_mouvement(p, w, -qty, move_type, note=request.data.get('note') or '', user=request.user)
+        except DjangoValidationError as e:
+            return Response({'detail': message_erreur(e)}, status=400)
         return Response({'detail': 'Sortie enregistrée', 'move': StockMoveSerializer(move).data}, status=201)
 
     @action(detail=False, methods=['post'])
@@ -2201,68 +2264,30 @@ class StockMoveViewSet(WarehouseRelatedTenantMixin, viewsets.ModelViewSet):
         """Retour fournisseur: retour de produit défectueux ou non conforme au fournisseur.
         Body: { produit: id, quantite: >0, fournisseur: id, warehouse: id, reason: str, note: str (opt), date: str (opt) }
         """
-        try:
-            produit_id = int(request.data.get('produit') or request.data.get('produit_id'))
-            qty = float(request.data.get('quantite') or request.data.get('qty') or 0)
-        except (TypeError, ValueError):
-            return Response({'detail': 'Paramètres invalides'}, status=400)
-
-        if qty <= 0:
-            return Response({'detail': 'La quantité doit être > 0'}, status=400)
-
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from .stock_utils import appliquer_mouvement, message_erreur
         fournisseur_id = request.data.get('fournisseur') or request.data.get('fournisseur_id')
-        warehouse_id = request.data.get('warehouse') or request.data.get('warehouse_id')
         reason = request.data.get('reason') or ''
         note = request.data.get('note') or ''
         date_str = request.data.get('date')
-
         if not fournisseur_id:
-            return Response({'detail': 'fournisseur requis'}, status=400)
-        if not warehouse_id:
-            return Response({'detail': 'warehouse requis'}, status=400)
+            return Response({'detail': 'Choisissez un fournisseur'}, status=400)
         if not reason:
-            return Response({'detail': 'motif de retour requis'}, status=400)
+            return Response({'detail': 'Indiquez le motif du retour'}, status=400)
+
+        p, qty, _type, w, erreur = self._sortie_depot(request, None, 'RETOUR', source_fixe='RETOUR')
+        if erreur is not None:
+            return erreur
+        try:
+            f = Fournisseur.objects.get(pk=int(fournisseur_id))
+        except (Fournisseur.DoesNotExist, TypeError, ValueError):
+            return Response({'detail': 'Fournisseur introuvable'}, status=404)
 
         try:
-            p = Produit.objects.get(pk=produit_id)
-            f = Fournisseur.objects.get(pk=int(fournisseur_id))
-            w = Warehouse.objects.get(pk=int(warehouse_id))
-        except Produit.DoesNotExist:
-            return Response({'detail': 'Produit introuvable'}, status=404)
-        except Fournisseur.DoesNotExist:
-            return Response({'detail': 'Fournisseur introuvable'}, status=404)
-        except Warehouse.DoesNotExist:
-            return Response({'detail': 'Entrepôt introuvable'}, status=404)
-
-        # Vérifier le stock disponible
-        ps, _ = ProductStock.objects.get_or_create(produit=p, warehouse=w, defaults={'quantity': 0})
-        if ps.quantity < qty:
-            return Response({
-                'detail': 'Stock insuffisant dans cet entrepôt',
-                'stock': ps.quantity,
-                'demande': qty
-            }, status=400)
-
-        # Décrémenter le stock
-        ps.quantity -= qty
-        ps.save(update_fields=['quantity'])
-
-        # Créer le mouvement de stock
-        ref_id = f'RETOUR-F{f.id}'
-        move = StockMove.objects.create(
-            produit=p,
-            warehouse=w,
-            delta=-qty,
-            source='RETOUR',
-            ref_id=ref_id,
-            note=note,
-            date=date_str if date_str else timezone.now()
-        )
-
-        # Mettre à jour le stock agrégé
-        total = p.stocks.aggregate(total=Sum('quantity')).get('total') or 0
-        p.quantite = total
-        p.save(update_fields=['quantite'])
+            move = appliquer_mouvement(p, w, -qty, 'RETOUR', ref_id=f'RETOUR-F{f.id}', note=note,
+                                       user=request.user, date=date_str or None)
+        except DjangoValidationError as e:
+            return Response({'detail': message_erreur(e)}, status=400)
 
         try:
             log_event(request, 'mouvement.return', target=p, metadata={
@@ -2303,7 +2328,22 @@ class InventorySessionViewSet(TenantFilterMixin, viewsets.ModelViewSet):
                 except Exception:
                     seq = 1
             numero = f"{prefix}{seq:04d}"
-        obj = serializer.save(created_by=self.request.user, numero=numero)
+        # Date absente -> aujourd'hui (une date-heure dans un champ date provoquait une erreur 500)
+        extra = {}
+        if not serializer.validated_data.get('date'):
+            extra['date'] = timezone.localdate()
+        # Dépôt inventorié : celui choisi (s'il appartient à l'entreprise), sinon le dépôt par défaut
+        from rest_framework.exceptions import ValidationError as DRFValidationError
+        from .securite_encaissements import company_connectee
+        from .stock_utils import depot_par_defaut
+        company = company_connectee(self.request)
+        w = serializer.validated_data.get('warehouse')
+        if w is not None:
+            if not self.request.user.is_superuser and not SystemConfig.warehouses_of(company).filter(pk=w.pk).exists():
+                raise DRFValidationError({'detail': 'Dépôt introuvable'})
+        else:
+            extra['warehouse'] = depot_par_defaut(company)
+        obj = serializer.save(created_by=self.request.user, numero=numero, **extra)
         try:
             log_event(self.request, 'inventorysession.create', target=obj, metadata={'id': obj.id, 'numero': obj.numero})
         except Exception:
@@ -2354,25 +2394,27 @@ class InventorySessionViewSet(TenantFilterMixin, viewsets.ModelViewSet):
                 ],
             }, status=400)
 
-        # pour chaque ligne, créer un mouvement d'écart et mettre à jour le stock produit
-        # (atomique : une erreur en cours de route n'applique aucun ajustement partiel)
-        from django.db import transaction
-        with transaction.atomic():
-            for l in session.lignes.select_related('produit'):
-                if l.counted_qty is not None:
-                    # book stock: utiliser le champ produit.quantite (source actuelle de vérité), sinon somme des mouvements
-                    book = l.snapshot_qty if l.snapshot_qty is not None else l.produit.quantite
-                    delta = l.counted_qty - book
-                    if delta != 0:
-                        StockMove.objects.create(produit=l.produit, delta=delta, source='INV', ref_id=str(session.id), note=f'Inventaire {session.numero}')
-                        # maintenir la cohérence avec le champ quantite
-                        l.produit.quantite = l.produit.quantite + delta
-                        l.produit.save(update_fields=['quantite'])
-
-            session.statut = 'validated'
-            session.validated_by = request.user
-            session.save(update_fields=['statut', 'validated_by'])
-        return Response({'detail': 'Inventaire validé'}, status=200)
+        # Le stock DU DÉPÔT inventorié devient la quantité comptée : écart = compté - stock actuel
+        # du dépôt, appliqué via la règle unique (ProductStock + journal + total produit).
+        # Atomique : une erreur en cours de route n'applique aucun ajustement partiel.
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from .stock_utils import appliquer_mouvement, stock_depot, message_erreur
+        w = session.warehouse or SystemConfig.ensure_default_warehouse(session.company)
+        try:
+            with transaction.atomic():
+                for l in session.lignes.select_related('produit'):
+                    if l.counted_qty is None:
+                        continue
+                    delta = l.counted_qty - stock_depot(l.produit, w)
+                    appliquer_mouvement(l.produit, w, delta, 'INV', ref_id=str(session.id), user=request.user,
+                                        note=f'Inventaire {session.numero} ({w.code})')
+                session.warehouse = w
+                session.statut = 'validated'
+                session.validated_by = request.user
+                session.save(update_fields=['warehouse', 'statut', 'validated_by'])
+        except DjangoValidationError as e:
+            return Response({'detail': message_erreur(e)}, status=400)
+        return Response({'detail': f'Inventaire validé : stock du dépôt {w.name} mis à jour'}, status=200)
 
     # ------------------------------------------------------------------
     # Feuille de comptage, saisie en masse, export
@@ -2556,10 +2598,12 @@ class InventorySessionViewSet(TenantFilterMixin, viewsets.ModelViewSet):
             else:
                 # Création
                 from django.utils import timezone
+                from .stock_utils import stock_depot
                 line = InventoryLine.objects.create(
                     session=session,
                     produit=produit,
-                    snapshot_qty=produit.quantite,
+                    # théorique = stock du dépôt inventorié (total produit si aucun dépôt)
+                    snapshot_qty=(stock_depot(produit, session.warehouse) if session.warehouse_id else produit.quantite),
                     counted_qty=counted_qty,
                     counted_by=request.user,
                     counted_at=timezone.now()
@@ -3258,46 +3302,47 @@ class VenteViewSet(TenantFilterMixin, viewsets.ModelViewSet):
             produit_ids = [l.produit_id for l in lignes]
             produits = {p.id: p for p in Produit.objects.select_for_update().filter(id__in=produit_ids).order_by('id')}
 
-            insuffisants = []
+            # Contrôle et sortie sur le stock DU DÉPÔT de la vente (dépôt par défaut si aucun),
+            # quantités cumulées par produit, sans plancher silencieux à 0.
+            from django.core.exceptions import ValidationError as DjangoValidationError
+            from .stock_utils import appliquer_mouvement, stock_depot, message_erreur
+            depot = vente.warehouse or SystemConfig.ensure_default_warehouse(vente.company)
+            if vente.warehouse_id is None:
+                vente.warehouse = depot
+            besoins = {}
             for ligne in lignes:
-                produit = produits[ligne.produit_id]
-                if produit.quantite < ligne.quantite:
+                besoins[ligne.produit_id] = besoins.get(ligne.produit_id, 0) + int(ligne.quantite or 0)
+            insuffisants = []
+            for pid, demande in besoins.items():
+                produit = produits[pid]
+                dispo = stock_depot(produit, depot)
+                if dispo < demande:
                     insuffisants.append({
                         'produit': produit.id,
                         'reference': produit.reference,
-                        'stock': produit.quantite,
-                        'demande': ligne.quantite
+                        'designation': produit.designation,
+                        'stock': dispo,
+                        'demande': demande
                     })
 
             if insuffisants:
-                return Response({'detail': 'Stock insuffisant', 'lignes': insuffisants}, status=400)
+                txt = ', '.join(f"{x['designation']} ({x['stock']} disponible(s), {x['demande']} demandé(s))" for x in insuffisants)
+                return Response({'detail': f"Stock insuffisant dans {depot.name} : {txt}", 'lignes': insuffisants}, status=400)
 
             vente.statut = 'completed'
             vente.save()
             # Hors crédit : le client paie à la validation (pas de champ « montant reçu » sur le PC)
             vente.enregistrer_paiement_validation(request.user if request.user.is_authenticated else None)
 
-            for ligne in lignes:
-                produit = produits[ligne.produit_id]
-                qty = int(ligne.quantite or 0)
-                if qty > 0:
-                    produit.quantite -= qty
-                    produit.save(update_fields=['quantite'])
-                    ps, _ = ProductStock.objects.select_for_update().get_or_create(
-                        produit=produit,
-                        warehouse=vente.warehouse,
-                        defaults={'quantity': 0}
-                    )
-                    ps.quantity = max(0, (ps.quantity or 0) - qty)
-                    ps.save(update_fields=['quantity'])
-                    StockMove.objects.create(
-                        produit=produit,
-                        warehouse=vente.warehouse,
-                        delta=-qty,
-                        source='VENTE',
-                        ref_id=str(vente.id),
-                        note=f"Vente {vente.numero} - finalisée"
-                    )
+            try:
+                for ligne in lignes:
+                    qty = int(ligne.quantite or 0)
+                    if qty > 0:
+                        appliquer_mouvement(produits[ligne.produit_id], depot, -qty, 'VENTE', ref_id=str(vente.id),
+                                            note=f"Vente {vente.numero} - finalisée", user=request.user)
+            except DjangoValidationError as e:
+                transaction.set_rollback(True)
+                return Response({'detail': message_erreur(e)}, status=400)
 
             bl_error = None
             if not vente.bon_livraison_id:
@@ -3570,8 +3615,29 @@ class VenteViewSet(TenantFilterMixin, viewsets.ModelViewSet):
 
         # Ventes mobiles
         mobile_sales = []
+        # Ventes mobiles limitées à l'entreprise de l'utilisateur (avant : toutes les entreprises).
+        # Une vente appartient à l'entreprise par sa propre company, celle du client ou celle de
+        # l'entrepôt du livreur ; les ventes sans aucune entreprise restent visibles, comme ailleurs.
+        mobiles_qs = VenteTourneeMobile.objects.all()
+        if not request.user.is_superuser:
+            from django.db.models import Q as _Q
+            from .securite_encaissements import company_connectee
+            _company = company_connectee(request)
+            # Entreprise de la vente : la sienne, sinon celle du client, sinon celle du livreur.
+            sans_entreprise = _Q(company__isnull=True, client__company__isnull=True,
+                                 tournee__livreur__entrepot__company__isnull=True)
+            if _company is not None:
+                mobiles_qs = mobiles_qs.filter(
+                    _Q(company=_company)
+                    | _Q(company__isnull=True, client__company=_company)
+                    | _Q(company__isnull=True, client__company__isnull=True,
+                         tournee__livreur__entrepot__company=_company)
+                    | sans_entreprise
+                )
+            else:
+                mobiles_qs = mobiles_qs.filter(sans_entreprise)
         try:
-            for vm in VenteTourneeMobile.objects.all().select_related('client', 'tournee').order_by('-date_vente'):
+            for vm in mobiles_qs.select_related('client', 'tournee').order_by('-date_vente'):
                 # Espèces : l'app enregistre l'argent reçu et, à part, la monnaie rendue.
                 paye = float(vm.montant_paye or 0) - float(getattr(vm, 'montant_rendu', 0) or 0)
                 reste = float(vm.montant_total or 0) - paye
@@ -4607,30 +4673,57 @@ from .reports import (
     generate_profit_report_excel,
     generate_profit_report_pdf,
     _get_profit_data,
+    nom_societe_rapport,
+    parametres_etat_stock,
     perimetre_rapport,
 )
+from rest_framework.decorators import renderer_classes
+from rest_framework.renderers import JSONRenderer
+
+
+class _RenduExportExcel(JSONRenderer):
+    """`?format=excel|pdf` est aussi le paramètre de format de DRF : sans renderer de ce nom,
+    DRF répondait 404 avant même d'entrer dans la vue. Les erreurs restent rendues en JSON."""
+    format = 'excel'
+
+
+class _RenduExportPdf(JSONRenderer):
+    format = 'pdf'
+
+
+_RENDUS_EXPORT = [JSONRenderer, _RenduExportExcel, _RenduExportPdf]
 
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+@renderer_classes(_RENDUS_EXPORT)
 def export_stock_valuation(request):
     """
     Export du rapport de valorisation du stock
     Query params:
         - format: excel ou pdf (défaut: excel)
         - warehouse: ID de l'entrepôt (optionnel)
+        - par_depot: 1 = détail et sous-totaux par dépôt
+        - prix: vente (défaut) ou achat (administrateur + PIN du tableau des bénéfices)
     """
+    from .benefices_acces import AccesRefuse
     export_format = request.GET.get('format', 'excel').lower()
-    warehouse_id = request.GET.get('warehouse', None)
+    try:
+        warehouse_id, par_depot, prix = parametres_etat_stock(request)
+    except AccesRefuse as e:
+        return Response({'error': e.message}, status=e.code)
+    except Warehouse.DoesNotExist:
+        return Response({'error': 'Entrepôt introuvable.'}, status=404)
+    options = {'par_depot': par_depot, 'prix': prix, 'societe': nom_societe_rapport(request)}
 
     try:
         if export_format == 'pdf':
-            buffer = generate_stock_valuation_pdf(warehouse_id, perimetre_rapport(request))
+            buffer = generate_stock_valuation_pdf(warehouse_id, perimetre_rapport(request), **options)
             response = HttpResponse(buffer, content_type='application/pdf')
             filename = f'valorisation_stock_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf'
             response['Content-Disposition'] = f'attachment; filename="{filename}"'
         else:
-            buffer = generate_stock_valuation_excel(warehouse_id, perimetre_rapport(request))
+            buffer = generate_stock_valuation_excel(warehouse_id, perimetre_rapport(request), **options)
             response = HttpResponse(
                 buffer,
                 content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -4647,6 +4740,8 @@ def export_stock_valuation(request):
 
         return response
 
+    except Warehouse.DoesNotExist:
+        return Response({'error': 'Entrepôt introuvable.'}, status=404)
     except Exception as e:
         logger.exception(f"Erreur lors de l'export du rapport de valorisation: {e}")
         return Response({'error': str(e)}, status=500)
@@ -4711,22 +4806,28 @@ def export_sales_report(request):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+@renderer_classes(_RENDUS_EXPORT)
 def export_inventory_report(request):
     """
     Export du rapport d'inventaire complet
     Query params:
         - format: excel ou pdf (défaut: excel)
+        - warehouse: ID de l'entrepôt (optionnel, sinon tous les dépôts actifs)
     """
     export_format = request.GET.get('format', 'excel').lower()
+    warehouse_id = (request.GET.get('warehouse') or '').strip() or None
+    if warehouse_id is not None and not warehouse_id.isdigit():
+        return Response({'error': 'Entrepôt introuvable.'}, status=404)
+    options = {'warehouse_id': warehouse_id, 'societe': nom_societe_rapport(request)}
 
     try:
         if export_format == 'pdf':
-            buffer = generate_inventory_report_pdf(perimetre_rapport(request))
+            buffer = generate_inventory_report_pdf(perimetre_rapport(request), **options)
             response = HttpResponse(buffer, content_type='application/pdf')
             filename = f'inventaire_complet_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf'
             response['Content-Disposition'] = f'attachment; filename="{filename}"'
         else:
-            buffer = generate_inventory_report_excel(perimetre_rapport(request))
+            buffer = generate_inventory_report_excel(perimetre_rapport(request), **options)
             response = HttpResponse(
                 buffer,
                 content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -4743,6 +4844,8 @@ def export_inventory_report(request):
 
         return response
 
+    except Warehouse.DoesNotExist:
+        return Response({'error': 'Entrepôt introuvable.'}, status=404)
     except Exception as e:
         logger.exception(f"Erreur lors de l'export du rapport d'inventaire: {e}")
         return Response({'error': str(e)}, status=500)

@@ -1710,3 +1710,9 @@ class ObjectifVendeur(models.Model):
             'taux_reussite': taux,
             'atteint': taux is not None and taux >= 100,
         }
+
+
+# Synchronisation automatique des arrêts des tournées à venir quand l'affectation des
+# clients d'un livreur change (planning hebdomadaire ou clients assignés).
+from .distribution_prix_stock import connecter_signaux as _connecter_signaux_arrets  # noqa: E402
+_connecter_signaux_arrets()

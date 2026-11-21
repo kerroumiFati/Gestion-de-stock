@@ -286,15 +286,66 @@
   }
 
   function setupTransfer(){
-    $('#mv_transfer_submit').on('click', function(){
+    // Liste de produits d'un même transfert (envoyés ensemble, même référence)
+    let lignesTransfert = [];
+    function renderLignesTransfert(){
+      const $tb = $('#mv_transfer_lignes').empty();
+      lignesTransfert.forEach(function(l, i){
+        const $tr = $('<tr>');
+        $tr.append($('<td>').text(l.label));
+        $tr.append($('<td class="text-center">').text(l.quantite));
+        $tr.append($('<td class="text-center">').append(
+          $('<button type="button" class="btn btn-sm btn-link text-danger p-0" title="Retirer">&times;</button>')
+            .on('click', function(){ lignesTransfert.splice(i, 1); renderLignesTransfert(); })));
+        $tb.append($tr);
+      });
+      $('#mv_transfer_lignes_box').toggle(lignesTransfert.length > 0);
+    }
+    // Ligne en cours de saisie : null si vide, {erreur} si invalide
+    function ligneSaisie(){
       const produit = $('#mv_transfer_produit').val();
-      const quantite = parseFloat($('#mv_transfer_qty').val() || '0');
+      const brut = String($('#mv_transfer_qty').val() || '').trim();
+      if (!produit && !brut) return null;
+      // Liste déjà commencée et quantité vide : le produit resté sélectionné après « Ajouter à la
+      // liste » n'est pas une nouvelle ligne (sinon « Enregistrer » refusait le transfert)
+      if (!brut && lignesTransfert.length) return null;
+      const quantite = Number(brut);
+      if (!produit) return { erreur: 'Sélectionnez un produit' };
+      if (!Number.isInteger(quantite) || quantite <= 0) return { erreur: 'La quantité doit être un nombre entier supérieur à 0' };
+      return { produit: produit, quantite: quantite, label: $('#mv_transfer_produit option:selected').text() || ('Produit #' + produit) };
+    }
+    $('#mv_transfer_add').on('click', function(){
+      const l = ligneSaisie();
+      if (!l) return notify('error', 'Sélectionnez un produit et une quantité');
+      if (l.erreur) return notify('error', l.erreur);
+      const deja = lignesTransfert.find(function(x){ return String(x.produit) === String(l.produit); });
+      if (deja) { deja.quantite += l.quantite; } else { lignesTransfert.push(l); }
+      $('#mv_transfer_qty').val('');
+      renderLignesTransfert();
+    });
+    $('#mv_transfer_submit').on('click', function(){
       const from_warehouse = $('#mv_transfer_from').val();
       const to_warehouse = $('#mv_transfer_to').val();
       const note = $('#mv_transfer_note').val();
-      if (!produit || quantite <= 0 || !from_warehouse || !to_warehouse){ return notify('error', 'Sélectionnez produit, quantité > 0 et les deux entrepôts'); }
-      postJSON(apiBase + '/mouvements/transfer/', { produit, quantite, from_warehouse, to_warehouse, note })
-        .then(function(){ notify('success', 'Transfert enregistré'); reloadJournal(); })
+      const enCours = ligneSaisie();
+      if (enCours && enCours.erreur) return notify('error', enCours.erreur);
+      const lignes = lignesTransfert.slice();
+      if (enCours) {
+        const deja = lignes.find(function(x){ return String(x.produit) === String(enCours.produit); });
+        if (deja) { lignes[lignes.indexOf(deja)] = Object.assign({}, deja, { quantite: deja.quantite + enCours.quantite }); }
+        else { lignes.push(enCours); }
+      }
+      if (!lignes.length || !from_warehouse || !to_warehouse){ return notify('error', 'Sélectionnez au moins un produit, une quantité et les deux entrepôts'); }
+      if (String(from_warehouse) === String(to_warehouse)) { return notify('error', "L'entrepôt de départ et l'entrepôt d'arrivée doivent être différents"); }
+      const payload = lignes.length === 1
+        ? { produit: lignes[0].produit, quantite: lignes[0].quantite, from_warehouse, to_warehouse, note }
+        : { lignes: lignes.map(function(l){ return { produit: l.produit, quantite: l.quantite }; }), from_warehouse, to_warehouse, note };
+      postJSON(apiBase + '/mouvements/transfer/', payload)
+        .then(function(r){
+          notify('success', (r && r.detail ? r.detail : 'Transfert enregistré') + (r && r.reference ? ' (' + r.reference + ')' : ''));
+          lignesTransfert = []; renderLignesTransfert(); $('#mv_transfer_qty').val('');
+          reloadJournal();
+        })
         .catch(function(xhr){
           const msg = (xhr && xhr.responseJSON && (xhr.responseJSON.detail || xhr.responseJSON.error)) || 'Erreur transfert';
           notify('error', msg);

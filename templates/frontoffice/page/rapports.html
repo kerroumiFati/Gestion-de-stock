@@ -217,8 +217,24 @@ input[type="date"]:focus {
                         Export de la valeur totale du stock avec calcul par produit.
                     </p>
 
-                    <!-- Espace pour aligner avec la carte des ventes -->
-                    <div class="date-selection-section"></div>
+                    <!-- Options : dépôt, détail par dépôt, prix de valorisation -->
+                    <div class="date-selection-section">
+                        <label class="form-label fw-bold" style="font-size: 0.85rem;" for="valo_depot">
+                            <i class="fas fa-warehouse"></i> Dépôt :
+                        </label>
+                        <select id="valo_depot" class="form-control form-control-sm js-depot-rapport" style="border-radius: 8px;">
+                            <option value="">Tous les dépôts actifs</option>
+                        </select>
+                        <div class="form-check mt-2" style="font-size: 0.85rem;">
+                            <input class="form-check-input" type="checkbox" id="valo_par_depot">
+                            <label class="form-check-label" for="valo_par_depot">Détail et sous-totaux par dépôt</label>
+                        </div>
+                        <select id="valo_prix" class="form-control form-control-sm mt-2 no-select2" style="border-radius: 8px;"
+                                title="Le prix d'achat est réservé à l'administrateur (code PIN du tableau des bénéfices)">
+                            <option value="vente">Valoriser au prix de vente</option>
+                            <option value="achat">Valoriser au prix d'achat moyen (admin, PIN)</option>
+                        </select>
+                    </div>
 
                     <div class="d-grid gap-2">
                         <button class="btn export-btn export-btn-excel" onclick="exportReport('stock-valuation', 'excel')">
@@ -287,8 +303,14 @@ input[type="date"]:focus {
                         Export de tous les produits avec leurs caractéristiques.
                     </p>
 
-                    <!-- Espace pour aligner avec la carte des ventes -->
-                    <div class="date-selection-section"></div>
+                    <div class="date-selection-section">
+                        <label class="form-label fw-bold" style="font-size: 0.85rem;" for="inv_depot">
+                            <i class="fas fa-warehouse"></i> Dépôt :
+                        </label>
+                        <select id="inv_depot" class="form-control form-control-sm js-depot-rapport" style="border-radius: 8px;">
+                            <option value="">Tous les dépôts actifs</option>
+                        </select>
+                    </div>
 
                     <div class="d-grid gap-2">
                         <button class="btn export-btn export-btn-excel" onclick="exportReport('inventory', 'excel')">
@@ -338,7 +360,17 @@ window.exportReport = async function(reportType, format) {
         'inventory': `${REPORTS_BASE}/inventory/`
     };
 
-    const url = `${endpoints[reportType]}?format=${format}`;
+    // Options choisies dans la carte : dépôt, détail par dépôt, prix de valorisation
+    const params = new URLSearchParams({format});
+    const val = id => (document.getElementById(id) || {}).value || '';
+    if (reportType === 'stock-valuation') {
+        if (val('valo_depot')) params.set('warehouse', val('valo_depot'));
+        if (document.getElementById('valo_par_depot')?.checked) params.set('par_depot', '1');
+        if (val('valo_prix') === 'achat') params.set('prix', 'achat');
+    } else if (reportType === 'inventory' && val('inv_depot')) {
+        params.set('warehouse', val('inv_depot'));
+    }
+    const url = `${endpoints[reportType]}?${params}`;
 
     try {
         showLoading();
@@ -355,8 +387,7 @@ window.exportReport = async function(reportType, format) {
             showSuccess(`Rapport ${format.toUpperCase()} téléchargé avec succès!`);
             loadExportHistory();
         } else {
-            const error = await response.json();
-            showError('Erreur: ' + (error.error || 'Erreur inconnue'));
+            showError('Erreur : ' + (await lireErreur(response)));
         }
     } catch (e) {
         showError('Erreur réseau: ' + e.message);
@@ -391,8 +422,7 @@ window.exportSalesReport = async function(format) {
             showSuccess(`Rapport des ventes ${format.toUpperCase()} téléchargé!`);
             loadExportHistory();
         } else {
-            const error = await response.json();
-            showError('Erreur: ' + (error.error || 'Erreur inconnue'));
+            showError('Erreur : ' + (await lireErreur(response)));
         }
     } catch (e) {
         showError('Erreur réseau: ' + e.message);
@@ -400,6 +430,39 @@ window.exportSalesReport = async function(format) {
         hideLoading();
     }
 }
+
+// Message d'erreur du serveur (texte brut ou JSON {error|detail})
+async function lireErreur(response) {
+    const texte = await response.text();
+    try {
+        const json = JSON.parse(texte);
+        return json.error || json.detail || texte;
+    } catch (e) {
+        return texte || ('HTTP ' + response.status);
+    }
+}
+
+// Liste des dépôts actifs pour les sélecteurs (vans signalés)
+async function chargerDepots() {
+    try {
+        const r = await fetch('/API/warehouses/', {credentials: 'include'});
+        if (!r.ok) return;
+        const data = await r.json();
+        const depots = (Array.isArray(data) ? data : (data.results || [])).filter(w => w.is_active !== false);
+        document.querySelectorAll('.js-depot-rapport').forEach(sel => {
+            depots.forEach(w => {
+                const opt = document.createElement('option');
+                opt.value = w.id;
+                const van = /van/i.test(w.code || '');
+                opt.textContent = (van ? 'Van : ' : '') + w.name;
+                sel.appendChild(opt);
+            });
+        });
+    } catch (e) {
+        console.warn('Dépôts non chargés', e);
+    }
+}
+chargerDepots();
 
 // Télécharger le blob
 function downloadBlob(blob, headers, format) {

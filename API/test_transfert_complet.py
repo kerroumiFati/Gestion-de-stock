@@ -50,6 +50,10 @@ class TransfertCompletTests(TestCase):
         self.assertEqual(self.stock(self.jus, self.depot), 0)
         self.assertEqual(self.stock(self.eau, self.magasin), 15)   # 3 déjà présents + 12
         self.assertEqual(self.stock(self.jus, self.magasin), 5)
+        # Total du produit (tous entrepôts) : inchangé et cohérent
+        self.eau.refresh_from_db(); self.jus.refresh_from_db()
+        self.assertEqual(self.eau.quantite, 15)
+        self.assertEqual(self.jus.quantite, 5)
         # Journal : une sortie et une entrée par produit, même référence
         moves = StockMove.objects.filter(ref_id=r.json()['reference'])
         self.assertEqual(moves.count(), 4)

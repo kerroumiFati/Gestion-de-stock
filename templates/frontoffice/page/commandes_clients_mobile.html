@@ -1,6 +1,6 @@
 {% load i18n %}
 {% load static %}
-<script src="{% static 'script/bon_livraison.js' %}?v=bl1"></script>
+<script src="{% static 'script/bon_livraison.js' %}?v=bl2"></script>
 
 <style>
 /* Select2 - Style pour dropdown avec hauteur limitée */
@@ -231,7 +231,7 @@
                     <i class="fa fa-times"></i> {% trans "Fermer" %}
                 </button>
                 <button type="button" class="btn btn-success" id="btnPrintBL" onclick="printCommande('bl')" style="display: none;">
-                    <i class="fa fa-truck-loading"></i> {% trans "Imprimer le bon de livraison" %}
+                    <i class="fa fa-truck-loading"></i> <span id="btnPrintBLLabel">{% trans "Imprimer le bon de livraison" %}</span>
                 </button>
                 <button type="button" class="btn btn-primary" onclick="printCommande()">
                     <i class="fa fa-print"></i> {% trans "Imprimer le bon de commande" %}
@@ -437,6 +437,32 @@
                                 </thead>
                                 <tbody id="editLignesBody">
                                     <!-- Sera rempli dynamiquement -->
+                                </tbody>
+                                <tbody id="editAjoutProduitBody">
+                                    <tr class="table-warning">
+                                        <td colspan="2">
+                                            <label class="small font-weight-bold mb-1" for="editAjoutProduitSelect"><i class="fa fa-plus-circle"></i> {% trans "Ajouter un produit" %}</label>
+                                            <select id="editAjoutProduitSelect" class="form-control form-control-sm no-select2">
+                                                <option value="">{% trans "Rechercher un produit..." %}</option>
+                                            </select>
+                                            <small id="editAjoutPrixInfo" class="form-text text-muted"></small>
+                                        </td>
+                                        <td class="text-center align-bottom">
+                                            <input type="number" id="editAjoutQuantite" class="form-control form-control-sm text-center"
+                                                   value="1" min="1" step="1" style="width: 80px; display: inline-block;" aria-label="{% trans 'Quantité' %}">
+                                        </td>
+                                        <td class="text-right align-bottom">
+                                            <input type="number" id="editAjoutPrix" class="form-control form-control-sm text-right"
+                                                   min="0" step="0.01" style="width: 100px; display: inline-block;" aria-label="{% trans 'Prix Unit. HT' %}">
+                                        </td>
+                                        <td class="text-right align-bottom small text-muted" id="editAjoutTVA">TVA —</td>
+                                        <td></td>
+                                        <td class="text-center align-bottom">
+                                            <button type="button" id="btnEditAjoutProduit" class="btn btn-sm btn-success" onclick="ajouterProduitCommande()" title="{% trans 'Ajouter à la commande' %}">
+                                                <i class="fa fa-plus"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
                                 </tbody>
                                 <tfoot class="bg-light">
                                     <tr>
@@ -665,6 +691,10 @@
                             <button class="btn btn-secondary" onclick="openChangeStatusModal(${cmd.id})" title="Changer statut">
                                 <i class="fa fa-exchange-alt"></i>
                             </button>
+                            ${blImprimable(cmd) ? `
+                            <button class="btn btn-outline-success" onclick="printBonLivraison(${cmd.id})" title="Imprimer le BL prévisionnel (quantités commandées)">
+                                <i class="fa fa-print"></i>
+                            </button>` : ''}
                             ` : `
                             ${cmd.statut === 'delivered' ? `
                             <button class="btn btn-success" onclick="printBonLivraison(${cmd.id})" title="Imprimer le bon de livraison">
@@ -825,7 +855,9 @@
             ${commande.lignes ? renderCommandeDetailsRow(commande, true) : '<p class="text-muted">Aucun produit</p>'}
         `;
 
-        document.getElementById('btnPrintBL').style.display = commande.statut === 'delivered' ? '' : 'none';
+        document.getElementById('btnPrintBL').style.display = blImprimable(commande) ? '' : 'none';
+        document.getElementById('btnPrintBLLabel').textContent = commande.statut === 'delivered'
+            ? 'Imprimer le bon de livraison' : 'Imprimer le BL prévisionnel';
         $('#modalCommandeDetails').modal('show');
     }
 
@@ -937,7 +969,16 @@
         return upc > 1 ? upc : '-';
     }
 
-    // Imprime le bon de livraison d'une commande livrée directement depuis la liste
+    // Bon de livraison : définitif une fois la commande livrée (quantités livrées), « BL
+    // prévisionnel » dès qu'elle est confirmée / en préparation / prête (quantités commandées,
+    // date de livraison souhaitée). Jamais pour une commande en attente ou annulée.
+    const STATUTS_BL_PREVISIONNEL = ['confirmed', 'preparing', 'ready'];
+    function blImprimable(cmd) {
+        return !!cmd && (cmd.statut === 'delivered' || STATUTS_BL_PREVISIONNEL.includes(cmd.statut));
+    }
+    window.blImprimable = blImprimable;
+
+    // Imprime le bon de livraison (définitif ou prévisionnel) directement depuis la liste
     function printBonLivraison(id) {
         const commande = allCommandes.find(c => c.id === id);
         if (!commande) return;
@@ -945,8 +986,10 @@
         printCommande('bl');
     }
 
-    // BL d'une commande livrée, au même format que tous les autres bons de livraison
+    // BL d'une commande, au même format que tous les autres bons de livraison.
+    // Commande pas encore livrée : BL prévisionnel (quantités commandées, date souhaitée).
     function imprimerBonLivraisonCommande(cmd) {
+        const previsionnel = cmd.statut !== 'delivered';
         const fenetre = window.open('', '_blank'); // ouverte tout de suite (anti pop-up)
         const totalHT = parseFloat(cmd.montant_total_ht) || 0;
         const totalTTC = parseFloat(cmd.montant_total_ttc) || 0;
@@ -954,7 +997,10 @@
         BonLivraison.chargerEntreprise().then(function (entreprise) {
             BonLivraison.imprimer({
                 numero: cmd.reference,
-                dateLivraison: cmd.date_livraison_reelle ? formatDate(cmd.date_livraison_reelle) : '',
+                dateLivraison: previsionnel
+                    ? (cmd.date_livraison_souhaitee ? formatDate(cmd.date_livraison_souhaitee) : '')
+                    : (cmd.date_livraison_reelle ? formatDate(cmd.date_livraison_reelle) : ''),
+                previsionnel: previsionnel,
                 dateVente: cmd.date_commande ? formatDate(cmd.date_commande) : '',
                 reference: cmd.reference,
                 entreprise: entreprise,
@@ -985,8 +1031,8 @@
     // type : 'commande' (par défaut) ou 'bl' (bon de livraison, commande livrée)
     function printCommande(type) {
         if (!currentCommande) return;
-        const estBL = type === 'bl' && currentCommande.statut === 'delivered';
-        const titreDoc = estBL ? 'Bon de Livraison' : 'Bon de Commande';
+        const estBL = type === 'bl' && blImprimable(currentCommande);
+        const titreDoc = estBL ? (currentCommande.statut === 'delivered' ? 'Bon de Livraison' : 'Bon de Livraison prévisionnel') : 'Bon de Commande';
 
         // Bon de livraison : modèle unique (static/script/bon_livraison.js), identique au BL serveur
         if (estBL && window.BonLivraison) {
@@ -1545,9 +1591,147 @@
         console.log('[COMMANDE EDIT] Lignes chargées:', editingLignes);
 
         renderEditLignes();
+        preparerAjoutProduit(commande);
 
         $('#modalModifierCommande').modal('show');
     }
+
+    // === Ajout d'un produit à la commande (ADV) ===
+    // Prix par défaut : prix du type de prix du client (code de prix par défaut, sinon sans
+    // code), à défaut le prix unitaire du produit. TVA : celle des lignes de la commande.
+    let ajoutProduits = null;          // cache des produits (API /API/produits/, filtrée par entreprise)
+    let ajoutCodePrixDefaut = null;    // id du code de prix par défaut
+    let ajoutTypePrixClient = null;    // id du type de prix du client de la commande
+    let ajoutCommande = null;
+
+    function chargerProduitsAjout() {
+        if (ajoutProduits) return Promise.resolve(ajoutProduits);
+        const opts = { credentials: 'same-origin', headers: { 'Accept': 'application/json' } };
+        return Promise.all([
+            fetch('/API/produits/', opts).then(r => r.ok ? r.json() : []),
+            fetch('/API/codes-prix/', opts).then(r => r.ok ? r.json() : []).catch(() => [])
+        ]).then(([prods, codes]) => {
+            ajoutProduits = Array.isArray(prods) ? prods : (prods.results || []);
+            const liste = Array.isArray(codes) ? codes : (codes.results || []);
+            const def = liste.find(c => c.is_default && c.is_active !== false);
+            ajoutCodePrixDefaut = def ? def.id : null;
+            return ajoutProduits;
+        });
+    }
+
+    function prixPourClient(produit) {
+        const prixU = parseFloat(produit.prixU) || 0;
+        if (!ajoutTypePrixClient) return { prix: prixU, source: 'prix du produit' };
+        const cands = (produit.prix_multiples || []).filter(p =>
+            p.is_active !== false && String(p.type_prix) === String(ajoutTypePrixClient));
+        const choisi = cands.find(p => ajoutCodePrixDefaut && String(p.code_prix) === String(ajoutCodePrixDefaut))
+            || cands.find(p => !p.code_prix) || null;
+        if (!choisi) return { prix: prixU, source: 'prix du produit' };
+        return { prix: parseFloat(choisi.prix) || 0, source: 'prix ' + (choisi.type_prix_libelle || 'client') };
+    }
+
+    function tvaCommandeEnCours() {
+        const l = editingLignes.find(x => x.taux_tva !== undefined && x.taux_tva !== null && x.taux_tva !== '');
+        return l ? (parseFloat(l.taux_tva) || 0) : 0;
+    }
+
+    function escapeHtmlAjout(v) {
+        return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function preparerAjoutProduit(commande) {
+        ajoutCommande = commande;
+        ajoutTypePrixClient = null;
+        const sel = document.getElementById('editAjoutProduitSelect');
+        document.getElementById('editAjoutQuantite').value = 1;
+        document.getElementById('editAjoutPrix').value = '';
+        document.getElementById('editAjoutPrixInfo').textContent = 'Chargement des produits…';
+        document.getElementById('editAjoutTVA').textContent = 'TVA ' + tvaCommandeEnCours() + ' %';
+        const clientReq = commande.client
+            ? fetch(`/API/clients/${commande.client}/`, { credentials: 'same-origin' })
+                .then(r => r.ok ? r.json() : null).catch(() => null)
+            : Promise.resolve(null);
+        Promise.all([chargerProduitsAjout(), clientReq]).then(([produits, client]) => {
+            if (ajoutCommande !== commande) return;   // une autre commande a été ouverte entre-temps
+            ajoutTypePrixClient = client && client.type_prix ? client.type_prix : null;
+            // Produits de l'entreprise de la commande (ou sans entreprise)
+            const visibles = produits.filter(p => !(p.company && commande.company && String(p.company) !== String(commande.company)));
+            const $sel = window.jQuery ? jQuery(sel) : null;
+            if ($sel && $sel.hasClass('select2-hidden-accessible')) $sel.select2('destroy');
+            sel.innerHTML = '<option value="">Rechercher un produit...</option>' + visibles.map(p =>
+                `<option value="${p.id}">${escapeHtmlAjout(p.designation || '')} (${escapeHtmlAjout(p.reference || '')})</option>`
+            ).join('');
+            if ($sel && jQuery.fn.select2) {
+                $sel.select2({
+                    theme: 'bootstrap4', width: '100%', placeholder: 'Rechercher un produit...', allowClear: true,
+                    dropdownParent: jQuery('#modalModifierCommande'),
+                    language: { noResults: () => 'Aucun produit trouvé' }
+                });
+                $sel.off('change.ajout').on('change.ajout', onProduitAjoutChange);
+            } else {
+                sel.onchange = onProduitAjoutChange;
+            }
+            document.getElementById('editAjoutPrixInfo').textContent = ajoutTypePrixClient
+                ? 'Prix proposé selon le type de prix du client.' : 'Client sans type de prix : prix du produit proposé.';
+        }).catch(() => {
+            document.getElementById('editAjoutPrixInfo').textContent = 'Impossible de charger les produits.';
+        });
+    }
+
+    function onProduitAjoutChange() {
+        const id = document.getElementById('editAjoutProduitSelect').value;
+        const produit = (ajoutProduits || []).find(p => String(p.id) === String(id));
+        const info = document.getElementById('editAjoutPrixInfo');
+        if (!produit) { document.getElementById('editAjoutPrix').value = ''; info.textContent = ''; return; }
+        const { prix, source } = prixPourClient(produit);
+        document.getElementById('editAjoutPrix').value = prix.toFixed(2);
+        info.textContent = `Prix proposé : ${prix.toFixed(2)} DA HT (${source}).`;
+        if (editingLignes.some(l => String(l.produit) === String(produit.id))) {
+            info.textContent += ' Déjà dans la commande : la quantité sera ajoutée à la ligne existante.';
+        }
+    }
+
+    function ajouterProduitCommande() {
+        const id = document.getElementById('editAjoutProduitSelect').value;
+        const produit = (ajoutProduits || []).find(p => String(p.id) === String(id));
+        if (!produit) { alert('Choisissez un produit à ajouter.'); return; }
+        const quantite = parseInt(document.getElementById('editAjoutQuantite').value, 10);
+        if (!(quantite >= 1)) { alert('La quantité doit être au moins 1'); return; }
+        const prixSaisi = document.getElementById('editAjoutPrix').value;
+        const prix = prixSaisi === '' ? prixPourClient(produit).prix : parseFloat(prixSaisi);
+        if (!(prix >= 0)) { alert('Le prix ne peut pas être négatif'); return; }
+
+        // Pas de doublon : un produit déjà présent voit sa quantité augmenter (prix de la ligne conservé)
+        const idx = editingLignes.findIndex(l => String(l.produit) === String(produit.id));
+        if (idx >= 0) {
+            const nouvelleQte = (parseFloat(editingLignes[idx].quantite) || 0) + quantite;
+            updateLigneQuantite(idx, nouvelleQte);
+            showSuccess(`« ${produit.designation} » est déjà dans la commande : quantité portée à ${nouvelleQte}.`);
+        } else {
+            const tva = tvaCommandeEnCours();
+            const montantHT = Math.round(prix * quantite * 100) / 100;
+            editingLignes.push({
+                produit: produit.id,
+                produit_designation: produit.designation,
+                produit_reference: produit.reference,
+                produit_unites_par_carton: produit.unites_par_carton,
+                quantite: quantite,
+                prix_unitaire_ht: prix,
+                taux_tva: tva,
+                montant_ht: montantHT,
+                montant_ttc: montantHT * (1 + tva / 100)
+            });
+            renderEditLignes();
+        }
+        // Réinitialiser la saisie
+        const sel = document.getElementById('editAjoutProduitSelect');
+        if (window.jQuery && jQuery(sel).hasClass('select2-hidden-accessible')) jQuery(sel).val('').trigger('change.select2');
+        else sel.value = '';
+        document.getElementById('editAjoutQuantite').value = 1;
+        document.getElementById('editAjoutPrix').value = '';
+        document.getElementById('editAjoutPrixInfo').textContent = '';
+    }
+    window.ajouterProduitCommande = ajouterProduitCommande;
 
     function renderEditLignes() {
         const tbody = document.getElementById('editLignesBody');
@@ -1626,7 +1810,7 @@
 
         // Recalculer les montants
         const prixUnitHT = parseFloat(editingLignes[index].prix_unitaire_ht) || 0;
-        const tauxTVA = parseFloat(editingLignes[index].taux_tva) || 19;
+        const tauxTVA = parseFloat(editingLignes[index].taux_tva) || 0;  // 0 % est un vrai taux (avant : remplacé par 19 %)
 
         editingLignes[index].montant_ht = prixUnitHT * quantite;
         editingLignes[index].montant_ttc = editingLignes[index].montant_ht * (1 + tauxTVA / 100);
@@ -1655,7 +1839,7 @@
 
         // Recalculer les montants
         const quantite = parseInt(editingLignes[index].quantite) || 1;
-        const tauxTVA = parseFloat(editingLignes[index].taux_tva) || 19;
+        const tauxTVA = parseFloat(editingLignes[index].taux_tva) || 0;  // 0 % est un vrai taux (avant : remplacé par 19 %)
 
         editingLignes[index].montant_ht = prix * quantite;
         editingLignes[index].montant_ttc = editingLignes[index].montant_ht * (1 + tauxTVA / 100);
@@ -1757,6 +1941,19 @@
         console.log('[COMMANDE EDIT] Payload complet:', JSON.stringify(payload, null, 2));
         console.log('[COMMANDE EDIT] URL:', `/API/distribution/commandes/${id}/`);
         console.log('[COMMANDE EDIT] CSRF Token:', getCookie('csrftoken'));
+
+        // Le nouveau total ne peut pas descendre sous l'argent déjà encaissé
+        const cmdAvant = allCommandes.find(c => String(c.id) === String(id));
+        const dejaPaye = cmdAvant ? (parseFloat(cmdAvant.montant_paye) || 0) : 0;
+        const nouveauTTC = editingLignes.reduce((s, l) => s + (parseFloat(l.montant_ttc) || 0), 0);
+        if (editingLignes.length === 0) {
+            showError('La commande doit contenir au moins un produit.');
+            return;
+        }
+        if (dejaPaye > 0 && nouveauTTC + 0.01 < dejaPaye) {
+            showError(`Le nouveau total (${nouveauTTC.toFixed(2)} DA) est inférieur au montant déjà encaissé (${dejaPaye.toFixed(2)} DA).`);
+            return;
+        }
 
         // Envoyer la requête
         fetch(`/API/distribution/commandes/${id}/`, {

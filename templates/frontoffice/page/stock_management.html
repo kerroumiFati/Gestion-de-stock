@@ -717,8 +717,9 @@
                                 </div>
                             </div>
                         </div>
-                        <button class="btn btn-outline-secondary ml-2" style="border-radius: 50px;" onclick="exportStock()">
-                            <i class="fas fa-download mr-1"></i>{% trans "Exporter" %}
+                        <button class="btn btn-outline-success ml-2" style="border-radius: 50px;" onclick="exportStock()"
+                                title="{% trans 'État du stock au format Excel (.xlsx), pour le dépôt sélectionné' %}">
+                            <i class="fas fa-file-excel mr-1"></i>{% trans "Exporter Excel" %}
                         </button>
                         <button class="btn btn-outline-primary ml-2" style="border-radius: 50px;" onclick="printStock()">
                             <i class="fas fa-print mr-1"></i>{% trans "Imprimer" %}
@@ -831,7 +832,7 @@
                     <div class="row">
                         <div class="col-md-6">
                             <div class="form-group">
-                                <label class="font-weight-bold">{% trans "Stock actuel" %}</label>
+                                <label class="font-weight-bold">{% trans "Stock actuel dans ce dépôt" %}</label>
                                 <input type="text" class="form-control" id="currentStock" readonly>
                             </div>
                         </div>
@@ -1155,10 +1156,9 @@
             hiddenSelect.dispatchEvent(new Event('change', { bubbles: true }));
         }
 
-        // Update stock display if this is the product select
-        if (containerId === 'customSelectAdjustProduct' && stockValue !== null) {
-            document.getElementById('currentStock').value = stockValue || 0;
-            document.getElementById('newQuantity').value = stockValue || 0;
+        // Stock affiché = stock du produit DANS LE DÉPÔT choisi (pas le total tous dépôts)
+        if (containerId === 'customSelectAdjustProduct' || containerId === 'customSelectAdjustWarehouse') {
+            majStockDepotAjustement();
         }
 
         // Update selected state
@@ -1496,7 +1496,44 @@
     }
 
     // Fonctions globales pour les boutons
+    // Stock actuel du produit dans le dépôt choisi : d'abord la liste chargée, puis relu au serveur.
+    let ajustementStockDepot = null;   // null = inconnu (produit ou dépôt non choisi)
+    function stockDepotLocal(productId, warehouseId) {
+        const ps = allProductStocks.find(s => s.produit == productId && s.warehouse == warehouseId);
+        return ps ? (parseInt(ps.quantity, 10) || 0) : 0;
+    }
+    function afficherStockDepotAjustement(qte) {
+        ajustementStockDepot = qte;
+        const cur = document.getElementById('currentStock');
+        const nouv = document.getElementById('newQuantity');
+        if (qte === null) {
+            cur.value = 'Choisissez le produit et le dépôt';
+            nouv.value = '';
+            return;
+        }
+        cur.value = qte;
+        nouv.value = qte;
+    }
+    function majStockDepotAjustement() {
+        const productId = document.getElementById('adjustProductSelect').value;
+        const warehouseId = document.getElementById('adjustWarehouseSelect').value;
+        if (!productId || !warehouseId) { afficherStockDepotAjustement(null); return; }
+        afficherStockDepotAjustement(stockDepotLocal(productId, warehouseId));
+        fetch(`/API/stocks/?produit=${encodeURIComponent(productId)}&warehouse=${encodeURIComponent(warehouseId)}`)
+            .then(r => r.ok ? r.json() : null)
+            .then(data => {
+                if (!data) return;
+                // ignorer une réponse arrivée après un autre choix
+                if (document.getElementById('adjustProductSelect').value !== productId ||
+                    document.getElementById('adjustWarehouseSelect').value !== warehouseId) return;
+                const lignes = data.results || data;
+                afficherStockDepotAjustement(lignes.length ? (parseInt(lignes[0].quantity, 10) || 0) : 0);
+            })
+            .catch(() => {});
+    }
+
     window.openAjustementModal = function() {
+        majStockDepotAjustement();
         $('#adjustStockModal').modal('show');
     };
 
@@ -1504,9 +1541,13 @@
         const product = allProducts.find(p => p.id === productId);
         if (product) {
             const label = (product.reference || '') + ' - ' + (product.designation || 'Produit #' + product.id);
-            selectAdjustOption('customSelectAdjustProduct', product.id, label, 'adjustProductSelect', product.quantite);
-            document.getElementById('currentStock').value = product.quantite || 0;
-            document.getElementById('newQuantity').value = product.quantite || 0;
+            // Si un dépôt est filtré dans la page, le pré-sélectionner
+            const filtre = document.getElementById('warehouseFilter')?.value;
+            if (filtre && !document.getElementById('adjustWarehouseSelect').value) {
+                const w = allWarehouses.find(x => String(x.id) === String(filtre));
+                if (w) selectAdjustOption('customSelectAdjustWarehouse', w.id, (w.code || '') + ' - ' + (w.name || 'Entrepôt #' + w.id), 'adjustWarehouseSelect', null);
+            }
+            selectAdjustOption('customSelectAdjustProduct', product.id, label, 'adjustProductSelect', null);
             $('#adjustStockModal').modal('show');
         }
     };
@@ -1563,15 +1604,24 @@
         const note = document.getElementById('adjustNote').value;
 
         if (!productId || !warehouseId) {
-            alert('Veuillez sélectionner un produit et un entrepôt');
+            alert('Veuillez sélectionner un produit et un dépôt');
+            return;
+        }
+        if (isNaN(newQty) || newQty < 0) {
+            alert('La nouvelle quantité doit être un nombre entier positif ou nul');
             return;
         }
 
-        const product = allProducts.find(p => p.id == productId);
-        const delta = newQty - (product?.quantite || 0);
+        // Correction du stock DU DÉPÔT : le serveur calcule l'écart à partir de son stock réel
+        // (motif « Expiration » envoyé comme « Autre » avec la mention dans la note).
+        const motifsServeur = ['INV', 'CASSE', 'PERTE', 'CORR', 'AUTRE'];
+        const motif = motifsServeur.includes(reason) ? reason : 'AUTRE';
+        const noteEnvoyee = (reason === 'EXP' ? 'Expiration' + (note ? ' — ' + note : '') : note);
+        const notifier = (msg, type) => {
+            if (window.toastr) { toastr[type](msg); } else { alert(msg); }
+        };
 
-        // Créer le mouvement de stock
-        fetch('/API/stock-moves/', {
+        fetch('/API/stocks/corriger/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -1580,55 +1630,54 @@
             body: JSON.stringify({
                 produit: productId,
                 warehouse: warehouseId,
-                delta: delta,
-                source: reason,
-                note: note || `Ajustement: ${product?.quantite || 0} -> ${newQty}`
+                nouvelle_quantite: newQty,
+                motif: motif,
+                note: noteEnvoyee
             })
         })
-        .then(r => {
-            if (!r.ok) throw new Error('Erreur serveur');
-            return r.json();
-        })
-        .then(() => {
-            $('#adjustStockModal').modal('hide');
-            // Recharger les données
-            loadData();
-            // Notification
-            if (window.toastr) {
-                toastr.success('Stock ajusté avec succès');
-            } else {
-                alert('Stock ajusté avec succès');
+        .then(r => r.json().catch(() => ({})).then(data => ({ ok: r.ok, status: r.status, data })))
+        .then(({ ok, status, data }) => {
+            if (!ok) {
+                notifier(data.detail || data.error || `Erreur lors de l'ajustement du stock (${status})`, 'error');
+                return;
             }
+            if (data.delta === 0) {
+                notifier(data.detail || 'La quantité est déjà celle-ci : rien à corriger.', 'info');
+                return;
+            }
+            $('#adjustStockModal').modal('hide');
+            loadData();
+            notifier(`Stock ajusté : ${data.entrepot || ''} ${data.avant} → ${data.apres}`, 'success');
         })
         .catch(err => {
             console.error('Erreur:', err);
-            alert('Erreur lors de l\'ajustement du stock');
+            notifier('Erreur réseau lors de l\'ajustement du stock', 'error');
         });
     };
 
-    // Imprimer l'état du stock : ouvre le PDF de valorisation dans un nouvel onglet
-    // (entrepôt sélectionné, ou tous) pour l'imprimer depuis la visionneuse du navigateur.
-    window.printStock = function() {
-        const params = new URLSearchParams({ format: 'pdf', inline: '1' });
+    // État du stock généré par le serveur (mêmes quantités que le tableau : stock des dépôts,
+    // dépôt sélectionné ou tous les dépôts actifs), tous les produits actifs même à 0.
+    function urlEtatStock(format, extra) {
+        const params = new URLSearchParams(Object.assign({ format: format }, extra || {}));
         const warehouseId = document.getElementById('warehouseFilter')?.value;
         if (warehouseId) params.set('warehouse', warehouseId);
-        window.open('/reports/stock-valuation/?' + params.toString(), '_blank');
+        return '/reports/inventory/?' + params.toString();
+    }
+
+    // Imprimer : ouvre le PDF dans un nouvel onglet pour l'imprimer depuis la visionneuse.
+    window.printStock = function() {
+        window.open(urlEtatStock('pdf', { inline: '1' }), '_blank');
     };
 
+    // Exporter : vrai fichier Excel (.xlsx) produit par le serveur (avant : CSV construit dans le
+    // navigateur, séparateur « , » sans BOM -> accents cassés dans Excel, quantité globale même
+    // avec un dépôt filtré).
     window.exportStock = function() {
-        // Export CSV simple
-        let csv = 'Reference,Designation,Categorie,Quantite,Prix,Valeur\n';
-        allProducts.forEach(p => {
-            const cat = allCategories.find(c => c.id === p.categorie)?.nom || '';
-            const valeur = p.quantite * parseFloat(p.prixU || 0);
-            csv += `"${p.reference}","${p.designation}","${cat}",${p.quantite},${p.prixU},${valeur}\n`;
-        });
-
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = `stock_${new Date().toISOString().slice(0,10)}.csv`;
+        link.href = urlEtatStock('excel');
+        document.body.appendChild(link);
         link.click();
+        link.remove();
     };
 
     function getCookie(name) {
