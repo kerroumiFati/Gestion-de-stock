@@ -257,13 +257,16 @@
           <a class="nav-link active" id="tab-transfer" data-toggle="tab" href="#pane-transfer" role="tab">1- Transfert de stock</a>
         </li>
         <li class="nav-item">
-          <a class="nav-link" id="tab-loss" data-toggle="tab" href="#pane-loss" role="tab">2- Perte / Casse / Expiration</a>
+          <a class="nav-link" id="tab-transfer-all" data-toggle="tab" href="#pane-transfer-all" role="tab">2- Transférer tout un entrepôt</a>
         </li>
         <li class="nav-item">
-          <a class="nav-link" id="tab-outflow" data-toggle="tab" href="#pane-outflow" role="tab">3- Échantillon / Don / Consommation interne</a>
+          <a class="nav-link" id="tab-loss" data-toggle="tab" href="#pane-loss" role="tab">3- Perte / Casse / Expiration</a>
         </li>
         <li class="nav-item">
-          <a class="nav-link" id="tab-return" data-toggle="tab" href="#pane-return" role="tab">4- Retour fournisseur</a>
+          <a class="nav-link" id="tab-outflow" data-toggle="tab" href="#pane-outflow" role="tab">4- Échantillon / Don / Consommation interne</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" id="tab-return" data-toggle="tab" href="#pane-return" role="tab">5- Retour fournisseur</a>
         </li>
       </ul>
 
@@ -340,6 +343,154 @@
             <button id="mv_transfer_submit" class="btn btn-primary">Enregistrer le transfert</button>
           </div>
         </div>
+
+        <!-- Transfert complet : tout le stock d'un entrepôt vers un autre -->
+        <div class="tab-pane fade" id="pane-transfer-all" role="tabpanel" aria-labelledby="tab-transfer-all">
+          <div class="border rounded p-3">
+            <p class="text-muted mb-3">
+              <i class="fas fa-info-circle"></i>
+              Déplace <strong>tous les produits en stock</strong> d'un entrepôt vers un autre, en une seule fois.
+              Choisissez les deux entrepôts, vérifiez la liste, puis confirmez.
+            </p>
+            <div class="form-row">
+              <div class="form-group col-md-5">
+                <label><strong>1. Depuis l'entrepôt</strong></label>
+                <select id="ta_from" class="form-control"><option value="">Sélectionner un entrepôt…</option></select>
+              </div>
+              <div class="form-group col-md-2 d-none d-md-flex align-items-end justify-content-center">
+                <i class="fas fa-arrow-right fa-2x text-primary mb-2"></i>
+              </div>
+              <div class="form-group col-md-5">
+                <label><strong>2. Vers l'entrepôt</strong></label>
+                <select id="ta_to" class="form-control"><option value="">Sélectionner un entrepôt…</option></select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Note (optionnel)</label>
+              <input id="ta_note" type="text" class="form-control" maxlength="200" placeholder="Ex : fermeture du dépôt, déménagement…" />
+            </div>
+
+            <div id="ta_apercu" class="d-none">
+              <div id="ta_resume" class="alert alert-info mb-2"></div>
+              <div class="table-responsive" style="max-height: 320px; overflow-y: auto;">
+                <table class="table table-sm table-striped mb-2" id="ta_table" data-no-datatable="true">
+                  <thead class="thead-light"><tr><th>Référence</th><th>Produit</th><th class="text-right">Quantité à transférer</th></tr></thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+            </div>
+            <div id="ta_message" class="mb-2"></div>
+            <button id="ta_submit" class="btn btn-primary btn-lg" disabled>
+              <i class="fas fa-exchange-alt"></i> Transférer tout le stock
+            </button>
+          </div>
+        </div>
+
+        <!-- Fenêtre de confirmation du transfert complet -->
+        <div class="modal fade" id="ta_confirm" tabindex="-1" role="dialog" aria-hidden="true">
+          <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content">
+              <div class="modal-header bg-warning">
+                <h5 class="modal-title"><i class="fas fa-exclamation-triangle"></i> Confirmer le transfert</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Fermer"><span aria-hidden="true">&times;</span></button>
+              </div>
+              <div class="modal-body" id="ta_confirm_texte"></div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Annuler</button>
+                <button type="button" class="btn btn-primary" id="ta_confirm_ok"><i class="fas fa-check"></i> Oui, tout transférer</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <script>
+        (function () {
+          // Transfert complet d'un entrepôt (script en ligne : réexécuté à chaque ouverture de la page)
+          var $ = window.jQuery;
+          var apercu = null;
+          var ENTITES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+          function esc(t) { return String(t == null ? '' : t).replace(/[&<>"']/g, function (c) { return ENTITES[c]; }); }
+          function nombre(n) { return Number(n || 0).toLocaleString('fr-FR'); }
+          function csrf() { var m = document.cookie.match(/(?:^|; )csrftoken=([^;]+)/); return m ? decodeURIComponent(m[1]) : ''; }
+          function appel(data) {
+            return $.ajax({ url: '/API/mouvements/transfer-all/', method: 'POST', contentType: 'application/json',
+                            headers: { 'X-CSRFToken': csrf() }, data: JSON.stringify(data) });
+          }
+          function erreur(xhr) { return (xhr && xhr.responseJSON && (xhr.responseJSON.detail || xhr.responseJSON.error)) || 'Erreur, réessayez.'; }
+          function message(html, type) { $('#ta_message').html(html ? '<div class="alert alert-' + type + ' mb-0">' + html + '</div>' : ''); }
+          function nomEntrepot(sel) { return $(sel + ' option:selected').text(); }
+
+          function chargerEntrepots() {
+            return $.getJSON('/API/entrepots/?page_size=1000').done(function (data) {
+              var liste = Array.isArray(data) ? data : (data && data.results) || [];
+              var opts = '<option value="">Sélectionner un entrepôt…</option>' + liste.map(function (w) {
+                var inactif = w.is_active === false;
+                return '<option value="' + w.id + '"' + (inactif ? ' disabled' : '') + '>' +
+                  esc((w.code || '') + ' - ' + (w.name || '')) + (inactif ? ' (inactif)' : '') + '</option>';
+              }).join('');
+              var f = $('#ta_from').val(), t = $('#ta_to').val();
+              // change.select2 : la liste de recherche affiche le bon texte (sinon « Chargement… » reste affiché)
+              $('#ta_from').html(opts).val(f || '').trigger('change.select2'); $('#ta_to').html(opts).val(t || '').trigger('change.select2');
+            }).fail(function () { message('Impossible de charger la liste des entrepôts.', 'danger'); });
+          }
+
+          function majBouton() {
+            var to = $('#ta_to').val(), from = $('#ta_from').val();
+            var ok = apercu && apercu.nb_produits > 0 && to && to !== from;
+            $('#ta_submit').prop('disabled', !ok);
+          }
+
+          function rafraichir() {
+            var from = $('#ta_from').val(), to = $('#ta_to').val();
+            apercu = null; majBouton(); $('#ta_apercu').addClass('d-none'); message('');
+            if (!from) return;
+            if (to && from === to) { message('Choisissez deux entrepôts différents.', 'warning'); return; }
+            appel({ from_warehouse: from, dry_run: true }).done(function (r) {
+              if ($('#ta_from').val() !== String(r.from)) return;   // réponse d'un ancien choix
+              apercu = r;
+              if (!r.nb_produits) {
+                message("L'entrepôt <strong>" + esc(nomEntrepot('#ta_from')) + '</strong> est vide : rien à transférer.', 'secondary');
+              } else {
+                $('#ta_resume').html('<strong>' + nombre(r.nb_produits) + ' produit(s)</strong> — ' + nombre(r.total_unites) +
+                  ' unité(s) au total seront déplacés depuis <strong>' + esc(nomEntrepot('#ta_from')) + '</strong>.');
+                $('#ta_table tbody').html(r.lignes.map(function (l) {
+                  return '<tr><td>' + esc(l.reference) + '</td><td>' + esc(l.designation) + '</td><td class="text-right">' + nombre(l.quantite) + '</td></tr>';
+                }).join(''));
+                $('#ta_apercu').removeClass('d-none');
+                if (!to) message("Choisissez maintenant l'entrepôt d'arrivée.", 'info');
+              }
+              majBouton();
+            }).fail(function (xhr) { message(esc(erreur(xhr)), 'danger'); });
+          }
+
+          function demanderConfirmation() {
+            if (!apercu) return;
+            $('#ta_confirm_texte').html('Vous allez déplacer <strong>' + nombre(apercu.nb_produits) + ' produit(s)</strong> (' +
+              nombre(apercu.total_unites) + ' unités)<br>de <strong>' + esc(nomEntrepot('#ta_from')) + '</strong><br>vers <strong>' +
+              esc(nomEntrepot('#ta_to')) + '</strong>.<br><br>L\'entrepôt de départ sera vide. Continuer ?');
+            $('#ta_confirm').modal('show');
+          }
+
+          function transferer() {
+            var $b = $('#ta_confirm_ok').prop('disabled', true);
+            appel({ from_warehouse: $('#ta_from').val(), to_warehouse: $('#ta_to').val(), note: $('#ta_note').val() })
+              .done(function (r) {
+                $('#ta_confirm').modal('hide');
+                message('<i class="fas fa-check-circle"></i> ' + esc(r.detail) + ' (' + nombre(r.total_unites) + ' unités). Référence : ' + esc(r.reference), 'success');
+                $('#ta_apercu').addClass('d-none'); apercu = null; majBouton(); $('#ta_note').val('');
+                $('#mv_refresh').trigger('click');   // journal des mouvements à jour
+              })
+              .fail(function (xhr) { $('#ta_confirm').modal('hide'); message(esc(erreur(xhr)), 'danger'); })
+              .always(function () { $b.prop('disabled', false); });
+          }
+
+          $(document).off('.transfertComplet')
+            .on('change.transfertComplet', '#ta_from, #ta_to', rafraichir)
+            .on('click.transfertComplet', '#ta_submit', demanderConfirmation)
+            .on('click.transfertComplet', '#ta_confirm_ok', transferer);
+          chargerEntrepots();
+        })();
+        </script>
 
         <!-- Perte / Casse / Expiration -->
         <div class="tab-pane fade" id="pane-loss" role="tabpanel" aria-labelledby="tab-loss">

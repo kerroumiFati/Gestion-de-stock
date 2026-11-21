@@ -2047,6 +2047,81 @@ class StockMoveViewSet(WarehouseRelatedTenantMixin, viewsets.ModelViewSet):
             pass
         return Response({'detail': 'Transfert enregistré', 'out': StockMoveSerializer(out_move).data, 'in': StockMoveSerializer(in_move).data}, status=201)
 
+    @action(detail=False, methods=['post'], url_path='transfer-all')
+    def transfer_all(self, request):
+        """Transfert de TOUT le stock d'un entrepôt vers un autre, en une seule opération.
+
+        Body : { from_warehouse: id, to_warehouse: id, note: str (opt), dry_run: bool (opt) }
+        - dry_run=true : renvoie seulement la liste (produit, quantité) qui serait transférée
+          (to_warehouse facultatif dans ce cas).
+        - sinon : tout est transféré en UN SEUL BLOC (tout ou rien), avec une sortie et une
+          entrée par produit dans le journal des mouvements, regroupées sous une même référence.
+        Seuls les produits en quantité positive sont déplacés. Entrepôts limités à l'entreprise
+        de l'utilisateur (ou sans entreprise).
+        """
+        from django.utils import timezone
+        from .securite_encaissements import company_connectee
+        from_wh = request.data.get('from_warehouse')
+        to_wh = request.data.get('to_warehouse')
+        note = (request.data.get('note') or '').strip()
+        dry_run = str(request.data.get('dry_run', '')).lower() in ('1', 'true', 'yes', 'oui')
+        if not from_wh or (not to_wh and not dry_run):
+            return Response({'detail': "Choisissez l'entrepôt de départ et l'entrepôt d'arrivée"}, status=400)
+        if to_wh and str(from_wh) == str(to_wh):
+            return Response({'detail': "L'entrepôt de départ et l'entrepôt d'arrivée doivent être différents"}, status=400)
+        entrepots = Warehouse.objects.all()
+        if not request.user.is_superuser:
+            entrepots = SystemConfig.warehouses_of(company_connectee(request))
+        try:
+            w_from = entrepots.get(pk=int(from_wh))
+            w_to = entrepots.get(pk=int(to_wh)) if to_wh else None
+        except (Warehouse.DoesNotExist, ValueError, TypeError):
+            return Response({'detail': 'Entrepôt introuvable'}, status=404)
+        if w_to is not None and not w_to.is_active:
+            return Response({'detail': f"L'entrepôt d'arrivée {w_to.name} est inactif"}, status=400)
+
+        def lignes_source(qs):
+            return [{'produit': ps.produit_id, 'reference': ps.produit.reference,
+                     'designation': ps.produit.designation, 'quantite': ps.quantity}
+                    for ps in qs.select_related('produit').order_by('produit__designation')]
+
+        sources = ProductStock.objects.filter(warehouse=w_from, quantity__gt=0)
+        if dry_run:
+            lignes = lignes_source(sources)
+            return Response({'from': w_from.id, 'to': w_to.id if w_to else None, 'lignes': lignes,
+                             'nb_produits': len(lignes), 'total_unites': sum(l['quantite'] for l in lignes)})
+
+        ref = f"TRANSALL-{timezone.now().strftime('%Y%m%d%H%M%S')}"
+        texte = f"Transfert complet {w_from.code} -> {w_to.code}" + (f" | {note}" if note else '')
+        with transaction.atomic():
+            stocks = list(sources.select_for_update().select_related('produit'))
+            if not stocks:
+                return Response({'detail': f"L'entrepôt {w_from.name} n'a aucun produit en stock"}, status=400)
+            lignes = []
+            for src in stocks:
+                qty = src.quantity
+                p = src.produit
+                src.quantity = 0
+                src.save(update_fields=['quantity'])
+                dst, _ = ProductStock.objects.select_for_update().get_or_create(
+                    produit=p, warehouse=w_to, defaults={'quantity': 0})
+                dst.quantity += qty
+                dst.save(update_fields=['quantity'])
+                StockMove.objects.create(produit=p, warehouse=w_from, delta=-qty, source='TRANS', ref_id=ref,
+                                         note='Sortie : ' + texte)
+                StockMove.objects.create(produit=p, warehouse=w_to, delta=qty, source='TRANS', ref_id=ref,
+                                         note='Entrée : ' + texte)
+                # Le total du produit (tous entrepôts) ne change pas : rien à recalculer
+                lignes.append({'produit': p.id, 'reference': p.reference, 'designation': p.designation, 'quantite': qty})
+        try:
+            log_event(self.request, 'stockmove.transfer_all', target=None,
+                      metadata={'from': w_from.id, 'to': w_to.id, 'ref': ref, 'nb_produits': len(lignes), 'note': note})
+        except Exception:
+            pass
+        return Response({'detail': f"{len(lignes)} produit(s) transféré(s) de {w_from.name} vers {w_to.name}",
+                         'reference': ref, 'lignes': lignes, 'nb_produits': len(lignes),
+                         'total_unites': sum(l['quantite'] for l in lignes)}, status=201)
+
     @action(detail=False, methods=['post'])
     def loss(self, request):
         """Perte / Casse / Expiration: sortie du stock.
