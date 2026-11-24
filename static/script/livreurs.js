@@ -18,9 +18,9 @@ window.initLivreursPage = function() {
     }
 
     console.log('[LIVREURS] Initializing livreurs page');
-    loadLivreurs();
+    livreursChargerListe();
     loadEntrepots();
-    setupFormHandlers();
+    livSetupFormHandlers();
 };
 
 // Charger la liste des entrepôts/vans
@@ -90,7 +90,7 @@ document.addEventListener('fragment:loaded', function(e) {
 });
 
 // Charger la liste des livreurs
-function loadLivreurs() {
+function livreursChargerListe() {
     fetch('/API/livreurs/')
         .then(response => {
             if (!response.ok) {
@@ -113,7 +113,7 @@ function loadLivreurs() {
                             <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 10px;"></i><br>
                             <strong>Erreur lors du chargement des livreurs</strong><br>
                             <small>${error.message}</small><br><br>
-                            <button class="btn-primary" onclick="loadLivreurs()">Réessayer</button>
+                            <button class="btn-primary" onclick="livreursChargerListe()">Réessayer</button>
                         </td>
                     </tr>
                 `;
@@ -234,7 +234,7 @@ function openLivreurModal(livreurId = null) {
 
     if (livreurId) {
         title.textContent = 'Modifier le Livreur';
-        loadLivreurData(livreurId);
+        livLoadLivreurData(livreurId);
     } else {
         title.textContent = 'Nouveau Livreur';
         document.getElementById('livreur-form').reset();
@@ -259,7 +259,7 @@ function nettoyerNom(valeur) {
 }
 
 // Charger les données d'un livreur
-function loadLivreurData(id) {
+function livLoadLivreurData(id) {
     fetch(`/API/livreurs/${id}/`)
         .then(response => response.json())
         .then(livreur => {
@@ -292,7 +292,7 @@ function loadLivreurData(id) {
 }
 
 // Configuration des event handlers
-function setupFormHandlers() {
+function livSetupFormHandlers() {
     const form = document.getElementById('livreur-form');
     if (!form) return;
 
@@ -359,7 +359,7 @@ function setupFormHandlers() {
             }
 
             closeLivreurModal();
-            loadLivreurs();
+            livreursChargerListe();
 
             // Afficher les informations de connexion pour un nouveau livreur
             if (!id && result.compte_cree && result.username && result.mot_de_passe_initial) {
@@ -402,7 +402,7 @@ function deleteLivreur(id) {
     })
     .then(response => {
         if (response.ok) {
-            loadLivreurs();
+            livreursChargerListe();
             showMessage('Livreur supprimé avec succès', 'success');
             return;
         }
@@ -433,7 +433,7 @@ function toggleDisponibilite(id, disponible) {
     })
     .then(response => response.json())
     .then(result => {
-        loadLivreurs();
+        livreursChargerListe();
         showMessage(disponible ? 'Livreur marqué disponible' : 'Livreur marqué indisponible', 'success');
     })
     .catch(error => {
@@ -466,7 +466,7 @@ function createAccount(id) {
             showMessage(result.error, 'error');
         } else {
             // Recharger la liste des livreurs pour mettre à jour l'interface
-            loadLivreurs();
+            livreursChargerListe();
             // Afficher les informations de connexion dans un modal
             showAccountCreatedModal(result);
         }

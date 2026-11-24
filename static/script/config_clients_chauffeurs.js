@@ -22,7 +22,7 @@ window.initConfigClientsChauffeursPage = function() {
     console.log('Initialisation de la page Configuration Clients/Chauffeurs');
 
     // Charger les données initiales
-    loadLivreurs();
+    cccChargerLivreurs();
     loadAllClients();
 
     // Attacher les événements
@@ -46,7 +46,7 @@ function attachEventListeners() {
 /**
  * Charger tous les livreurs
  */
-async function loadLivreurs() {
+async function cccChargerLivreurs() {
     try {
         const response = await fetch(`${API_BASE}/distribution/livreurs/`);
         if (!response.ok) throw new Error('Erreur lors du chargement des livreurs');

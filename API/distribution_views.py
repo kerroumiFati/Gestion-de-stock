@@ -640,6 +640,14 @@ class LivreurViewSet(viewsets.ModelViewSet):
                 planning.is_active = True
                 planning.save(update_fields=['is_active'])
             planning.secteurs.set(secteurs)
+            # Secteur ajouté (ou réaffecté) ou retiré de la journée : ses clients repartent de zéro.
+            # Les clients qu'on avait retirés à la main de ce secteur reviennent avec lui.
+            from API.models import Client
+            changes = ids_demandes | ({sid for sid in deja if sid} - {s.id for s in secteurs})
+            if changes:
+                remis = list(Client.objects.filter(secteur_id__in=changes).values_list('id', flat=True))
+                for p in PlanningHebdomadaire.objects.filter(livreur=livreur, jour_semaine=jour):
+                    p.clients_exclus.remove(*remis)
         return Response({'message': f"{self.JOURS_NOMS[jour]} : {len(secteurs)} secteur(s)", 'jour': jour,
                          'secteurs': [s.id for s in secteurs]})
 
@@ -708,6 +716,11 @@ class LivreurViewSet(viewsets.ModelViewSet):
                     ajoutes.append(jour)
             # Liste utilisée pour les droits du prévendeur (encaissements…)
             livreur.clients_assignes.add(client)
+            # Le client a pu être le dernier d'un secteur chez l'ancien prévendeur : secteur retiré
+            from .distribution_prix_stock import retirer_secteurs_vides
+            for c in conflits:
+                if c.get('secteur_nom'):
+                    retirer_secteurs_vides(c['livreur_id'], c['jour'])
         return Response({'message': f"{client.nom} ajouté : {', '.join(self.JOURS_NOMS[j] for j in jours)}",
                          'jours_ajoutes': ajoutes, 'transferes': len(conflits)})
 
@@ -726,6 +739,8 @@ class LivreurViewSet(viewsets.ModelViewSet):
         lignes = ClientLivreurHebdo.objects.filter(client=client, livreur=livreur)
         if jour is not None:
             lignes = lignes.filter(jour_semaine=jour)
+        from .distribution_prix_stock import retirer_secteurs_vides
+        secteurs_retires = []
         with transaction.atomic():
             supprimees = lignes.count()
             lignes.delete()
@@ -741,10 +756,15 @@ class LivreurViewSet(viewsets.ModelViewSet):
                     if planning is not None:
                         planning.clients_exclus.add(client)
                         ecartes.append(j)
+                        # Dernier client du secteur retiré : le secteur quitte la journée
+                        secteurs_retires += retirer_secteurs_vides(livreur.id, j)
         message = f"{client.nom} retiré"
-        if ecartes:
+        if secteurs_retires:
+            message += f" — plus aucun client dans « {', '.join(secteurs_retires)} » : secteur retiré du jour"
+        elif ecartes:
             message += f" (les autres clients du secteur « {client.secteur.nom} » restent visités)"
-        return Response({'message': message, 'supprimees': supprimees, 'ecarte_du_secteur': ecartes})
+        return Response({'message': message, 'supprimees': supprimees, 'ecarte_du_secteur': ecartes,
+                         'secteurs_retires': secteurs_retires})
 
     @action(detail=True, methods=['post'], url_path='planning/remettre-client')
     def planning_remettre_client(self, request, pk=None):

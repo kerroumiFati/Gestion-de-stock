@@ -8,7 +8,7 @@ if (!window.__distribution_dashboard_script_loaded__) {
     console.log('[DISTRIBUTION PAGE] Loading distribution_dashboard.js for the first time');
     window.__distribution_dashboard_script_loaded__ = true;
     var script = document.createElement('script');
-    script.src = "{% static 'script/distribution_dashboard.js' %}";
+    script.src = "{% static 'script/distribution_dashboard.js' %}?v=20261124";
     script.type = 'text/javascript';
     script.onload = function() {
         console.log('[DISTRIBUTION PAGE] distribution_dashboard.js loaded, dispatching fragment:loaded event');
@@ -276,19 +276,19 @@ if (!window.__distribution_dashboard_script_loaded__) {
     <!-- Filtres -->
     <div class="filter-bar">
         <label>{% trans "Période:" %}</label>
-        <select id="period-filter" onchange="loadDashboardData()">
+        <select id="period-filter" onchange="ddLoadDashboardData()">
             <option value="7">7 derniers jours</option>
             <option value="30" selected>30 derniers jours</option>
             <option value="90">90 derniers jours</option>
         </select>
 
         <label>{% trans "Du:" %}</label>
-        <input type="date" id="date-from" onchange="loadDashboardData()">
+        <input type="date" id="date-from" onchange="ddLoadDashboardData()">
 
         <label>{% trans "Au:" %}</label>
-        <input type="date" id="date-to" onchange="loadDashboardData()">
+        <input type="date" id="date-to" onchange="ddLoadDashboardData()">
 
-        <button onclick="loadDashboardData()">
+        <button onclick="ddLoadDashboardData()">
             <i class="fas fa-sync"></i> {% trans "Actualiser" %}
         </button>
     </div>

@@ -189,6 +189,48 @@ class PlanningSemaineTests(TestCase):
         _, jour = self._planning_jour(self.jour)
         self.assertEqual(jour['exclus'], [])
 
+    def test_retirer_tous_les_clients_d_un_secteur_retire_le_secteur(self):
+        self._secteurs(self.jour, [self.sa.id, self.sb.id])
+        r = self._post('planning/retirer-client', {'client_id': self.a1.id, 'jour': self.jour})
+        self.assertEqual(r['secteurs_retires'], [])
+        r = self._post('planning/retirer-client', {'client_id': self.a2.id, 'jour': self.jour})
+        self.assertEqual(r['secteurs_retires'], ['Secteur A'])
+        _, jour = self._planning_jour(self.jour)
+        self.assertEqual([s['id'] for s in jour['secteurs']], [self.sb.id])   # plus de « Secteur A (0) »
+        self.assertEqual(jour['exclus'], [])
+        self.assertEqual(self._telephone(), {self.b1.id})
+        self.assertEqual(self._tournee(), {self.b1.id})
+        # remis plus tard : le secteur repart complet
+        self._secteurs(self.jour, [self.sa.id, self.sb.id])
+        self.assertEqual(self._telephone(), {self.a1.id, self.a2.id, self.b1.id})
+
+    def test_donner_le_dernier_client_d_un_secteur_retire_le_secteur(self):
+        self._secteurs(self.jour, [self.sb.id])
+        url = f'{BASE}/livreurs/{self.karim.id}/planning/ajouter-client/'
+        with self.captureOnCommitCallbacks(execute=True):
+            r = self.bureau.post(url, {'client_id': self.b1.id, 'jours': [self.jour], 'transferer': True}, format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+        _, jour = self._planning_jour(self.jour)
+        self.assertEqual(jour['secteurs'], [])
+        self.assertEqual(self._tournee(), set())
+
+    def test_reaffecter_un_secteur_remet_tous_ses_clients(self):
+        self._secteurs(self.jour, [self.sa.id, self.sb.id])
+        self._post('planning/retirer-client', {'client_id': self.a1.id, 'jour': self.jour})
+        self._secteurs(self.jour, [self.sb.id])                     # ✕ sur le secteur A
+        self._secteurs(self.jour, [self.sa.id, self.sb.id])         # puis réaffecté
+        self.assertEqual(self._telephone(), {self.a1.id, self.a2.id, self.b1.id})
+        self.assertEqual(self._tournee(), self._telephone())
+        _, jour = self._planning_jour(self.jour)
+        self.assertEqual(jour['exclus'], [])
+
+    def test_secteur_sans_aucun_client_est_garde(self):
+        neuf = Secteur.objects.create(company=self.co, code='SN', nom='Secteur neuf')
+        self._secteurs(self.jour, [self.sa.id, neuf.id])
+        self._post('planning/retirer-client', {'client_id': self.a1.id, 'jour': self.jour})
+        _, jour = self._planning_jour(self.jour)
+        self.assertIn(neuf.id, [s['id'] for s in jour['secteurs']])
+
     # -- Un client n'a qu'UN prévendeur par jour de la semaine
     def _post_karim(self, chemin, data, attendu=200):
         with self.captureOnCommitCallbacks(execute=True):

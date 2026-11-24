@@ -471,7 +471,7 @@ function initInventaire() {
 
     loadProducts();
     loadCategories();
-    loadWarehouses();
+    inventaireChargerDepots();
     setupEventListeners();
     setupKeyboardShortcuts();
 }
@@ -569,7 +569,7 @@ async function loadCategories() {
 }
 
 // Charger les entrepôts
-async function loadWarehouses() {
+async function inventaireChargerDepots() {
     try {
         console.log('[Inventaire] Chargement des entrepôts...');
         const response = await fetch('/API/entrepots/', {

@@ -323,8 +323,10 @@
     const r = await postJSON(`${API}${ps.livreurId}/planning/retirer-client/`, { client_id: clientId, jour: jour });
     if (!r.ok) { message(r.data.error || 'Le retrait a échoué', 'danger'); return false; }
     if (!silencieux) {
+      const secteurRetire = (r.data.secteurs_retires || []).length > 0;
       const resteParSecteur = r.data.message && r.data.message.includes('reste visité');
-      message(resteParSecteur ? r.data.message : `Client retiré du ${nomJour(jour)}`, resteParSecteur ? 'warning' : 'success');
+      message(secteurRetire || resteParSecteur ? r.data.message : `Client retiré du ${nomJour(jour)}`,
+              resteParSecteur ? 'warning' : 'success');
       await chargerPlanning();
     }
     return true;

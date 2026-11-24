@@ -43,9 +43,9 @@ async function initPromotions() {
         // Charger les données de référence
         await Promise.all([
             loadProduits(),
-            loadCategories(),
+            promoLoadCategories(),
             loadTypesPrix(),
-            loadCodesPrix(),
+            promotionsChargerCodesPrix(),
             loadStats()
         ]);
 
@@ -214,7 +214,7 @@ async function loadProduits() {
     }
 }
 
-async function loadCategories() {
+async function promoLoadCategories() {
     try {
         const response = await fetch(`${PromoConfig.apiUrl}categories/`);
         if (!response.ok) throw new Error('Erreur chargement catégories');
@@ -259,13 +259,13 @@ async function loadTypesPrix() {
     }
 }
 
-async function loadCodesPrix() {
+async function promotionsChargerCodesPrix() {
     try {
         const response = await fetch(`${PromoConfig.apiUrl}codes-prix/`);
         if (response.ok) {
             PromoConfig.cache.codesPrix = await response.json();
             // Peupler le select des codes prix
-            populateCodesPrixSelect();
+            promoPopulateCodesPrixSelect();
         }
     } catch (error) {
         console.error('Erreur chargement codes prix:', error);
@@ -285,7 +285,7 @@ function populateTypesPrixSelect() {
     });
 }
 
-function populateCodesPrixSelect() {
+function promoPopulateCodesPrixSelect() {
     const select = document.getElementById('promo-code-prix');
     if (!select) return;
 
@@ -444,12 +444,12 @@ function showNewPromoForm() {
     currentPromotion = null;
     document.getElementById('promo-id').value = '';
     document.getElementById('form-title').textContent = 'Nouvelle Promotion';
-    resetForm();
+    promoResetForm();
     document.getElementById('promo-form-section').style.display = 'block';
     document.getElementById('promo-form-section').scrollIntoView({ behavior: 'smooth' });
 }
 
-function resetForm() {
+function promoResetForm() {
     document.getElementById('promo-form').reset();
     document.getElementById('promo-id').value = '';
 
@@ -480,7 +480,7 @@ function resetForm() {
 
 function cancelForm() {
     document.getElementById('promo-form-section').style.display = 'none';
-    resetForm();
+    promoResetForm();
 }
 
 async function editPromotion(id) {

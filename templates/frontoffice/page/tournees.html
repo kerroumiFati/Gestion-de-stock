@@ -8,7 +8,7 @@ if (!window.__tournees_script_loaded__) {
     window.__tournees_script_loaded__ = true;
     var script = document.createElement('script');
     // ?v= : force le navigateur à recharger le script après une mise à jour
-    script.src = "{% static 'script/tournees.js' %}?v=20260929-vans";
+    script.src = "{% static 'script/tournees.js' %}?v=20261124";
     script.type = 'text/javascript';
     script.onload = function() {
         console.log('[TOURNEES PAGE] tournees.js loaded, dispatching fragment:loaded event');

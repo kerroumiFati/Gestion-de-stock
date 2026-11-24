@@ -19,7 +19,7 @@ var arretCounter = window.arretCounter;
 // ============================================
 // GESTION DES PERMISSIONS
 // ============================================
-function hasPermission(permName) {
+function trnHasPermission(permName) {
     // Superuser a toutes les permissions
     if (window.userPermissions && window.userPermissions.is_superuser) {
         return true;
@@ -31,7 +31,7 @@ function hasPermission(permName) {
     return false;
 }
 
-async function loadUserPermissions() {
+async function trnLoadUserPermissions() {
     try {
         const response = await fetch('/API/my-permissions/');
         if (response.ok) {
@@ -86,7 +86,7 @@ function initCustomSelect(containerId, triggerId, dropdownId, searchId, optionsI
             if (si) {
                 si.value = '';
                 setTimeout(function() { si.focus(); }, 50);
-                filterCustomSelectOptions(document.getElementById(optionsId), '');
+                trnFilterCustomSelectOptions(document.getElementById(optionsId), '');
             }
         } else {
             dd.classList.remove('open');
@@ -101,7 +101,7 @@ function initCustomSelect(containerId, triggerId, dropdownId, searchId, optionsI
         searchInput = newSearchInput;
 
         searchInput.addEventListener('input', function() {
-            filterCustomSelectOptions(document.getElementById(optionsId), this.value);
+            trnFilterCustomSelectOptions(document.getElementById(optionsId), this.value);
         });
         searchInput.addEventListener('click', function(e) {
             e.stopPropagation();
@@ -151,7 +151,7 @@ function initCustomSelect(containerId, triggerId, dropdownId, searchId, optionsI
     });
 }
 
-function filterCustomSelectOptions(optionsContainer, searchText) {
+function trnFilterCustomSelectOptions(optionsContainer, searchText) {
     if (!optionsContainer) return;
     var options = optionsContainer.querySelectorAll('.custom-select-option');
     var search = (searchText || '').toLowerCase().trim();
@@ -297,30 +297,30 @@ window.initTourneesPage = async function() {
     console.log('[TOURNEES] Initializing tournees page');
 
     // Charger les permissions utilisateur en premier
-    await loadUserPermissions();
+    await trnLoadUserPermissions();
 
     window.arretCounter = 0;
     loadTournees();
 
     // Charger les livreurs et peupler le select
-    loadLivreurs().then(() => {
+    tourneesChargerLivreurs().then(() => {
         populateLivreursSelect();
     }).catch(err => console.error('Erreur chargement livreurs:', err));
 
     // Charger les clients
-    loadClients().catch(err => console.error('Erreur chargement clients:', err));
+    tourneesChargerClients().catch(err => console.error('Erreur chargement clients:', err));
 
     // Charger les entrepôts et peupler le select
-    loadWarehouses().then(() => {
+    tourneesChargerDepots().then(() => {
         populateWarehousesSelect();
     }).catch(err => console.error('Erreur chargement entrepôts:', err));
 
     // Charger les codes de prix et peupler le select
-    loadCodesPrix().then(() => {
-        populateCodesPrixSelect();
+    tourneesChargerCodesPrix().then(() => {
+        trnPopulateCodesPrixSelect();
     }).catch(err => console.error('Erreur chargement codes de prix:', err));
 
-    setupFormHandlers();
+    trnSetupFormHandlers();
 
     // Définir la date par défaut à aujourd'hui
     const dateField = document.getElementById('date');
@@ -422,7 +422,7 @@ function getStatutDisplay(statut) {
 }
 
 // Charger les livreurs
-function loadLivreurs() {
+function tourneesChargerLivreurs() {
     return fetch('/API/distribution/livreurs/', {
         credentials: 'same-origin',
         headers: { 'Accept': 'application/json' }
@@ -448,7 +448,7 @@ function loadLivreurs() {
 }
 
 // Charger les clients
-function loadClients() {
+function tourneesChargerClients() {
     return fetch('/API/clients/?page_size=1000', {
         credentials: 'same-origin',
         headers: { 'Accept': 'application/json' }
@@ -480,7 +480,7 @@ function isVanWarehouse(warehouse) {
 }
 
 // Charger les entrepôts
-function loadWarehouses() {
+function tourneesChargerDepots() {
     return fetch('/API/entrepots/?page_size=1000', {
         credentials: 'same-origin',  // Inclure les cookies de session
         headers: {
@@ -512,7 +512,7 @@ function loadWarehouses() {
 }
 
 // Charger les codes de prix
-function loadCodesPrix() {
+function tourneesChargerCodesPrix() {
     return fetch('/API/codes-prix/?page_size=1000', {
         credentials: 'same-origin',
         headers: {
@@ -542,7 +542,7 @@ function loadCodesPrix() {
 }
 
 // Peupler le select des codes de prix
-function populateCodesPrixSelect() {
+function trnPopulateCodesPrixSelect() {
     const select = document.getElementById('code_prix');
     if (!select) {
         console.warn('Element #code_prix not found');
@@ -663,7 +663,7 @@ function getTourneeActions(tournee) {
 
     if (tournee.statut === 'planifiee') {
         actions += `
-            <button class="btn-success" onclick="demarrerTournee(${tournee.id})" title="Démarrer la tournée">
+            <button class="btn-success" onclick="trnDemarrerTournee(${tournee.id})" title="Démarrer la tournée">
                 <i class="fas fa-play"></i> Démarrer
             </button>
             <button class="btn-primary" onclick="syncTourneeArrets(${tournee.id})" title="Synchroniser avec les clients assignés">
@@ -686,7 +686,7 @@ function getTourneeActions(tournee) {
             </button>
         `;
         // Bouton Modifier si permission accordée
-        if (hasPermission('edit_tournee_en_cours')) {
+        if (trnHasPermission('edit_tournee_en_cours')) {
             actions += `
                 <button class="btn-warning" onclick="editTournee(${tournee.id})" title="Modifier la tournée en cours">
                     <i class="fas fa-edit"></i>
@@ -694,7 +694,7 @@ function getTourneeActions(tournee) {
             `;
         }
         actions += `
-            <button class="btn-success" onclick="terminerTournee(${tournee.id})" title="Terminer la tournée">
+            <button class="btn-success" onclick="trnTerminerTournee(${tournee.id})" title="Terminer la tournée">
                 <i class="fas fa-check"></i> Terminer
             </button>
             <button class="btn-danger" onclick="annulerTournee(${tournee.id})" title="Annuler">
@@ -1100,7 +1100,7 @@ function closeDetailsModal() {
 }
 
 // Démarrer une tournée
-function demarrerTournee(id) {
+function trnDemarrerTournee(id) {
     if (!confirm('Démarrer cette tournée ?')) return;
 
     fetch(`/API/tournees/${id}/demarrer/`, {
@@ -1121,7 +1121,7 @@ function demarrerTournee(id) {
 }
 
 // Terminer une tournée
-function terminerTournee(id) {
+function trnTerminerTournee(id) {
     if (!confirm('Terminer cette tournée ?')) return;
 
     fetch(`/API/tournees/${id}/terminer/`, {
@@ -1239,21 +1239,21 @@ async function openTourneeModal(tourneeId = null) {
 
     if (!window.livreurs_tournees || window.livreurs_tournees.length === 0) {
         console.log('Rechargement des livreurs...');
-        loadPromises.push(loadLivreurs());
+        loadPromises.push(tourneesChargerLivreurs());
     } else {
         loadPromises.push(Promise.resolve());
     }
 
     if (!window.warehouses_tournees || window.warehouses_tournees.length === 0) {
         console.log('Rechargement des entrepôts...');
-        loadPromises.push(loadWarehouses());
+        loadPromises.push(tourneesChargerDepots());
     } else {
         loadPromises.push(Promise.resolve());
     }
 
     if (!window.clients_tournees || window.clients_tournees.length === 0) {
         console.log('Rechargement des clients...');
-        loadPromises.push(loadClients());
+        loadPromises.push(tourneesChargerClients());
     } else {
         console.log('Clients déjà chargés:', window.clients_tournees.length);
         loadPromises.push(Promise.resolve());
@@ -1261,7 +1261,7 @@ async function openTourneeModal(tourneeId = null) {
 
     if (!window.codes_prix_tournees || window.codes_prix_tournees.length === 0) {
         console.log('Rechargement des codes de prix...');
-        loadPromises.push(loadCodesPrix());
+        loadPromises.push(tourneesChargerCodesPrix());
     } else {
         loadPromises.push(Promise.resolve());
     }
@@ -1277,7 +1277,7 @@ async function openTourneeModal(tourneeId = null) {
     // Peupler les selects après le chargement
     populateLivreursSelect();
     populateWarehousesSelect();
-    populateCodesPrixSelect();
+    trnPopulateCodesPrixSelect();
 
     if (tourneeId) {
         // Charger les données de la tournée après que les selects soient peuplés
@@ -1370,7 +1370,7 @@ function addArretForm() {
         console.warn('Clients non chargés, chargement en cours...');
         showMessage('Chargement des clients...', 'info');
 
-        loadClients()
+        tourneesChargerClients()
             .then(() => {
                 console.log('Clients chargés, ajout du formulaire d\'arrêt');
                 addArretFormInternal();
@@ -1633,7 +1633,7 @@ function removeArret(id) {
 
 // Soumettre le formulaire de tournée
 // Configuration des event handlers
-function setupFormHandlers() {
+function trnSetupFormHandlers() {
     const form = document.getElementById('tournee-form');
     if (!form) {
         console.warn('Form #tournee-form not found - skipping handler setup');
@@ -1931,7 +1931,7 @@ function editTournee(id) {
 function loadTourneeData(id) {
     // S'assurer que les clients sont chargés avant de charger les données de la tournée
     const ensureClientsLoaded = (!window.clients_tournees || window.clients_tournees.length === 0)
-        ? loadClients()
+        ? tourneesChargerClients()
         : Promise.resolve();
 
     ensureClientsLoaded
@@ -2067,7 +2067,7 @@ function loadTourneeData(id) {
 
                 // S'assurer que les clients sont chargés avant d'ajouter les arrêts
                 const loadClientsPromise = (!window.clients_tournees || window.clients_tournees.length === 0)
-                    ? loadClients()
+                    ? tourneesChargerClients()
                     : Promise.resolve();
 
                 loadClientsPromise.then(function() {
@@ -2245,13 +2245,13 @@ function switchTab(tabName) {
             configSection.style.display = 'block';
             // Charger les données nécessaires pour la configuration
             Promise.all([
-                (!window.livreurs_tournees || window.livreurs_tournees.length === 0) ? loadLivreurs() : Promise.resolve(),
-                (!window.clients_tournees || window.clients_tournees.length === 0) ? loadClients() : Promise.resolve()
+                (!window.livreurs_tournees || window.livreurs_tournees.length === 0) ? tourneesChargerLivreurs() : Promise.resolve(),
+                (!window.clients_tournees || window.clients_tournees.length === 0) ? tourneesChargerClients() : Promise.resolve()
             ]).then(() => {
                 // Mettre à jour les variables locales après le chargement
                 livreurs = window.livreurs_tournees;
                 clients = window.clients_tournees;
-                loadConfigClientsLivreurs();
+                trnLoadConfigClientsLivreurs();
             }).catch(err => {
                 console.error('Erreur lors du chargement des données:', err);
                 showMessage('Erreur lors du chargement des données', 'error');
@@ -2281,7 +2281,7 @@ async function loadPlanningsHebdo() {
         // Si une semaine est sélectionnée, calculer les dates de début et fin
         if (weekFilter) {
             const [year, week] = weekFilter.split('-W');
-            const weekDates = getWeekDates(parseInt(year), parseInt(week));
+            const weekDates = trnGetWeekDates(parseInt(year), parseInt(week));
             url += `&date_tournee__gte=${weekDates.start}&date_tournee__lte=${weekDates.end}`;
             console.log('[PLANNING] Week dates:', weekDates);
         }
@@ -2314,7 +2314,7 @@ async function loadPlanningsHebdo() {
 }
 
 // Obtenir les dates de début (dimanche) et fin (samedi) d'une semaine ISO
-function getWeekDates(year, week) {
+function trnGetWeekDates(year, week) {
     // Calculer le lundi de la semaine ISO demandée
     // ISO week: la semaine qui contient le 4 janvier
     const jan4 = new Date(Date.UTC(year, 0, 4));
@@ -2755,7 +2755,7 @@ async function genererSemaine() {
 let allConfigs = [];
 
 // Charger les configurations client/livreur
-async function loadConfigClientsLivreurs() {
+async function trnLoadConfigClientsLivreurs() {
     try {
         const livreurFilter = document.getElementById('filter-livreur-config').value;
         const jourFilter = document.getElementById('filter-jour-config').value;
@@ -2885,12 +2885,12 @@ async function openConfigModal(configId = null) {
     try {
         // Charger les livreurs si pas encore chargés
         if (!window.livreurs_tournees || window.livreurs_tournees.length === 0) {
-            await loadLivreurs();
+            await tourneesChargerLivreurs();
         }
 
         // Charger les clients si pas encore chargés
         if (!window.clients_tournees || window.clients_tournees.length === 0) {
-            await loadClients();
+            await tourneesChargerClients();
         }
 
         // Mettre à jour les variables locales après le chargement
@@ -2966,7 +2966,7 @@ async function deleteConfig(configId) {
         if (!response.ok) throw new Error('Erreur lors de la suppression');
 
         showMessage('Configuration désactivée avec succès!', 'success');
-        loadConfigClientsLivreurs();
+        trnLoadConfigClientsLivreurs();
     } catch (error) {
         console.error('Erreur:', error);
         showMessage('Erreur lors de la suppression', 'error');
@@ -3033,7 +3033,7 @@ async function saveConfig(event) {
 
         showMessage(configId ? 'Configuration modifiée avec succès!' : 'Configuration créée avec succès!', 'success');
         closeConfigModal();
-        loadConfigClientsLivreurs();
+        trnLoadConfigClientsLivreurs();
     } catch (error) {
         console.error('Erreur:', error);
         showMessage(error.message, 'error');

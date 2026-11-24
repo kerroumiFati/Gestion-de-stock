@@ -8,7 +8,7 @@ if (!window.__clients_solde_dashboard_script_loaded__) {
     console.log('[CLIENTS SOLDE DASHBOARD] Loading clients_solde_dashboard.js for the first time');
     window.__clients_solde_dashboard_script_loaded__ = true;
     var script = document.createElement('script');
-    script.src = "{% static 'script/clients_solde_dashboard.js' %}";
+    script.src = "{% static 'script/clients_solde_dashboard.js' %}?v=20261124";
     script.type = 'text/javascript';
     script.onload = function() {
         console.log('[CLIENTS SOLDE DASHBOARD] clients_solde_dashboard.js loaded, dispatching fragment:loaded event');

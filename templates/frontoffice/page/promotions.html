@@ -8,7 +8,7 @@ if (!window.__promotions_script_loaded__) {
     console.log('[PROMOTIONS PAGE] Loading promotions.js for the first time');
     window.__promotions_script_loaded__ = true;
     var script = document.createElement('script');
-    script.src = "{% static 'script/promotions.js' %}";
+    script.src = "{% static 'script/promotions.js' %}?v=20261124";
     script.type = 'text/javascript';
     script.onload = function() {
         console.log('[PROMOTIONS PAGE] promotions.js loaded');

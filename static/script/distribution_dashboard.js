@@ -21,7 +21,7 @@ function initDistributionDashboard() {
     dateToField.value = today.toISOString().split('T')[0];
     dateFromField.value = thirtyDaysAgo.toISOString().split('T')[0];
 
-    loadDashboardData();
+    ddLoadDashboardData();
 }
 
 // NE PAS charger automatiquement au DOMContentLoaded car on utilise le chargement dynamique
@@ -35,7 +35,7 @@ document.addEventListener('fragment:loaded', function(e) {
     }
 });
 
-function loadDashboardData() {
+function ddLoadDashboardData() {
     const period = document.getElementById('period-filter').value;
     const dateFrom = document.getElementById('date-from').value;
     const dateTo = document.getElementById('date-to').value;

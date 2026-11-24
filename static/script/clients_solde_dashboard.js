@@ -17,19 +17,19 @@ function initDashboard() {
 
     console.log('[CLIENTS SOLDE DASHBOARD] Initializing dashboard');
     dashboardInitialized = true;
-    loadDashboardData();
+    csdLoadDashboardData();
 
     // Attach refresh button handler
     const refreshBtn = document.getElementById('refresh-btn');
     if (refreshBtn) {
         refreshBtn.addEventListener('click', function() {
-            loadDashboardData();
+            csdLoadDashboardData();
         });
     }
 }
 
 // Load dashboard data from API
-function loadDashboardData() {
+function csdLoadDashboardData() {
     console.log('[CLIENTS SOLDE DASHBOARD] Loading data from API');
     showLoading();
 

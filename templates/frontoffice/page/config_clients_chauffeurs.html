@@ -59,7 +59,7 @@ function applyPermissionsToUI() {
 if (!window.__config_clients_chauffeurs_script_loaded__) {
     window.__config_clients_chauffeurs_script_loaded__ = true;
     var script = document.createElement('script');
-    script.src = "{% static 'script/config_clients_chauffeurs.js' %}";
+    script.src = "{% static 'script/config_clients_chauffeurs.js' %}?v=20261124";
     script.type = 'text/javascript';
     document.head.appendChild(script);
 } else {
@@ -73,7 +73,7 @@ if (!window.__config_clients_chauffeurs_script_loaded__) {
 if (!window.__planning_semaine_script_loaded__) {
     window.__planning_semaine_script_loaded__ = true;
     var scriptPlanning = document.createElement('script');
-    scriptPlanning.src = "{% static 'script/planning_semaine.js' %}";
+    scriptPlanning.src = "{% static 'script/planning_semaine.js' %}?v=20261124";
     scriptPlanning.onload = function () { if (window.initPlanningSemaine) window.initPlanningSemaine(); };
     document.head.appendChild(scriptPlanning);
 } else if (typeof window.initPlanningSemaine === 'function') {

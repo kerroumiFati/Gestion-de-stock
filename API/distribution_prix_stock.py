@@ -295,6 +295,32 @@ def exclusions_du_jour(livreur_id, jour, secteurs=None):
     return {cid: v for cid, v in ecartes.items() if cid in garder}
 
 
+def retirer_secteurs_vides(livreur_id, jour):
+    """Retire du jour les secteurs dont TOUS les clients ont été retirés ou donnés à un autre
+    prévendeur (ex. « AKID (0) ») : un secteur vide n'a plus rien à faire dans la journée.
+    Un secteur qui n'a encore aucun client (secteur neuf) est gardé. Renvoie les noms retirés."""
+    from .distribution_models import PlanningHebdomadaire
+    from .models import Client, Secteur
+    secteurs = secteurs_du_jour(livreur_id, jour)
+    if not secteurs:
+        return []
+    ecartes = set(exclusions_du_jour(livreur_id, jour, secteurs))
+    vides = []
+    for sid in secteurs:
+        ids = set(Client.objects.filter(secteur_id=sid).values_list('id', flat=True))
+        if ids and ids <= ecartes:
+            vides.append((sid, ids))
+    if not vides:
+        return []
+    noms = dict(Secteur.objects.filter(pk__in=[sid for sid, _ in vides]).values_list('id', 'nom'))
+    for planning in PlanningHebdomadaire.objects.filter(livreur_id=livreur_id, jour_semaine=jour, is_active=True):
+        for sid, ids in vides:
+            planning.secteurs.remove(sid)
+            # Nettoyage : si le secteur est remis plus tard, ses clients repartent de zéro
+            planning.clients_exclus.remove(*ids)
+    return [noms.get(sid, '') for sid, _ in vides]
+
+
 def jours_par_client(livreur_id):
     """{client_id: {jours}} : tous les clients du planning de la semaine du prévendeur."""
     jours = {}

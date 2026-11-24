@@ -17,8 +17,8 @@ function initLivreurMobilePage() {
     console.log('[LIVREUR_MOBILE] Initializing livreur mobile page');
     initSignaturePad();
     initSearchBox();
-    loadLivreurData();
-    setupFormHandlers();
+    lmLoadLivreurData();
+    lmSetupFormHandlers();
 }
 
 // NE PAS charger automatiquement au DOMContentLoaded car on utilise le chargement dynamique
@@ -115,7 +115,7 @@ function initSearchBox() {
         }
 
         // Filtrer les clients
-        filterClients(searchTerm);
+        lmFilterClients(searchTerm);
     });
 
     // Bouton pour effacer la recherche
@@ -123,13 +123,13 @@ function initSearchBox() {
         searchClear.addEventListener('click', function() {
             searchInput.value = '';
             searchClear.style.display = 'none';
-            filterClients('');
+            lmFilterClients('');
         });
     }
 }
 
 // Filtrer les clients affichés
-function filterClients(searchTerm) {
+function lmFilterClients(searchTerm) {
     const arretCards = document.querySelectorAll('.arret-card');
     const searchLower = searchTerm.toLowerCase();
 
@@ -183,7 +183,7 @@ async function chargerClientsPlanning(livreurId, dateStr) {
     }));
 }
 
-async function loadLivreurData() {
+async function lmLoadLivreurData() {
     try {
         const joursNoms = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 
@@ -323,7 +323,7 @@ function displayClientsAvecBoutonDemarrer(configs) {
         <div style="background: linear-gradient(135deg, #10b981, #059669); color: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; text-align: center;">
             <h4 style="margin: 0 0 10px 0;"><i class="fas fa-play-circle"></i> Prêt à démarrer ?</h4>
             <p style="margin: 0 0 15px 0; opacity: 0.9;">${configs.length} client(s) à visiter aujourd'hui</p>
-            <button onclick="demarrerTournee()" class="btn" style="background: white; color: #059669; padding: 12px 30px; font-weight: bold; border-radius: 8px;">
+            <button onclick="lmDemarrerTournee()" class="btn" style="background: white; color: #059669; padding: 12px 30px; font-weight: bold; border-radius: 8px;">
                 <i class="fas fa-rocket"></i> Démarrer la tournée
             </button>
         </div>
@@ -354,7 +354,7 @@ function displayClientsAvecBoutonDemarrer(configs) {
 }
 
 // Démarrer une nouvelle tournée
-async function demarrerTournee() {
+async function lmDemarrerTournee() {
     if (!confirm('Voulez-vous démarrer la tournée maintenant ?')) return;
 
     try {
@@ -383,7 +383,7 @@ async function demarrerTournee() {
             showNotification('Tournée démarrée !', 'success');
 
             // Recharger les données
-            await loadLivreurData();
+            await lmLoadLivreurData();
         } else {
             const error = await response.json();
             showNotification(error.error || error.detail || 'Erreur lors du démarrage', 'error');
@@ -395,7 +395,7 @@ async function demarrerTournee() {
 }
 
 // Terminer la tournée en cours
-async function terminerTournee() {
+async function lmTerminerTournee() {
     if (!currentTournee) return;
 
     if (!confirm('Voulez-vous terminer cette tournée ?')) return;
@@ -421,7 +421,7 @@ async function terminerTournee() {
             showNotification('Tournée terminée !', 'success');
 
             // Recharger les données
-            await loadLivreurData();
+            await lmLoadLivreurData();
         } else {
             const error = await response.json();
             showNotification(error.error || 'Erreur lors de la terminaison', 'error');
@@ -454,7 +454,7 @@ function displayClientsJourAvecActions(configs, tourneeId) {
     // Bouton pour terminer la tournée
     let html = `
         <div style="background: linear-gradient(135deg, #ef4444, #dc2626); color: white; padding: 15px; border-radius: 10px; margin-bottom: 20px; text-align: center;">
-            <button onclick="terminerTournee()" class="btn" style="background: white; color: #dc2626; padding: 10px 25px; font-weight: bold; border-radius: 8px;">
+            <button onclick="lmTerminerTournee()" class="btn" style="background: white; color: #dc2626; padding: 10px 25px; font-weight: bold; border-radius: 8px;">
                 <i class="fas fa-flag-checkered"></i> Terminer la tournée
             </button>
         </div>
@@ -649,7 +649,7 @@ function closeEchecModal() {
     document.getElementById('echecModal').style.display = 'none';
 }
 
-function setupFormHandlers() {
+function lmSetupFormHandlers() {
     // Form livraison
     document.getElementById('livraison-form').addEventListener('submit', async function(e) {
         e.preventDefault();
@@ -737,7 +737,7 @@ function updateProgress() {
 function showActiveTournee() {
     document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
     event.target.closest('.nav-btn').classList.add('active');
-    loadLivreurData();
+    lmLoadLivreurData();
 }
 
 function showHistory() {

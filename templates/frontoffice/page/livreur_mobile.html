@@ -479,7 +479,7 @@
         console.log('[LIVREUR MOBILE PAGE] Loading livreur_mobile.js for the first time');
         window.__livreur_mobile_script_loaded__ = true;
         var script = document.createElement('script');
-        script.src = "{% static 'script/livreur_mobile.js' %}";
+        script.src = "{% static 'script/livreur_mobile.js' %}?v=20261124";
         script.type = 'text/javascript';
         script.onload = function() {
             console.log('[LIVREUR MOBILE PAGE] livreur_mobile.js loaded, dispatching fragment:loaded event');
