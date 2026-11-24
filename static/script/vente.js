@@ -736,7 +736,12 @@
       designation: l.designation,
       quantite: parseInt(l.quantite,10),
       prixU_snapshot: l.prixU_snapshot,
-      currency: l.currency ? parseInt(l.currency,10) : undefined
+      currency: l.currency ? parseInt(l.currency,10) : undefined,
+      // Promotion : garder la trace (avant : perdue à l'enregistrement)
+      promotion: l.promotion ? parseInt(l.promotion,10) : undefined,
+      prix_original: l.promotion && l.prix_original ? l.prix_original : undefined,
+      remise_promo: l.promotion ? (l.remise_promo || 0) : undefined,
+      quantite_offerte: l.promotion ? (parseInt(l.quantite_offerte,10) || 0) : undefined
     };});
 
     // Définir le statut selon le bouton cliqué
@@ -1112,10 +1117,15 @@
     return $.ajax({ url:'/API/ventes/'+saleId+'/', method:'GET', dataType:'json' });
   }
 
-  // Unités par carton d'une ligne de vente ('-' si le produit n'est pas en carton)
+  // Nombre de cartons d'une ligne de vente : quantite (en unites) / unites par carton, le reste en
+  // fraction de carton. Ex. carton de 8 : 1 u -> '1/8' ; 8 u -> '1' ; 10 u -> '1 + 2/8' ; '-' sans carton.
   function qteParCarton(ligne){
     const upc = parseInt(ligne && (ligne.produit_unites_par_carton || ligne.unitesParCarton), 10);
-    return upc > 1 ? upc : '-';
+    if(!(upc > 1)) return '-';
+    const qty = Math.abs(parseInt(ligne.quantite || 0, 10)) || 0;
+    const ct = Math.floor(qty / upc), reste = qty % upc;
+    if(!reste) return String(ct);
+    return ct ? (ct + ' + ' + reste + '/' + upc) : (reste + '/' + upc);
   }
 
   function showSaleDetailsModal(saleId){
@@ -1231,7 +1241,7 @@
       html += '<div class="table-responsive">';
       html += '<table class="table table-sm table-bordered table-hover mb-0" id="saleDetailsTable">';
       html += '<thead class="thead-dark">';
-      html += '<tr><th>Produit</th><th>Prix unitaire</th><th>Quantité</th><th>Qté / carton</th><th>Total</th></tr>';
+      html += '<tr><th>Produit</th><th>Prix unitaire</th><th>Quantité</th><th>Nb cartons</th><th>Total</th></tr>';
       html += '</thead>';
       html += '<tbody>';
       lignes.forEach(function(ligne){
@@ -1499,7 +1509,7 @@
       html += '<div class="table-responsive" style="max-height: 400px; overflow-y: auto;">';
       html += '<table class="table table-sm table-bordered table-hover mb-0" id="saleDetailsTable">';
       html += '<thead class="thead-dark" style="position: sticky; top: 0; z-index: 1;">';
-      html += '<tr><th style="width: 15%;">Référence</th><th style="width: 30%;">Désignation</th><th style="width: 15%;">Prix unitaire</th><th style="width: 10%;">Quantité</th><th style="width: 10%;">Qté / carton</th><th style="width: 20%;">Total</th></tr>';
+      html += '<tr><th style="width: 15%;">Référence</th><th style="width: 30%;">Désignation</th><th style="width: 15%;">Prix unitaire</th><th style="width: 10%;">Quantité</th><th style="width: 10%;">Nb cartons</th><th style="width: 20%;">Total</th></tr>';
       html += '</thead>';
       html += '<tbody>';
       lignes.forEach(function(ligne){
@@ -2103,7 +2113,7 @@
         <th style="width: 40px;">#</th>
         <th>Désignation</th>
         <th style="width: 60px; text-align: center;">Qté</th>
-        <th style="width: 80px; text-align: center;">Qté / carton</th>
+        <th style="width: 80px; text-align: center;">Nb cartons</th>
         <th style="width: 100px; text-align: right;">P.U.</th>
         <th style="width: 100px; text-align: right;">Total</th>
       </tr>

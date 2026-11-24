@@ -1525,6 +1525,19 @@ class LigneVente(models.Model):
         help_text="Quantité offerte gratuitement (pour promos X+Y)"
     )
 
+    @staticmethod
+    def offerts_en_plus(promotion, quantite):
+        """Articles offerts qui s'AJOUTENT à la quantité achetée (offre « Achetez X, Y offert(s) »),
+        recalculés par le serveur. Pour « Achetez X, payez Y », les gratuits sont déjà compris
+        dans la quantité : rien en plus."""
+        if promotion is None or getattr(promotion, 'type_promotion', None) != 'achetez_x_offert_y':
+            return 0
+        return int(promotion.calculer_offre_speciale(int(quantite or 0)).get('quantite_gratuite') or 0)
+
+    def quantite_sortie_stock(self):
+        """Quantité qui quitte le stock : achetée + offerte en plus."""
+        return int(self.quantite or 0) + self.offerts_en_plus(self.promotion, self.quantite)
+
     def __str__(self):
         currency_symbol = self.currency.symbol if self.currency else self.vente.get_sale_currency().symbol if self.vente.get_sale_currency() else 'DA'
         return f"{self.designation} x {self.quantite} à {self.prixU_snapshot} {currency_symbol} (Vente {self.vente.numero})"

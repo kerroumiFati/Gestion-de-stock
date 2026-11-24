@@ -26,6 +26,18 @@ from .mixins import TenantFilterMixin, WarehouseRelatedTenantMixin
 logger = logging.getLogger(__name__)
 
 
+def nb_cartons(quantite, upc):
+    """Nombre de cartons d'une ligne (quantité en unités), le reste en fraction de carton :
+    carton de 8 -> 1 u = « 1/8 », 8 u = « 1 », 10 u = « 1 + 2/8 » ; « - » si pas en carton."""
+    if not upc or upc <= 1:
+        return '-'
+    q = abs(int(quantite or 0))
+    ct, reste = divmod(q, upc)
+    if not reste:
+        return str(ct)
+    return f'{ct} + {reste}/{upc}' if ct else f'{reste}/{upc}'
+
+
 def _tournee_id_valide(valeur):
     """Id de TourneeMobile envoyé par le téléphone, ou None s'il est absent ou inconnu."""
     from API.distribution_models import TourneeMobile
@@ -1292,7 +1304,7 @@ class BonLivraisonViewSet(TenantFilterMixin, viewsets.ModelViewSet):
             <tr>
               <td>{designation}</td>
               <td class="r">{f'{l.quantite:,}'.replace(',', ' ')} Unité(s)</td>
-              <td class="c">{upc if upc > 1 else '-'}</td>
+              <td class="c">{nb_cartons(l.quantite, upc)}</td>
               <td class="r">{fmt(l.prixU_snapshot)}</td>
               <td class="r">—</td>
               <td class="r">—</td>
@@ -1402,7 +1414,7 @@ class BonLivraisonViewSet(TenantFilterMixin, viewsets.ModelViewSet):
       <tr>
         <th>Désignation</th>
         <th class="r">Quantité</th>
-        <th class="c">Qté / carton</th>
+        <th class="c">Nb cartons</th>
         <th class="r">Prix unitaire</th>
         <th class="r">Remise</th>
         <th class="r">TVA</th>
@@ -3317,8 +3329,8 @@ class VenteViewSet(TenantFilterMixin, viewsets.ModelViewSet):
             if vente.warehouse_id is None:
                 vente.warehouse = depot
             besoins = {}
-            for ligne in lignes:
-                besoins[ligne.produit_id] = besoins.get(ligne.produit_id, 0) + int(ligne.quantite or 0)
+            for ligne in lignes:   # quantité achetée + articles offerts en plus
+                besoins[ligne.produit_id] = besoins.get(ligne.produit_id, 0) + ligne.quantite_sortie_stock()
             insuffisants = []
             for pid, demande in besoins.items():
                 produit = produits[pid]
@@ -3343,7 +3355,7 @@ class VenteViewSet(TenantFilterMixin, viewsets.ModelViewSet):
 
             try:
                 for ligne in lignes:
-                    qty = int(ligne.quantite or 0)
+                    qty = ligne.quantite_sortie_stock()
                     if qty > 0:
                         appliquer_mouvement(produits[ligne.produit_id], depot, -qty, 'VENTE', ref_id=str(vente.id),
                                             note=f"Vente {vente.numero} - finalisée", user=request.user)
@@ -3474,13 +3486,15 @@ class VenteViewSet(TenantFilterMixin, viewsets.ModelViewSet):
             vente.statut = 'canceled'
             vente.save()
 
-            lignes = list(vente.lignes.select_related('produit'))
+            # Un brouillon n'a jamais sorti de stock : rien à remettre (avant : le stock augmentait)
+            lignes = list(vente.lignes.select_related('produit', 'promotion')) if old_statut == 'completed' else []
             produit_ids = [l.produit_id for l in lignes]
             produits = {p.id: p for p in Produit.objects.select_for_update().filter(id__in=produit_ids).order_by('id')}
 
             for ligne in lignes:
                 produit = produits[ligne.produit_id]
-                produit.quantite += ligne.quantite
+                rendu = ligne.quantite_sortie_stock()   # achetés + offerts en plus
+                produit.quantite += rendu
                 produit.save(update_fields=['quantite'])
 
                 if vente.warehouse:
@@ -3489,13 +3503,13 @@ class VenteViewSet(TenantFilterMixin, viewsets.ModelViewSet):
                         warehouse=vente.warehouse,
                         defaults={'quantity': 0}
                     )
-                    ps.quantity += ligne.quantite
+                    ps.quantity += rendu
                     ps.save(update_fields=['quantity'])
 
                 StockMove.objects.create(
                     produit=produit,
                     warehouse=vente.warehouse,
-                    delta=ligne.quantite,
+                    delta=rendu,
                     source='CORR',
                     ref_id=str(vente.id),
                     note=f"Annulation vente {vente.numero}"
@@ -3800,7 +3814,7 @@ class VenteViewSet(TenantFilterMixin, viewsets.ModelViewSet):
             <tr>
               <td>{_e(l.designation)}</td>
               <td class="r">{l.quantite:,} Unité(s)</td>
-              <td class="c">{upc if upc > 1 else '-'}</td>
+              <td class="c">{nb_cartons(l.quantite, upc)}</td>
               <td class="r">{l.prixU_snapshot:.4f}</td>
               <td class="r">—</td>
               <td class="r">—</td>
@@ -3912,7 +3926,7 @@ class VenteViewSet(TenantFilterMixin, viewsets.ModelViewSet):
       <tr>
         <th>Désignation</th>
         <th class="r">Quantité</th>
-        <th class="c">Qté / carton</th>
+        <th class="c">Nb cartons</th>
         <th class="r">Prix unitaire</th>
         <th class="r">Remise</th>
         <th class="r">TVA</th>

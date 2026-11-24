@@ -968,6 +968,7 @@ class VenteCreateSerializer(serializers.ModelSerializer):
                 qty = int(ld.get('quantite') or 0)
                 if qty <= 0:
                     continue
+                qty += LigneVente.offerts_en_plus(ld.get('promotion'), qty)   # articles offerts en plus
                 if produit.quantite < qty:
                     insuffisants.append({'produit': produit.id, 'reference': produit.reference, 'stock': produit.quantite, 'demande': qty})
             if insuffisants:
@@ -1014,7 +1015,12 @@ class VenteCreateSerializer(serializers.ModelSerializer):
                 if 'currency' not in ligne_data:
                     ligne_data['currency'] = produit.currency or vente.get_sale_currency()
 
+                # Offre « Y offert(s) » : quantité offerte recalculée par le serveur ; elle sort du stock
+                offerts = LigneVente.offerts_en_plus(ligne_data.get('promotion'), qty)
+                if offerts:
+                    ligne_data['quantite_offerte'] = offerts
                 LigneVente.objects.create(vente=vente, **ligne_data)
+                qty += offerts
 
                 # Décrémenter le stock SEULEMENT si la vente est finalisée (completed)
                 if qty > 0 and vente.statut == 'completed':

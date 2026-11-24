@@ -1,6 +1,6 @@
 {% load i18n %}
 {% load static %}
-<script src="{% static 'script/bon_livraison.js' %}?v=bl2"></script>
+<script src="{% static 'script/bon_livraison.js' %}?v=ct1"></script>
 
 <style>
 /* Select2 - Style pour dropdown avec hauteur limitée */
@@ -724,7 +724,7 @@
                             <th>Produit</th>
                             <th>Référence</th>
                             <th class="text-right">Qté</th>
-                            <th class="text-center">Qté / carton</th>
+                            <th class="text-center">Nb cartons</th>
                             <th class="text-right">Prix Unit. HT</th>
                             <th class="text-right">Total HT</th>
                             <th class="text-right">Total TTC</th>
@@ -963,10 +963,14 @@
         loadCommandes();
     }
 
-    // Unités par carton d'une ligne de commande ('-' si le produit n'est pas en carton)
+    // Nombre de cartons d'une ligne de commande : 1 u (carton de 8) -> 1/8 ; 8 u -> 1 ;
+    // 10 u -> 1 + 2/8 ; '-' si le produit n'est pas en carton
     function qteParCarton(ligne) {
         const upc = parseInt(ligne.produit_unites_par_carton, 10);
-        return upc > 1 ? upc : '-';
+        if (!(upc > 1)) return '-';
+        const q = Math.abs(parseInt(ligne.quantite || 0, 10)) || 0, ct = Math.floor(q / upc), reste = q % upc;
+        if (!reste) return String(ct);
+        return ct ? ct + ' + ' + reste + '/' + upc : reste + '/' + upc;
     }
 
     // Bon de livraison : définitif une fois la commande livrée (quantités livrées), « BL
@@ -1130,7 +1134,7 @@
             '<th>Produit</th>' +
             '<th style="width: 120px;">Référence</th>' +
             '<th class="text-center" style="width: 80px;">' + (estBL ? 'Qté livrée' : 'Quantité') + '</th>' +
-            '<th class="text-center" style="width: 80px;">Qté / carton</th>' +
+            '<th class="text-center" style="width: 80px;">Nb cartons</th>' +
             '<th class="text-right" style="width: 100px;">Prix Unit. HT</th>' +
             '<th class="text-right" style="width: 100px;">Total HT</th>' +
             '<th class="text-right" style="width: 100px;">Total TTC</th>' +
@@ -1322,7 +1326,7 @@
                 const select = document.getElementById('newLivreur');
 
                 // Détruire l'instance Select2 existante si elle existe
-                if (typeof $.fn.select2 !== 'undefined') {
+                if (typeof $.fn.select2 !== 'undefined' && $('#newLivreur').data('select2')) {
                     $('#newLivreur').select2('destroy');
                 }
 

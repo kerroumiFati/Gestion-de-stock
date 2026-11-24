@@ -449,6 +449,9 @@
             type_paiement: typePaiement,
             remise_percent: remise,
             currency: currencyData ? currencyData.id : null,
+            // Vente de caisse = vente terminée : sortie du stock et paiement (hors crédit) tout de suite.
+            // Sans statut, le serveur l'enregistrait en brouillon (ni stock, ni caisse).
+            statut: 'completed',
             lignes: lignes
         };
 

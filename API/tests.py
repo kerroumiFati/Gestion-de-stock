@@ -15,6 +15,9 @@ class StockMultiWarehouseTests(TestCase):
         self.p = Produit.objects.create(reference='P1', code_barre='CB1', designation='Prod 1', categorie=self.cat, prixU=10, currency=self.cur, quantite=0, fournisseur=self.four)
         self.w1 = Warehouse.objects.create(name='Depot', code='DEP')
         self.w2 = Warehouse.objects.create(name='Magasin', code='MAG')
+        # L'API exige une connexion (les tests dataient d'avant)
+        from django.contrib.auth.models import User
+        self.client.force_authenticate(User.objects.create_superuser('admin_stock', 'a@a.fr', 'x'))
 
     def test_transfer_between_warehouses(self):
         # Seed source stock

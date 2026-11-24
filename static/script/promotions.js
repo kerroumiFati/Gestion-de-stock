@@ -81,7 +81,9 @@ function initSelect2() {
     console.log('[PROMOTIONS] Initialisation de Select2');
 
     // Détruire les instances existantes si nécessaire
-    $('#promo-produit, #promo-categorie').select2('destroy');
+    $('#promo-produit, #promo-categorie').each(function() {
+        if ($(this).data('select2')) $(this).select2('destroy');
+    });
 
     // Configuration Select2 pour produits et catégories
     $('#promo-produit, #promo-categorie').select2({

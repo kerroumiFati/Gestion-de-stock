@@ -98,12 +98,20 @@
     var prev = !!data.previsionnel;
     var titre = prev ? 'Bon de Livraison prévisionnel' : 'Bon de Livraison';
 
+    // Nombre de cartons : 1 u (carton de 8) -> 1/8 ; 8 u -> 1 ; 10 u -> 1 + 2/8 ; '-' sans carton
+    function nbCartons(qte, upc) {
+      if (!(upc > 1)) return '-';
+      var q = Math.abs(parseInt(qte, 10)) || 0, ct = Math.floor(q / upc), reste = q % upc;
+      if (!reste) return String(ct);
+      return ct ? ct + ' + ' + reste + '/' + upc : reste + '/' + upc;
+    }
+
     var lignes = (data.lignes || []).map(function (l) {
       var upc = parseInt(l.unitesParCarton, 10);
       return '<tr>' +
         '<td>' + esc(l.designation) + '</td>' +
         '<td class="r">' + formatQte(l.quantite) + ' Unité(s)</td>' +
-        '<td class="c">' + (upc > 1 ? upc : '-') + '</td>' +
+        '<td class="c">' + nbCartons(l.quantite, upc) + '</td>' +
         '<td class="r">' + formatDA(l.prixUnitaire) + '</td>' +
         '<td class="r">' + (Number(l.remise) ? esc(l.remise) + ' %' : '—') + '</td>' +
         '<td class="r">' + (Number(l.tauxTva) ? esc(l.tauxTva) + ' %' : '—') + '</td>' +
@@ -148,7 +156,7 @@
         '<td>' + esc(data.reference || '—') + '</td>' +
       '</tr></tbody></table>' +
       '<table class="items-table"><thead><tr>' +
-        '<th>Désignation</th><th class="r">Quantité</th><th class="c">Qté / carton</th>' +
+        '<th>Désignation</th><th class="r">Quantité</th><th class="c">Nb cartons</th>' +
         '<th class="r">Prix unitaire</th><th class="r">Remise</th><th class="r">TVA</th><th class="r">Montant</th>' +
       '</tr></thead><tbody>' + lignes + '</tbody></table>' +
       '<div class="totals-wrap"><table class="totals-table">' +
