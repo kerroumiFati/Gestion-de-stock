@@ -12,6 +12,26 @@ import csv
 from decimal import Decimal
 from .models import Produit, Categorie, Fournisseur, Client, Secteur, Currency, CodePrix, TypePrix, PrixProduit
 from django.db import transaction
+from django.db.models import F, Q
+from .tenant import entreprise_de, filtrer
+
+
+def _visibles(model, company):
+    """Enregistrements visibles par l'entreprise : les siens + les anciens sans entreprise.
+    company None (superutilisateur sans entreprise) : tous."""
+    if company is None:
+        return model.objects.all()
+    return model.objects.filter(Q(company=company) | Q(company__isnull=True))
+
+
+def _trouver(model, company, **filtres):
+    """Comme model.objects.get(**filtres), mais limité à l'entreprise (son propre enregistrement
+    passe avant un ancien enregistrement partagé). Avant : recherche dans TOUTES les entreprises,
+    et l'import écrasait la fiche d'une autre entreprise portant le même nom."""
+    obj = _visibles(model, company).filter(**filtres).order_by(F('company').asc(nulls_last=True)).first()
+    if obj is None:
+        raise model.DoesNotExist
+    return obj
 
 
 class CsrfExemptSessionAuthentication(SessionAuthentication):
@@ -61,6 +81,7 @@ class ImportPreviewView(APIView):
             df = df.fillna('')
 
             # Enrichir les données pour les pricelists avec le nom de l'article
+            company = entreprise_de(request)
             if import_type == 'pricelists':
                 # Ajouter une colonne pour le nom de l'article
                 designations = []
@@ -72,13 +93,13 @@ class ImportPreviewView(APIView):
                     produit = None
                     if code_article:
                         try:
-                            produit = Produit.objects.get(code_barre=code_article)
+                            produit = _trouver(Produit, company, code_barre=code_article)
                         except Produit.DoesNotExist:
                             pass
 
                     if not produit and reference:
                         try:
-                            produit = Produit.objects.get(reference=reference)
+                            produit = _trouver(Produit, company, reference=reference)
                         except Produit.DoesNotExist:
                             pass
 
@@ -146,9 +167,7 @@ class ImportExecuteView(APIView):
             df = df.fillna('')
 
             # Récupérer la company de l'utilisateur
-            company = None
-            if hasattr(request, 'company') and request.company is not None:
-                company = request.company
+            company = entreprise_de(request)
 
             # Traiter selon le type
             if import_type == 'products':
@@ -253,7 +272,7 @@ class ImportExecuteView(APIView):
                     if row.get('categorie'):
                         cat_name = str(row['categorie']).strip()
                         try:
-                            categorie = Categorie.objects.get(nom__iexact=cat_name)
+                            categorie = _trouver(Categorie, company, nom__iexact=cat_name)
                             data['categorie'] = categorie
                         except Categorie.DoesNotExist:
                             errors.append({'row': idx + 2, 'message': f'Catégorie "{cat_name}" introuvable'})
@@ -262,16 +281,24 @@ class ImportExecuteView(APIView):
                     if row.get('fournisseur'):
                         fournisseur_name = str(row['fournisseur']).strip()
                         try:
-                            fournisseur = Fournisseur.objects.get(libelle__iexact=fournisseur_name)
+                            fournisseur = _trouver(Fournisseur, company, libelle__iexact=fournisseur_name)
                             data['fournisseur'] = fournisseur
                         except Fournisseur.DoesNotExist:
                             errors.append({'row': idx + 2, 'message': f'Fournisseur "{fournisseur_name}" introuvable'})
 
                     # Créer ou mettre à jour le produit
-                    produit, is_created = Produit.objects.update_or_create(
-                        reference=data['reference'],
-                        defaults=data
-                    )
+                    produit = _visibles(Produit, company).filter(reference=data['reference']).order_by(
+                        F('company').asc(nulls_last=True)).first()
+                    if produit is not None:
+                        for key, value in data.items():
+                            if key == 'company' and produit.company_id is None:
+                                continue   # ancien enregistrement partagé : il reste à toutes les entreprises
+                            setattr(produit, key, value)
+                        produit.save()
+                        is_created = False
+                    else:
+                        produit = Produit.objects.create(**data)
+                        is_created = True
 
                     if is_created:
                         created += 1
@@ -331,7 +358,7 @@ class ImportExecuteView(APIView):
                     if row.get('parent'):
                         parent_name = str(row['parent']).strip()
                         try:
-                            parent = Categorie.objects.get(nom__iexact=parent_name)
+                            parent = _trouver(Categorie, company, nom__iexact=parent_name)
                             data['parent'] = parent
                         except Categorie.DoesNotExist:
                             errors.append({'row': idx + 2, 'message': f'Catégorie parente "{parent_name}" introuvable'})
@@ -339,9 +366,11 @@ class ImportExecuteView(APIView):
                     # Créer ou mettre à jour la catégorie
                     # Chercher d'abord si existe (case insensitive)
                     try:
-                        categorie = Categorie.objects.get(nom__iexact=data['nom'])
+                        categorie = _trouver(Categorie, company, nom__iexact=data['nom'])
                         # Mettre à jour
                         for key, value in data.items():
+                            if key == 'company' and categorie.company_id is None:
+                                continue   # ancien enregistrement partagé : il reste à toutes les entreprises
                             setattr(categorie, key, value)
                         categorie.save()
                         is_created = False
@@ -418,9 +447,11 @@ class ImportExecuteView(APIView):
 
                     # Créer ou mettre à jour le fournisseur
                     try:
-                        fournisseur = Fournisseur.objects.get(libelle__iexact=data['libelle'])
+                        fournisseur = _trouver(Fournisseur, company, libelle__iexact=data['libelle'])
                         # Mettre à jour
                         for key, value in data.items():
+                            if key == 'company' and fournisseur.company_id is None:
+                                continue   # ancien enregistrement partagé : il reste à toutes les entreprises
                             setattr(fournisseur, key, value)
                         fournisseur.save()
                         is_created = False
@@ -514,7 +545,7 @@ class ImportExecuteView(APIView):
                     if row.get('secteur'):
                         secteur_name = str(row['secteur']).strip()
                         try:
-                            secteur = Secteur.objects.get(nom__iexact=secteur_name)
+                            secteur = _trouver(Secteur, company, nom__iexact=secteur_name)
                             data['secteur'] = secteur
                         except Secteur.DoesNotExist:
                             errors.append({'row': idx + 2, 'message': f'Secteur "{secteur_name}" introuvable'})
@@ -522,9 +553,11 @@ class ImportExecuteView(APIView):
                     # Créer ou mettre à jour le client (basé sur nom + prénom pour unicité)
                     prenom = data.get('prenom', '')
                     try:
-                        client = Client.objects.get(nom__iexact=data['nom'], prenom__iexact=prenom)
+                        client = _trouver(Client, company, nom__iexact=data['nom'], prenom__iexact=prenom)
                         # Mettre à jour
                         for key, value in data.items():
+                            if key == 'company' and client.company_id is None:
+                                continue   # ancien enregistrement partagé : il reste à toutes les entreprises
                             setattr(client, key, value)
                         client.save()
                         is_created = False
@@ -589,13 +622,13 @@ class ImportExecuteView(APIView):
                     produit = None
                     if code_article:
                         try:
-                            produit = Produit.objects.get(code_barre=code_article)
+                            produit = _trouver(Produit, company, code_barre=code_article)
                         except Produit.DoesNotExist:
                             pass
 
                     if not produit and reference:
                         try:
-                            produit = Produit.objects.get(reference=reference)
+                            produit = _trouver(Produit, company, reference=reference)
                         except Produit.DoesNotExist:
                             pass
 
@@ -609,14 +642,14 @@ class ImportExecuteView(APIView):
                     if row.get('code_prix'):
                         code_prix_str = str(row['code_prix']).strip().upper()
                         try:
-                            code_prix = CodePrix.objects.get(code__iexact=code_prix_str, is_active=True)
+                            code_prix = _trouver(CodePrix, company, code__iexact=code_prix_str, is_active=True)
                         except CodePrix.DoesNotExist:
                             errors.append({'row': idx + 2, 'message': f'Code de prix "{code_prix_str}" introuvable. Utilisez STANDARD, AID, RAMADAN, etc.'})
                             skipped += 1
                             continue
                     else:
                         # Si pas de code prix spécifié, utiliser le code par défaut
-                        code_prix = CodePrix.get_default()
+                        code_prix = CodePrix.get_default(company)
                         if not code_prix:
                             errors.append({'row': idx + 2, 'message': 'Aucun code de prix par défaut configuré'})
                             skipped += 1
@@ -627,14 +660,14 @@ class ImportExecuteView(APIView):
                     if row.get('type_prix'):
                         type_prix_str = str(row['type_prix']).strip().upper()
                         try:
-                            type_prix = TypePrix.objects.get(code__iexact=type_prix_str, is_active=True)
+                            type_prix = _trouver(TypePrix, company, code__iexact=type_prix_str, is_active=True)
                         except TypePrix.DoesNotExist:
                             errors.append({'row': idx + 2, 'message': f'Type de prix "{type_prix_str}" introuvable. Utilisez DETAIL, SUPERETTE, GROS, etc.'})
                             skipped += 1
                             continue
                     else:
                         # Si pas de type prix spécifié, utiliser le type par défaut
-                        type_prix = TypePrix.objects.filter(is_default=True, is_active=True).first()
+                        type_prix = TypePrix.get_default(company)
                         if not type_prix:
                             errors.append({'row': idx + 2, 'message': 'Aucun type de prix par défaut configuré'})
                             skipped += 1
@@ -707,7 +740,7 @@ class ImportExecuteView(APIView):
                     client = None
                     if client_id:
                         try:
-                            client = Client.objects.get(id=int(client_id))
+                            client = _trouver(Client, company, id=int(client_id))
                         except (Client.DoesNotExist, ValueError):
                             pass
 
@@ -949,8 +982,8 @@ class ExportProductsView(APIView):
 
     def get(self, request):
         try:
-            # Récupérer tous les produits
-            produits = Produit.objects.all().select_related('categorie', 'fournisseur')
+            # Produits de l'entreprise de l'utilisateur (avant : toutes les entreprises)
+            produits = filtrer(Produit.objects.all(), request).select_related('categorie', 'fournisseur')
 
             # Préparer les données
             data = []

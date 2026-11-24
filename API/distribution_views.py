@@ -102,8 +102,10 @@ class LivreurViewSet(viewsets.ModelViewSet):
         return LivreurSerializer
 
     def get_queryset(self):
+        # Livreurs de l'entreprise de l'utilisateur (avant : toutes les entreprises)
+        from .tenant import filtrer_livreurs
         # Nombre de tournées actives annoté : une requête pour toute la liste (avant : 2 par livreur)
-        return super().get_queryset().select_related('user', 'entrepot').annotate(
+        return filtrer_livreurs(super().get_queryset(), self.request).select_related('user', 'entrepot').annotate(
             nb_tournees_actives=models.Count(
                 'tournees', filter=models.Q(tournees__statut__in=['planifiee', 'en_cours']), distinct=True))
 
@@ -278,27 +280,15 @@ class LivreurViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'])
     def clients_assignes(self, request, pk=None):
-        """TOUS les clients assignés à un livreur, sans tournée démarrée :
-        clients assignés directement + clients de son planning hebdomadaire (tous jours, lignes
-        actives et en cours de validité). Chaque client porte `jours_semaine` (1=lundi..7,
-        vide si assigné sans planning)."""
+        """Tous les clients du planning de la semaine du prévendeur (choisis un par un ou via
+        les secteurs du jour). Chaque client porte `jours_semaine` (1=lundi..7=dimanche).
+        Même calcul que le téléphone et les tournées : les chiffres sont toujours identiques."""
         from API.models import Client
         from .distribution_serializers import ClientMobileSerializer
+        from .distribution_prix_stock import jours_par_client
         livreur = self.get_object()
-        today = timezone.localdate()
-
-        jours = {}
-        for client_id, jour in ClientLivreurHebdo.objects.filter(
-                livreur=livreur, is_active=True).filter(
-                models.Q(date_debut__isnull=True) | models.Q(date_debut__lte=today)).filter(
-                models.Q(date_fin__isnull=True) | models.Q(date_fin__gte=today)
-        ).values_list('client_id', 'jour_semaine'):
-            jours.setdefault(client_id, set()).add(jour)
-
-        clients = Client.objects.filter(
-            models.Q(pk__in=livreur.clients_assignes.values('pk')) | models.Q(pk__in=list(jours))
-        ).select_related('type_prix').order_by('nom', 'prenom')
-
+        jours = jours_par_client(livreur.id)
+        clients = Client.objects.filter(pk__in=list(jours)).select_related('type_prix').order_by('nom', 'prenom')
         data = ClientMobileSerializer(clients, many=True).data
         for item in data:
             item['jours_semaine'] = sorted(jours.get(item['id'], ()))
@@ -338,27 +328,14 @@ class LivreurViewSet(viewsets.ModelViewSet):
         # Python: weekday() retourne 0=Lundi, donc on ajoute 1
         jour_semaine = target_date.weekday() + 1  # 1=Lundi, 7=Dimanche
 
-        # Récupérer les configurations actives pour ce livreur et ce jour
-        configs = ClientLivreurHebdo.objects.filter(
-            livreur=livreur,
-            jour_semaine=jour_semaine,
-            is_active=True
-        ).select_related('client', 'client__type_prix').order_by('ordre_passage')
-
-        # Filtrer par période de validité si définie
-        configs = configs.filter(
-            models.Q(date_debut__isnull=True) | models.Q(date_debut__lte=target_date)
-        ).filter(
-            models.Q(date_fin__isnull=True) | models.Q(date_fin__gte=target_date)
-        )
-
-        # Extraire les clients avec leur ordre de passage
+        # Planning de la semaine : clients choisis un par un + clients des secteurs du jour
+        from .distribution_serializers import ClientMobileSerializer
+        from .distribution_prix_stock import clients_planifies
         clients_data = []
-        for config in configs:
-            client = config.client
-            from .distribution_serializers import ClientMobileSerializer
-            client_data = ClientMobileSerializer(client).data
-            client_data['ordre_visite'] = config.ordre_passage
+        for rang, item in enumerate(clients_planifies(livreur.id, jour_semaine), start=1):
+            client_data = ClientMobileSerializer(item['client']).data
+            client_data['ordre_visite'] = item['ordre'] or rang
+            client_data['source_planning'] = item['source']
             clients_data.append(client_data)
 
         return Response({
@@ -498,6 +475,298 @@ class LivreurViewSet(viewsets.ModelViewSet):
                 {'error': 'Client introuvable'},
                 status=status.HTTP_404_NOT_FOUND
             )
+
+    # ------------------------------------------------------------------
+    # Planning de la semaine (sans dates) : par secteurs et/ou par clients
+    # ------------------------------------------------------------------
+    JOURS_NOMS = {1: 'Lundi', 2: 'Mardi', 3: 'Mercredi', 4: 'Jeudi', 5: 'Vendredi', 6: 'Samedi', 7: 'Dimanche'}
+
+    @action(detail=False, methods=['get'], url_path='planning-clients')
+    def planning_clients(self, request):
+        """Vue d'ensemble du planning de la semaine de TOUS les prévendeurs de l'entreprise :
+        {clients: {client_id: [{jour, livreur_id, livreur_nom}]},
+         secteurs: {secteur_id: [{jour, livreur_id, livreur_nom}]}}.
+        Sert aux cases L M M J V S D de l'écran Planning : un client pris le mardi par Karim
+        reste affiché comme pris quand on sélectionne un autre prévendeur."""
+        from .distribution_prix_stock import clients_planifies
+        clients, secteurs = {}, {}
+        livreurs = list(self.get_queryset().order_by('nom').values_list('id', 'nom'))
+        noms = dict(livreurs)
+        for lid, nom in livreurs:
+            for jour in range(1, 8):
+                for it in clients_planifies(lid, jour):
+                    clients.setdefault(it['client'].id, []).append({'jour': jour, 'livreur_id': lid, 'livreur_nom': nom})
+        for lid, jour, sid in PlanningHebdomadaire.objects.filter(
+                livreur_id__in=noms, is_active=True, secteurs__isnull=False).values_list('livreur_id', 'jour_semaine', 'secteurs'):
+            secteurs.setdefault(sid, []).append({'jour': jour, 'livreur_id': lid, 'livreur_nom': noms[lid]})
+        return Response({'clients': clients, 'secteurs': secteurs})
+
+    def _doublons_du_jour(self, livreur, jour, items):
+        """Clients de ce jour qu'un AUTRE prévendeur visite aussi ce jour-là (anciennes données
+        ou secteur donné à deux prévendeurs avant la vérification) : [{id, nom, chez: [noms]}]."""
+        from .distribution_prix_stock import clients_planifies
+        ids = {it['client'].id for it in items}
+        if not ids:
+            return []
+        secteurs = {it['client'].secteur_id for it in items if it['client'].secteur_id}
+        autres = set(ClientLivreurHebdo.objects.filter(jour_semaine=jour, is_active=True, client_id__in=ids)
+                     .exclude(livreur=livreur).values_list('livreur_id', flat=True))
+        if secteurs:
+            autres |= set(PlanningHebdomadaire.objects.filter(jour_semaine=jour, is_active=True, secteurs__in=secteurs)
+                          .exclude(livreur=livreur).values_list('livreur_id', flat=True))
+        chez = {}
+        for autre in LivreurDistribution.objects.filter(pk__in=autres).order_by('nom'):
+            for it in clients_planifies(autre.id, jour):
+                if it['client'].id in ids:
+                    chez.setdefault(it['client'].id, []).append(autre.nom)
+        noms = {it['client'].id: f"{it['client'].nom or ''} {it['client'].prenom or ''}".strip() for it in items}
+        return [{'id': cid, 'nom': noms[cid], 'chez': n} for cid, n in sorted(chez.items(), key=lambda x: noms[x[0]])]
+
+    def _company_planning(self, livreur):
+        company = getattr(self.request, 'company', None)
+        if company is None and livreur.entrepot_id:
+            company = getattr(livreur.entrepot, 'company', None)
+        return company
+
+    @staticmethod
+    def _jour_valide(valeur):
+        try:
+            jour = int(valeur)
+        except (TypeError, ValueError):
+            return None
+        return jour if 1 <= jour <= 7 else None
+
+    @action(detail=True, methods=['get'])
+    def planning(self, request, pk=None):
+        """Planning de la semaine du prévendeur : pour chaque jour, ses secteurs, ses clients
+        choisis un par un et la liste complète des clients du jour (même calcul que le
+        téléphone et les tournées)."""
+        from API.models import Client, Secteur
+        from .distribution_prix_stock import clients_planifies, secteurs_du_jour, exclusions_du_jour
+        livreur = self.get_object()
+        company = self._company_planning(livreur)
+        secteurs_qs = Secteur.objects.filter(is_active=True)
+        if company is not None:
+            secteurs_qs = secteurs_qs.filter(models.Q(company=company) | models.Q(company__isnull=True))
+        nb_par_secteur = dict(Client.objects.filter(secteur__in=secteurs_qs).values_list('secteur_id').annotate(n=models.Count('id')))
+        secteurs_info = {s.id: {'id': s.id, 'nom': s.nom, 'code': s.code, 'couleur': s.couleur,
+                                'nb_clients': nb_par_secteur.get(s.id, 0)} for s in secteurs_qs.order_by('nom')}
+
+        def nom_client(c):
+            return f"{c.nom or ''} {c.prenom or ''}".strip()
+
+        jours, tous = [], set()
+        for jour in range(1, 8):
+            items = clients_planifies(livreur.id, jour)
+            tous.update(it['client'].id for it in items)
+            ids_secteurs = secteurs_du_jour(livreur.id, jour)
+            exclusions = exclusions_du_jour(livreur.id, jour, ids_secteurs)
+            exclus = [{'id': c.id, 'nom': nom_client(c), 'secteur_id': c.secteur_id, 'chez': exclusions[c.id]}
+                      for c in Client.objects.filter(pk__in=exclusions).order_by('nom', 'prenom')]
+            doublons = self._doublons_du_jour(livreur, jour, items)
+            jours.append({
+                'jour': jour,
+                'nom': self.JOURS_NOMS[jour],
+                'secteurs': [secteurs_info.get(sid) or {'id': sid, 'nom': f'Secteur {sid}', 'nb_clients': nb_par_secteur.get(sid, 0)}
+                             for sid in ids_secteurs],
+                'clients': [{'id': it['client'].id, 'nom': nom_client(it['client']),
+                             'secteur_nom': getattr(it['client'].secteur, 'nom', '') if it['client'].secteur_id else ''}
+                            for it in items if it['source'] == 'client'],
+                'liste': [{'id': it['client'].id, 'nom': nom_client(it['client']), 'source': it['source'],
+                           'secteur_id': it['client'].secteur_id,
+                           'telephone': it['client'].telephone or '',
+                           'secteur_nom': getattr(it['client'].secteur, 'nom', '') if it['client'].secteur_id else ''}
+                          for it in items],
+                'exclus': exclus,
+                'doublons': doublons,
+                'total': len(items),
+            })
+        # Anciennes affectations sans aucun jour de passage : à compléter ou retirer
+        sans_jour = livreur.clients_assignes.exclude(pk__in=tous).order_by('nom')
+        return Response({
+            'livreur_id': livreur.id,
+            'livreur_nom': livreur.nom,
+            'jours': jours,
+            'total_clients': len(tous),
+            'clients_sans_jour': [{'id': c.id, 'nom': nom_client(c)} for c in sans_jour],
+            'secteurs_disponibles': list(secteurs_info.values()),
+        })
+
+    @action(detail=True, methods=['post'], url_path='planning/secteurs')
+    def planning_secteurs(self, request, pk=None):
+        """Fixe les secteurs visités un jour de la semaine. Body : {jour, secteurs: [ids]}."""
+        from API.models import Secteur
+        livreur = self.get_object()
+        jour = self._jour_valide(request.data.get('jour'))
+        if jour is None:
+            return Response({'error': 'Jour invalide (1 = lundi … 7 = dimanche)'}, status=status.HTTP_400_BAD_REQUEST)
+        ids = request.data.get('secteurs') or []
+        if not isinstance(ids, list):
+            return Response({'error': 'secteurs doit être une liste'}, status=status.HTTP_400_BAD_REQUEST)
+        company = self._company_planning(livreur)
+        secteurs = Secteur.objects.filter(pk__in=ids)
+        if company is not None:
+            secteurs = secteurs.filter(models.Q(company=company) | models.Q(company__isnull=True))
+        secteurs = list(secteurs)
+        if len(secteurs) != len(set(ids)):
+            return Response({'error': 'Secteur introuvable'}, status=status.HTTP_400_BAD_REQUEST)
+        # Un secteur ne peut être visité que par UN prévendeur un jour donné (sinon ses clients
+        # seraient chez deux prévendeurs le même jour). 409 sauf si transferer=true : il est alors
+        # retiré au prévendeur qui l'avait ce jour-là.
+        transferer = str(request.data.get('transferer', '')).lower() in ('1', 'true', 'oui', 'yes')
+        autres_plannings = PlanningHebdomadaire.objects.filter(
+            jour_semaine=jour, is_active=True, secteurs__in=secteurs,
+        ).exclude(livreur=livreur).select_related('livreur').distinct()
+        if company is not None:
+            autres_plannings = autres_plannings.filter(models.Q(company=company) | models.Q(company__isnull=True))
+        deja = set(PlanningHebdomadaire.objects.filter(livreur=livreur, jour_semaine=jour, is_active=True)
+                   .values_list('secteurs', flat=True))
+        ids_demandes = {s.id for s in secteurs} - deja   # seulement les secteurs ajoutés
+        conflits = [{'secteur_id': s.id, 'secteur_nom': s.nom, 'livreur_id': p.livreur_id, 'livreur_nom': p.livreur.nom,
+                     'jour': jour, 'jour_nom': self.JOURS_NOMS[jour]}
+                    for p in autres_plannings for s in p.secteurs.filter(pk__in=ids_demandes)]
+        if conflits and not transferer:
+            return Response({'error': 'Ce secteur est déjà visité par un autre prévendeur ce jour-là',
+                             'conflits': conflits}, status=status.HTTP_409_CONFLICT)
+        with transaction.atomic():
+            for p in autres_plannings:
+                p.secteurs.remove(*[s for s in secteurs if s.id in ids_demandes])
+            planning = PlanningHebdomadaire.objects.filter(livreur=livreur, jour_semaine=jour).order_by('-is_active', 'id').first()
+            if planning is None:
+                planning = PlanningHebdomadaire.objects.create(
+                    livreur=livreur, jour_semaine=jour, company=company, is_active=True,
+                    created_by=request.user if request.user.is_authenticated else None)
+            elif not planning.is_active:
+                planning.is_active = True
+                planning.save(update_fields=['is_active'])
+            planning.secteurs.set(secteurs)
+        return Response({'message': f"{self.JOURS_NOMS[jour]} : {len(secteurs)} secteur(s)", 'jour': jour,
+                         'secteurs': [s.id for s in secteurs]})
+
+    @action(detail=True, methods=['post'], url_path='planning/ajouter-client')
+    def planning_ajouter_client(self, request, pk=None):
+        """Ajoute un client précis à un ou plusieurs jours. Body : {client_id, jours: [1..7],
+        transferer: bool}. Si un autre prévendeur a déjà ce client ce jour-là : 409 avec la
+        liste des conflits, sauf si transferer=true (le client lui est alors retiré)."""
+        from API.models import Client
+        livreur = self.get_object()
+        jours = request.data.get('jours')
+        if jours is None:
+            jours = [request.data.get('jour')]
+        jours = sorted({j for j in (self._jour_valide(v) for v in (jours if isinstance(jours, list) else [jours])) if j})
+        if not jours:
+            return Response({'error': 'Choisissez au moins un jour'}, status=status.HTTP_400_BAD_REQUEST)
+        client = Client.objects.filter(pk=request.data.get('client_id')).first()
+        if client is None:
+            return Response({'error': 'Client introuvable'}, status=status.HTTP_404_NOT_FOUND)
+        transferer = str(request.data.get('transferer', '')).lower() in ('1', 'true', 'oui', 'yes')
+        company = self._company_planning(livreur)
+
+        autres = list(ClientLivreurHebdo.objects.filter(client=client, jour_semaine__in=jours, is_active=True
+                                                        ).exclude(livreur=livreur).select_related('livreur'))
+        conflits = [{'jour': a.jour_semaine, 'jour_nom': self.JOURS_NOMS[a.jour_semaine],
+                     'livreur_id': a.livreur_id, 'livreur_nom': a.livreur.nom, 'secteur_nom': None} for a in autres]
+        # Client visité par un autre prévendeur via son secteur : il lui sera retiré automatiquement
+        from .distribution_prix_stock import secteurs_du_jour, exclusions_du_jour, livreurs_du_secteur
+        if client.secteur_id:
+            deja = {(c['livreur_id'], c['jour']) for c in conflits}
+            for autre in LivreurDistribution.objects.filter(pk__in=livreurs_du_secteur({client.secteur_id})).exclude(pk=livreur.pk):
+                for jour in jours:
+                    if (autre.id, jour) in deja:
+                        continue
+                    secteurs = secteurs_du_jour(autre.id, jour)
+                    if client.secteur_id in secteurs and client.id not in exclusions_du_jour(autre.id, jour, secteurs):
+                        conflits.append({'jour': jour, 'jour_nom': self.JOURS_NOMS[jour], 'livreur_id': autre.id,
+                                         'livreur_nom': autre.nom, 'secteur_nom': client.secteur.nom})
+        if conflits and not transferer:
+            return Response({
+                'error': 'Ce client est déjà chez un autre prévendeur',
+                'conflits': conflits,
+            }, status=status.HTTP_409_CONFLICT)
+        ajoutes = []
+        with transaction.atomic():
+            for a in autres:
+                a.delete()
+            # S'il avait été retiré d'un secteur de ce prévendeur ces jours-là : on l'y remet
+            for planning in PlanningHebdomadaire.objects.filter(livreur=livreur, jour_semaine__in=jours,
+                                                                clients_exclus=client):
+                planning.clients_exclus.remove(client)
+            for jour in jours:
+                ligne = ClientLivreurHebdo.objects.filter(client=client, livreur=livreur, jour_semaine=jour).first()
+                if ligne is None:
+                    # Même entreprise + même jour : la ligne d'un autre prévendeur bloquerait (unicité)
+                    ClientLivreurHebdo.objects.filter(client=client, jour_semaine=jour, company=company).delete()
+                    ordre = (ClientLivreurHebdo.objects.filter(livreur=livreur, jour_semaine=jour)
+                             .aggregate(m=models.Max('ordre_passage'))['m'] or 0) + 1
+                    ClientLivreurHebdo.objects.create(
+                        client=client, livreur=livreur, jour_semaine=jour, company=company, is_active=True,
+                        ordre_passage=ordre, created_by=request.user if request.user.is_authenticated else None)
+                    ajoutes.append(jour)
+                elif not ligne.is_active:
+                    ligne.is_active = True
+                    ligne.save(update_fields=['is_active'])
+                    ajoutes.append(jour)
+            # Liste utilisée pour les droits du prévendeur (encaissements…)
+            livreur.clients_assignes.add(client)
+        return Response({'message': f"{client.nom} ajouté : {', '.join(self.JOURS_NOMS[j] for j in jours)}",
+                         'jours_ajoutes': ajoutes, 'transferes': len(conflits)})
+
+    @action(detail=True, methods=['post'], url_path='planning/retirer-client')
+    def planning_retirer_client(self, request, pk=None):
+        """Retire un client précis d'un jour (ou de tous les jours si jour absent).
+        Body : {client_id, jour?}. Un client qui vient d'un secteur est écarté de ce secteur
+        ce jour-là (les autres clients du secteur restent visités)."""
+        from API.models import Client
+        from .distribution_prix_stock import secteurs_du_jour
+        livreur = self.get_object()
+        client = Client.objects.filter(pk=request.data.get('client_id')).first()
+        if client is None:
+            return Response({'error': 'Client introuvable'}, status=status.HTTP_404_NOT_FOUND)
+        jour = self._jour_valide(request.data.get('jour'))
+        lignes = ClientLivreurHebdo.objects.filter(client=client, livreur=livreur)
+        if jour is not None:
+            lignes = lignes.filter(jour_semaine=jour)
+        with transaction.atomic():
+            supprimees = lignes.count()
+            lignes.delete()
+            if not ClientLivreurHebdo.objects.filter(client=client, livreur=livreur).exists():
+                livreur.clients_assignes.remove(client)
+            ecartes = []
+            if client.secteur_id:
+                for j in ([jour] if jour is not None else range(1, 8)):
+                    if client.secteur_id not in secteurs_du_jour(livreur.id, j):
+                        continue
+                    planning = PlanningHebdomadaire.objects.filter(livreur=livreur, jour_semaine=j,
+                                                                   is_active=True).first()
+                    if planning is not None:
+                        planning.clients_exclus.add(client)
+                        ecartes.append(j)
+        message = f"{client.nom} retiré"
+        if ecartes:
+            message += f" (les autres clients du secteur « {client.secteur.nom} » restent visités)"
+        return Response({'message': message, 'supprimees': supprimees, 'ecarte_du_secteur': ecartes})
+
+    @action(detail=True, methods=['post'], url_path='planning/remettre-client')
+    def planning_remettre_client(self, request, pk=None):
+        """Remet dans le secteur un client qui en avait été retiré ce jour-là (ou donné à un autre
+        prévendeur : il lui est alors repris). Body : {client_id, jour}."""
+        from API.models import Client
+        livreur = self.get_object()
+        client = Client.objects.filter(pk=request.data.get('client_id')).first()
+        if client is None:
+            return Response({'error': 'Client introuvable'}, status=status.HTTP_404_NOT_FOUND)
+        jour = self._jour_valide(request.data.get('jour'))
+        if jour is None:
+            return Response({'error': 'Jour invalide (1 = lundi … 7 = dimanche)'}, status=status.HTTP_400_BAD_REQUEST)
+        with transaction.atomic():
+            for planning in PlanningHebdomadaire.objects.filter(livreur=livreur, jour_semaine=jour, clients_exclus=client):
+                planning.clients_exclus.remove(client)
+            repris = ClientLivreurHebdo.objects.filter(client=client, jour_semaine=jour).exclude(livreur=livreur)
+            nb_repris = repris.count()
+            for ligne in repris:
+                ligne.delete()
+        return Response({'message': f"{client.nom} est de nouveau visité le {self.JOURS_NOMS[jour].lower()}",
+                         'repris': nb_repris})
 
     @action(detail=True, methods=['post'])
     def creer_compte(self, request, pk=None):
@@ -2163,10 +2432,8 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
             return Response({'detail': "Précisez la commande (« id » ou « app_id »)."},
                             status=status.HTTP_400_BAD_REQUEST)
 
-        commandes = CommandeClient.objects.all()
-        company = getattr(request, 'company', None)
-        if company is not None and not (request.user.is_staff or request.user.is_superuser):
-            commandes = commandes.filter(models.Q(company=company) | models.Q(company__isnull=True))
+        from .tenant import filtrer
+        commandes = filtrer(CommandeClient.objects.all(), request)
         if ident:
             commande = commandes.filter(pk=ident).first() if str(ident).isdigit() else None
         else:
@@ -2597,13 +2864,33 @@ class ClientLivreurHebdoViewSet(viewsets.ModelViewSet):
     ordering_fields = ['jour_semaine', 'ordre_passage']
     ordering = ['jour_semaine', 'ordre_passage']
 
+    # --- Entreprise de l'utilisateur (TenantMiddleware) ---------------------------------
+    # Avant : request.user.company (inexistant) -> aucun filtre, les affectations, livreurs et
+    # clients de TOUTES les entreprises sortaient dans la liste et les exports Excel.
+    def _company(self):
+        from .tenant import entreprise_de
+        return entreprise_de(self.request)   # session web ou jeton du téléphone
+
+    def _livreurs_entreprise(self):
+        """Livreurs de l'entreprise (règles communes : API/tenant.py)."""
+        from .tenant import filtrer_livreurs
+        return filtrer_livreurs(LivreurDistribution.objects.all(), self.request)
+
+    def _clients_entreprise(self):
+        from .models import Client
+        qs = Client.objects.all()
+        company = self._company()
+        if company is not None and not self.request.user.is_superuser:
+            qs = qs.filter(company=company)
+        return qs
+
     def get_queryset(self):
         queryset = super().get_queryset()
-        company = self.request.user.company if hasattr(self.request.user, 'company') else None
-
-        if company:
-            queryset = queryset.filter(company=company)
-
+        company = self._company()
+        if company is not None and not self.request.user.is_superuser:
+            # Anciennes lignes sans entreprise : rattachées par l'entreprise du client
+            queryset = queryset.filter(models.Q(company=company)
+                                       | models.Q(company__isnull=True, client__company=company))
         return queryset.select_related('client', 'livreur', 'company', 'created_by')
 
     def get_serializer_class(self):
@@ -2620,13 +2907,25 @@ class ClientLivreurHebdoViewSet(viewsets.ModelViewSet):
             kwargs['created_by'] = self.request.user
 
             # Assigner company depuis l'utilisateur connecté
-            if hasattr(self.request.user, 'company') and self.request.user.company:
-                kwargs['company'] = self.request.user.company
+            if self._company() is not None:
+                kwargs['company'] = self._company()
 
+        self._verifier_entreprise(serializer)
         serializer.save(**kwargs)
+
+    def _verifier_entreprise(self, serializer):
+        """Refuse un client ou un livreur d'une autre entreprise."""
+        from rest_framework.exceptions import ValidationError
+        data = serializer.validated_data
+        client, livreur = data.get('client'), data.get('livreur')
+        if client is not None and not self._clients_entreprise().filter(pk=client.pk).exists():
+            raise ValidationError({'client': 'Client introuvable'})
+        if livreur is not None and not self._livreurs_entreprise().filter(pk=livreur.pk).exists():
+            raise ValidationError({'livreur': 'Livreur introuvable'})
 
     def perform_update(self, serializer):
         """Ne pas modifier la company lors de la mise à jour"""
+        self._verifier_entreprise(serializer)
         serializer.save()
 
     @action(detail=False, methods=['get'])
@@ -2682,32 +2981,35 @@ class ClientLivreurHebdoViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Vérifier que le livreur existe
+        # Vérifier que le livreur existe (dans l'entreprise de l'utilisateur)
         try:
-            livreur = LivreurDistribution.objects.get(id=livreur_id)
+            livreur = self._livreurs_entreprise().get(id=livreur_id)
         except LivreurDistribution.DoesNotExist:
             return Response(
                 {'error': 'Livreur non trouvé'},
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        company = request.user.company if hasattr(request.user, 'company') else None
+        company = self._company()
         created_assignments = []
         errors = []
 
         for client_id in clients_ids:
             try:
                 from .models import Client
-                client = Client.objects.get(id=client_id)
+                client = self._clients_entreprise().get(id=client_id)
 
                 for jour in jours_semaine:
-                    # Vérifier si une assignation existe déjà
+                    # Vérifier si une assignation existe déjà (ou une ancienne ligne sans entreprise)
                     existing = ClientLivreurHebdo.objects.filter(
                         client=client,
                         jour_semaine=jour,
-                        company=company,
                         is_active=True
-                    ).first()
+                    ).filter(
+                        models.Q(company=company) | models.Q(company__isnull=True)
+                    ).order_by(models.F('company').asc(nulls_last=True)).first()
+                    if existing and existing.company_id is None and company is not None:
+                        existing.company = company
 
                     if existing:
                         # Mettre à jour l'assignation existante
@@ -2812,7 +3114,7 @@ class ClientLivreurHebdoViewSet(viewsets.ModelViewSet):
             )
 
         # Récupérer les configurations actives pour la période
-        company = request.user.company if hasattr(request.user, 'company') else None
+        company = self._company()
         configs = self.get_queryset().filter(
             is_active=True
         ).filter(
@@ -2959,19 +3261,17 @@ class ClientLivreurHebdoViewSet(viewsets.ModelViewSet):
             cell.border = border
 
         # Récupérer les données
-        company = getattr(request.user, 'company', None)
+        company = self._company()
 
         # Récupérer tous les livreurs
-        livreurs = list(LivreurDistribution.objects.all().order_by('nom'))
+        livreurs = list(self._livreurs_entreprise().order_by('nom'))
 
         # Récupérer tous les clients
-        clients_qs = Client.objects.all().order_by('nom', 'prenom')
-        if company:
-            clients_qs = clients_qs.filter(company=company)
+        clients_qs = self._clients_entreprise().order_by('nom', 'prenom')
         clients = list(clients_qs)
 
         # Récupérer toutes les configurations existantes
-        configs_existantes = ClientLivreurHebdo.objects.filter(is_active=True).select_related('livreur', 'client')
+        configs_existantes = self.get_queryset().filter(is_active=True)
 
         # Regrouper les configurations par (livreur_id, client_id)
         configs_dict = {}
@@ -3220,7 +3520,7 @@ class ClientLivreurHebdoViewSet(viewsets.ModelViewSet):
             errors = []
             valid_count = 0
 
-            company = request.user.company if hasattr(request.user, 'company') else None
+            company = self._company()
 
             from .models import Client
 
@@ -3252,7 +3552,7 @@ class ClientLivreurHebdoViewSet(viewsets.ModelViewSet):
                     continue  # Ligne vide, on passe
                 else:
                     try:
-                        livreur = LivreurDistribution.objects.get(id=int(livreur_id))
+                        livreur = self._livreurs_entreprise().get(id=int(livreur_id))
                     except (LivreurDistribution.DoesNotExist, ValueError):
                         row_errors.append(f'Livreur ID {livreur_id} invalide')
 
@@ -3260,7 +3560,7 @@ class ClientLivreurHebdoViewSet(viewsets.ModelViewSet):
                     continue  # Ligne vide, on passe
                 else:
                     try:
-                        client = Client.objects.get(id=int(client_id))
+                        client = self._clients_entreprise().get(id=int(client_id))
                     except (Client.DoesNotExist, ValueError):
                         row_errors.append(f'Client ID {client_id} invalide')
 
@@ -3345,7 +3645,7 @@ class ClientLivreurHebdoViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        company = request.user.company if hasattr(request.user, 'company') else None
+        company = self._company()
         replace_existing = request.data.get('replace_existing', 'false').lower() == 'true'
 
         try:
@@ -3383,14 +3683,14 @@ class ClientLivreurHebdoViewSet(viewsets.ModelViewSet):
 
                     # Validation
                     try:
-                        livreur = LivreurDistribution.objects.get(id=int(livreur_id))
+                        livreur = self._livreurs_entreprise().get(id=int(livreur_id))
                     except (LivreurDistribution.DoesNotExist, ValueError, TypeError):
                         errors.append(f'Ligne {row_idx}: Livreur ID {livreur_id} invalide')
                         skipped_count += 1
                         continue
 
                     try:
-                        client = Client.objects.get(id=int(client_id))
+                        client = self._clients_entreprise().get(id=int(client_id))
                     except (Client.DoesNotExist, ValueError, TypeError):
                         errors.append(f'Ligne {row_idx}: Client ID {client_id} invalide')
                         skipped_count += 1
@@ -3416,10 +3716,12 @@ class ClientLivreurHebdoViewSet(viewsets.ModelViewSet):
 
                             # Chercher une configuration existante
                             existing = ClientLivreurHebdo.objects.filter(
-                                client=client,
-                                jour_semaine=jour_idx,
-                                company=company
-                            ).first()
+                                client=client, jour_semaine=jour_idx,
+                            ).filter(
+                                models.Q(company=company) | models.Q(company__isnull=True)
+                            ).order_by(models.F('company').asc(nulls_last=True)).first()
+                            if existing and existing.company_id is None and company is not None:
+                                existing.company = company
 
                             if existing:
                                 if replace_existing:
@@ -3475,8 +3777,15 @@ class SyncViewSet(viewsets.ViewSet):
 
     def _get_livreur_for_request(self, request, livreur_id):
         """Retourne le LivreurDistribution autorisé pour cette requête, ou lève PermissionDenied."""
+        from .tenant import filtrer_livreurs
         livreur = get_object_or_404(LivreurDistribution, id=livreur_id)
-        if request.user.is_staff or request.user.is_superuser:
+        if request.user.is_superuser:
+            return livreur
+        if request.user.is_staff:
+            # Administrateur d'entreprise : seulement les livreurs de son entreprise
+            if not filtrer_livreurs(LivreurDistribution.objects.filter(pk=livreur.pk), request).exists():
+                from rest_framework.exceptions import PermissionDenied
+                raise PermissionDenied("Ce livreur n'appartient pas à votre entreprise.")
             return livreur
         try:
             user_livreur = request.user.livreur_distribution_profile
@@ -4174,9 +4483,8 @@ class EtatLivreursAPIView(APIView):
         if livreur_id is not None and not str(livreur_id).isdigit():
             return Response({'error': 'livreur_id invalide'}, status=status.HTTP_400_BAD_REQUEST)
 
-        company = None
-        if not (request.user.is_staff or request.user.is_superuser):
-            company = getattr(request, 'company', None)
+        from .tenant import entreprise_de
+        company = None if request.user.is_superuser else entreprise_de(request)
         return Response(calculer_etat_livreurs(date_debut, date_fin, company=company, livreur_id=livreur_id))
 
 

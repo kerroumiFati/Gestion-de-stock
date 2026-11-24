@@ -192,6 +192,22 @@ class ExchangeRateSerializer(serializers.ModelSerializer):
                  'from_currency_symbol', 'to_currency_symbol', 'rate', 'date', 'is_active']
 
 # Serializers pour les Codes de Prix et Types de Prix
+def _code_unique_dans_entreprise(serializer, modele, value):
+    """Un code (DETAIL, STANDARD…) ne peut exister qu'une fois parmi les codes visibles par
+    l'entreprise (les siens + les anciens codes partagés)."""
+    from .tenant import entreprise_de
+    request = serializer.context.get('request')
+    company = entreprise_de(request)
+    if company is None and getattr(serializer.instance, 'company_id', None):
+        company = serializer.instance.company
+    qs = modele.pour_entreprise(company).filter(code__iexact=value)
+    if serializer.instance is not None:
+        qs = qs.exclude(pk=serializer.instance.pk)
+    if qs.exists():
+        raise serializers.ValidationError('Ce code existe déjà.')
+    return value
+
+
 class CodePrixSerializer(serializers.ModelSerializer):
     """Serializer pour les codes promotionnels (STANDARD, AID, RAMADAN, etc.)"""
     nombre_tournees = serializers.SerializerMethodField()
@@ -204,6 +220,9 @@ class CodePrixSerializer(serializers.ModelSerializer):
     def get_nombre_tournees(self, obj):
         return obj.tournees.count()
 
+    def validate_code(self, value):
+        return _code_unique_dans_entreprise(self, CodePrix, value)
+
 class TypePrixSerializer(serializers.ModelSerializer):
     nombre_prix = serializers.SerializerMethodField()
 
@@ -214,6 +233,9 @@ class TypePrixSerializer(serializers.ModelSerializer):
 
     def get_nombre_prix(self, obj):
         return obj.prix.filter(is_active=True).count()
+
+    def validate_code(self, value):
+        return _code_unique_dans_entreprise(self, TypePrix, value)
 
 class PrixProduitSerializer(serializers.ModelSerializer):
     code_prix_libelle = serializers.CharField(source='code_prix.libelle', read_only=True, allow_null=True)
@@ -966,8 +988,9 @@ class VenteCreateSerializer(serializers.ModelSerializer):
                     client = vente.client
                     type_prix_client = client.type_prix if client else None
 
-                    # Récupérer le CodePrix par défaut ou actif
-                    code_prix_defaut = CodePrix.get_default()
+                    # Récupérer le CodePrix par défaut ou actif (de l'entreprise de la vente)
+                    code_prix_defaut = CodePrix.get_default(
+                        getattr(vente, 'company', None) or getattr(client, 'company', None) or produit.company)
 
                     if code_prix_defaut and type_prix_client:
                         # Chercher le prix configuré pour ce produit/code_prix/type_prix
@@ -1031,8 +1054,9 @@ class VenteCreateSerializer(serializers.ModelSerializer):
                     client = instance.client
                     type_prix_client = client.type_prix if client else None
 
-                    # Récupérer le CodePrix par défaut ou actif
-                    code_prix_defaut = CodePrix.get_default()
+                    # Récupérer le CodePrix par défaut ou actif (de l'entreprise de la vente)
+                    code_prix_defaut = CodePrix.get_default(
+                        getattr(instance, 'company', None) or getattr(client, 'company', None) or produit.company)
 
                     if code_prix_defaut and type_prix_client:
                         # Chercher le prix configuré pour ce produit/code_prix/type_prix

@@ -1480,18 +1480,23 @@ async function loadClientsAssignesJour(livreurId, date) {
     if (!livreurId || !date) return [];
 
     try {
-        // Convertir la date en jour de la semaine (1=Lundi, 7=Dimanche)
-        const dateObj = new Date(date);
-        const dayOfWeek = dateObj.getDay();
-        const jourSemaine = dayOfWeek === 0 ? 7 : dayOfWeek;
-
-        console.log('[TOURNEES] Chargement clients assignés - Livreur:', livreurId, 'Date:', date, 'Jour:', jourSemaine);
-
-        const response = await fetch(`/API/distribution/clients-livreurs-hebdo/?livreur=${livreurId}&jour_semaine=${jourSemaine}&is_active=true`);
+        // Planning de la semaine (secteurs + clients choisis un par un) : même calcul côté serveur
+        // que le téléphone et la synchronisation des arrêts. Le serveur déduit le jour de la date.
+        const response = await fetch(`/API/distribution/livreurs/${livreurId}/clients_du_jour/?date=${encodeURIComponent(date)}`,
+            { credentials: 'same-origin' });
+        if (!response.ok) throw new Error('HTTP ' + response.status);
         const data = await response.json();
-        const configs = Array.isArray(data) ? data : (data.results || []);
+        const configs = (data.clients || []).map(c => ({
+            client: c.id,
+            client_nom: `${c.nom || ''} ${c.prenom || ''}`.trim(),
+            client_adresse: c.adresse || '',
+            client_telephone: c.telephone || '',
+            client_lat: c.lat,
+            client_lng: c.lng,
+            ordre_passage: c.ordre_visite
+        }));
 
-        console.log('[TOURNEES] Clients assignés trouvés:', configs.length);
+        console.log('[TOURNEES] Clients du planning trouvés:', configs.length, '-', data.jour_nom);
         return configs;
     } catch (error) {
         console.error('[TOURNEES] Erreur chargement clients assignés:', error);

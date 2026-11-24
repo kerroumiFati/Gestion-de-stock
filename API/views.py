@@ -454,9 +454,12 @@ class ClientViewSet(TenantFilterMixin, viewsets.ModelViewSet):
         if not self.request.user.is_authenticated:
             return queryset.none()
 
-        # Si superuser ou staff, voir tous les clients
-        if self.request.user.is_superuser or self.request.user.is_staff:
+        # Seul le superutilisateur voit les clients de toutes les entreprises
+        if self.request.user.is_superuser:
             return queryset
+        from .tenant import entreprise_de
+        if getattr(self.request, 'company', None) is None:
+            self.request.company = entreprise_de(self.request)   # téléphone (jeton JWT)
 
         # Si l'utilisateur a une company : ses clients + les clients sans entreprise
         # (créés sur les téléphones par des livreurs sans entreprise), comme TenantFilterMixin
@@ -484,8 +487,12 @@ class ClientViewSet(TenantFilterMixin, viewsets.ModelViewSet):
                         tournee.arrets.values_list('client_id', flat=True)
                     )
 
-                # Combiner les deux listes
-                all_client_ids = set(clients_assignes_ids) | clients_tournees_ids
+                # Clients du planning de la semaine (choisis un par un ou via les secteurs)
+                from .distribution_prix_stock import jours_par_client
+                clients_planning_ids = set(jours_par_client(livreur.id))
+
+                # Combiner les listes
+                all_client_ids = set(clients_assignes_ids) | clients_tournees_ids | clients_planning_ids
                 queryset = Client.objects.filter(id__in=all_client_ids).order_by('nom')
 
             except LivreurDistribution.DoesNotExist:
@@ -767,7 +774,7 @@ class ClientViewSet(TenantFilterMixin, viewsets.ModelViewSet):
             # comme le reste de l'application.
             clients = Client.objects.filter(Q(company=company) | Q(company__isnull=True))
             print(f"[DASHBOARD STATS] Filtering by company: {company}")
-        elif request.user.is_superuser or request.user.is_staff:
+        elif request.user.is_superuser:
             # Les superusers voient tous les clients
             clients = Client.objects.all()
             print(f"[DASHBOARD STATS] User is staff/superuser, showing all clients")
@@ -818,7 +825,7 @@ class ClientViewSet(TenantFilterMixin, viewsets.ModelViewSet):
         if company:
             paiements_filter = Q(client__company=company) | Q(client__company__isnull=True)
             ventes_filter = Q(client__company=company) | Q(client__company__isnull=True)
-        elif request.user.is_superuser or request.user.is_staff:
+        elif request.user.is_superuser:
             paiements_filter = Q()
             ventes_filter = Q()
         else:
@@ -4982,15 +4989,17 @@ def benefices_definir_pin(request):
 ####################
 # Codes de Prix API #
 ####################
-class CodePrixViewSet(viewsets.ModelViewSet):
-    """API pour les codes promotionnels (STANDARD, AID, RAMADAN, etc.)"""
+class CodePrixViewSet(TenantFilterMixin, viewsets.ModelViewSet):
+    """API pour les codes promotionnels (STANDARD, AID, RAMADAN, etc.) — de l'entreprise de
+    l'utilisateur + anciens codes partagés (avant : ceux de toutes les entreprises)."""
     queryset = CodePrix.objects.all().order_by('ordre', 'libelle')
     serializer_class = CodePrixSerializer
     permission_classes = [IsAuthenticated]
     filterset_fields = ['is_active', 'is_default']
 
     def perform_create(self, serializer):
-        obj = serializer.save()
+        from .tenant import entreprise_de
+        obj = serializer.save(company=entreprise_de(self.request))
         try:
             log_event(self.request, 'codeprix.create', target=obj, metadata={'code': obj.code})
         except Exception:
@@ -5006,14 +5015,17 @@ class CodePrixViewSet(viewsets.ModelViewSet):
 #####################
 # Types de Prix API #
 #####################
-class TypePrixViewSet(viewsets.ModelViewSet):
+class TypePrixViewSet(TenantFilterMixin, viewsets.ModelViewSet):
+    """Types de prix de l'entreprise de l'utilisateur + anciens types partagés
+    (avant : ceux de toutes les entreprises)."""
     queryset = TypePrix.objects.all().order_by('ordre', 'libelle')
     serializer_class = TypePrixSerializer
     permission_classes = [IsAuthenticated]
     filterset_fields = ['is_active', 'is_default']
 
     def perform_create(self, serializer):
-        obj = serializer.save()
+        from .tenant import entreprise_de
+        obj = serializer.save(company=entreprise_de(self.request))
         try:
             log_event(self.request, 'typeprix.create', target=obj, metadata={'code': obj.code})
         except Exception:
@@ -5037,7 +5049,29 @@ class PrixProduitViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     filterset_fields = ['produit', 'code_prix', 'type_prix', 'is_active']
 
+    def get_queryset(self):
+        # Prix des produits de l'entreprise (avant : les prix de toutes les entreprises)
+        from .tenant import filtrer
+        return filtrer(super().get_queryset(), self.request, 'produit__company')
+
+    def _verifier_entreprise(self, serializer):
+        """Refuse un produit, un type ou un code de prix d'une autre entreprise."""
+        from rest_framework.exceptions import ValidationError
+        from .tenant import entreprise_de, filtrer
+        data = serializer.validated_data
+        company = entreprise_de(self.request)
+        produit = data.get('produit')
+        if produit is not None and not filtrer(Produit.objects.filter(pk=produit.pk), self.request).exists():
+            raise ValidationError({'produit': 'Produit introuvable'})
+        if self.request.user.is_superuser:
+            return
+        for champ, modele in (('type_prix', TypePrix), ('code_prix', CodePrix)):
+            obj = data.get(champ)
+            if obj is not None and not modele.pour_entreprise(company).filter(pk=obj.pk).exists():
+                raise ValidationError({champ: 'Introuvable'})
+
     def perform_create(self, serializer):
+        self._verifier_entreprise(serializer)
         obj = serializer.save()
         try:
             log_event(self.request, 'prixproduit.create', target=obj,
@@ -5046,6 +5080,7 @@ class PrixProduitViewSet(viewsets.ModelViewSet):
             pass
 
     def perform_update(self, serializer):
+        self._verifier_entreprise(serializer)
         obj = serializer.save()
         try:
             log_event(self.request, 'prixproduit.update', target=obj,
@@ -5705,34 +5740,36 @@ class PromotionViewSet(TenantFilterMixin, viewsets.ModelViewSet):
         if not produit_id:
             return Response({'error': 'produit_id requis'}, status=400)
 
+        from .tenant import entreprise_de, filtrer
+        company = entreprise_de(request)
         try:
-            produit = Produit.objects.get(id=produit_id)
-        except Produit.DoesNotExist:
+            produit = filtrer(Produit.objects.all(), request).get(id=produit_id)
+        except (Produit.DoesNotExist, ValueError):
             return Response({'error': 'Produit non trouvé'}, status=404)
 
         # Résolution du prix: PrixProduit (CodePrix défaut + TypePrix) → fallback prixU
         prix_original = produit.prixU or Decimal('0')
 
-        # Essayer de récupérer le prix du CodePrix par défaut
-        code_prix_defaut = CodePrix.get_default()
+        # Essayer de récupérer le prix du CodePrix par défaut (de l'entreprise)
+        code_prix_defaut = CodePrix.get_default(company)
         type_prix_client = None
 
         # Récupérer le type_prix du client ou celui envoyé
         if type_prix_id:
             try:
-                type_prix_client = TypePrix.objects.get(id=type_prix_id)
-            except TypePrix.DoesNotExist:
+                type_prix_client = TypePrix.pour_entreprise(company).get(id=type_prix_id)
+            except (TypePrix.DoesNotExist, ValueError):
                 pass
         elif client_id:
             try:
-                client = Client.objects.get(id=client_id)
+                client = filtrer(Client.objects.all(), request).get(id=client_id)
                 type_prix_client = client.type_prix
-            except Client.DoesNotExist:
+            except (Client.DoesNotExist, ValueError):
                 pass
 
         # Si pas de type_prix, utiliser le défaut
         if not type_prix_client:
-            type_prix_client = TypePrix.objects.filter(is_default=True, is_active=True).first()
+            type_prix_client = TypePrix.get_default(company)
 
         # Chercher le prix dans PrixProduit
         if code_prix_defaut and type_prix_client:

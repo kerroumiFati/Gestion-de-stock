@@ -431,13 +431,8 @@ def _filtre_entreprise(request, queryset, champ='company'):
     """Mêmes règles que l'API (TenantFilterMixin) : administrateur (superuser/staff) = tout ;
     utilisateur d'une entreprise = son entreprise + les données sans entreprise ;
     utilisateur sans entreprise = seulement les données sans entreprise."""
-    user = request.user
-    if user.is_superuser or user.is_staff:
-        return queryset
-    company = getattr(request, 'company', None)
-    if company is not None:
-        return queryset.filter(Q(**{champ: company}) | Q(**{champ + '__isnull': True}))
-    return queryset.filter(**{champ + '__isnull': True})
+    from API.tenant import filtrer
+    return filtrer(queryset, request, champ)
 
 
 def stocks_list(request):
@@ -468,8 +463,9 @@ def stocks_list(request):
     page = request.GET.get('page', 1)
     stocks_page = paginator.get_page(page)
 
-    # Récupérer le CodePrix par défaut
-    code_prix_defaut = CodePrix.get_default()
+    # Récupérer le CodePrix par défaut (de l'entreprise)
+    from API.tenant import entreprise_de
+    code_prix_defaut = CodePrix.get_default(entreprise_de(request))
 
     # a. Récupérer le type_prix du client (si client sélectionné)
     client_selectionne = None
@@ -483,7 +479,7 @@ def stocks_list(request):
 
     # Fallback vers TypePrix par défaut si pas de client ou client sans type_prix
     if not type_prix_client:
-        type_prix_client = TypePrix.get_default()
+        type_prix_client = TypePrix.get_default(entreprise_de(request))
 
     # c. Prix PrixProduit(produit, code_prix, type_prix) de TOUTE la page en une seule requête
     #    (avant : une requête par ligne affichée).

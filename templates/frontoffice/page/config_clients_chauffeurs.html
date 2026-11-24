@@ -69,6 +69,17 @@ if (!window.__config_clients_chauffeurs_script_loaded__) {
     }
 }
 
+// Planning de la semaine (par secteurs et/ou par clients)
+if (!window.__planning_semaine_script_loaded__) {
+    window.__planning_semaine_script_loaded__ = true;
+    var scriptPlanning = document.createElement('script');
+    scriptPlanning.src = "{% static 'script/planning_semaine.js' %}";
+    scriptPlanning.onload = function () { if (window.initPlanningSemaine) window.initPlanningSemaine(); };
+    document.head.appendChild(scriptPlanning);
+} else if (typeof window.initPlanningSemaine === 'function') {
+    window.initPlanningSemaine();
+}
+
 // Charger les permissions au chargement de la page
 loadUserPermissions();
 </script>
@@ -1461,19 +1472,210 @@ loadUserPermissions();
 
     <!-- Onglets -->
     <div class="config-tabs">
-        <button class="config-tab active" data-tab="assignation" onclick="switchConfigTab('assignation')">
-            <i class="fas fa-user-plus"></i> Assignation Clients
-        </button>
-        <button class="config-tab" data-tab="config-jour" onclick="switchConfigTab('config-jour')">
-            <i class="fas fa-calendar-week"></i> Configuration par Jour
+        <button class="config-tab active" data-tab="planning-semaine" onclick="switchConfigTab('planning-semaine')">
+            <i class="fas fa-calendar-week"></i> Planning de la semaine
         </button>
         <button class="config-tab" data-tab="import-export" onclick="switchConfigTab('import-export')">
             <i class="fas fa-file-excel"></i> Import/Export Excel
         </button>
     </div>
 
-    <!-- Section Assignation des clients (existante) -->
-    <div id="assignation-section" class="modern-section">
+    <!-- Planning de la semaine : par secteurs et/ou par clients, sans dates -->
+    <div id="planning-semaine-section" class="modern-section">
+        <style>
+            #planning-semaine-section { --ps-bleu:#1d4ed8; --ps-bleu-clair:#eff6ff; --ps-gris:#6b7280; --ps-bord:#e5e7eb; --ps-vert:#16a34a; --ps-rouge:#dc2626; color:#1f2937; }
+            #planning-semaine-section .ps-etape { background:#fff; border:1px solid var(--ps-bord); border-radius:14px; padding:18px 20px; margin-bottom:16px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+            #planning-semaine-section .ps-etape-titre { display:flex; align-items:center; gap:10px; font-size:16px; font-weight:700; margin-bottom:12px; }
+            #planning-semaine-section .ps-num { flex:0 0 28px; height:28px; border-radius:50%; background:var(--ps-bleu); color:#fff; display:flex; align-items:center; justify-content:center; font-size:14px; }
+            #planning-semaine-section .ps-etape-titre small { font-weight:400; color:var(--ps-gris); font-size:14px; }
+            #planning-semaine-section .ps-etape.ps-inactive { opacity:.45; pointer-events:none; }
+            /* étape 1 */
+            #planning-semaine-section .ps-select-livreur { width:100%; max-width:420px; height:48px; border:2px solid #cbd5e1; border-radius:10px; padding:0 14px; font-size:16px; background:#fff; color:#111827; }
+            #planning-semaine-section .ps-select-livreur:focus { outline:none; border-color:var(--ps-bleu); box-shadow:0 0 0 3px rgba(29,78,216,.15); }
+            #planning-semaine-section .ps-entete-livreur { display:flex; justify-content:space-between; align-items:flex-end; gap:12px; flex-wrap:wrap; }
+            #planning-semaine-section .ps-total { color:var(--ps-gris); font-size:14px; }
+            #planning-semaine-section .ps-total b { color:#111827; font-size:18px; }
+            #planning-semaine-section .ps-avert { background:#fffbeb; border:1px solid #fcd34d; color:#92400e; border-radius:12px; padding:12px 16px; margin-bottom:16px; font-size:14px; }
+            #planning-semaine-section .ps-chargement { opacity:.5; pointer-events:none; }
+            /* calendrier de la semaine */
+            #planning-semaine-section .ps-astuce-dd { color:var(--ps-gris); font-size:14px; margin:0 0 12px; }
+            #planning-semaine-section .ps-tableau { display:grid; grid-template-columns:minmax(0,1fr); gap:14px; }
+            
+            #planning-semaine-section .ps-panneau { border:1px solid var(--ps-bord); border-radius:12px; background:#fff; overflow:hidden; }
+            #planning-semaine-section .ps-panneau-tete { padding:10px; border-bottom:1px solid var(--ps-bord); background:#f8fafc; display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+            #planning-semaine-section .ps-mini-onglets { display:grid; grid-template-columns:1fr 1fr; gap:4px; width:240px; }
+            #planning-semaine-section .ps-mini-onglet { border:1px solid var(--ps-bord); background:#fff; border-radius:8px; padding:6px; font-size:13px; font-weight:600; cursor:pointer; color:#475569; }
+            #planning-semaine-section .ps-mini-onglet.active { background:var(--ps-bleu); border-color:var(--ps-bleu); color:#fff; }
+            #planning-semaine-section .ps-panneau input { flex:1; min-width:200px; height:38px; border:1px solid #cbd5e1; border-radius:8px; padding:0 10px; font-size:14px; }
+            #planning-semaine-section .ps-panneau-liste { max-height:190px; overflow:auto; padding:8px; display:grid; grid-template-columns:repeat(auto-fill, minmax(210px, 1fr)); gap:6px; align-content:start; }
+            #planning-semaine-section .ps-carte { background:#fff; border:1px solid var(--ps-bord); border-radius:10px; padding:6px 9px; margin:0; cursor:grab; user-select:none; }
+            #planning-semaine-section .ps-carte:hover { border-color:#93c5fd; box-shadow:0 2px 6px rgba(29,78,216,.12); }
+            #planning-semaine-section .ps-glisse { opacity:.4; }
+            #planning-semaine-section .ps-carte-nom { font-weight:600; font-size:14px; display:flex; align-items:center; gap:6px; }
+            #planning-semaine-section .ps-carte-nom .fa-grip-vertical { color:#cbd5e1; }
+            #planning-semaine-section .ps-carte-info { color:var(--ps-gris); font-size:12px; margin-left:16px; }
+            #planning-semaine-section .ps-jours-pris { margin:4px 0 0 16px; display:flex; gap:2px; }
+            #planning-semaine-section .ps-jours-pris span { width:18px; height:18px; border-radius:4px; font-size:10px; font-weight:700; display:inline-flex; align-items:center; justify-content:center; background:#f1f5f9; color:#cbd5e1; }
+            #planning-semaine-section .ps-jours-pris span.on { color:#fff; }
+            #planning-semaine-section .ps-jours-pris span.ps-autre { background:repeating-linear-gradient(45deg,#94a3b8 0 3px,#475569 3px 6px); color:#fff; text-shadow:0 0 2px #000, 0 0 2px #000; }
+            #planning-semaine-section .ps-legende { font-size:12px; color:var(--ps-gris); display:flex; gap:12px; align-items:center; flex-wrap:wrap; width:100%; }
+            #planning-semaine-section .ps-legende i { display:inline-block; width:14px; height:14px; border-radius:3px; vertical-align:-2px; margin-right:4px; }
+            #planning-semaine-section .ps-badge-orange { background:#fef3c7; color:#92400e; border-radius:6px; padding:0 6px; font-size:11px; font-weight:700; }
+            #planning-semaine-section .ps-semaine { display:grid; grid-template-columns:repeat(7, minmax(118px, 1fr)); gap:8px; overflow-x:auto; padding-bottom:4px; }
+            #planning-semaine-section .ps-col { border:1px solid var(--ps-bord); border-radius:12px; background:#fff; display:flex; flex-direction:column; overflow:hidden; }
+            #planning-semaine-section .ps-col-tete { color:#fff; padding:10px 10px; display:flex; justify-content:space-between; align-items:center; font-weight:700; font-size:15px; }
+            #planning-semaine-section .ps-col-tete span { background:rgba(255,255,255,.25); border-radius:999px; padding:1px 10px; font-size:13px; }
+            #planning-semaine-section .ps-col-corps { flex:1; padding:6px; background:#f8fafc; min-height:320px; max-height:560px; overflow:auto; transition:background .15s; }
+            #planning-semaine-section .ps-col-corps.ps-survol { background:#eff6ff; outline:2px dashed #3b82f6; outline-offset:-4px; }
+            #planning-semaine-section .ps-col-vide { text-align:center; color:#94a3b8; font-size:13px; padding:34px 6px; pointer-events:none; }
+            #planning-semaine-section .ps-col-vide i { display:block; font-size:20px; margin-bottom:6px; }
+            #planning-semaine-section .ps-item { background:#fff; border:1px solid var(--ps-bord); border-radius:8px; padding:6px 6px 6px 9px; margin-bottom:6px; font-size:13px; display:flex; justify-content:space-between; align-items:center; gap:4px; cursor:grab; }
+            #planning-semaine-section .ps-item-nom { font-weight:600; word-break:break-word; line-height:1.3; }
+            #planning-semaine-section .ps-secteur-bloc { border:1px solid var(--ps-bord); border-left:4px solid #2563eb; background:#fff; border-radius:8px; margin-bottom:6px; }
+            #planning-semaine-section .ps-secteur-tete { display:flex; justify-content:space-between; align-items:center; gap:4px; padding:6px 6px 6px 8px; font-size:13px; font-weight:700; }
+            #planning-semaine-section .ps-secteur-tete small { font-weight:400; color:var(--ps-gris); }
+            #planning-semaine-section .ps-secteur-membres { padding:0 8px 6px 10px; font-size:12px; color:#475569; }
+            #planning-semaine-section .ps-membre { display:flex; justify-content:space-between; align-items:center; gap:4px; padding:3px 4px; border-top:1px dashed #eef2f7; border-radius:4px; cursor:pointer; }
+            #planning-semaine-section .ps-membre:hover { background:#eff6ff; }
+            #planning-semaine-section .ps-membre i { color:#cbd5e1; font-size:11px; }
+            #planning-semaine-section .ps-membre:hover i { color:#1d4ed8; }
+            #planning-semaine-section .ps-membre-exclu { cursor:default; color:#94a3b8; flex-direction:column; align-items:flex-start; }
+            #planning-semaine-section .ps-membre-exclu:hover { background:none; }
+            #planning-semaine-section .ps-membre-exclu small { font-size:11px; color:#b45309; }
+            #planning-semaine-section .ps-remettre { border:1px solid #cbd5e1; background:#fff; color:#334155; border-radius:6px; font-size:11px; padding:1px 6px; cursor:pointer; flex:0 0 auto; }
+            #planning-semaine-section .ps-remettre:hover { border-color:#16a34a; color:#16a34a; }
+            #planning-semaine-section .ps-item:hover { border-color:#93c5fd; }
+            .ps-action { border-bottom:1px solid #e5e7eb; padding:10px 0; }
+            .ps-action-titre { font-weight:700; font-size:14px; margin-bottom:6px; color:#334155; }
+            .ps-action-ligne { display:flex; gap:8px; }
+            .ps-action-ligne select { flex:1; height:40px; border:1px solid #cbd5e1; border-radius:8px; padding:0 10px; font-size:14px; background:#fff; }
+            .ps-action-ligne button { border:none; color:#fff; border-radius:8px; padding:0 16px; font-weight:600; cursor:pointer; }
+            .ps-action-retirer { width:100%; border:1px solid #fecaca; background:#fef2f2; color:#b91c1c; border-radius:8px; padding:10px; font-weight:600; cursor:pointer; font-size:14px; }
+            .ps-action-retirer:hover { background:#fee2e2; }
+            #planning-semaine-section .ps-doublons { background:#fef2f2; border:1px solid #fca5a5; color:#991b1b; border-radius:8px; padding:6px 8px; margin-bottom:6px; font-size:12px; line-height:1.4; }
+            #planning-semaine-section .ps-doublons small { display:block; color:#b91c1c; margin-top:2px; }
+            #planning-semaine-section .ps-doublon { border:none; background:none; padding:0; color:#991b1b; font-weight:700; text-decoration:underline; cursor:pointer; font-size:12px; text-align:left; }
+            #planning-semaine-section .ps-x { border:none; background:none; color:#94a3b8; width:24px; height:24px; border-radius:50%; cursor:pointer; flex:0 0 24px; padding:0; }
+            #planning-semaine-section .ps-x:hover { background:#fee2e2; color:var(--ps-rouge); }
+            #planning-semaine-section .ps-col-ajout { border:none; border-top:1px solid var(--ps-bord); background:#fff; color:var(--ps-vert); font-weight:700; padding:9px; cursor:pointer; font-size:14px; }
+            #planning-semaine-section .ps-col-ajout:hover { background:#f0fdf4; }
+            .ps-j1 { background:linear-gradient(135deg,#3b82f6,#2563eb); } .ps-j2 { background:linear-gradient(135deg,#8b5cf6,#7c3aed); }
+            .ps-j3 { background:linear-gradient(135deg,#06b6d4,#0891b2); } .ps-j4 { background:linear-gradient(135deg,#10b981,#059669); }
+            .ps-j5 { background:linear-gradient(135deg,#f59e0b,#d97706); } .ps-j6 { background:linear-gradient(135deg,#ef4444,#dc2626); }
+            .ps-j7 { background:linear-gradient(135deg,#6b7280,#4b5563); }
+            @media (max-width: 760px) { #planning-semaine-section .ps-etape { padding:14px; } #planning-semaine-section .ps-mini-onglets { width:100%; } }
+            /* toast */
+            #ps-toast { position:fixed; right:20px; bottom:20px; z-index:2100; max-width:420px; }
+            #ps-toast .ps-toast { border-radius:12px; padding:12px 16px; font-weight:600; font-size:15px; box-shadow:0 10px 30px rgba(0,0,0,.18); display:flex; gap:10px; align-items:flex-start; }
+            #ps-toast .ps-toast-success { background:#166534; color:#fff; }
+            #ps-toast .ps-toast-warning { background:#92400e; color:#fff; }
+            #ps-toast .ps-toast-danger { background:#991b1b; color:#fff; }
+            @media (max-width: 600px) { #ps-toast { left:16px; right:16px; max-width:none; } }
+            /* fenêtres */
+            .ps-fond { display:none; position:fixed; inset:0; background:rgba(15,23,42,.55); z-index:2000; align-items:center; justify-content:center; padding:16px; }
+            .ps-fenetre { background:#fff; border-radius:16px; width:100%; max-width:560px; max-height:90vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 25px 60px rgba(0,0,0,.3); color:#1f2937; }
+            .ps-fenetre-tete { padding:16px 20px; border-bottom:1px solid #e5e7eb; display:flex; justify-content:space-between; align-items:center; }
+            .ps-fenetre-tete h4 { margin:0; font-size:18px; font-weight:700; }
+            .ps-fermer { border:none; background:#f1f5f9; width:34px; height:34px; border-radius:50%; font-size:20px; line-height:1; cursor:pointer; color:#475569; }
+            .ps-fenetre-corps { padding:16px 20px; overflow:auto; }
+            .ps-fenetre-pied { padding:14px 20px; border-top:1px solid #e5e7eb; display:flex; justify-content:flex-end; gap:10px; }
+            .ps-fenetre-pied button { border:none; border-radius:10px; padding:10px 20px; font-weight:600; font-size:15px; cursor:pointer; }
+            .ps-onglets { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:14px; }
+            .ps-onglet { border:2px solid #e5e7eb; background:#fff; border-radius:12px; padding:12px; cursor:pointer; text-align:left; }
+            .ps-onglet b { display:block; font-size:15px; }
+            .ps-onglet small { color:#6b7280; }
+            .ps-onglet.active { border-color:#1d4ed8; background:#eff6ff; }
+            .ps-recherche-box { position:relative; margin-bottom:10px; }
+            .ps-recherche-box i { position:absolute; left:14px; top:50%; transform:translateY(-50%); color:#94a3b8; }
+            .ps-recherche-box input { width:100%; height:46px; border:2px solid #cbd5e1; border-radius:10px; padding:0 14px 0 40px; font-size:15px; }
+            .ps-recherche-box input:focus { outline:none; border-color:#1d4ed8; }
+            .ps-choix { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px 4px; border-bottom:1px solid #f1f5f9; }
+            .ps-choix-nom { font-weight:600; }
+            .ps-choix-info { color:#6b7280; font-size:13px; }
+            .ps-choix button { border:none; border-radius:8px; padding:7px 14px; font-weight:600; font-size:14px; cursor:pointer; background:#16a34a; color:#fff; white-space:nowrap; }
+            .ps-choix button[disabled] { background:#e2e8f0; color:#64748b; cursor:default; }
+            .ps-astuce { color:#6b7280; font-size:13px; margin:0 0 8px; }
+        </style>
+
+        <div class="ps-etape">
+            <div class="ps-entete-livreur">
+                <div style="flex:1;min-width:260px">
+                    <div class="ps-etape-titre"><span class="ps-num">1</span> Choisissez le prévendeur</div>
+                    <select id="ps-livreur" class="ps-select-livreur no-select2"><option value="">Chargement…</option></select>
+                </div>
+                <div class="ps-total" id="ps-semaine-total"></div>
+            </div>
+        </div>
+
+        <div id="ps-avert-sans-jour" class="ps-avert" style="display:none"></div>
+
+        <div class="ps-etape ps-inactive" id="ps-etape-semaine">
+            <div class="ps-etape-titre"><span class="ps-num">2</span> Organisez sa semaine <small>— le planning se répète chaque semaine</small></div>
+            <p class="ps-astuce-dd"><i class="fas fa-hand-paper"></i> <strong>Glissez</strong> un client ou un secteur de la liste ci-dessous vers un jour,
+                ou cliquez sur <strong>« + Ajouter »</strong> en bas d'un jour. Pour changer un client de jour, glissez-le vers l'autre jour.</p>
+            <div class="ps-tableau">
+                <div class="ps-panneau">
+                    <div class="ps-panneau-tete">
+                        <div class="ps-mini-onglets">
+                            <button type="button" class="ps-mini-onglet active" data-liste="clients"><i class="fas fa-user"></i> Clients</button>
+                            <button type="button" class="ps-mini-onglet" data-liste="secteurs"><i class="fas fa-map-marked-alt"></i> Secteurs</button>
+                        </div>
+                        <input type="text" id="ps-filtre" placeholder="Rechercher un client…" autocomplete="off">
+                        <div class="ps-legende"><span>Cases L M M J V S D :</span>
+                            <span><i style="background:#2563eb"></i>visité par ce prévendeur</span>
+                            <span><i style="background:repeating-linear-gradient(45deg,#94a3b8 0 3px,#475569 3px 6px)"></i>déjà pris par un autre prévendeur (nom au survol)</span>
+                            <span><i style="background:#f1f5f9;border:1px solid #e2e8f0"></i>libre</span></div>
+                    </div>
+                    <div class="ps-panneau-liste" id="ps-panneau-liste"></div>
+                </div>
+                <div class="ps-semaine" id="ps-semaine"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="ps-toast"></div>
+
+    <!-- Fenêtre : ajouter des clients au jour choisi -->
+    <div id="ps-fenetre-ajout" class="ps-fond">
+        <div class="ps-fenetre">
+            <div class="ps-fenetre-tete">
+                <h4 id="ps-ajout-titre">Ajouter des clients</h4>
+                <button type="button" class="ps-fermer" data-action="fermer-ajout" title="Fermer">&times;</button>
+            </div>
+            <div class="ps-fenetre-corps">
+                <div class="ps-onglets">
+                    <button type="button" class="ps-onglet active" data-onglet="clients"><b><i class="fas fa-user"></i> Un client</b><small>Chercher par nom ou téléphone</small></button>
+                    <button type="button" class="ps-onglet" data-onglet="secteurs"><b><i class="fas fa-map-marked-alt"></i> Tout un secteur</b><small>Tous les clients d'un quartier</small></button>
+                </div>
+                <div id="ps-panneau-clients">
+                    <div class="ps-recherche-box"><i class="fas fa-search"></i><input type="text" id="ps-recherche" placeholder="Tapez le nom ou le téléphone du client…" autocomplete="off"></div>
+                    <div id="ps-liste-choix-clients"></div>
+                </div>
+                <div id="ps-panneau-secteurs" style="display:none">
+                    <p class="ps-astuce">Un secteur ajoute tous ses clients, y compris les futurs clients de ce secteur.</p>
+                    <div id="ps-liste-choix-secteurs"></div>
+                </div>
+            </div>
+            <div class="ps-fenetre-pied">
+                <button type="button" data-action="fermer-ajout" style="background:#1d4ed8;color:#fff">Terminé</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fenêtre : confirmation (transfert, retrait) -->
+    <div id="ps-fenetre-confirm" class="ps-fond" style="z-index:2050">
+        <div class="ps-fenetre" style="max-width:440px">
+            <div class="ps-fenetre-tete"><h4 id="ps-confirm-titre"></h4></div>
+            <div class="ps-fenetre-corps" id="ps-confirm-texte" style="font-size:15px;line-height:1.55"></div>
+            <div class="ps-fenetre-pied">
+                <button type="button" data-action="fermer-confirm" style="background:#f1f5f9;color:#334155">Annuler</button>
+                <button type="button" id="ps-confirm-oui"></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Anciennes sections (remplacées par le planning de la semaine), conservées masquées -->
+    <div id="assignation-section" class="modern-section" style="display:none;">
         <div class="section-header">
             Assignation des clients aux chauffeurs de l'application mobile
         </div>
@@ -1889,9 +2091,14 @@ function switchConfigTab(tabName) {
     });
 
     // Afficher/masquer les sections
-    document.getElementById('assignation-section').style.display = tabName === 'assignation' ? 'block' : 'none';
-    document.getElementById('config-jour-section').style.display = tabName === 'config-jour' ? 'block' : 'none';
-    document.getElementById('import-export-section').style.display = tabName === 'import-export' ? 'block' : 'none';
+    const afficher = (id, oui) => { const el = document.getElementById(id); if (el) el.style.display = oui ? 'block' : 'none'; };
+    afficher('planning-semaine-section', tabName === 'planning-semaine');
+    afficher('assignation-section', tabName === 'assignation');
+    afficher('config-jour-section', tabName === 'config-jour');
+    afficher('import-export-section', tabName === 'import-export');
+    if (tabName === 'planning-semaine' && typeof window.initPlanningSemaine === 'function') {
+        window.initPlanningSemaine();
+    }
 
     // Charger les données si nécessaire
     if (tabName === 'config-jour') {

@@ -305,10 +305,13 @@ class SyncArretsTests(BaseMobile):
         r = self.api.get(f'{BASE}/livreurs/{self.livreur.id}/clients_assignes/')
         self.assertEqual(r.status_code, 200)
         clients = {c['id']: c for c in r.json()['clients']}
-        self.assertEqual(set(clients), {self.c1.id, self.c2.id})
+        # Seuls les clients du planning de la semaine comptent (même calcul que le téléphone et
+        # les tournées) : c1, affecté sans aucun jour de passage, n'y est plus...
+        self.assertEqual(set(clients), {self.c2.id})
         self.assertEqual(clients[self.c2.id]['jours_semaine'], [self.jour])
-        self.assertEqual(clients[self.c1.id]['jours_semaine'], [])
-        self.assertEqual(clients[self.c1.id]['type_prix_code'], 'DETAIL')
+        # ... il est signalé à part dans le planning, pour être complété ou retiré
+        r = self.bureau.get(f'{BASE}/livreurs/{self.livreur.id}/planning/')
+        self.assertEqual([c['id'] for c in r.json()['clients_sans_jour']], [self.c1.id])
 
 
 class AvertissementStockVanTests(BaseMobile):

@@ -18,14 +18,8 @@ from .models import Categorie, InventoryLine, Produit
 
 def produits_du_tenant(request):
     """Produits actifs visibles par l'utilisateur (meme regle que TenantFilterMixin)."""
-    qs = Produit.objects.filter(is_active=True)
-    user = request.user
-    if user.is_superuser or user.is_staff:
-        return qs
-    company = getattr(request, 'company', None)
-    if company is not None:
-        return qs.filter(Q(company=company) | Q(company__isnull=True))
-    return qs.filter(company__isnull=True)
+    from .tenant import filtrer
+    return filtrer(Produit.objects.filter(is_active=True), request)
 
 
 def _ids_categorie(categorie_id):

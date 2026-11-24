@@ -96,11 +96,14 @@ class TarifsMobile:
         from .models import CodePrix, PrixProduit, TypePrix, Promotion, Categorie
         today = timezone.localdate()
         now = timezone.now()
-        self.types = list(TypePrix.objects.filter(is_active=True))
-        self.type_defaut = next((t for t in self.types if t.is_default), None)
-        self.code_defaut = CodePrix.get_default()
-        code_actif = CodePrix.objects.filter(
-            is_active=True, date_debut__lte=today, date_fin__gte=today).first() if avec_promotions else None
+        # Types et codes de prix de l'entreprise (+ anciens partagés) ; avant : toutes les entreprises
+        self.types = list(TypePrix.pour_entreprise(company).filter(is_active=True))
+        self.type_defaut = (next((t for t in self.types if t.is_default and t.company_id), None)
+                            or next((t for t in self.types if t.is_default), None))
+        self.code_defaut = CodePrix.get_default(company)
+        code_actif = CodePrix.pour_entreprise(company).filter(
+            is_active=True, date_debut__lte=today, date_fin__gte=today).order_by(
+            models.F('company').asc(nulls_last=True)).first() if avec_promotions else None
         self.code_actif = code_actif or self.code_defaut
 
         codes = {c.id for c in (self.code_defaut, self.code_actif) if c is not None}
@@ -220,13 +223,98 @@ def prix_unitaire_client(produit, client, tarifs=None):
     """Prix d'un produit pour un client (type de prix du client, sinon type par défaut ;
     sinon prixU). Utilisé quand le téléphone envoie une ligne sans prix (ou à 0)."""
     if tarifs is None:
-        tarifs = TarifsMobile(produits=[produit.id], avec_promotions=False)
+        company = getattr(client, 'company_id', None) or getattr(produit, 'company_id', None)
+        tarifs = TarifsMobile(company=company, produits=[produit.id], avec_promotions=False)
     type_id = getattr(client, 'type_prix_id', None) if client is not None else None
     return tarifs.prix_base(produit, type_id)
 
 
 # ---------------------------------------------------------------------------
-# Synchronisation des arrêts avec le planning (ClientLivreurHebdo)
+# Planning de la semaine : UNE seule source pour le web, le téléphone et les tournées.
+# Pour chaque prévendeur et chaque jour de la semaine (1=lundi..7=dimanche) :
+#   clients choisis un par un (ClientLivreurHebdo)  +  clients des secteurs du jour
+#   (PlanningHebdomadaire.secteurs).  Pas de dates : seul le jour de la semaine compte.
+# ---------------------------------------------------------------------------
+def secteurs_du_jour(livreur_id, jour):
+    """Ids des secteurs prévus pour ce prévendeur ce jour de la semaine."""
+    from .distribution_models import PlanningHebdomadaire
+    return sorted({sid for sid in PlanningHebdomadaire.objects.filter(
+        livreur_id=livreur_id, jour_semaine=jour, is_active=True).values_list('secteurs', flat=True) if sid})
+
+
+def clients_planifies(livreur_id, jour):
+    """Clients que le prévendeur visite ce jour de la semaine, dans l'ordre de passage.
+
+    Liste de dicts {client, ordre, notes, source ('client'|'secteur'), config_id}. Les clients
+    choisis un par un passent d'abord (dans leur ordre de passage), puis ceux des secteurs
+    (par nom). Un client présent des deux façons n'apparaît qu'une fois."""
+    from .distribution_models import ClientLivreurHebdo
+    from .models import Client
+    resultat, vus = [], set()
+    configs = ClientLivreurHebdo.objects.filter(
+        livreur_id=livreur_id, jour_semaine=jour, is_active=True,
+    ).select_related('client', 'client__type_prix', 'client__secteur').order_by('ordre_passage', 'id')
+    for c in configs:
+        if c.client_id in vus:
+            continue
+        vus.add(c.client_id)
+        resultat.append({'client': c.client, 'ordre': c.ordre_passage, 'notes': c.notes or '',
+                         'source': 'client', 'config_id': c.id})
+    secteurs = secteurs_du_jour(livreur_id, jour)
+    if secteurs:
+        ecartes = set(exclusions_du_jour(livreur_id, jour, secteurs))
+        for client in Client.objects.filter(secteur_id__in=secteurs).select_related(
+                'type_prix', 'secteur').order_by('nom', 'prenom', 'id'):
+            if client.id in vus or client.id in ecartes:
+                continue
+            vus.add(client.id)
+            resultat.append({'client': client, 'ordre': None, 'notes': '', 'source': 'secteur',
+                             'config_id': None})
+    return resultat
+
+
+def exclusions_du_jour(livreur_id, jour, secteurs=None):
+    """Clients des secteurs du jour que ce prévendeur ne visite PAS ce jour-là :
+    {client_id: None (retiré à la main) | nom du prévendeur à qui il a été donné}.
+    Un client donné un par un à un autre prévendeur ce jour-là sort des secteurs des autres."""
+    from .distribution_models import ClientLivreurHebdo, PlanningHebdomadaire
+    from .models import Client
+    if secteurs is None:
+        secteurs = secteurs_du_jour(livreur_id, jour)
+    if not secteurs:
+        return {}
+    ecartes = {cid: None for cid in PlanningHebdomadaire.objects.filter(
+        livreur_id=livreur_id, jour_semaine=jour, is_active=True).values_list('clients_exclus', flat=True) if cid}
+    ailleurs = ClientLivreurHebdo.objects.filter(
+        jour_semaine=jour, is_active=True, client__secteur_id__in=secteurs,
+    ).exclude(livreur_id=livreur_id).values_list('client_id', 'livreur__nom')
+    for cid, nom in ailleurs:
+        ecartes[cid] = nom or 'un autre prévendeur'
+    # seuls les clients encore dans un des secteurs comptent
+    garder = set(Client.objects.filter(pk__in=ecartes, secteur_id__in=secteurs).values_list('id', flat=True))
+    return {cid: v for cid, v in ecartes.items() if cid in garder}
+
+
+def jours_par_client(livreur_id):
+    """{client_id: {jours}} : tous les clients du planning de la semaine du prévendeur."""
+    jours = {}
+    for jour in range(1, 8):
+        for item in clients_planifies(livreur_id, jour):
+            jours.setdefault(item['client'].id, set()).add(jour)
+    return jours
+
+
+def livreurs_du_secteur(secteur_ids):
+    """Ids des prévendeurs dont le planning contient un de ces secteurs."""
+    from .distribution_models import PlanningHebdomadaire
+    ids = [i for i in secteur_ids if i]
+    if not ids:
+        return set()
+    return set(PlanningHebdomadaire.objects.filter(secteurs__in=ids).values_list('livreur_id', flat=True))
+
+
+# ---------------------------------------------------------------------------
+# Synchronisation des arrêts avec le planning de la semaine
 # ---------------------------------------------------------------------------
 def synchroniser_arrets_tournee(tournee, clients_concernes=None):
     """Aligne les arrêts d'une tournée sur le planning hebdomadaire de son livreur.
@@ -239,28 +327,21 @@ def synchroniser_arrets_tournee(tournee, clients_concernes=None):
       ajoutés à la main pour d'autres clients).
     Retourne {'ajoutes', 'supprimes', 'mis_a_jour'}.
     """
-    from .distribution_models import ArretTourneeMobile, ClientLivreurHebdo
+    from .distribution_models import ArretTourneeMobile
 
-    date_tournee = tournee.date_tournee
-    configs = list(ClientLivreurHebdo.objects.filter(
-        livreur_id=tournee.livreur_id, jour_semaine=date_tournee.weekday() + 1, is_active=True,
-    ).filter(
-        models.Q(date_debut__isnull=True) | models.Q(date_debut__lte=date_tournee)
-    ).filter(
-        models.Q(date_fin__isnull=True) | models.Q(date_fin__gte=date_tournee)
-    ).select_related('client').order_by('ordre_passage', 'id'))
+    configs = clients_planifies(tournee.livreur_id, tournee.date_tournee.weekday() + 1)
 
     arrets = list(ArretTourneeMobile.objects.filter(tournee=tournee))
     existants = {a.client_id: a for a in arrets}
-    planifies = {c.client_id for c in configs}
+    planifies = {c['client'].id for c in configs}
     ordres = {a.ordre_passage for a in arrets}
     ajoutes = supprimes = mis_a_jour = 0
 
     for config in configs:
-        arret = existants.get(config.client_id)
+        arret = existants.get(config['client'].id)
         if arret is None:
             continue
-        lat, lng = getattr(config.client, 'lat', None), getattr(config.client, 'lng', None)
+        lat, lng = getattr(config['client'], 'lat', None), getattr(config['client'], 'lng', None)
         if lat is not None and lng is not None:
             cur = (float(arret.latitude) if arret.latitude is not None else None,
                    float(arret.longitude) if arret.longitude is not None else None)
@@ -280,14 +361,15 @@ def synchroniser_arrets_tournee(tournee, clients_concernes=None):
 
     ordre = 1
     for config in configs:
-        if config.client_id in existants:
+        client = config['client']
+        if client.id in existants:
             continue
         while ordre in ordres:
             ordre += 1
         ArretTourneeMobile.objects.create(
-            tournee=tournee, client=config.client, ordre_passage=ordre,
-            latitude=getattr(config.client, 'lat', None), longitude=getattr(config.client, 'lng', None),
-            statut='en_attente', notes=config.notes or '')
+            tournee=tournee, client=client, ordre_passage=ordre,
+            latitude=getattr(client, 'lat', None), longitude=getattr(client, 'lng', None),
+            statut='en_attente', notes=config['notes'])
         ordres.add(ordre)
         ajoutes += 1
 
@@ -367,15 +449,39 @@ def _hebdo_pre_save(sender, instance, **kwargs):
             'livreur_id', flat=True).first()
 
 
+def _livreurs_secteur_client(client_id):
+    """Prévendeurs qui visitent le secteur de ce client : un client donné un par un à un
+    prévendeur sort de leurs secteurs (et y revient quand on le lui retire)."""
+    from .models import Client
+    secteur_id = Client.objects.filter(pk=client_id).values_list('secteur_id', flat=True).first()
+    return livreurs_du_secteur({secteur_id})
+
+
 def _hebdo_post_save(sender, instance, raw=False, **kwargs):
     if raw:
         return
-    planifier_sync_arrets({instance.livreur_id, getattr(instance, '_sync_ancien_livreur_id', None)},
-                          {instance.client_id})
+    planifier_sync_arrets({instance.livreur_id, getattr(instance, '_sync_ancien_livreur_id', None)}
+                          | _livreurs_secteur_client(instance.client_id), {instance.client_id})
 
 
 def _hebdo_post_delete(sender, instance, **kwargs):
-    planifier_sync_arrets({instance.livreur_id}, {instance.client_id})
+    planifier_sync_arrets({instance.livreur_id} | _livreurs_secteur_client(instance.client_id),
+                          {instance.client_id})
+
+
+def _planning_exclus_changed(sender, instance, action, reverse, pk_set, **kwargs):
+    """Client d'un secteur retiré (ou remis) d'un jour : tournées à venir du prévendeur."""
+    if action not in ('pre_clear', 'post_add', 'post_remove', 'post_clear'):
+        return
+    if reverse:
+        from .distribution_models import PlanningHebdomadaire
+        livreurs = set(PlanningHebdomadaire.objects.filter(pk__in=pk_set or ()).values_list('livreur_id', flat=True))
+        planifier_sync_arrets(livreurs, {instance.pk})
+        return
+    if action == 'pre_clear':
+        instance._sync_exclus_avant = set(instance.clients_exclus.values_list('id', flat=True))
+        return
+    planifier_sync_arrets({instance.livreur_id}, set(pk_set or ()) | getattr(instance, '_sync_exclus_avant', set()))
 
 
 def _clients_assignes_changed(sender, instance, action, reverse, pk_set, **kwargs):
@@ -385,10 +491,55 @@ def _clients_assignes_changed(sender, instance, action, reverse, pk_set, **kwarg
     planifier_sync_arrets(livreurs)
 
 
+def _planning_secteurs_changed(sender, instance, action, reverse, pk_set, **kwargs):
+    """Secteurs ajoutés / retirés d'un jour de planning : tournées à venir du prévendeur."""
+    from .models import Client
+    if action not in ('pre_clear', 'post_add', 'post_remove', 'post_clear'):
+        return
+    if reverse:   # secteur.plannings_hebdo.add(...) : rare, on resynchronise ces prévendeurs
+        from .distribution_models import PlanningHebdomadaire
+        livreurs = set(PlanningHebdomadaire.objects.filter(pk__in=pk_set or ()).values_list('livreur_id', flat=True))
+        planifier_sync_arrets(livreurs, set(Client.objects.filter(secteur=instance).values_list('id', flat=True)))
+        return
+    if action == 'pre_clear':   # mémoriser les secteurs avant leur retrait
+        instance._sync_secteurs_avant = set(instance.secteurs.values_list('id', flat=True))
+        return
+    secteurs = set(pk_set or ()) | getattr(instance, '_sync_secteurs_avant', set())
+    planifier_sync_arrets({instance.livreur_id},
+                          set(Client.objects.filter(secteur_id__in=secteurs).values_list('id', flat=True)))
+
+
+def _client_pre_save(sender, instance, **kwargs):
+    instance._sync_ancien_secteur_id = None
+    if instance.pk:
+        instance._sync_ancien_secteur_id = sender.objects.filter(pk=instance.pk).values_list(
+            'secteur_id', flat=True).first()
+
+
+def _client_post_save(sender, instance, created=False, raw=False, **kwargs):
+    """Un client change de secteur (ou un nouveau client a un secteur) : tournées à venir des
+    prévendeurs qui visitent l'ancien ou le nouveau secteur."""
+    if raw:
+        return
+    ancien = getattr(instance, '_sync_ancien_secteur_id', None)
+    if ancien == instance.secteur_id and not created:
+        return
+    livreurs = livreurs_du_secteur({ancien, instance.secteur_id})
+    if livreurs:
+        planifier_sync_arrets(livreurs, {instance.pk})
+
+
 def connecter_signaux():
     from django.db.models.signals import pre_save, post_save, post_delete, m2m_changed
-    from .distribution_models import ClientLivreurHebdo, LivreurDistribution
+    from .distribution_models import ClientLivreurHebdo, LivreurDistribution, PlanningHebdomadaire
+    from .models import Client
     uid = 'distribution_prix_stock'
+    m2m_changed.connect(_planning_secteurs_changed, sender=PlanningHebdomadaire.secteurs.through,
+                        dispatch_uid=uid + '_secteurs')
+    m2m_changed.connect(_planning_exclus_changed, sender=PlanningHebdomadaire.clients_exclus.through,
+                        dispatch_uid=uid + '_exclus')
+    pre_save.connect(_client_pre_save, sender=Client, dispatch_uid=uid + '_client_pre')
+    post_save.connect(_client_post_save, sender=Client, dispatch_uid=uid + '_client_post')
     pre_save.connect(_hebdo_pre_save, sender=ClientLivreurHebdo, dispatch_uid=uid + '_pre')
     post_save.connect(_hebdo_post_save, sender=ClientLivreurHebdo, dispatch_uid=uid + '_post')
     post_delete.connect(_hebdo_post_delete, sender=ClientLivreurHebdo, dispatch_uid=uid + '_del')

@@ -306,8 +306,11 @@ class Categorie(models.Model):
 #   Types de Prix   #
 #####################
 class CodePrix(models.Model):
-    """Codes de prix pour les promotions/périodes (ex: STANDARD, AID, RAMADAN)"""
-    code = models.CharField(max_length=20, unique=True, help_text="Code unique (ex: STANDARD, AID, RAMADAN)")
+    """Codes de prix pour les promotions/périodes (ex: STANDARD, AID, RAMADAN).
+    Propres à une entreprise ; company vide = ancien code partagé par toutes."""
+    company = models.ForeignKey('Company', on_delete=models.CASCADE, null=True, blank=True,
+                                related_name='codes_prix', verbose_name='Entreprise')
+    code = models.CharField(max_length=20, help_text="Code unique dans l'entreprise (ex: STANDARD, AID, RAMADAN)")
     libelle = models.CharField(max_length=100, help_text="Libellé du code de prix")
     description = models.TextField(blank=True, help_text="Description du code de prix")
     date_debut = models.DateField("Date début", null=True, blank=True, help_text="Date de début de validité")
@@ -321,23 +324,41 @@ class CodePrix(models.Model):
         ordering = ['ordre', 'libelle']
         verbose_name = "Code de prix"
         verbose_name_plural = "Codes de prix"
+        constraints = [
+            models.UniqueConstraint(fields=['company', 'code'], name='codeprix_code_unique_par_entreprise'),
+            models.UniqueConstraint(fields=['code'], condition=models.Q(company__isnull=True),
+                                    name='codeprix_code_unique_partage'),
+        ]
 
     def __str__(self):
         return f"{self.code} - {self.libelle}"
 
     def save(self, *args, **kwargs):
         if self.is_default:
-            CodePrix.objects.filter(is_default=True).exclude(pk=self.pk).update(is_default=False)
+            # Un seul code par défaut PAR ENTREPRISE (avant : retirait celui des autres entreprises)
+            CodePrix.objects.filter(is_default=True, company_id=self.company_id).exclude(pk=self.pk).update(is_default=False)
         super().save(*args, **kwargs)
 
     @classmethod
-    def get_default(cls):
-        return cls.objects.filter(is_default=True, is_active=True).first()
+    def pour_entreprise(cls, company):
+        """Codes visibles par une entreprise : les siens + les anciens codes partagés."""
+        if company is None:
+            return cls.objects.filter(company__isnull=True)
+        return cls.objects.filter(models.Q(company=company) | models.Q(company__isnull=True))
+
+    @classmethod
+    def get_default(cls, company=None):
+        """Code par défaut de l'entreprise, sinon l'ancien code par défaut partagé."""
+        qs = cls.pour_entreprise(company).filter(is_default=True, is_active=True)
+        return qs.order_by(models.F('company').asc(nulls_last=True)).first()
 
 
 class TypePrix(models.Model):
-    """Types de prix par client : Détail, Supérette, Gros, etc."""
-    code = models.CharField(max_length=20, unique=True, help_text="Code du type de prix (ex: DETAIL, SUPERETTE, GROS)")
+    """Types de prix par client : Détail, Supérette, Gros, etc.
+    Propres à une entreprise ; company vide = ancien type partagé par toutes."""
+    company = models.ForeignKey('Company', on_delete=models.CASCADE, null=True, blank=True,
+                                related_name='types_prix', verbose_name='Entreprise')
+    code = models.CharField(max_length=20, help_text="Code du type de prix, unique dans l'entreprise (ex: DETAIL, SUPERETTE, GROS)")
     libelle = models.CharField(max_length=100, help_text="Libellé du type de prix")
     description = models.TextField(blank=True, help_text="Description du type de prix")
     ordre = models.IntegerField(default=0, help_text="Ordre d'affichage")
@@ -349,18 +370,33 @@ class TypePrix(models.Model):
         ordering = ['ordre', 'libelle']
         verbose_name = "Type de prix"
         verbose_name_plural = "Types de prix"
+        constraints = [
+            models.UniqueConstraint(fields=['company', 'code'], name='typeprix_code_unique_par_entreprise'),
+            models.UniqueConstraint(fields=['code'], condition=models.Q(company__isnull=True),
+                                    name='typeprix_code_unique_partage'),
+        ]
 
     def __str__(self):
         return f"{self.code} - {self.libelle}"
 
     def save(self, *args, **kwargs):
         if self.is_default:
-            TypePrix.objects.filter(is_default=True).exclude(pk=self.pk).update(is_default=False)
+            # Un seul type par défaut PAR ENTREPRISE (avant : retirait celui des autres entreprises)
+            TypePrix.objects.filter(is_default=True, company_id=self.company_id).exclude(pk=self.pk).update(is_default=False)
         super().save(*args, **kwargs)
 
     @classmethod
-    def get_default(cls):
-        return cls.objects.filter(is_default=True, is_active=True).first()
+    def pour_entreprise(cls, company):
+        """Types visibles par une entreprise : les siens + les anciens types partagés."""
+        if company is None:
+            return cls.objects.filter(company__isnull=True)
+        return cls.objects.filter(models.Q(company=company) | models.Q(company__isnull=True))
+
+    @classmethod
+    def get_default(cls, company=None):
+        """Type par défaut de l'entreprise, sinon l'ancien type par défaut partagé."""
+        qs = cls.pour_entreprise(company).filter(is_default=True, is_active=True)
+        return qs.order_by(models.F('company').asc(nulls_last=True)).first()
 
 #####################
 #    Produits       #

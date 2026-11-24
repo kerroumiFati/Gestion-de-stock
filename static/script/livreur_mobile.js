@@ -164,6 +164,25 @@ function getSignatureData() {
     return signaturePad.canvas.toDataURL('image/png');
 }
 
+// Clients d'un livreur pour une date (YYYY-MM-DD) selon le planning de la semaine :
+// même calcul côté serveur que le téléphone, les tournées et l'écran « Planning de la semaine ».
+async function chargerClientsPlanning(livreurId, dateStr) {
+    const r = await fetch(`/API/distribution/livreurs/${livreurId}/clients_du_jour/?date=${encodeURIComponent(dateStr)}`,
+        { credentials: 'same-origin' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    return (data.clients || []).map(c => ({
+        client: c.id,
+        client_nom: `${c.nom || ''} ${c.prenom || ''}`.trim(),
+        client_adresse: c.adresse || '',
+        client_telephone: c.telephone || '',
+        client_lat: c.lat,
+        client_lng: c.lng,
+        ordre_passage: c.ordre_visite,
+        notes: ''
+    }));
+}
+
 async function loadLivreurData() {
     try {
         const joursNoms = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
@@ -188,11 +207,9 @@ async function loadLivreurData() {
 
             console.log('[LIVREUR_MOBILE] Tournée verrouillée - Date:', currentTournee.date_tournee, 'Jour:', jourNom);
 
-            // Charger les clients assignés au livreur pour le jour de la tournée
+            // Clients du planning de la semaine (secteurs + clients choisis) pour le jour de la tournée
             const livreurId = currentTournee.livreur;
-            const configResponse = await fetch(`/API/distribution/clients-livreurs-hebdo/?livreur=${livreurId}&jour_semaine=${jourSemaineAPI}&is_active=true`);
-            const configData = await configResponse.json();
-            const configs = Array.isArray(configData) ? configData : (configData.results || []);
+            const configs = await chargerClientsPlanning(livreurId, String(currentTournee.date_tournee).slice(0, 10));
 
             console.log('[LIVREUR_MOBILE] Clients pour cette tournée:', configs.length);
 
@@ -211,10 +228,19 @@ async function loadLivreurData() {
 
             console.log('[LIVREUR_MOBILE] Pas de tournée en cours - Jour actuel:', jourNom);
 
-            // Charger les clients du jour actuel
-            const configResponse = await fetch(`/API/distribution/clients-livreurs-hebdo/?jour_semaine=${jourSemaine}&is_active=true`);
-            const configData = await configResponse.json();
-            const configs = Array.isArray(configData) ? configData : (configData.results || []);
+            // Clients du jour actuel selon le planning de la semaine du livreur connecté
+            let configs;
+            const moi = await fetch('/API/distribution/livreurs/me/', { credentials: 'same-origin' });
+            if (moi.ok) {
+                const livreur = await moi.json();
+                const aujourdHui = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+                configs = await chargerClientsPlanning(livreur.id, aujourdHui);
+            } else {
+                // Compte sans livreur (administrateur) : ancienne liste, tous livreurs confondus
+                const configResponse = await fetch(`/API/distribution/clients-livreurs-hebdo/?jour_semaine=${jourSemaine}&is_active=true`);
+                const configData = await configResponse.json();
+                configs = Array.isArray(configData) ? configData : (configData.results || []);
+            }
 
             if (configs.length > 0) {
                 displayJourInfoAvecDemarrage(jourNom, configs);

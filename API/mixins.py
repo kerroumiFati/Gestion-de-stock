@@ -21,29 +21,20 @@ class TenantFilterMixin:
         """
         Filtre le queryset par la company de l'utilisateur connecté.
         Uniquement si le modèle a un champ 'company'.
-        Les superusers et staff voient toutes les données.
+        Seul le superutilisateur voit toutes les données. Les administrateurs d'entreprise
+        (is_staff) ne voient que leur entreprise — avant, is_staff voyait tout.
         """
-        from django.db.models import Q
+        from .tenant import filtrer
         queryset = super().get_queryset()
 
         # Vérifier si l'utilisateur est authentifié
         if not self.request.user.is_authenticated:
             return queryset.none()
 
-        # Les superusers et staff voient toutes les données
-        if self.request.user.is_superuser or self.request.user.is_staff:
-            return queryset
-
         # Vérifier si le modèle a un champ 'company'
-        model = queryset.model
-        if hasattr(model, 'company'):
-            # Filtrer par la company de l'utilisateur OU données sans company (null)
-            if hasattr(self.request, 'company') and self.request.company is not None:
-                # Afficher les données de la company de l'utilisateur + celles sans company
-                queryset = queryset.filter(Q(company=self.request.company) | Q(company__isnull=True))
-            else:
-                # Si l'utilisateur n'a pas de company, afficher uniquement les données sans company
-                queryset = queryset.filter(company__isnull=True)
+        if hasattr(queryset.model, 'company'):
+            # Données de l'entreprise de l'utilisateur + anciennes données sans entreprise
+            queryset = filtrer(queryset, self.request)
 
         return queryset
 
@@ -51,12 +42,14 @@ class TenantFilterMixin:
         """
         Attache automatiquement la company lors de la création.
         """
-        # Vérifier si l'utilisateur a une company
-        if hasattr(self.request, 'company') and self.request.company is not None:
+        # Vérifier si l'utilisateur a une company (session web ou jeton du téléphone)
+        from .tenant import entreprise_de
+        company = entreprise_de(self.request)
+        if company is not None:
             # Attacher la company à l'objet créé si le modèle a ce champ
             model_fields = [f.name for f in serializer.Meta.model._meta.get_fields()]
             if 'company' in model_fields:
-                serializer.save(company=self.request.company)
+                serializer.save(company=company)
             else:
                 serializer.save()
         else:
@@ -68,8 +61,9 @@ class TenantFilterMixin:
         Vérifie que l'objet appartient bien à la company de l'utilisateur.
         Utile pour les opérations update/delete.
         """
-        if hasattr(obj, 'company'):
-            if obj.company != self.request.company:
+        from .tenant import entreprise_de, voit_toutes_les_entreprises
+        if hasattr(obj, 'company') and not voit_toutes_les_entreprises(self.request):
+            if obj.company_id is not None and obj.company != entreprise_de(self.request):
                 return False
         return True
 
@@ -83,25 +77,26 @@ class WarehouseRelatedTenantMixin:
     def get_queryset(self):
         """
         Filtre le queryset par la company via le warehouse.
-        Les superusers et staff voient toutes les données.
+        Seul le superutilisateur voit toutes les données (avant : aussi is_staff).
         """
         from django.db.models import Q
+        from .tenant import entreprise_de, voit_toutes_les_entreprises
         queryset = super().get_queryset()
 
         # Vérifier si l'utilisateur est authentifié
         if not self.request.user.is_authenticated:
             return queryset.none()
 
-        # Les superusers et staff voient toutes les données
-        if self.request.user.is_superuser or self.request.user.is_staff:
+        if voit_toutes_les_entreprises(self.request):
             return queryset
 
         # Filtrer par warehouse.company
         model = queryset.model
         if hasattr(model, 'warehouse'):
-            if hasattr(self.request, 'company') and self.request.company is not None:
+            company = entreprise_de(self.request)
+            if company is not None:
                 # Afficher les données de la company de l'utilisateur + celles sans company
-                queryset = queryset.filter(Q(warehouse__company=self.request.company) | Q(warehouse__company__isnull=True))
+                queryset = queryset.filter(Q(warehouse__company=company) | Q(warehouse__company__isnull=True))
             # Si l'utilisateur n'a pas de company, afficher toutes les données (pour éviter liste vide)
 
         return queryset

@@ -1235,7 +1235,8 @@ class CommandeClientCreateSerializer(serializers.ModelSerializer):
         # (Détail, Gros...), le même que « prix_par_type » du catalogue mobile.
         from .distribution_prix_stock import TarifsMobile, prix_unitaire_client
         sans_prix = [l['produit'].id for l in lignes_data if not l.get('prix_unitaire_ht')]
-        tarifs = TarifsMobile(produits=sans_prix, avec_promotions=False) if sans_prix else None
+        company_tarifs = commande.company_id or getattr(commande.client, 'company_id', None)
+        tarifs = TarifsMobile(company=company_tarifs, produits=sans_prix, avec_promotions=False) if sans_prix else None
         for ligne_data in lignes_data:
             # Retirer les champs calculés s'ils sont présents
             ligne_data.pop('produit_reference', None)

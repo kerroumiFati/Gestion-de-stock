@@ -1194,6 +1194,12 @@ class PlanningHebdomadaire(models.Model):
     code_prix = models.ForeignKey('CodePrix', on_delete=models.SET_NULL, null=True, blank=True,
                                   related_name='plannings_hebdo',
                                   help_text='Code prix à appliquer pour cette tournée')
+    # Secteurs visités ce jour-là : tous les clients de ces secteurs font partie des clients
+    # du jour (en plus des clients choisis un par un dans ClientLivreurHebdo).
+    secteurs = models.ManyToManyField('Secteur', blank=True, related_name='plannings_hebdo',
+                                      help_text='Secteurs visités ce jour de la semaine')
+    clients_exclus = models.ManyToManyField('Client', blank=True, related_name='plannings_exclus',
+                                            help_text="Clients de ces secteurs à ne PAS visiter ce jour-là")
 
     # Planning actif
     is_active = models.BooleanField('Actif', default=True,

@@ -20,7 +20,7 @@ on:
         default: true
         type: boolean
       run_migrations:
-        description: 'Exécuter les migrations'
+        description: 'Exécuter les migrations (ignoré : elles sont toujours exécutées)'
         required: true
         default: true
         type: boolean
@@ -130,8 +130,8 @@ jobs:
             echo "✓ Dépendances installées"
           EOF
 
+      # Toujours exécutées : un code déployé sans ses migrations plante (vu les 21/11 avec 0094 et 0095).
       - name: Run migrations
-        if: ${{ github.event.inputs.run_migrations == 'true' }}
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USERNAME: ${{ secrets.VPS_USERNAME }}
@@ -143,6 +143,9 @@ jobs:
             cd /home/gestionstock/app
             source venv/bin/activate
             python manage.py migrate --noinput
+            # Échoue (et bloque le redémarrage) s'il reste une migration non appliquée
+            python manage.py migrate --check
+            python manage.py showmigrations API | tail -3
             echo "✓ Migrations exécutées"
           EOF
 

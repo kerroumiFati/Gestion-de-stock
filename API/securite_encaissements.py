@@ -74,6 +74,9 @@ def _client_du_livreur(livreur, client):
         return True
     if ClientLivreurHebdo.objects.filter(client=client, livreur=livreur).exists():
         return True
+    # Client d'un secteur que le prévendeur visite (planning de la semaine par secteurs)
+    if client.secteur_id and livreur.plannings_hebdo.filter(secteurs=client.secteur_id).exists():
+        return True
     if CommandeClient.objects.filter(client=client).filter(
             Q(livreur=livreur) | Q(passee_par=livreur)).exists():
         return True

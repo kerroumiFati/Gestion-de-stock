@@ -23,18 +23,19 @@ from django.utils import timezone
 from .models import Produit, Vente, LigneVente, Achat, StockMove, ProductStock, Warehouse
 
 
-# Périmètre « toutes les entreprises » : réservé au staff / superuser, comme dans
+# Périmètre « toutes les entreprises » : réservé au superutilisateur, comme dans
 # TenantFilterMixin (API/mixins.py). Valeur par défaut des générateurs.
 TOUTES_ENTREPRISES = object()
 
 
 def perimetre_rapport(request):
     """Entreprise à laquelle limiter un rapport, selon les mêmes règles que l'API :
-    staff / superuser -> toutes ; sinon l'entreprise de l'utilisateur (None s'il n'en a pas)."""
-    user = request.user
-    if user.is_superuser or user.is_staff:
+    superuser -> toutes ; sinon (administrateur d'entreprise compris) l'entreprise de
+    l'utilisateur (None s'il n'en a pas)."""
+    from .tenant import entreprise_de
+    if request.user.is_superuser:
         return TOUTES_ENTREPRISES
-    return getattr(request, 'company', None)
+    return entreprise_de(request)
 
 
 def _filtrer_entreprise(qs, company, champ='company'):
