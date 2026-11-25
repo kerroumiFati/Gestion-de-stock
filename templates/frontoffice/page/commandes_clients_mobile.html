@@ -907,7 +907,19 @@
         });
     }
 
+    // Jour (AAAA-MM-JJ, heure locale) d'une date ISO : la date de fin inclut toute la journée
+    function jourLocal(iso) {
+        const d = new Date(iso);
+        if (isNaN(d)) return String(iso || '').slice(0, 10);
+        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+
     function applyFilters() {
+        renderCommandes(commandesFiltrees());
+    }
+
+    // Commandes correspondant aux filtres de la page (liste affichée, récapitulatif)
+    function commandesFiltrees() {
         const statut = document.getElementById('filterStatut').value;
         const livreur = document.getElementById('filterLivreur').value;
         const dateDebut = document.getElementById('filterDateDebut').value;
@@ -923,10 +935,10 @@
             filtered = filtered.filter(c => c.livreur == livreur);
         }
         if (dateDebut) {
-            filtered = filtered.filter(c => c.date_commande >= dateDebut);
+            filtered = filtered.filter(c => jourLocal(c.date_commande) >= dateDebut);
         }
         if (dateFin) {
-            filtered = filtered.filter(c => c.date_commande <= dateFin);
+            filtered = filtered.filter(c => jourLocal(c.date_commande) <= dateFin);
         }
         if (search) {
             filtered = filtered.filter(c =>
@@ -936,7 +948,7 @@
             );
         }
 
-        renderCommandes(filtered);
+        return filtered;
     }
 
     function resetFilters() {

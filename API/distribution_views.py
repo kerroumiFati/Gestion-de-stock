@@ -2250,6 +2250,12 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
                 if paye < total_ttc - Decimal('0.01'):
                     CommandeClient.objects.filter(id=commande.id).update(est_paye=False)
 
+            # Historique : quantité juste avant la livraison et quantité livrée, ligne par ligne
+            for pid, ligne in lignes.items():
+                livree = quantites.get(pid, ligne.quantite) if quantites is not None else ligne.quantite
+                LigneCommandeClient.objects.filter(id=ligne.id).update(
+                    quantite_avant_livraison=ligne.quantite, quantite_livree=livree)
+
             commande.statut = 'delivered'
             commande.date_livraison_reelle = date_livraison or timezone.now()
             champs = ['statut', 'date_livraison_reelle']

@@ -951,11 +951,13 @@ class LigneCommandeClientSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'produit', 'produit_reference', 'produit_designation', 'produit_image',
             'produit_unites_par_carton',
-            'quantite', 'prix_unitaire_ht', 'taux_tva',
+            'quantite', 'quantite_commandee', 'quantite_avant_livraison', 'quantite_livree',
+            'prix_unitaire_ht', 'taux_tva',
             'montant_ht', 'montant_tva', 'montant_ttc',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['montant_ht', 'montant_tva', 'montant_ttc', 'created_at', 'updated_at']
+        read_only_fields = ['montant_ht', 'montant_tva', 'montant_ttc', 'created_at', 'updated_at',
+                            'quantite_commandee', 'quantite_avant_livraison', 'quantite_livree']
 
     def get_produit_unites_par_carton(self, obj):
         return obj.produit.get_unites_par_carton() if obj.produit_id else 1
@@ -1012,10 +1014,23 @@ class CommandeClientSerializer(serializers.ModelSerializer):
             # Champs de paiement
             'est_paye', 'type_paiement', 'montant_paye', 'date_paiement',
             'notes', 'notes_preparation',
-            'lignes', 'app_id', 'synced_at',
+            'lignes', 'lignes_retirees', 'app_id', 'synced_at',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['reference', 'created_at', 'updated_at', 'synced_at']
+
+    lignes_retirees = serializers.SerializerMethodField()
+
+    def get_lignes_retirees(self, obj):
+        """Produits retirés après la commande, avec leurs unités par carton."""
+        retirees = list(obj.lignes_retirees or [])
+        if not retirees:
+            return []
+        produits = {p.id: p for p in Produit.objects.filter(id__in=[r.get('produit') for r in retirees])}
+        for r in retirees:
+            p = produits.get(r.get('produit'))
+            r['produit_unites_par_carton'] = p.get_unites_par_carton() if p else 1
+        return retirees
 
     def get_livreur_nom(self, obj):
         """Retourne le nom du livreur"""
@@ -1351,6 +1366,12 @@ class CommandeClientCreateSerializer(serializers.ModelSerializer):
             anciens_prix = {
                 l.produit_id: (l.prix_unitaire_ht, l.taux_tva) for l in instance.lignes.all()
             }
+            # Quantités commandées au départ : conservées malgré la suppression / recréation des lignes
+            anciennes_lignes = {l.produit_id: l for l in instance.lignes.select_related('produit')}
+            produits_recus = {getattr(ld.get('produit'), 'id', ld.get('produit')) for ld in lignes_data}
+            for pid, ancienne in anciennes_lignes.items():
+                if pid not in produits_recus:
+                    instance.noter_ligne_retiree(ancienne)
 
             # Supprimer les anciennes lignes
             instance.lignes.all().delete()
@@ -1389,6 +1410,12 @@ class CommandeClientCreateSerializer(serializers.ModelSerializer):
                     if ligne_data.get('taux_tva') is None:
                         ligne_data['taux_tva'] = anciens_prix[produit.id][1]
 
+                ancienne = anciennes_lignes.get(produit.id)
+                if ancienne is not None:
+                    ligne_data['quantite_commandee'] = (ancienne.quantite_commandee
+                                                        if ancienne.quantite_commandee is not None else ancienne.quantite)
+                else:
+                    ligne_data['quantite_commandee'] = instance.reprendre_ligne_retiree(produit.id)
                 nouvelle_ligne = LigneCommandeClient.objects.create(
                     commande=instance,
                     produit=produit,
@@ -1404,6 +1431,8 @@ class CommandeClientCreateSerializer(serializers.ModelSerializer):
             # Vérifier le nombre de lignes après création
             nb_lignes_finales = instance.lignes.count()
             print(f"[COMMANDE UPDATE] Lignes après création: {nb_lignes_finales}")
+
+            CommandeClient.objects.filter(pk=instance.pk).update(lignes_retirees=instance.lignes_retirees or [])
 
             # Recalculer les totaux
             print(f"[COMMANDE UPDATE] Appel de calculer_totaux()")

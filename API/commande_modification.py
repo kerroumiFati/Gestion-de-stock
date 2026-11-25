@@ -142,14 +142,19 @@ def modifier_lignes_commande(commande, lignes, user, notes=None, autoriser_payee
                     commande=commande, produit=produit, quantite=quantite,
                     prix_unitaire_ht=prix if prix is not None else (produit.prixU or Decimal('0')),
                     taux_tva=tva if tva is not None else tva_defaut,
+                    # ajouté après la commande (0) ou remis après avoir été retiré (quantité d'origine)
+                    quantite_commandee=commande.reprendre_ligne_retiree(produit.id),
                 )
                 modifications.append(f"+{produit.designation} x{_fmt(quantite)}")
 
         for pid, ligne in existantes.items():
             if pid not in conserves:
                 modifications.append(f"-{ligne.produit.designation}")
+                commande.noter_ligne_retiree(ligne)
                 ligne.delete()
 
+        # Produits retirés / remis : enregistré avant le rechargement de la commande
+        CommandeClient.objects.filter(pk=commande.pk).update(lignes_retirees=commande.lignes_retirees or [])
         commande.calculer_totaux()
         commande.refresh_from_db()
         if commande.montant_paye and commande.montant_total_ttc < commande.montant_paye:

@@ -647,6 +647,10 @@ class CommandeClient(models.Model):
     # Notes
     notes = models.TextField(blank=True, null=True)
     notes_preparation = models.TextField(blank=True, null=True)
+    # Produits retirés de la commande après sa création (modification par le vendeur ou depuis
+    # le site) : [{produit, designation, reference, quantite_commandee}]. Ils n'ont plus de ligne,
+    # on garde ici ce que le client avait commandé.
+    lignes_retirees = models.JSONField(default=list, blank=True)
 
     # Métadonnées
     created_at = models.DateTimeField(auto_now_add=True)
@@ -690,6 +694,36 @@ class CommandeClient(models.Model):
             self.reference = self.generer_reference()
 
         super().save(*args, **kwargs)
+
+    def noter_ligne_retiree(self, ligne):
+        """Garde la trace d'une ligne supprimée après la commande (à appeler avant ligne.delete()).
+        Un produit ajouté après coup puis retiré (commandé = 0) n'est pas gardé."""
+        from decimal import Decimal
+        commandee = ligne.quantite_commandee if ligne.quantite_commandee is not None else ligne.quantite
+        if not commandee or Decimal(commandee) <= 0:
+            return
+        reste = [r for r in (self.lignes_retirees or []) if str(r.get('produit')) != str(ligne.produit_id)]
+        reste.append({
+            'produit': ligne.produit_id,
+            'designation': ligne.produit.designation,
+            'reference': ligne.produit.reference,
+            'quantite_commandee': str(commandee),
+        })
+        self.lignes_retirees = reste
+
+    def reprendre_ligne_retiree(self, produit_id):
+        """Produit remis dans la commande : retourne sa quantité commandée d'origine (et le retire
+        de la liste des produits retirés), ou 0 s'il n'avait pas été commandé au départ."""
+        from decimal import Decimal
+        quantite = Decimal('0')
+        reste = []
+        for r in (self.lignes_retirees or []):
+            if str(r.get('produit')) == str(produit_id):
+                quantite = Decimal(str(r.get('quantite_commandee') or 0))
+            else:
+                reste.append(r)
+        self.lignes_retirees = reste
+        return quantite
 
     def generer_reference(self):
         """Génère une référence unique pour la commande"""
@@ -1041,6 +1075,17 @@ class LigneCommandeClient(models.Model):
     montant_tva = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     montant_ttc = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
+    # Historique des quantités (`quantite` reste la quantité actuelle, livrée une fois la commande livrée)
+    quantite_commandee = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Quantité commandée au départ, jamais modifiée (0 = produit ajouté après la commande)")
+    quantite_avant_livraison = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Quantité juste avant la livraison (après les modifications éventuelles)")
+    quantite_livree = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Quantité réellement livrée")
+
     # Métadonnées
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -1056,6 +1101,11 @@ class LigneCommandeClient(models.Model):
     def save(self, *args, **kwargs):
         """Calcule automatiquement les montants"""
         from decimal import Decimal
+
+        # Nouvelle ligne : la quantité commandée est celle de départ (une ligne ajoutée après la
+        # commande reçoit quantite_commandee=0 de la part de l'appelant)
+        if self._state.adding and self.quantite_commandee is None:
+            self.quantite_commandee = self.quantite
 
         # Calcul montant HT
         self.montant_ht = self.quantite * self.prix_unitaire_ht

@@ -1,0 +1,258 @@
+{% load static %}
+{% load i18n %}
+<script>
+// Chargement unique du script (navigation SPA), même mécanisme que etat_livreurs.html
+if (!window.__recap_commandes_script_loaded__) {
+    window.__recap_commandes_script_loaded__ = true;
+    var s = document.createElement('script');
+    s.src = "{% static 'script/recap_commandes.js' %}?v=20261125m";
+    s.onload = function () {
+        setTimeout(function () {
+            document.dispatchEvent(new CustomEvent('fragment:loaded', {
+                detail: { name: 'recap_commandes', container: document.getElementById('main-content') }
+            }));
+        }, 50);
+    };
+    document.head.appendChild(s);
+} else {
+    setTimeout(function () {
+        document.dispatchEvent(new CustomEvent('fragment:loaded', {
+            detail: { name: 'recap_commandes', container: document.getElementById('main-content') }
+        }));
+    }, 50);
+}
+</script>
+
+<style>
+.rc-page { padding: 18px 4px 40px; color: #1f2937; }
+
+/* En-tête */
+.rc-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 18px; }
+.rc-head-titre { display: flex; align-items: center; gap: 14px; }
+.rc-head-icone { width: 52px; height: 52px; border-radius: 14px; background: linear-gradient(135deg, #2563eb, #1e40af);
+    color: #fff; display: flex; align-items: center; justify-content: center; font-size: 22px; box-shadow: 0 6px 16px rgba(37,99,235,.25); }
+.rc-head h1 { font-size: 1.6rem; font-weight: 700; margin: 0; color: #111827; }
+.rc-head p { margin: 2px 0 0; color: #6b7280; font-size: .95rem; }
+.rc-head-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.rc-btn { border-radius: 10px; font-weight: 600; padding: 9px 16px; display: inline-flex; align-items: center; gap: 8px; }
+
+/* Barre de sélection */
+.rc-panneau { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; box-shadow: 0 1px 3px rgba(16,24,40,.06); }
+.rc-barre { padding: 14px 18px; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 18px; margin-bottom: 18px; }
+.rc-champ > label { display: block; height: 18px; font-size: .78rem; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px; }
+.rc-jour { display: flex; align-items: center; gap: 6px; }
+.rc-jour .btn { border-radius: 10px; height: 40px; min-width: 40px; }
+.rc-jour input { height: 40px; border-radius: 10px; font-weight: 600; width: 160px; }
+.rc-du-au { font-weight: 600; color: #6b7280; font-size: .9rem; }
+.rc-raccourcis .btn { border-radius: 20px; font-size: .85rem; padding: 6px 14px; }
+.rc-raccourcis .btn.active { background: #2563eb; border-color: #2563eb; color: #fff; }
+.rc-barre select { height: 40px; border-radius: 10px; min-width: 200px; }
+.rc-date-longue { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; margin: 0 2px 12px; }
+.rc-date-longue .j { font-size: 1.25rem; font-weight: 800; color: #111827; }
+.rc-date-longue .j::first-letter { text-transform: uppercase; }
+.rc-date-longue .s { font-size: .85rem; color: #6b7280; }
+
+/* Indicateurs */
+.rc-kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }
+.rc-kpi { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 14px 16px; display: flex; gap: 12px; align-items: center;
+    box-shadow: 0 1px 3px rgba(16,24,40,.06); }
+.rc-kpi .ic { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+.rc-kpi { min-width: 0; } .rc-kpi > div:last-child { min-width: 0; }
+.rc-kpi .v { font-size: 1.05rem; font-weight: 800; color: #111827; line-height: 1.15; overflow-wrap: anywhere; }
+.rc-kpi .l { font-size: .8rem; color: #6b7280; font-weight: 600; }
+.ic-bleu { background: #dbeafe; color: #1d4ed8; } .ic-violet { background: #ede9fe; color: #6d28d9; }
+.ic-orange { background: #ffedd5; color: #c2410c; } .ic-vert { background: #dcfce7; color: #15803d; }
+.ic-rouge { background: #fee2e2; color: #b91c1c; } .ic-gris { background: #f3f4f6; color: #374151; }
+
+/* Sections */
+.rc-section { margin-bottom: 18px; overflow: hidden; }
+.rc-section-tete { padding: 14px 18px; border-bottom: 1px solid #eef0f3; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.rc-section-tete h2 { font-size: 1.08rem; font-weight: 700; margin: 0; display: flex; align-items: center; gap: 10px; }
+.rc-section-tete h2 .num { width: 28px; height: 28px; border-radius: 8px; background: #2563eb; color: #fff; font-size: .85rem;
+    display: inline-flex; align-items: center; justify-content: center; }
+.rc-section-tete .aide { font-size: .85rem; color: #6b7280; margin: 2px 0 0 38px; }
+.rc-recherche { position: relative; }
+.rc-recherche i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #9ca3af; }
+.rc-recherche input { padding-left: 34px; border-radius: 10px; height: 38px; width: 260px; }
+
+/* Tableau produits */
+.rc-table-wrap { overflow-x: auto; }
+.rc-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: .92rem; }
+.rc-table th { position: sticky; top: 0; z-index: 2; background: #f8fafc; color: #475569; font-size: .78rem; text-transform: uppercase;
+    letter-spacing: .03em; font-weight: 700; padding: 10px 12px; border-bottom: 1px solid #e5e7eb; white-space: nowrap; }
+.rc-table td { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+.rc-table tbody tr:hover td { background: #f8fbff; }
+.rc-table .c { text-align: center; } .rc-table .r { text-align: right; white-space: nowrap; }
+.rc-table .col-total { background: #fffbeb !important; font-weight: 700; }
+.rc-table th.col-total { color: #92400e; }
+.rc-table tfoot td { background: #f1f5f9; font-weight: 800; border-top: 2px solid #cbd5e1; }
+.rc-prod-nom { font-weight: 600; color: #111827; }
+.rc-prod-ref { font-size: .75rem; color: #9ca3af; }
+.rc-q { font-weight: 700; font-size: 1rem; color: #111827; }
+.rc-ct { display: inline-block; margin-top: 2px; font-size: .72rem; font-weight: 700; color: #1d4ed8; background: #eff6ff; border-radius: 6px; padding: 1px 6px; }
+.rc-zero { color: #d1d5db; }
+/* Onglets */
+.rc-onglets { gap: 6px; border-bottom: 2px solid #e5e7eb; }
+.rc-onglets .nav-link { border: none; border-bottom: 3px solid transparent; margin-bottom: -2px; color: #6b7280; font-weight: 700;
+    padding: 10px 16px; border-radius: 10px 10px 0 0; display: flex; align-items: center; gap: 8px; }
+.rc-onglets .nav-link:hover { color: #1d4ed8; background: #f8fafc; }
+.rc-onglets .nav-link.active { color: #1d4ed8; border-bottom-color: #2563eb; background: #fff; }
+/* Tableau détaillé */
+.rc-plat th.triable { cursor: pointer; user-select: none; }
+.rc-plat th.triable:hover { color: #1d4ed8; }
+.rc-plat th .tri { opacity: .35; margin-left: 4px; font-size: .7rem; }
+.rc-plat th.trie .tri { opacity: 1; color: #2563eb; }
+.rc-plat th { padding: 9px 8px; font-size: .7rem; white-space: normal; letter-spacing: .01em; vertical-align: bottom; }
+.rc-plat td { font-size: .85rem; padding: 8px; }
+.rc-plat td:first-child { min-width: 130px; } .rc-plat td:nth-child(3) { min-width: 120px; }
+.rc-plat td:nth-child(2) .rc-heure { white-space: nowrap; }
+.rc-plat tbody tr:nth-child(even) td { background: #fbfcfe; }
+.rc-plat tr.rc-annulee td { opacity: .55; }
+.rc-compteur { font-size: .85rem; color: #6b7280; }
+.rc-modif { color: #c2410c; } .rc-livre { color: #15803d; }
+.rc-ecart { display: inline-block; font-weight: 800; border-radius: 6px; padding: 1px 7px; font-size: .85rem; }
+.rc-ecart.moins { background: #fee2e2; color: #b91c1c; } .rc-ecart.plus { background: #dcfce7; color: #15803d; }
+.rc-tag { display: inline-block; font-size: .66rem; font-weight: 800; text-transform: uppercase; border-radius: 5px; padding: 1px 5px; margin-left: 4px; vertical-align: middle; }
+.rc-tag.ajoute { background: #dcfce7; color: #166534; } .rc-tag.retire { background: #fee2e2; color: #b91c1c; }
+.rc-btn-clients { border: 1px solid #c7d2fe; background: #eef2ff; color: #3730a3; border-radius: 20px; padding: 3px 10px;
+    font-size: .8rem; font-weight: 700; white-space: nowrap; cursor: pointer; }
+.rc-btn-clients:hover { background: #e0e7ff; }
+.rc-btn-clients i { transition: transform .2s; font-size: .7rem; }
+.rc-btn-clients.ouvert i { transform: rotate(90deg); }
+.rc-apercu-clients { font-size: .78rem; color: #6b7280; margin-top: 3px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rc-detail-clients > td { background: #f8fafc !important; padding: 6px 12px 12px 40px !important; }
+.rc-sous-table { width: 100%; border-collapse: collapse; font-size: .86rem; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; }
+.rc-sous-table th { background: #eef2ff; color: #3730a3; font-size: .72rem; text-transform: uppercase; letter-spacing: .03em; padding: 6px 10px; text-align: left; }
+.rc-sous-table td { padding: 6px 10px; border-top: 1px solid #f1f5f9; }
+.rc-sous-table .c { text-align: center; } .rc-sous-table .r { text-align: right; white-space: nowrap; }
+.rc-cmds { font-size: .78rem; color: #6b7280; }
+
+/* Cartes pré-vendeurs */
+.rc-vendeur { border: 1px solid #e5e7eb; border-radius: 12px; margin: 14px 18px; overflow: hidden; }
+.rc-vendeur-tete { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 12px 16px; cursor: pointer; background: #fff; user-select: none; }
+.rc-vendeur-tete:hover { background: #f9fafb; }
+.rc-avatar { width: 42px; height: 42px; border-radius: 50%; color: #fff; font-weight: 800; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.rc-vendeur-nom { font-weight: 700; font-size: 1.02rem; color: #111827; }
+.rc-vendeur-sous { font-size: .82rem; color: #6b7280; }
+.rc-vendeur-chiffres { margin-left: auto; display: flex; gap: 22px; flex-wrap: wrap; align-items: center; }
+.rc-chiffre .l { font-size: .72rem; color: #6b7280; text-transform: uppercase; font-weight: 700; letter-spacing: .03em; }
+.rc-chiffre .v { font-weight: 800; color: #111827; white-space: nowrap; }
+.rc-chiffre .v.vert { color: #15803d; } .rc-chiffre .v.rouge { color: #b91c1c; }
+.rc-barre-paiement { width: 120px; }
+.rc-barre-paiement .progress { height: 7px; border-radius: 6px; background: #f1f5f9; }
+.rc-chevron { color: #9ca3af; transition: transform .2s; }
+.rc-vendeur.ferme .rc-chevron { transform: rotate(-90deg); }
+.rc-vendeur.ferme .rc-vendeur-corps { display: none; }
+.rc-vendeur-corps { border-top: 1px solid #eef0f3; }
+.rc-badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: .76rem; font-weight: 700; white-space: nowrap; }
+.st-pending { background: #fef3c7; color: #92400e; } .st-confirmed { background: #dbeafe; color: #1e40af; }
+.st-preparing { background: #e0f2fe; color: #075985; } .st-ready { background: #ede9fe; color: #5b21b6; }
+.st-delivered { background: #dcfce7; color: #166534; } .st-cancelled { background: #f3f4f6; color: #6b7280; }
+.rc-puce { display: inline-flex; align-items: center; gap: 4px; background: #f3f4f6; border-radius: 8px; padding: 2px 8px; margin: 2px 4px 2px 0;
+    font-size: .8rem; color: #374151; white-space: nowrap; }
+.rc-puce b { color: #111827; }
+.rc-annulee td { opacity: .55; } .rc-annulee .rc-ref { text-decoration: line-through; }
+.rc-ref { font-weight: 700; color: #1f2937; white-space: nowrap; } .rc-heure { font-size: .76rem; color: #9ca3af; }
+.rc-reste-ok { color: #15803d; font-weight: 700; } .rc-reste-du { color: #b91c1c; font-weight: 700; }
+
+/* États vides / chargement */
+.rc-vide { text-align: center; padding: 56px 20px; }
+.rc-vide .ic { width: 84px; height: 84px; border-radius: 50%; background: #eff6ff; color: #2563eb; font-size: 34px;
+    display: inline-flex; align-items: center; justify-content: center; margin-bottom: 14px; }
+.rc-vide h3 { font-size: 1.2rem; font-weight: 700; margin-bottom: 6px; }
+.rc-vide p { color: #6b7280; margin-bottom: 18px; }
+.rc-squelette { height: 14px; border-radius: 7px; background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 37%, #f1f5f9 63%);
+    background-size: 400% 100%; animation: rcBrille 1.3s ease infinite; margin: 12px 0; }
+@keyframes rcBrille { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+.rc-astuce { font-size: .85rem; color: #6b7280; padding: 10px 18px; background: #f8fafc; border-top: 1px solid #eef0f3; }
+.rc-astuce i { color: #2563eb; }
+@media (max-width: 1560px) { .rc-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 768px) {
+    .rc-jour { flex-wrap: wrap; } .rc-jour input { width: calc(50% - 40px); min-width: 130px; }
+    .rc-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .rc-kpi { padding: 10px; } .rc-kpi .ic { width: 36px; height: 36px; }
+    .rc-recherche input { width: 100%; }
+    .rc-vendeur { margin: 10px; }
+    .rc-vendeur-chiffres { margin-left: 0; width: 100%; }
+}
+</style>
+
+<div class="container-fluid rc-page">
+    <!-- En-tête -->
+    <div class="rc-head">
+        <div class="rc-head-titre">
+            <div class="rc-head-icone"><i class="fas fa-clipboard-list"></i></div>
+            <div>
+                <h1>{% trans "Récapitulatif des commandes" %}</h1>
+                <p>{% trans "Ce qui a été commandé sur un jour ou une période : par produit et par pré-vendeur." %}</p>
+            </div>
+        </div>
+        <div class="rc-head-actions">
+            <button class="btn btn-outline-success rc-btn" onclick="recapCommandesExporter()" title="{% trans 'Télécharger un fichier pour Excel' %}">
+                <i class="fas fa-file-excel"></i> {% trans "Exporter Excel" %}
+            </button>
+            <button class="btn btn-primary rc-btn" onclick="recapCommandesImprimer()">
+                <i class="fas fa-print"></i> {% trans "Imprimer" %}
+            </button>
+        </div>
+    </div>
+
+    <!-- Choix de la période et du pré-vendeur -->
+    <div class="rc-panneau rc-barre">
+        <div class="rc-champ">
+            <label>{% trans "Période" %}</label>
+            <div class="rc-jour">
+                <button class="btn btn-outline-secondary" onclick="recapCommandesDecaler(-1)" title="{% trans 'Période précédente' %}"><i class="fas fa-chevron-left"></i></button>
+                <span class="rc-du-au">{% trans "Du" %}</span>
+                <input type="date" id="rcDu" class="form-control" onchange="recapCommandesDatesChangees('du')" title="{% trans 'Date de début' %}">
+                <span class="rc-du-au">{% trans "au" %}</span>
+                <input type="date" id="rcAu" class="form-control" onchange="recapCommandesDatesChangees('au')" title="{% trans 'Date de fin (incluse)' %}">
+                <button class="btn btn-outline-secondary" onclick="recapCommandesDecaler(1)" title="{% trans 'Période suivante' %}"><i class="fas fa-chevron-right"></i></button>
+            </div>
+        </div>
+        <div class="rc-champ rc-raccourcis">
+            <label>{% trans "Raccourcis" %}</label>
+            <div class="d-flex flex-wrap" style="gap:6px;">
+                <button class="btn btn-outline-primary" data-raccourci="aujourdhui" onclick="recapCommandesRaccourci('aujourdhui')">{% trans "Aujourd'hui" %}</button>
+                <button class="btn btn-outline-primary" data-raccourci="hier" onclick="recapCommandesRaccourci('hier')">{% trans "Hier" %}</button>
+                <button class="btn btn-outline-primary" data-raccourci="semaine" onclick="recapCommandesRaccourci('semaine')">{% trans "Cette semaine" %}</button>
+                <button class="btn btn-outline-primary" data-raccourci="mois" onclick="recapCommandesRaccourci('mois')">{% trans "Ce mois-ci" %}</button>
+                <button class="btn btn-outline-primary" data-raccourci="annee" onclick="recapCommandesRaccourci('annee')">{% trans "Cette année" %}</button>
+            </div>
+        </div>
+        <div class="rc-champ">
+            <label>{% trans "Produit" %}</label>
+            <select id="rcProduit" class="form-control" onchange="recapCommandesAfficher()">
+                <option value="">{% trans "Tous les produits" %}</option>
+            </select>
+        </div>
+        <div class="rc-champ">
+            <label>{% trans "Pré-vendeur" %}</label>
+            <select id="rcVendeur" class="form-control" onchange="recapCommandesAfficher()">
+                <option value="">{% trans "Tous les pré-vendeurs" %}</option>
+            </select>
+        </div>
+        <div class="rc-champ">
+            <label>&nbsp;</label>
+            <div class="custom-control custom-switch" style="height:40px;display:flex;align-items:center;">
+                <input type="checkbox" class="custom-control-input" id="rcAnnulees" onchange="recapCommandesAfficher()">
+                <label class="custom-control-label" for="rcAnnulees" style="text-transform:none;font-size:.9rem;color:#374151;letter-spacing:0;font-weight:600;margin:0;">{% trans "Afficher les commandes annulées" %}</label>
+            </div>
+        </div>
+    </div>
+
+    <div class="rc-date-longue">
+        <div class="j" id="rcDateLongue"></div>
+        <div class="s" id="rcMaj"></div>
+    </div>
+
+    <!-- Onglets -->
+    <ul class="nav rc-onglets mb-3" role="tablist">
+        <li class="nav-item"><a href="#" class="nav-link active" data-onglet="recap" onclick="recapCommandesOnglet('recap');return false;">
+            <i class="fas fa-th-large"></i> {% trans "Récapitulatif" %}</a></li>
+        <li class="nav-item"><a href="#" class="nav-link" data-onglet="tableau" onclick="recapCommandesOnglet('tableau');return false;">
+            <i class="fas fa-table"></i> {% trans "Tableau détaillé" %}</a></li>
+    </ul>
+
+    <div id="rcContenu"></div>
+</div>
