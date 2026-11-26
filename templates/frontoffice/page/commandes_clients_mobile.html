@@ -1814,13 +1814,25 @@
     }
     window.cartonProductFromLigne = cartonProductFromLigne;
 
+    // Met à jour les montants d'une ligne et les totaux SANS reconstruire le tableau : la saisie
+    // en cours (champ quantité ou cartons / pièces) garde le curseur.
+    function majMontantsEdition(index) {
+        const fmt = (v) => formatCurrency(v);
+        const ligne = editingLignes[index];
+        const ht = document.getElementById('editMontantHT-' + index);
+        const ttc = document.getElementById('editMontantTTC-' + index);
+        if (ht) ht.textContent = fmt(parseFloat(ligne.montant_ht) || 0);
+        if (ttc) ttc.textContent = fmt(parseFloat(ligne.montant_ttc) || 0);
+        let totalHT = 0, totalTTC = 0;
+        editingLignes.forEach(l => { totalHT += parseFloat(l.montant_ht) || 0; totalTTC += parseFloat(l.montant_ttc) || 0; });
+        document.getElementById('editTotalHT').textContent = fmt(totalHT);
+        document.getElementById('editTotalTTC').textContent = fmt(totalTTC);
+    }
+
     function updateLigneQuantite(index, newQuantite) {
-        const quantite = parseInt(newQuantite) || 1;
-        if (quantite < 1) {
-            alert('La quantité doit être au moins 1');
-            renderEditLignes();
-            return;
-        }
+        // 0 accepté pendant la saisie (ex. cartons effacés avant de taper le nombre) ;
+        // le minimum de 1 est contrôlé à l'enregistrement.
+        const quantite = Math.max(0, parseInt(newQuantite) || 0);
 
         editingLignes[index].quantite = quantite;
 
@@ -1840,7 +1852,7 @@
             montantTTC: editingLignes[index].montant_ttc
         });
 
-        renderEditLignes();
+        majMontantsEdition(index);
     }
 
     function updateLignePrix(index, newPrix) {
@@ -1908,6 +1920,12 @@
         const dateLivraison = document.getElementById('editDateLivraison').value;
         const typePaiement = document.getElementById('editTypePaiement').value;
         const notes = document.getElementById('editNotes').value;
+
+        const sansQuantite = editingLignes.filter(l => !((parseInt(l.quantite) || 0) >= 1));
+        if (sansQuantite.length) {
+            showError('Quantité manquante (au moins 1) : ' + sansQuantite.map(l => l.produit_designation || 'produit').join(', '));
+            return;
+        }
 
         console.log('[COMMANDE EDIT] ===== DÉBUT SAUVEGARDE =====');
         console.log('[COMMANDE EDIT] ID Commande:', id);

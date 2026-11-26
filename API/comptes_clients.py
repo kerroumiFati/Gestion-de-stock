@@ -282,3 +282,168 @@ def encaisser(client, app_id, montant, mode, tournee=None, date_paiement=None, u
         if existant:
             return existant, True
         raise
+
+
+def suivi_bons(clients, du=None, au=None):
+    """Suivi des paiements, bon par bon : tous les bons des clients (payés ou non) dont la date
+    est dans la période [du, au] (dates, bornes incluses). Mêmes documents et même calcul du
+    reste que documents_dus (ventes téléphone, ventes bureau validées, commandes livrées).
+    Renvoie {'bons': [...], 'clients': {id: {...}}} ; la dette antérieure (sans date) et la
+    situation globale du client sont données à part, sans filtre de période."""
+    from django.db.models import Max
+    from API.models import Vente
+    from API.distribution_models import VenteTourneeMobile, CommandeClient
+
+    infos = {c['id']: c for c in clients.values('id', 'nom', 'prenom', 'telephone', 'solde')}
+    ids = list(infos)
+
+    def periode(qs, champ):
+        if du:
+            qs = qs.filter(**{f'{champ}__date__gte': du})
+        if au:
+            qs = qs.filter(**{f'{champ}__date__lte': au})
+        return qs
+
+    def etat(total, reste):
+        if reste <= CENT:
+            return 'paye'
+        return 'partiel' if reste < total - CENT else 'non_paye'
+
+    bons = []
+
+    def ajouter(cle, type_, libelle, reference, client_id, date, vendeur, total, paye, dernier_paiement, mode):
+        total = _d(total)
+        if total <= CENT:  # bon à 0 DA (tout offert, annulé à zéro) : rien à suivre
+            return
+        paye = max(_d(paye), Z)
+        reste = max(total - paye, Z)
+        bons.append({'cle': cle, 'type': type_, 'libelle': libelle, 'reference': reference or '',
+                     'client_id': client_id, 'date': date, 'vendeur': vendeur or '',
+                     'total': total, 'paye': min(paye, total), 'reste': reste,
+                     'etat': etat(total, reste), 'dernier_paiement': dernier_paiement, 'mode': mode or ''})
+
+    # Ventes faites sur le téléphone (payé - rendu = argent gardé)
+    for v in (periode(VenteTourneeMobile.objects.filter(client_id__in=ids), 'date_vente')
+              .select_related('tournee__livreur').annotate(der=Max('encaissements__date_paiement'))):
+        recu = _d(v.montant_paye) - _d(v.montant_rendu)
+        livreur = v.tournee.livreur.nom if v.tournee_id and v.tournee.livreur_id else ''
+        ajouter(f'vm-{v.pk}', 'vente', 'Vente directe', v.numero_vente, v.client_id, v.date_vente, livreur,
+                v.montant_total, recu, v.der or (v.date_vente if recu > CENT else None), v.type_paiement)
+
+    # Ventes faites au bureau (validées)
+    modes_pc = {'cash': 'especes', 'check': 'cheque', 'card': 'carte', 'transfer': 'virement', 'credit': 'credit'}
+    for v in (periode(Vente.objects.filter(client_id__in=ids, statut='completed'), 'date_vente')
+              .prefetch_related('paiements')):
+        paiements = list(v.paiements.all())
+        paye = sum((_d(p.montant) for p in paiements), Z)
+        der = max((p.date_paiement for p in paiements), default=None)
+        ajouter(f'vpc-{v.pk}', 'vente_pc', 'Vente (bureau)', v.numero, v.client_id, v.date_vente, '',
+                v.total_ttc, paye, der, modes_pc.get(v.type_paiement, v.type_paiement))
+
+    # Commandes livrées (date = date de livraison, sinon date de commande)
+    from django.db.models.functions import Coalesce
+    cmds = (CommandeClient.objects.filter(client_id__in=ids, statut='delivered')
+            .annotate(jour=Coalesce('date_livraison_reelle', 'date_commande'))
+            .select_related('passee_par', 'livreur').annotate(der=Max('encaissements__date_paiement')))
+    for c in periode(cmds, 'jour'):
+        vendeur = (c.passee_par or c.livreur).nom if (c.passee_par_id or c.livreur_id) else ''
+        ajouter(f'cmd-{c.pk}', 'commande', 'Commande livrée', c.reference, c.client_id, c.jour, vendeur,
+                c.montant_total_ttc, c.montant_paye,
+                (c.der or c.date_paiement or c.jour) if _d(c.montant_paye) > CENT else None,
+                c.type_paiement)
+
+    bons.sort(key=lambda b: _date_tri(b['date']), reverse=True)
+
+    sit = situations_clients(clients)
+    res_clients = {}
+    for cid, c in infos.items():
+        solde = _d(c.get('solde'))
+        s = sit.get(cid, {'net': Z})
+        res_clients[cid] = {'id': cid, 'nom': ' '.join(x for x in [c.get('prenom'), c.get('nom')] if x).strip(),
+                            'telephone': c.get('telephone') or '',
+                            'dette_anterieure': -solde if solde < 0 else Z,
+                            'avance': solde if solde > 0 else Z,
+                            'situation': s['net']}
+    return {'bons': bons, 'clients': res_clients}
+
+
+def detail_bon(cle, clients):
+    """Contenu d'un bon du suivi des paiements (clé « cmd-12 », « vm-3 », « vpc-40 ») : en-tête,
+    produits et paiements. None si le bon n'existe pas ou si son client n'est pas dans `clients`."""
+    from API.models import Vente
+    from API.distribution_models import VenteTourneeMobile, CommandeClient
+
+    try:
+        prefixe, pk = str(cle).split('-', 1)
+        pk = int(pk)
+    except (ValueError, TypeError):
+        return None
+    MODES_PC = {'cash': 'especes', 'check': 'cheque', 'card': 'carte', 'transfer': 'virement', 'credit': 'credit'}
+
+    def ligne(produit, designation, quantite, prix, montant):
+        return {'designation': designation or (produit.designation if produit else ''),
+                'reference': produit.reference if produit else '',
+                'unites_par_carton': produit.get_unites_par_carton() if produit else 1,
+                'quantite': _d(quantite), 'prix_unitaire': _d(prix), 'montant': _d(montant)}
+
+    if prefixe == 'cmd':
+        c = (CommandeClient.objects.filter(pk=pk, client__in=clients)
+             .select_related('client', 'passee_par', 'livreur').first())
+        if c is None:
+            return None
+        lignes = [ligne(l.produit, '', l.quantite, l.prix_unitaire_ht, l.montant_ttc)
+                  for l in c.lignes.select_related('produit').order_by('id')]
+        paiements = [{'date': e.date_paiement, 'montant': _d(e.montant), 'mode': e.type_paiement}
+                     for e in c.encaissements.order_by('date_paiement')]
+        paye = _d(c.montant_paye)
+        if not paiements and paye > CENT:  # payé à la livraison, sans encaissement séparé
+            paiements = [{'date': c.date_paiement or c.date_livraison_reelle, 'montant': paye, 'mode': c.type_paiement}]
+        vendeur = c.passee_par or c.livreur
+        res = {'type': 'commande', 'libelle': 'Commande livrée', 'reference': c.reference, 'client': c.client,
+               'date': c.date_livraison_reelle or c.date_commande, 'date_commande': c.date_commande,
+               'vendeur': vendeur.nom if vendeur else '',
+               'livreur': c.livreur.nom if c.livreur_id and c.passee_par_id and c.livreur_id != c.passee_par_id else '',
+               'total_ht': _d(c.montant_total_ht), 'total': _d(c.montant_total_ttc), 'paye': paye,
+               'notes': c.notes or '', 'prix_ht': True}
+    elif prefixe == 'vm':
+        v = (VenteTourneeMobile.objects.filter(pk=pk, client__in=clients)
+             .select_related('client', 'tournee__livreur').first())
+        if v is None:
+            return None
+        lignes = [ligne(l.produit, '', l.quantite, l.prix_unitaire, l.montant_ttc)
+                  for l in v.lignes.select_related('produit').order_by('id')]
+        encs = list(v.encaissements.order_by('date_paiement'))
+        recu = _d(v.montant_paye) - _d(v.montant_rendu)
+        a_la_vente = recu - sum((e.montant for e in encs), Z)
+        paiements = ([{'date': v.date_vente, 'montant': a_la_vente, 'mode': v.type_paiement}] if a_la_vente > CENT else []) + [
+            {'date': e.date_paiement, 'montant': _d(e.montant), 'mode': e.type_paiement} for e in encs]
+        res = {'type': 'vente', 'libelle': 'Vente directe (van)', 'reference': v.numero_vente, 'client': v.client,
+               'date': v.date_vente, 'date_commande': None,
+               'vendeur': v.tournee.livreur.nom if v.tournee_id and v.tournee.livreur_id else '', 'livreur': '',
+               'total_ht': _d(v.montant_ht), 'total': _d(v.montant_total), 'paye': recu,
+               'notes': v.notes or '', 'prix_ht': True}
+    elif prefixe == 'vpc':
+        v = Vente.objects.filter(pk=pk, client__in=clients, statut='completed').select_related('client').first()
+        if v is None:
+            return None
+        lignes = [ligne(l.produit, l.designation, l.quantite, l.prixU_snapshot, l.get_total_in_sale_currency())
+                  for l in v.lignes.select_related('produit').order_by('id')]
+        paiements = [{'date': p.date_paiement, 'montant': _d(p.montant),
+                      'mode': MODES_PC.get(p.moyen_paiement, p.moyen_paiement)} for p in v.paiements.order_by('date_paiement')]
+        res = {'type': 'vente_pc', 'libelle': 'Vente au bureau', 'reference': v.numero, 'client': v.client,
+               'date': v.date_vente, 'date_commande': None, 'vendeur': '', 'livreur': '',
+               'total_ht': _d(v.total_ht), 'total': _d(v.total_ttc), 'paye': sum((p['montant'] for p in paiements), Z),
+               'notes': v.observations or '', 'prix_ht': False}
+    else:
+        return None
+
+    client = res.pop('client')
+    res['paye'] = min(max(res['paye'], Z), res['total'])
+    res['reste'] = max(res['total'] - res['paye'], Z)
+    res['etat'] = 'paye' if res['reste'] <= CENT else ('partiel' if res['paye'] > CENT else 'non_paye')
+    res['cle'] = cle
+    res['client'] = {'id': client.pk, 'nom': ' '.join(x for x in [client.prenom, client.nom] if x).strip(),
+                     'telephone': client.telephone or '', 'adresse': getattr(client, 'adresse', '') or ''}
+    res['lignes'] = lignes
+    res['paiements'] = paiements
+    return res

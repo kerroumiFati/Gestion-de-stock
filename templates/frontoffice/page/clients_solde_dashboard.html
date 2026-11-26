@@ -29,7 +29,150 @@ if (!window.__clients_solde_dashboard_script_loaded__) {
 }
 </script>
 
+<script>
+// Onglet « Suivi des paiements par bon » : script chargé une seule fois, initialisé à chaque affichage
+if (!window.__suivi_paiements_clients_loaded__) {
+    window.__suivi_paiements_clients_loaded__ = true;
+    var spScript = document.createElement('script');
+    spScript.src = "{% static 'script/suivi_paiements_clients.js' %}?v=20261125d";
+    spScript.onload = function() { if (window.spInit) window.spInit(); };
+    document.head.appendChild(spScript);
+} else {
+    setTimeout(function() { if (window.spInit) window.spInit(); }, 50);
+}
+</script>
+
 <style>
+/* ---------- Onglets ---------- */
+.sp-onglets { display:flex; gap:6px; border-bottom:2px solid #e2e8f0; margin:-10px 0 22px; flex-wrap:wrap; }
+.sp-onglets button { border:0; background:none; padding:11px 18px; font-weight:600; color:#64748b; font-size:.98rem;
+    border-bottom:3px solid transparent; margin-bottom:-2px; cursor:pointer; border-radius:8px 8px 0 0; }
+.sp-onglets button:hover { color:#4c1d95; background:#f5f3ff; }
+.sp-onglets button.actif { color:#6d28d9; border-bottom-color:#7c3aed; background:#f5f3ff; }
+.sp-onglets button i { margin-right:7px; }
+
+/* ---------- Suivi des paiements par bon ---------- */
+#spRoot .sp-filtres { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:16px 18px; margin-bottom:18px;
+    display:flex; flex-wrap:wrap; gap:14px 18px; align-items:flex-end; }
+#spRoot .sp-champ { display:flex; flex-direction:column; gap:5px; min-width:150px; }
+#spRoot .sp-champ label { font-size:.78rem; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:.03em; margin:0; }
+#spRoot .sp-champ .form-control { height:38px; border-radius:8px; }
+#spRoot .sp-periode { display:flex; align-items:center; gap:6px; }
+#spRoot .sp-periode input { width:150px; }
+#spRoot .sp-raccourcis { display:flex; gap:5px; flex-wrap:wrap; }
+#spRoot .sp-raccourcis button { border:1px solid #ddd6fe; background:#faf5ff; color:#5b21b6; border-radius:999px; padding:5px 12px;
+    font-size:.82rem; font-weight:600; cursor:pointer; }
+#spRoot .sp-raccourcis button.actif, #spRoot .sp-raccourcis button:hover { background:#7c3aed; color:#fff; border-color:#7c3aed; }
+#spRoot .sp-kpis { display:grid; grid-template-columns:repeat(6, minmax(0,1fr)); gap:14px; margin-bottom:18px; }
+@media (max-width:1400px) { #spRoot .sp-kpis { grid-template-columns:repeat(3, minmax(0,1fr)); } }
+@media (max-width:768px) { #spRoot .sp-kpis { grid-template-columns:repeat(2, minmax(0,1fr)); } }
+#spRoot .sp-kpi { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:14px 16px; border-left:4px solid #94a3b8; }
+#spRoot .sp-kpi .v { font-size:1.35rem; font-weight:700; color:#1e293b; white-space:nowrap; }
+#spRoot .sp-kpi .l { font-size:.8rem; color:#64748b; font-weight:600; margin-top:2px; }
+#spRoot .sp-kpi .s { font-size:.76rem; color:#94a3b8; margin-top:3px; }
+#spRoot .sp-kpi.violet { border-left-color:#7c3aed; } #spRoot .sp-kpi.bleu { border-left-color:#3b82f6; }
+#spRoot .sp-kpi.vert { border-left-color:#10b981; } #spRoot .sp-kpi.rouge { border-left-color:#ef4444; }
+#spRoot .sp-kpi.orange { border-left-color:#f59e0b; } #spRoot .sp-kpi.gris { border-left-color:#64748b; }
+#spRoot .sp-kpi.rouge .v { color:#dc2626; } #spRoot .sp-kpi.vert .v { color:#059669; }
+#spRoot .sp-barre-outils { display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between; margin-bottom:12px; }
+#spRoot .sp-vues { display:inline-flex; background:#f1f5f9; border-radius:10px; padding:4px; }
+#spRoot .sp-vues button { border:0; background:none; padding:7px 16px; border-radius:8px; font-weight:600; color:#475569; cursor:pointer; }
+#spRoot .sp-vues button.actif { background:#fff; color:#6d28d9; box-shadow:0 1px 3px rgba(0,0,0,.12); }
+#spRoot .sp-actions { display:flex; gap:8px; }
+#spRoot .sp-actions button { border:1px solid #cbd5e1; background:#fff; border-radius:8px; padding:7px 14px; font-weight:600; color:#334155; cursor:pointer; }
+#spRoot .sp-actions button:hover { background:#f8fafc; }
+#spRoot .sp-actions .sp-xls { border-color:#10b981; color:#047857; }
+#spRoot .sp-carte { background:#fff; border:1px solid #e2e8f0; border-radius:12px; overflow:hidden; }
+#spRoot .sp-table-wrap { overflow-x:auto; }
+#spRoot table.sp-table { width:100%; border-collapse:collapse; font-size:.9rem; }
+#spRoot .sp-table th { background:#f8fafc; color:#475569; font-size:.76rem; text-transform:uppercase; letter-spacing:.03em;
+    padding:10px 12px; border-bottom:2px solid #e2e8f0; text-align:left; white-space:nowrap; }
+#spRoot .sp-table th.tri { cursor:pointer; user-select:none; }
+#spRoot .sp-table th.tri:hover { color:#6d28d9; }
+#spRoot .sp-table th.r, #spRoot .sp-table td.r { text-align:right; }
+#spRoot .sp-table th.c, #spRoot .sp-table td.c { text-align:center; }
+#spRoot .sp-table th i.fas { margin-left:4px; opacity:.55; }
+#spRoot .sp-table td { padding:10px 12px; border-bottom:1px solid #f1f5f9; vertical-align:middle; }
+#spRoot .sp-table td.r, #spRoot .sp-table td.nw, #spRoot .sp-ref { white-space:nowrap; }
+#spRoot .sp-table tbody tr.sp-client:hover { background:#faf5ff; cursor:pointer; }
+#spRoot .sp-table tbody tr.sp-client.ouvert { background:#f5f3ff; }
+#spRoot .sp-table tfoot td { background:#f8fafc; font-weight:700; border-top:2px solid #e2e8f0; }
+#spRoot .sp-nom { font-weight:700; color:#1e293b; display:inline-block; min-width:150px; }
+#spRoot .sp-tel { font-size:.78rem; color:#94a3b8; }
+#spRoot .sp-chev { color:#a78bfa; width:16px; transition:transform .15s; }
+#spRoot tr.ouvert .sp-chev { transform:rotate(90deg); }
+#spRoot .sp-badge { display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:999px; font-size:.78rem; font-weight:700; white-space:nowrap; }
+#spRoot .sp-badge.paye, #spRoot .sp-badge.ajour { background:#d1fae5; color:#065f46; }
+#spRoot .sp-badge.partiel { background:#fef3c7; color:#92400e; }
+#spRoot .sp-badge.non_paye, #spRoot .sp-badge.dette { background:#fee2e2; color:#991b1b; }
+#spRoot .sp-badge.avance { background:#dbeafe; color:#1e40af; }
+#spRoot .sp-compteurs { display:flex; gap:4px; justify-content:center; }
+#spRoot .sp-compteurs span { min-width:26px; padding:2px 7px; border-radius:6px; font-weight:700; font-size:.8rem; text-align:center; }
+#spRoot .sp-compteurs .p { background:#d1fae5; color:#065f46; }
+#spRoot .sp-compteurs .pa { background:#fef3c7; color:#92400e; }
+#spRoot .sp-compteurs .n { background:#fee2e2; color:#991b1b; }
+#spRoot .sp-compteurs .z { opacity:.35; }
+#spRoot .sp-prog { width:90px; height:8px; background:#fee2e2; border-radius:999px; overflow:hidden; display:inline-block; vertical-align:middle; }
+#spRoot .sp-prog i { display:block; height:100%; background:#10b981; }
+#spRoot .sp-pct { font-size:.75rem; color:#64748b; margin-left:6px; }
+#spRoot .sp-reste { color:#dc2626; font-weight:700; }
+#spRoot .sp-zero { color:#94a3b8; }
+#spRoot .sp-type { font-size:.74rem; color:#64748b; display:block; }
+#spRoot .sp-ref { font-weight:600; color:#334155; font-family:Consolas, monospace; font-size:.84rem; }
+#spRoot tr.sp-detail > td { background:#faf5ff; padding:0 12px 14px 40px; }
+#spRoot .sp-sous { width:100%; background:#fff; border:1px solid #ede9fe; border-radius:10px; overflow:hidden; border-collapse:separate; border-spacing:0; }
+#spRoot .sp-sous th { background:#f5f3ff; color:#5b21b6; }
+#spRoot .sp-sous td { border-bottom:1px solid #f5f3ff; }
+#spRoot .sp-note { font-size:.82rem; color:#64748b; padding:8px 14px; background:#f8fafc; border-top:1px solid #e2e8f0; }
+#spRoot .sp-dette-ant { font-size:.82rem; color:#9a3412; background:#fff7ed; border:1px solid #fed7aa; border-radius:8px; padding:7px 12px; margin:10px 0 8px; }
+#spRoot .sp-vide { text-align:center; padding:50px 20px; color:#94a3b8; }
+#spRoot .sp-vide i { font-size:2.6rem; margin-bottom:10px; display:block; color:#c4b5fd; }
+#spRoot .sp-chargement { text-align:center; padding:60px; color:#7c3aed; }
+#spRoot .sp-aide { background:#f5f3ff; border:1px solid #ddd6fe; color:#4c1d95; border-radius:10px; padding:10px 14px; font-size:.86rem; margin-bottom:14px; }
+#spRoot .sp-aide b { color:#6d28d9; }
+#spRoot .sp-plus { text-align:center; padding:12px; }
+#spRoot .sp-plus button { border:1px solid #ddd6fe; background:#faf5ff; color:#5b21b6; border-radius:8px; padding:7px 16px; font-weight:600; cursor:pointer; }
+
+#spRoot a.sp-lien { color:#6d28d9; text-decoration:none; border-bottom:1px dashed #c4b5fd; }
+#spRoot a.sp-lien:hover { color:#4c1d95; border-bottom-style:solid; }
+#spRoot a.sp-lien i { margin-right:5px; font-size:.8rem; opacity:.7; }
+/* Fenêtre « détail du bon » (ajoutée au body, hors de #spRoot) */
+.sp-fenetre { position:fixed; inset:0; background:rgba(15,23,42,.55); z-index:2000; display:none; align-items:flex-start; justify-content:center; padding:40px 16px; overflow-y:auto; }
+.sp-fenetre.ouverte { display:flex; }
+.sp-fenetre-boite { background:#fff; border-radius:14px; width:100%; max-width:860px; box-shadow:0 20px 50px rgba(0,0,0,.3); overflow:hidden; }
+.sp-fenetre-tete { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; padding:18px 22px; background:linear-gradient(135deg,#f5f3ff,#ede9fe); border-bottom:1px solid #ddd6fe; }
+.sp-fenetre-tete > div:last-child { display:flex; align-items:center; gap:12px; }
+.sp-fenetre-type { font-size:.78rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:#7c3aed; }
+.sp-fenetre-ref { font-size:1.3rem; font-weight:700; color:#1e293b; font-family:Consolas, monospace; word-break:break-all; }
+.sp-fermer { border:0; background:#fff; width:34px; height:34px; border-radius:50%; font-size:1.4rem; line-height:1; color:#64748b; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,.1); }
+.sp-fermer:hover { color:#111; }
+.sp-fenetre-corps { padding:18px 22px; }
+.sp-fenetre .sp-infos { display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:10px 18px; margin-bottom:6px; }
+.sp-fenetre .sp-infos div { display:flex; flex-direction:column; }
+.sp-fenetre .sp-infos span { font-size:.74rem; color:#64748b; font-weight:700; text-transform:uppercase; letter-spacing:.03em; }
+.sp-fenetre .sp-infos b { color:#1e293b; font-weight:600; }
+.sp-fenetre .sp-titre-bloc { font-weight:700; color:#5b21b6; margin:18px 0 8px; font-size:.92rem; }
+.sp-fenetre .sp-table-wrap { overflow-x:auto; }
+.sp-fenetre table.sp-table { width:100%; border-collapse:separate; border-spacing:0; font-size:.9rem; border:1px solid #ede9fe; border-radius:10px; overflow:hidden; }
+.sp-fenetre .sp-table th { background:#f5f3ff; color:#5b21b6; font-size:.74rem; text-transform:uppercase; letter-spacing:.03em; padding:9px 12px; text-align:left; white-space:nowrap; }
+.sp-fenetre .sp-table td { padding:9px 12px; border-top:1px solid #f1f5f9; }
+.sp-fenetre .r { text-align:right !important; white-space:nowrap; } .sp-fenetre .c { text-align:center !important; }
+.sp-fenetre .sp-tel { font-size:.78rem; color:#94a3b8; font-weight:400; }
+.sp-fenetre .sp-zero { color:#94a3b8; }
+.sp-fenetre .sp-totaux { margin:12px 0 0 auto; max-width:330px; }
+.sp-fenetre .sp-totaux div { display:flex; justify-content:space-between; padding:6px 4px; border-bottom:1px solid #f1f5f9; }
+.sp-fenetre .sp-totaux .gros { font-size:1.05rem; } .sp-fenetre .sp-totaux .vert b { color:#059669; } .sp-fenetre .sp-totaux .rouge b { color:#dc2626; font-size:1.1rem; }
+.sp-fenetre .sp-aucun-paiement { background:#fff7ed; color:#9a3412; border:1px solid #fed7aa; border-radius:8px; padding:9px 12px; font-size:.88rem; }
+.sp-fenetre .sp-notes { background:#f8fafc; border-radius:8px; padding:9px 12px; white-space:pre-wrap; font-size:.86rem; color:#475569; }
+.sp-fenetre-pied { display:flex; justify-content:flex-end; gap:10px; padding:14px 22px; border-top:1px solid #e2e8f0; background:#f8fafc; }
+.sp-fenetre-pied button { border:1px solid #cbd5e1; background:#fff; border-radius:8px; padding:8px 16px; font-weight:600; cursor:pointer; }
+.sp-fenetre-pied button.principal { background:#7c3aed; border-color:#7c3aed; color:#fff; }
+.sp-fenetre .sp-badge { display:inline-flex; align-items:center; gap:5px; padding:4px 11px; border-radius:999px; font-size:.8rem; font-weight:700; white-space:nowrap; }
+.sp-fenetre .sp-badge.paye { background:#d1fae5; color:#065f46; } .sp-fenetre .sp-badge.partiel { background:#fef3c7; color:#92400e; }
+.sp-fenetre .sp-badge.non_paye { background:#fee2e2; color:#991b1b; }
+.sp-fenetre .sp-chargement, .sp-fenetre .sp-vide { text-align:center; padding:50px 20px; color:#7c3aed; }
+.sp-fenetre .sp-vide i { font-size:2.4rem; display:block; margin-bottom:10px; }
+
 .page-container { padding: 20px 0; }
 
 .page-title {
@@ -258,11 +401,18 @@ if (!window.__clients_solde_dashboard_script_loaded__) {
         </button>
     </div>
 
+    <!-- Onglets -->
+    <div class="sp-onglets">
+        <button type="button" class="actif" data-csd-onglet="ensemble" onclick="spOnglet('ensemble')"><i class="fas fa-chart-pie"></i>{% trans "Vue d'ensemble" %}</button>
+        <button type="button" data-csd-onglet="suivi" onclick="spOnglet('suivi')"><i class="fas fa-file-invoice-dollar"></i>{% trans "Suivi des paiements par bon" %}</button>
+    </div>
+
     <!-- Loading Overlay -->
     <div id="loading-overlay" class="loading-overlay" style="display: none;">
         <div class="spinner"></div>
     </div>
 
+    <div id="csdVueEnsemble">
     <!-- Statistiques Globales -->
     <div class="dashboard-grid">
         <div class="stat-card">
@@ -414,5 +564,70 @@ if (!window.__clients_solde_dashboard_script_loaded__) {
                 </tr>
             </tbody>
         </table>
+    </div>
+    </div><!-- /csdVueEnsemble -->
+
+    <!-- ===== Suivi des paiements par bon ===== -->
+    <div id="spRoot" style="display:none;">
+        <div class="sp-aide">
+            <i class="fas fa-info-circle"></i>
+            {% trans "Chaque bon (commande livrée, vente directe du van, vente au bureau) avec ce que le client a" %}
+            <b>{% trans "payé" %}</b> {% trans "et ce qu'il" %} <b>{% trans "reste à payer" %}</b>.
+            {% trans "Cliquez sur un client pour voir ses bons." %}
+        </div>
+
+        <div class="sp-filtres">
+            <div class="sp-champ">
+                <label>{% trans "Période" %}</label>
+                <div class="sp-periode">
+                    <input type="date" id="spDu" class="form-control" onchange="spDatesChangees()">
+                    <span class="text-muted">{% trans "au" %}</span>
+                    <input type="date" id="spAu" class="form-control" onchange="spDatesChangees()">
+                </div>
+            </div>
+            <div class="sp-champ">
+                <label>{% trans "Raccourcis" %}</label>
+                <div class="sp-raccourcis">
+                    <button type="button" data-sp-raccourci="mois" onclick="spRaccourci('mois')">{% trans "Ce mois" %}</button>
+                    <button type="button" data-sp-raccourci="mois_dernier" onclick="spRaccourci('mois_dernier')">{% trans "Mois dernier" %}</button>
+                    <button type="button" data-sp-raccourci="trimestre" onclick="spRaccourci('trimestre')">{% trans "3 derniers mois" %}</button>
+                    <button type="button" data-sp-raccourci="annee" onclick="spRaccourci('annee')">{% trans "Cette année" %}</button>
+                    <button type="button" data-sp-raccourci="tout" onclick="spRaccourci('tout')">{% trans "Tout" %}</button>
+                </div>
+            </div>
+            <div class="sp-champ">
+                <label for="spEtat">{% trans "État du paiement" %}</label>
+                <select id="spEtat" class="form-control" onchange="spAfficher()">
+                    <option value="">{% trans "Tous les bons" %}</option>
+                    <option value="a_payer">{% trans "Non payés + payés en partie" %}</option>
+                    <option value="non_paye">{% trans "Non payés" %}</option>
+                    <option value="partiel">{% trans "Payés en partie" %}</option>
+                    <option value="paye">{% trans "Payés" %}</option>
+                </select>
+            </div>
+            <div class="sp-champ">
+                <label for="spType">{% trans "Type de bon" %}</label>
+                <select id="spType" class="form-control" onchange="spAfficher()">
+                    <option value="">{% trans "Tous" %}</option>
+                    <option value="commande">{% trans "Commandes livrées" %}</option>
+                    <option value="vente">{% trans "Ventes directes (van)" %}</option>
+                    <option value="vente_pc">{% trans "Ventes au bureau" %}</option>
+                </select>
+            </div>
+            <div class="sp-champ" style="min-width:200px;">
+                <label for="spClient">{% trans "Client" %}</label>
+                <select id="spClient" class="form-control" onchange="spAfficher()"><option value="">{% trans "Tous les clients" %}</option></select>
+            </div>
+            <div class="sp-champ" style="min-width:180px;">
+                <label for="spVendeur">{% trans "Pré-vendeur / livreur" %}</label>
+                <select id="spVendeur" class="form-control" onchange="spAfficher()"><option value="">{% trans "Tous" %}</option></select>
+            </div>
+            <div class="sp-champ" style="flex:1; min-width:200px;">
+                <label for="spRecherche">{% trans "Rechercher" %}</label>
+                <input type="search" id="spRecherche" class="form-control" placeholder="{% trans 'N° de bon, client, téléphone…' %}" oninput="spRechercher(this.value)">
+            </div>
+        </div>
+
+        <div id="spContenu"></div>
     </div>
 </div>

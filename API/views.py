@@ -764,6 +764,55 @@ class ClientViewSet(TenantFilterMixin, viewsets.ModelViewSet):
             'paiements': result
         })
 
+    def _clients_suivi(self, request):
+        """Clients visibles dans le suivi des paiements (mêmes règles que dashboard_stats)."""
+        from django.db.models import Q
+        company = getattr(request, 'company', None)
+        if company:
+            return Client.objects.filter(Q(company=company) | Q(company__isnull=True))
+        if request.user.is_superuser:
+            return Client.objects.all()
+        return Client.objects.filter(company__isnull=True)
+
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    def detail_bon(self, request):
+        """Contenu d'un bon du suivi des paiements : GET ?cle=cmd-12 | vm-3 | vpc-40"""
+        from .comptes_clients import detail_bon, _json
+        res = detail_bon(request.query_params.get('cle') or '', self._clients_suivi(request))
+        if res is None:
+            return Response({'error': 'Bon introuvable'}, status=status.HTTP_404_NOT_FOUND)
+
+        def conv(v):
+            if isinstance(v, dict):
+                return {k: conv(x) for k, x in v.items()}
+            if isinstance(v, list):
+                return [conv(x) for x in v]
+            return _json(v)
+        return Response(conv(res))
+
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    def suivi_paiements(self, request):
+        """Suivi des paiements par client et par bon (Dashboard Soldes Clients, onglet « Suivi
+        par bon »). GET ?du=AAAA-MM-JJ&au=AAAA-MM-JJ : bons de la période (payés ou non) et,
+        par client, la dette antérieure et la situation globale (sans filtre de période)."""
+        from django.db.models import Q
+        from django.utils.dateparse import parse_date
+        from .comptes_clients import suivi_bons, _json
+
+        clients = self._clients_suivi(request)
+
+        du = parse_date(request.query_params.get('du') or '')
+        au = parse_date(request.query_params.get('au') or '')
+        if du and au and du > au:
+            du, au = au, du
+        res = suivi_bons(clients, du, au)
+        return Response({
+            'du': du.isoformat() if du else None,
+            'au': au.isoformat() if au else None,
+            'bons': [{k: _json(v) for k, v in b.items()} for b in res['bons']],
+            'clients': [{k: _json(v) for k, v in c.items()} for c in res['clients'].values()],
+        })
+
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
     def dashboard_stats(self, request):
         """
