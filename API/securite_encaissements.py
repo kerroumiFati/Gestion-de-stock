@@ -42,8 +42,16 @@ def _meme_entreprise(request, company_id):
 
 
 def company_id_du_livreur(livreur):
+    """Entreprise d'un livreur : celle de son entrepôt (van), sinon celle de son compte.
+    Avant : l'entrepôt seul. Un entrepôt partagé sans entreprise (ex. « CENTRAL ») faisait
+    passer le livreur pour une donnée sans entreprise, comme le fait déjà tenant.q_livreurs."""
     entrepot = getattr(livreur, 'entrepot', None)
-    return getattr(entrepot, 'company_id', None)
+    company_id = getattr(entrepot, 'company_id', None)
+    if company_id is None:
+        user = getattr(livreur, 'user', None)
+        profil = getattr(user, 'profile', None) if user is not None else None
+        company_id = getattr(profil, 'company_id', None)
+    return company_id
 
 
 def livreur_autorise(request, livreur):

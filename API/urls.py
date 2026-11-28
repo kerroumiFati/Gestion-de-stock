@@ -7,6 +7,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from . import views
 from .distribution_views import (
     LivreurViewSet as LivreurDistributionViewSet,
+    SyncViewSet as SyncDistributionViewSet,
     TourneeViewSet as TourneeDistributionViewSet,
     ArretTourneeViewSet as ArretTourneeDistributionViewSet,
     LivraisonConfirmerView, LivraisonEchecView
@@ -479,6 +480,8 @@ urlpatterns = [
 
     # Module de distribution mobile (nouveau système complet)
     path('distribution/', include('API.distribution_urls')),
+    # Chemin appelé par l'application mobile (GET /API/sync/deltas/?since=...) : avant, 404
+    path('sync/deltas/', SyncDistributionViewSet.as_view({'get': 'deltas'}), name='sync-deltas'),
 
     # Endpoints de livraison compat mobile
     path('livraisons/confirmer/', LivraisonConfirmerView.as_view(), name='livraison-confirmer'),

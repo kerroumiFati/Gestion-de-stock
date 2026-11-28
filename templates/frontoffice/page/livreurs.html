@@ -7,7 +7,7 @@ if (!window.__livreurs_script_loaded__) {
     console.log('[LIVREURS PAGE] Loading livreurs.js for the first time');
     window.__livreurs_script_loaded__ = true;
     var script = document.createElement('script');
-    script.src = "{% static 'script/livreurs.js' %}?v=20261124";
+    script.src = "{% static 'script/livreurs.js' %}?v=20261128";
     script.type = 'text/javascript';
     script.onload = function() {
         console.log('[LIVREURS PAGE] livreurs.js loaded, dispatching fragment:loaded event');

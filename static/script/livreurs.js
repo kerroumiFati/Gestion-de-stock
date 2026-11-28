@@ -292,16 +292,47 @@ function livLoadLivreurData(id) {
 }
 
 // Configuration des event handlers
+// Message lisible à partir d'une réponse d'erreur DRF : {detail|error|message} ou erreurs par
+// champ {matricule: ["Ce matricule existe déjà ..."], nom: [...]}.
+function livMessageErreur(result, status) {
+    if (result && typeof result === 'object') {
+        if (result.error || result.detail || result.message) {
+            return String(result.error || result.detail || result.message);
+        }
+        const libelles = { matricule: 'Matricule', nom: 'Nom', telephone: 'Téléphone', email: 'Email',
+                           entrepot: 'Van', vehicule_immatriculation: 'Immatriculation' };
+        const parties = Object.keys(result).map(function(champ) {
+            const v = result[champ];
+            const texte = Array.isArray(v) ? v.join(' ') : String(v);
+            return champ === 'non_field_errors' ? texte : (libelles[champ] || champ) + ' : ' + texte;
+        }).filter(Boolean);
+        if (parties.length) return parties.join(' — ');
+    }
+    return `Erreur lors de l'enregistrement (HTTP ${status})`;
+}
+
 function livSetupFormHandlers() {
     const form = document.getElementById('livreur-form');
     if (!form) return;
+    // La page reçoit deux fois « fragment:loaded » (redirect.js puis livreurs.html) : sans ce
+    // garde-fou, deux écouteurs « submit » étaient posés et UN clic envoyait DEUX POST
+    // (le second échouait sur le matricule en double : 500 en production le 28/11).
+    if (form.dataset.livHandlers === '1') return;
+    form.dataset.livHandlers = '1';
 
     // Soumettre le formulaire
     form.addEventListener('submit', function(e) {
         e.preventDefault();
+        if (form.dataset.envoiEnCours === '1') return;   // double clic : un seul envoi
 
         const id = document.getElementById('livreur-id').value;
         const entrepotValue = document.getElementById('entrepot').value;
+        // Sans van, le téléphone du livreur n'a ni stock ni produits à vendre : prévenir
+        if (!id && !entrepotValue && !window.confirm(
+                "Aucun van n'est assigné à ce livreur : il n'aura pas de stock dans l'application mobile.\n\n" +
+                "Enregistrer quand même ? (Vous pourrez lui assigner un van plus tard.)")) {
+            return;
+        }
         const nomComplet = nettoyerNom(
             document.getElementById('nom').value + ' ' + document.getElementById('prenom').value
         );
@@ -328,6 +359,7 @@ function livSetupFormHandlers() {
         // et éviter les double-soumissions (qui prolongeaient la sensation de blocage).
         const submitBtn = form.querySelector('button[type="submit"]');
         const submitBtnOriginalText = submitBtn ? submitBtn.innerHTML : '';
+        form.dataset.envoiEnCours = '1';
         if (submitBtn) {
             submitBtn.disabled = true;
             submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enregistrement...';
@@ -341,7 +373,8 @@ function livSetupFormHandlers() {
             },
             body: JSON.stringify(data)
         })
-        .then(response => response.json().then(result => ({ ok: response.ok, status: response.status, result })))
+        // Réponse non JSON (page d'erreur 500) : ne pas la confondre avec une erreur réseau
+        .then(response => response.json().catch(() => null).then(result => ({ ok: response.ok, status: response.status, result })))
         .then(({ ok, status, result }) => {
             console.log('[LIVREURS] Réponse du serveur:', status, result);
 
@@ -351,10 +384,9 @@ function livSetupFormHandlers() {
                 // ne vérifiait jamais response.ok : le modal ne se fermait jamais et
                 // "Enregistrer" restait la seule action possible, sans jamais dire à
                 // l'utilisateur ce qui bloquait.
-                const msg = result && (result.detail || result.error || result.message)
-                    ? (result.detail || result.error || result.message)
-                    : `Erreur lors de l'enregistrement (HTTP ${status})`;
-                showMessage(msg, 'error');
+                // Erreurs par champ (ex. matricule déjà utilisé) affichées en clair ; avant :
+                // « Erreur lors de l'enregistrement (HTTP 400) » sans dire ce qui bloquait.
+                showMessage(livMessageErreur(result, status), 'error');
                 return;
             }
 
@@ -375,6 +407,7 @@ function livSetupFormHandlers() {
             showMessage('Erreur lors de l\'enregistrement', 'error');
         })
         .finally(() => {
+            form.dataset.envoiEnCours = '';
             if (submitBtn) {
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = submitBtnOriginalText;

@@ -13,6 +13,14 @@ from .distribution_models import (
 from .models import Client, Produit, Company, CodePrix, PrixProduit, TypePrix, Warehouse
 from django.contrib.auth import get_user_model
 
+
+def _livreur_du_compte(request):
+    """Livreur / prévendeur lié au compte qui envoie la requête (None pour un compte du bureau)."""
+    user = getattr(request, 'user', None)
+    if user is None or not getattr(user, 'is_authenticated', False):
+        return None
+    return LivreurDistribution.objects.filter(user=user).first()
+
 User = get_user_model()
 
 
@@ -186,6 +194,20 @@ class LivreurSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at'
         ]
         read_only_fields = ['created_at', 'updated_at']
+        # Unicité contrôlée par validate_matricule (message en français, avec le matricule)
+        extra_kwargs = {'matricule': {'validators': []}}
+
+    MESSAGE_MATRICULE_EXISTANT = ("Ce matricule existe déjà ({matricule}). Ce livreur est peut-être "
+                                  "déjà enregistré : vérifiez la liste des livreurs.")
+
+    def validate_matricule(self, value):
+        value = (value or '').strip()
+        qs = LivreurDistribution.objects.filter(matricule__iexact=value)
+        if self.instance is not None:
+            qs = qs.exclude(pk=self.instance.pk)
+        if value and qs.exists():
+            raise serializers.ValidationError(self.MESSAGE_MATRICULE_EXISTANT.format(matricule=value))
+        return value
 
     def get_username(self, obj):
         return obj.user.username if obj.user else None
@@ -491,35 +513,13 @@ class VenteMobileCreateSerializer(serializers.Serializer):
             except LivreurDistribution.DoesNotExist:
                 logger.warning(f"Livreur avec ID {livreur_id_from_mobile} introuvable, recherche alternative...")
 
-        # PRIORITÉ 2: Chercher dans clients_assignes (assignation directe)
+        # Sinon : le livreur du compte qui envoie la vente (son téléphone). JAMAIS un livreur
+        # deviné à partir du client (avant : clients assignés, planning, tournées du jour) : la
+        # vente partait sur le compte et le stock du van d'un AUTRE vendeur.
         if not livreur:
-            livreur = LivreurDistribution.objects.filter(clients_assignes=client).first()
+            livreur = _livreur_du_compte(self.context.get('request'))
             if livreur:
-                logger.info(f"Livreur trouvé via clients_assignes: {livreur.nom}")
-
-        # PRIORITÉ 3: Chercher via le planning hebdomadaire
-        if not livreur:
-            jour_semaine = timezone.now().weekday()  # 0=lundi, 6=dimanche
-            client_hebdo = ClientLivreurHebdo.objects.filter(
-                client=client,
-                jour_semaine=jour_semaine,
-                is_active=True
-            ).select_related('livreur').first()
-            if client_hebdo:
-                livreur = client_hebdo.livreur
-                logger.info(f"Livreur trouvé via planning hebdomadaire: {livreur.nom}")
-
-        # PRIORITÉ 4: Chercher via les tournées actives du jour
-        if not livreur:
-            today = timezone.now().date()
-            arret = ArretTourneeMobile.objects.filter(
-                client=client,
-                tournee__date_tournee=today,
-                tournee__statut__in=['en_cours', 'planifiee']
-            ).select_related('tournee__livreur').first()
-            if arret and arret.tournee and arret.tournee.livreur:
-                livreur = arret.tournee.livreur
-                logger.info(f"Livreur trouvé via tournée active: {livreur.nom}")
+                logger.info(f"Livreur du compte connecté: {livreur.nom}")
 
         if not livreur:
             logger.warning(f"Aucun livreur trouvé pour le client {client.id} ({client.nom}). Le stock ne sera pas décrémenté.")
@@ -1212,19 +1212,17 @@ class CommandeClientCreateSerializer(serializers.ModelSerializer):
         client = validated_data.get('client')
         print(f'[COMMANDE CREATE] Company fournie: {validated_data.get("company")}, sera laissée à null pour compatibilité filtres')
 
-        # Auto-assigner le livreur depuis le client si non fourni
-        if not validated_data.get('livreur') and client:
-            # ATTENTION: Auto-assignation du livreur - peut causer des problèmes si plusieurs livreurs ont le même client
-            print(f'[COMMANDE CREATE - WARNING] Livreur non fourni, auto-assignation depuis client {client.id}')
-            # Trouver le livreur assigné à ce client
-            livreur = LivreurDistribution.objects.filter(clients_assignes=client).first()
-            if livreur:
-                print(f'[COMMANDE CREATE] Livreur auto-assigné: {livreur.id} - {livreur.nom}')
-                validated_data['livreur'] = livreur
-            else:
-                print(f'[COMMANDE CREATE - WARNING] Aucun livreur assigné au client {client.id}, commande créée sans livreur')
-                # Ne pas lever d'erreur, permettre la création sans livreur
-                # Cela pourrait être corrigé manuellement plus tard via l'interface web
+        # Livreur non fourni : celui du compte qui envoie la commande (téléphone du prévendeur),
+        # sinon refus : l'utilisateur du bureau le choisit. Avant : le premier livreur
+        # ayant ce client dans ses clients assignés → la commande partait sur l'application
+        # d'un autre prévendeur et disparaissait de celle de son auteur.
+        if not validated_data.get('livreur'):
+            livreur = _livreur_du_compte(self.context.get('request'))
+            if livreur is None:
+                raise serializers.ValidationError(
+                    {'livreur': "Précisez le prévendeur / livreur de la commande (aucune affectation automatique)."})
+            validated_data['livreur'] = livreur
+            passee_par = livreur
 
         # Créer la commande d'abord pour calculer le montant total
         # Tournée envoyée par le téléphone : ignorée si inconnue ou si elle appartient à un autre livreur

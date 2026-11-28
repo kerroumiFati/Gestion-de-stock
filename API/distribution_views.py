@@ -155,9 +155,25 @@ class LivreurViewSet(viewsets.ModelViewSet):
         password = f"{username}{jour}{mois}"
         return password
 
-    @transaction.atomic
     def create(self, request, *args, **kwargs):
-        """Créer un livreur et son compte utilisateur automatiquement"""
+        """Créer un livreur et son compte utilisateur automatiquement.
+
+        Deux envois simultanés du même formulaire (double clic) passent tous deux la validation
+        d'unicité du matricule ; le second échouait sur la contrainte unique de la base (500).
+        Il reçoit maintenant un 400 lisible."""
+        from django.db import IntegrityError
+        try:
+            return self._creer_livreur(request, *args, **kwargs)
+        except IntegrityError:
+            matricule = str(request.data.get('matricule') or '').strip()
+            if matricule and LivreurDistribution.objects.filter(matricule__iexact=matricule).exists():
+                message = LivreurSerializer.MESSAGE_MATRICULE_EXISTANT.format(matricule=matricule)
+                return Response({'matricule': [message], 'error': message}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': "Ce livreur n'a pas pu être enregistré : une fiche identique existe déjà."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+    @transaction.atomic
+    def _creer_livreur(self, request, *args, **kwargs):
         from django.contrib.auth.models import Group
 
         serializer = self.get_serializer(data=request.data)
@@ -906,11 +922,23 @@ class LivreurViewSet(viewsets.ModelViewSet):
         livreur = self.get_object()
 
         if not livreur.entrepot:
+            # Situation normale (prévendeur, van pas encore affecté) : 200 et stock vide, pas une
+            # erreur (avant : 404, 386 erreurs dans les journaux le 28/11 avant l'affectation des
+            # vans). `sans_van` : l'application installée affiche alors « Aucun van affecté » ;
+            # `statistiques` à zéro : l'écran Stock du van les lit sans condition.
+            message = "Ce livreur n'a pas de van assigné"
             return Response({
-                'error': 'Ce livreur n\'a pas de van assigné',
+                'a_van': False,
+                'sans_van': True,
+                'message': message,
                 'livreur_id': livreur.id,
-                'livreur_nom': livreur.nom
-            }, status=status.HTTP_404_NOT_FOUND)
+                'livreur_nom': livreur.nom,
+                'livreur': {'id': livreur.id, 'nom': livreur.nom, 'matricule': livreur.matricule},
+                'van': None,
+                'statistiques': {'nb_produits': 0, 'nb_references': 0, 'total_quantite': 0,
+                                 'valeur_stock': 0, 'currency_symbol': 'DA'},
+                'stocks': [],
+            })
 
         # Récupérer la devise par défaut
         currency = Currency.objects.filter(is_default=True, is_active=True).first()
@@ -939,7 +967,11 @@ class LivreurViewSet(viewsets.ModelViewSet):
 
         # Prix par type de client et promotions : chargés EN UNE FOIS pour tous les produits
         # du van (avant : 2 à 3 requêtes par produit et par type de prix)
-        tarifs = TarifsMobile(company=livreur.entrepot.company_id, produits=stocks.values('produit_id'))
+        # Entreprise du livreur : celle du van, sinon celle de son compte. Avant : celle du van
+        # seule ; un van sans entreprise (« CENTRAL ») donnait company=None → types et codes de
+        # prix de l'entreprise ignorés et promotions de TOUTES les entreprises appliquées.
+        from API.securite_encaissements import company_id_du_livreur
+        tarifs = TarifsMobile(company=company_id_du_livreur(livreur), produits=stocks.values('produit_id'))
         code_prix_actif = tarifs.code_actif
 
         for stock in stocks:
@@ -998,6 +1030,7 @@ class LivreurViewSet(viewsets.ModelViewSet):
                     total_value += product_value
 
         return Response({
+            'a_van': True,
             'livreur': {
                 'id': livreur.id,
                 'nom': livreur.nom,
@@ -2577,12 +2610,13 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
         Body:
         {
             "livreur_id": int,           # ID du livreur
-            "entrepot_source_id": int    # ID de l'entrepôt source (optionnel, prend l'entrepôt principal par défaut)
+            "entrepot_source_id": int    # ID de l'entrepôt source (OBLIGATOIRE : choisi par l'utilisateur)
         }
 
         Returns:
         - 200: Commande affectée avec succès
-        - 400: Erreur (rupture de stock, livreur sans van, etc.)
+        - 400: Erreur (entrepôt source non choisi, rupture de stock, livreur sans van, etc.)
+        - 404: commande, livreur ou entrepôt source introuvable (ou d'une autre entreprise)
         """
         from .models import Warehouse
         from .distribution_models import LivreurDistribution
@@ -2605,99 +2639,44 @@ class CommandeClientViewSet(viewsets.ModelViewSet):
             )
 
         # Récupérer le livreur
+        # Livreur de l'entreprise de l'utilisateur seulement (avant : n'importe lequel)
+        from .tenant import filtrer_livreurs
         try:
-            livreur = LivreurDistribution.objects.get(id=livreur_id)
+            livreur = filtrer_livreurs(LivreurDistribution.objects.all(), request).get(id=int(livreur_id))
             print(f"[AFFECTER LIVREUR] Livreur trouvé: {livreur.nom}, Van: {livreur.entrepot}")
-        except LivreurDistribution.DoesNotExist:
+        except (LivreurDistribution.DoesNotExist, TypeError, ValueError):
             print(f"[AFFECTER LIVREUR] Erreur: Livreur ID {livreur_id} introuvable")
             return Response(
                 {'error': f'Livreur avec ID {livreur_id} introuvable'},
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # Récupérer l'entrepôt source :
-        # 1) celui choisi dans la fenêtre « Affecter à un Livreur » ;
-        # 2) sinon le dépôt par défaut des commandes mobiles (Paramètres > Général) ;
-        # 3) sinon l'ancien choix automatique (premier dépôt actif hors van).
-        from .models import SystemConfig
-        if entrepot_source_id:
-            try:
-                entrepot_source = Warehouse.objects.get(id=int(entrepot_source_id))
-                print(f"[AFFECTER LIVREUR] Entrepôt source spécifié: {entrepot_source.name} (ID: {entrepot_source.id})")
-            except (Warehouse.DoesNotExist, ValueError, TypeError):
-                print(f"[AFFECTER LIVREUR] Erreur: Entrepôt ID {entrepot_source_id} introuvable")
-                return Response(
-                    {'success': False, 'message': f'Entrepôt source #{entrepot_source_id} introuvable', 'ruptures': []},
-                    status=status.HTTP_404_NOT_FOUND
-                )
-            if not entrepot_source.is_active:
-                return Response({'success': False, 'message': f"L'entrepôt {entrepot_source.name} est inactif", 'ruptures': []},
-                                status=status.HTTP_400_BAD_REQUEST)
-            if 'van' in (entrepot_source.code or '').lower():
-                return Response({'success': False, 'ruptures': [],
-                                 'message': f"{entrepot_source.name} est un van : choisissez un dépôt comme entrepôt source"},
-                                status=status.HTTP_400_BAD_REQUEST)
-        else:
-            entrepot_source = None
-            # Paramètres de l'entreprise de la commande (chaque entreprise a les siens)
-            cfg_company = commande.company or getattr(commande.client, 'company', None)
-            depot_cfg = SystemConfig.get_solo(cfg_company).depot_commandes_mobile
-            if depot_cfg and depot_cfg.is_active and 'van' not in (depot_cfg.code or '').lower():
-                entrepot_source = depot_cfg
-                print(f"[AFFECTER LIVREUR] Dépôt par défaut (paramètres): {entrepot_source.name}")
-
-        if not entrepot_source:
-            # Prendre l'entrepôt principal de la company
-            # On cherche un entrepôt actif qui n'est pas un van
-            print(f"[AFFECTER LIVREUR] Recherche d'un entrepôt source pour company: {commande.company}")
-
-            # Essayer d'abord avec la company de la commande
-            if commande.company:
-                entrepot_source = Warehouse.objects.filter(
-                    company=commande.company,
-                    is_active=True
-                ).exclude(
-                    code__icontains='van'
-                ).first()
-                print(f"[AFFECTER LIVREUR] Recherche avec company: trouvé={entrepot_source}")
-            else:
-                entrepot_source = None
-
-            # Si pas trouvé avec company, essayer avec la company du client
-            if not entrepot_source and commande.client.company:
-                print(f"[AFFECTER LIVREUR] Commande sans company, recherche avec company du client: {commande.client.company}")
-                entrepot_source = Warehouse.objects.filter(
-                    company=commande.client.company,
-                    is_active=True
-                ).exclude(
-                    code__icontains='van'
-                ).first()
-                print(f"[AFFECTER LIVREUR] Recherche avec company du client: trouvé={entrepot_source}")
-
-                # Mettre à jour la commande avec la company du client
-                if entrepot_source:
-                    commande.company = commande.client.company
-                    commande.save(update_fields=['company'])
-                    print(f"[AFFECTER LIVREUR] Company du client assignée à la commande")
-
-            # Si toujours pas trouvé, chercher n'importe quel entrepôt actif non-van
-            if not entrepot_source:
-                print(f"[AFFECTER LIVREUR] Aucun entrepôt trouvé avec company, recherche globale...")
-                entrepot_source = Warehouse.objects.filter(
-                    is_active=True
-                ).exclude(
-                    code__icontains='van'
-                ).first()
-                print(f"[AFFECTER LIVREUR] Recherche globale: trouvé={entrepot_source}")
-
-            if not entrepot_source:
-                print(f"[AFFECTER LIVREUR] Erreur: Aucun entrepôt source trouvé dans le système")
-                return Response(
-                    {'error': 'Aucun entrepôt source trouvé. Veuillez créer un entrepôt ou spécifier entrepot_source_id.'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            else:
-                print(f"[AFFECTER LIVREUR] Entrepôt source auto-détecté: {entrepot_source.name} (ID: {entrepot_source.id})")
+        # Entrepôt source : TOUJOURS choisi par l'utilisateur dans la fenêtre « Affecter à un
+        # Livreur ». Aucun choix automatique : avant, sans choix, le serveur prenait le dépôt des
+        # paramètres, puis un dépôt de l'entreprise de la commande ou du client, et en dernier
+        # recours le premier dépôt actif de N'IMPORTE QUELLE entreprise.
+        if entrepot_source_id in (None, ''):
+            return Response(
+                {'success': False, 'ruptures': [],
+                 'error': "Choisissez l'entrepôt source (dépôt d'où part la marchandise).",
+                 'message': "Choisissez l'entrepôt source (dépôt d'où part la marchandise)."},
+                status=status.HTTP_400_BAD_REQUEST)
+        from .tenant import filtrer
+        try:
+            entrepot_source = filtrer(Warehouse.objects.all(), request).get(id=int(entrepot_source_id))
+        except (Warehouse.DoesNotExist, TypeError, ValueError):
+            # Inexistant ou dépôt d'une autre entreprise : même réponse
+            return Response(
+                {'success': False, 'message': f'Entrepôt source #{entrepot_source_id} introuvable', 'ruptures': []},
+                status=status.HTTP_404_NOT_FOUND)
+        print(f"[AFFECTER LIVREUR] Entrepôt source choisi: {entrepot_source.name} (ID: {entrepot_source.id})")
+        if not entrepot_source.is_active:
+            return Response({'success': False, 'message': f"L'entrepôt {entrepot_source.name} est inactif", 'ruptures': []},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if 'van' in (entrepot_source.code or '').lower():
+            return Response({'success': False, 'ruptures': [],
+                             'message': f"{entrepot_source.name} est un van : choisissez un dépôt comme entrepôt source"},
+                            status=status.HTTP_400_BAD_REQUEST)
 
         # Effectuer l'affectation et le transfert de stock
         print(f"[AFFECTER LIVREUR] Appel affecter_livreur_et_preparer_stock...")
@@ -3823,17 +3802,9 @@ class SyncViewSet(viewsets.ViewSet):
             raise PermissionDenied("Vous ne pouvez synchroniser que vos propres données.")
         return livreur
 
-    @action(detail=False, methods=['post'])
-    def pull(self, request):
-        """Pull: Récupérer les données depuis le serveur (Serveur -> Mobile)"""
-        serializer = SyncDeltaSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        livreur_id = serializer.validated_data['livreur_id']
-        derniere_sync = serializer.validated_data.get('derniere_sync')
-
-        livreur = self._get_livreur_for_request(request, livreur_id)
-
+    @staticmethod
+    def _tournees_a_synchroniser(livreur, derniere_sync):
+        """Tournées à envoyer au téléphone (partagé par pull et deltas)."""
         # Récupérer les tournées modifiées depuis la dernière sync
         tournees = TourneeMobile.objects.filter(livreur=livreur)
 
@@ -3848,7 +3819,19 @@ class SyncViewSet(viewsets.ViewSet):
         if not derniere_sync:
             tournees = tournees.exclude(est_cloturee=True)
 
-        tournees = tournees.prefetch_related('arrets', 'arrets__client')
+        return tournees.prefetch_related('arrets', 'arrets__client')
+
+    @action(detail=False, methods=['post'])
+    def pull(self, request):
+        """Pull: Récupérer les données depuis le serveur (Serveur -> Mobile)"""
+        serializer = SyncDeltaSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        livreur_id = serializer.validated_data['livreur_id']
+        derniere_sync = serializer.validated_data.get('derniere_sync')
+
+        livreur = self._get_livreur_for_request(request, livreur_id)
+        tournees = self._tournees_a_synchroniser(livreur, derniere_sync)
 
         # Log de sync
         sync_log = SyncLogMobile.objects.create(
@@ -3870,6 +3853,83 @@ class SyncViewSet(viewsets.ViewSet):
         }
 
         return Response(response_data)
+
+    # Statuts serveur -> statuts du téléphone (même conversion que la synchro des tournées du jour)
+    _STATUT_TOURNEE_MOBILE = {'planifiee': 'pending', 'en_cours': 'in_progress', 'terminee': 'completed',
+                              'cloturee': 'completed', 'annulee': 'completed'}
+    _STATUT_ARRET_MOBILE = {'livre': 'success', 'echec': 'failure'}
+
+    @action(detail=False, methods=['get'])
+    def deltas(self, request):
+        """Changements depuis la dernière synchronisation, format attendu par l'application mobile.
+
+        GET /API/sync/deltas/?since=<ISO datetime>   (alias : /API/distribution/sync/deltas/)
+        Paramètres : since (optionnel ; absent = tournées du jour et futures, non clôturées) ;
+        livreur_id (optionnel ; par défaut le livreur du compte connecté).
+        Mêmes tournées, permissions et filtrage que POST /API/distribution/sync/pull/ ; réponse
+        {tournees, arrets, clients, suppressions} au format du téléphone, + timestamp, nb_tournees,
+        nb_arrets, message.
+        """
+        from django.utils.dateparse import parse_datetime
+        since = (request.query_params.get('since') or '').strip()
+        derniere_sync = None
+        if since:
+            derniere_sync = parse_datetime(since.replace(' ', '+'))  # « + » du fuseau décodé en espace
+            if derniere_sync is None:
+                return Response({'error': f'since invalide : {since} (date ISO 8601 attendue)'},
+                                status=status.HTTP_400_BAD_REQUEST)
+            if timezone.is_naive(derniere_sync):
+                derniere_sync = timezone.make_aware(derniere_sync)
+
+        livreur_id = (request.query_params.get('livreur_id') or '').strip()
+        if livreur_id:
+            if not livreur_id.isdigit():
+                return Response({'error': 'livreur_id invalide'}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            livreur_connecte = LivreurDistribution.objects.filter(user=request.user).first()
+            if livreur_connecte is None:
+                return Response({'error': "Votre compte n'est pas lié à un livreur : précisez livreur_id."},
+                                status=status.HTTP_400_BAD_REQUEST)
+            livreur_id = livreur_connecte.id
+        livreur = self._get_livreur_for_request(request, int(livreur_id))
+
+        tournees = list(self._tournees_a_synchroniser(livreur, derniere_sync))
+        tournees_data, arrets_data = [], []
+        for t in tournees:
+            tournees_data.append({
+                'id': str(t.id),
+                'date': t.date_tournee.isoformat(),
+                'assigned_to': str(livreur.id),
+                'status': self._STATUT_TOURNEE_MOBILE.get(t.statut, 'pending'),
+                'argent_depart': float(t.argent_depart or 0),
+                'updated_at': t.updated_at.isoformat(),
+            })
+            for a in t.arrets.all():
+                cl = a.client
+                arrets_data.append({
+                    'id': str(a.id),
+                    'tournee_id': str(t.id),
+                    'client_id': str(a.client_id) if a.client_id else None,
+                    'client_nom': (cl.nom if cl else '') or 'Client',
+                    'client_tel': (cl.telephone if cl else None) or None,
+                    'adresse': (cl.adresse if cl else '') or '',
+                    'lat': float(cl.lat) if cl and cl.lat is not None else (float(a.latitude) if a.latitude is not None else None),
+                    'lng': float(cl.lng) if cl and cl.lng is not None else (float(a.longitude) if a.longitude is not None else None),
+                    'heure_prevue': a.heure_prevue.strftime('%H:%M') if a.heure_prevue else None,
+                    'statut': self._STATUT_ARRET_MOBILE.get(a.statut, 'pending'),
+                    'notes': a.notes or None,
+                    'updated_at': (a.updated_at or t.updated_at).isoformat(),
+                })
+        return Response({
+            'timestamp': timezone.now(),
+            'tournees': tournees_data,
+            'arrets': arrets_data,
+            'clients': [],
+            'suppressions': [],
+            'nb_tournees': len(tournees_data),
+            'nb_arrets': len(arrets_data),
+            'message': f'Synchronisation réussie: {len(tournees_data)} tournée(s)',
+        })
 
     @action(detail=False, methods=['post'])
     def push(self, request):
@@ -4520,7 +4580,9 @@ class ComptesClientsAPIView(APIView):
 
     GET /API/distribution/comptes-clients/?tournees=14,15   → clients des arrêts de ces tournées
     GET /API/distribution/comptes-clients/?clients=12,13
+    GET /API/distribution/comptes-clients/                 → (livreur) clients de ses tournées en cours
     Pour chaque client : dette (détail par document), avance, net, historique.
+    Aucun client trouvé (ex. tournée sans arrêt) → 200 [] (avant : 400 « tournees ou clients est requis »).
     """
     permission_classes = [IsAuthenticated]
 
@@ -4528,14 +4590,24 @@ class ComptesClientsAPIView(APIView):
         from API.models import Client
         from API.comptes_clients import compte
         ids = set()
-        t = request.query_params.get('tournees') or ''
-        c = request.query_params.get('clients') or ''
+        t = (request.query_params.get('tournees') or '').strip()
+        c = (request.query_params.get('clients') or '').strip()
         t_ids = [int(x) for x in t.split(',') if x.strip().isdigit()]
         if t_ids:
             ids |= set(ArretTourneeMobile.objects.filter(tournee_id__in=t_ids).values_list('client_id', flat=True))
         ids |= {int(x) for x in c.split(',') if x.strip().isdigit()}
+        if not t and not c:
+            # Aucun paramètre : le livreur connecté → clients des arrêts de ses tournées en cours
+            livreur = LivreurDistribution.objects.filter(user=request.user).first()
+            if livreur is None:
+                return Response({'error': 'Précisez tournees (ex. ?tournees=14,15) ou clients (ex. ?clients=12,13)'},
+                                status=status.HTTP_400_BAD_REQUEST)
+            ids |= set(ArretTourneeMobile.objects.filter(
+                tournee__livreur=livreur, tournee__statut__in=['planifiee', 'en_cours'],
+                tournee__est_cloturee=False).values_list('client_id', flat=True))
+        ids.discard(None)
         if not ids:
-            return Response({'error': 'tournees ou clients est requis'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response([])
         return Response([compte(cl) for cl in Client.objects.filter(pk__in=ids).order_by('nom', 'prenom')])
 
 

@@ -929,6 +929,64 @@ Chaque tournée contient un champ `argent_depart` qui représente le montant pr�
 
 ---
 
+## 6 bis. Synchronisation incrémentale (deltas)
+
+### Endpoint
+```
+GET /API/sync/deltas/?since=2026-11-28T07:00:00.000Z
+```
+Alias : `GET /API/distribution/sync/deltas/`.
+
+### Paramètres (query string, tous optionnels)
+| Paramètre | Description |
+|-----------|-------------|
+| `since` | Date ISO 8601 de la dernière synchronisation. Absent : tournées du jour et futures, non clôturées. |
+| `livreur_id` | Livreur à synchroniser. Absent : le livreur du compte connecté. Un utilisateur du bureau doit le préciser. |
+
+### Règles
+- Même sélection de tournées, mêmes permissions et même filtrage par entreprise que `POST /API/distribution/sync/pull/` :
+  un livreur ne reçoit que ses propres tournées ; un administrateur d'entreprise, seulement les livreurs de son entreprise.
+- Statuts convertis au format du téléphone : tournée `planifiee` → `pending`, `en_cours` → `in_progress`,
+  `terminee` / `cloturee` / `annulee` → `completed` ; arrêt `livre` → `success`, `echec` → `failure`, sinon `pending`.
+
+### Réponse (200 OK)
+```json
+{
+  "timestamp": "2026-11-28T08:15:02.120Z",
+  "tournees": [{"id": "14", "date": "2026-11-28", "assigned_to": "29", "status": "in_progress",
+                "argent_depart": 5000.0, "updated_at": "2026-11-28T07:58:11+00:00"}],
+  "arrets": [{"id": "301", "tournee_id": "14", "client_id": "12", "client_nom": "MINI market",
+              "client_tel": "0550...", "adresse": "...", "lat": 36.7, "lng": 3.05, "heure_prevue": "09:30",
+              "statut": "pending", "notes": null, "updated_at": "2026-11-28T07:58:11+00:00"}],
+  "clients": [],
+  "suppressions": [],
+  "nb_tournees": 1,
+  "nb_arrets": 1,
+  "message": "Synchronisation réussie: 1 tournée(s)"
+}
+```
+Erreurs : `400` si `since` ou `livreur_id` est invalide, ou si le compte n'est pas un livreur et que `livreur_id` est absent ;
+`403` pour le livreur d'un autre (ou d'une autre entreprise) ; `404` si le livreur n'existe pas.
+
+## 6 ter. Stock du van — livreur sans van
+
+`GET /API/distribution/livreurs/{id}/stock_van/` répond **200** (et non plus 404) quand aucun van n'est assigné :
+```json
+{"a_van": false, "sans_van": true, "message": "Ce livreur n'a pas de van assigné",
+ "livreur_id": 29, "livreur_nom": "...", "livreur": {"id": 29, "nom": "...", "matricule": "..."},
+ "van": null, "statistiques": {"nb_produits": 0, "nb_references": 0, "total_quantite": 0,
+ "valeur_stock": 0, "currency_symbol": "DA"}, "stocks": []}
+```
+Avec un van, la réponse habituelle contient `"a_van": true`.
+
+## 6 quater. Comptes clients
+
+`GET /API/distribution/comptes-clients/?tournees=14,15` ou `?clients=12,13`.
+Sans paramètre, pour un compte livreur : clients des arrêts de ses tournées planifiées ou en cours.
+Aucun client trouvé (ex. tournée sans arrêt) : **200 `[]`** (avant : 400 « tournees ou clients est requis »).
+
+---
+
 ## 7. Checklist de déploiement
 
 Avant de déployer votre application mobile:
@@ -965,6 +1023,9 @@ Avant de déployer votre application mobile:
 | Détail livreur | GET | `/API/distribution/livreurs/{id}/` | ✅ Oui | Détails d'un livreur |
 | **Clients assignés** | GET | `/API/distribution/livreurs/{id}/clients_assignes/` | ✅ Oui | Clients d'un livreur |
 | Tournées livreur | GET | `/API/distribution/livreurs/{id}/tournees/` | ✅ Oui | Tournées d'un livreur |
+| Synchro incrémentale | GET | `/API/sync/deltas/?since=...` | ✅ Oui | Tournées et arrêts modifiés depuis `since` |
+| Stock du van | GET | `/API/distribution/livreurs/{id}/stock_van/` | ✅ Oui | Stock du van (200 + `a_van: false` sans van) |
+| Comptes clients | GET | `/API/distribution/comptes-clients/` | ✅ Oui | Dettes, avances et historique des clients |
 
 ---
 

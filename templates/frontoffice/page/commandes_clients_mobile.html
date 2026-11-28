@@ -315,7 +315,7 @@
                         <option value="">{% trans "Chargement..." %}</option>
                     </select>
                     <small class="form-text text-muted">
-                        {% trans "Le stock de la commande part de ce dépôt vers le van du livreur. Dépôt par défaut : Paramètres > Général." %}
+                        {% trans "Obligatoire : le stock de la commande part de ce dépôt vers le van du livreur." %}
                     </small>
                 </div>
                 <div class="form-group">
@@ -1370,36 +1370,30 @@
             .catch(err => console.error('Erreur chargement livreurs:', err));
     }
 
-    // Dépôts proposés comme source : actifs et hors vans. Pré-sélection : dépôt par défaut
-    // des paramètres, sinon le dernier choisi pendant la session, sinon le premier.
-    let dernierEntrepotSource = null;
+    // Dépôts proposés comme source : actifs et hors vans. AUCUNE pré-sélection : l'utilisateur
+    // choisit toujours lui-même le dépôt d'où part la marchandise (le serveur l'exige aussi).
     function loadEntrepotsSourceForModal() {
         const select = document.getElementById('entrepotSource');
         const opts = { credentials: 'same-origin', headers: { 'Accept': 'application/json' } };
-        Promise.all([
-            fetch('/API/entrepots/', opts).then(r => r.ok ? r.json() : []),
-            fetch('/API/system-config/', opts).then(r => r.ok ? r.json() : {}).catch(() => ({}))
-        ]).then(([data, cfg]) => {
+        select.innerHTML = '<option value="">Chargement…</option>';
+        fetch('/API/entrepots/', opts).then(r => r.ok ? r.json() : []).then(data => {
             const list = (Array.isArray(data) ? data : (data.results || []))
                 .filter(w => w.is_active !== false && !String(w.code || '').toLowerCase().includes('van'));
-            select.innerHTML = '';
             if (!list.length) {
                 select.innerHTML = '<option value="">Aucun dépôt actif</option>';
                 return;
             }
+            select.innerHTML = '<option value="">— Choisir le dépôt source —</option>';
             list.forEach(w => {
                 const o = document.createElement('option');
                 o.value = w.id;
                 o.textContent = (w.name || '') + (w.code ? ' (' + w.code + ')' : '');
                 select.appendChild(o);
             });
-            const ids = list.map(w => String(w.id));
-            const defaut = cfg && cfg.depot_commandes_mobile ? String(cfg.depot_commandes_mobile) : null;
-            const choix = [dernierEntrepotSource, defaut].find(v => v && ids.includes(v));
-            select.value = choix || ids[0];
+            select.value = '';
         }).catch(err => {
             console.error('Erreur chargement dépôts:', err);
-            select.innerHTML = '<option value="">Choix automatique</option>';
+            select.innerHTML = '<option value="">Dépôts indisponibles : réessayez</option>';
         });
     }
 
@@ -1459,10 +1453,13 @@
         const newLivreur = document.getElementById('newLivreur').value;
         const dateLivraison = document.getElementById('dateLivraisonSouhaitee').value;
         const entrepotSource = document.getElementById('entrepotSource').value;
-        if (entrepotSource) dernierEntrepotSource = entrepotSource;
 
         if (!newLivreur) {
             showError('Veuillez sélectionner un livreur');
+            return;
+        }
+        if (!entrepotSource) {
+            showError("Veuillez choisir l'entrepôt source (dépôt d'où part la marchandise)");
             return;
         }
 
@@ -1473,11 +1470,7 @@
                 'Content-Type': 'application/json',
                 'X-CSRFToken': getCookie('csrftoken')
             },
-            body: JSON.stringify(Object.assign(
-                { livreur_id: parseInt(newLivreur) },
-                // Sans dépôt choisi, le serveur prend le dépôt par défaut des paramètres
-                entrepotSource ? { entrepot_source_id: parseInt(entrepotSource) } : {}
-            ))
+            body: JSON.stringify({ livreur_id: parseInt(newLivreur), entrepot_source_id: parseInt(entrepotSource) })
         })
         .then(res => res.json())
         .then(data => {
